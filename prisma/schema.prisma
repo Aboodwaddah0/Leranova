@@ -1,0 +1,295 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model academy_user {
+  user_academy_id Int          @id
+  OrgId           Int
+  organization    organization @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_academy_user_org")
+  user            user         @relation(fields: [user_academy_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_academy_user_user")
+  enrollment      enrollment[]
+
+  @@index([OrgId], map: "fk_academy_user_org")
+}
+
+model chat_participants {
+  id           Int                             @id @default(autoincrement())
+  chat_id      Int
+  user_id      Int
+  role_in_chat chat_participants_role_in_chat? @default(member)
+  joined_at    DateTime                        @default(now()) @db.Timestamp(0)
+  chats        chats                           @relation(fields: [chat_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_chat_participants_chat")
+  user         user                            @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_chat_participants_user")
+
+  @@unique([chat_id, user_id], map: "uq_chat_participant")
+  @@index([chat_id], map: "idx_chat_participants_chat_id")
+  @@index([user_id], map: "idx_chat_participants_user_id")
+}
+
+model chats {
+  id                Int                 @id @default(autoincrement())
+  organization_id   Int
+  subject_id        Int?
+  created_by        Int
+  type              chats_type
+  title             String?             @db.VarChar(255)
+  created_at        DateTime            @default(now()) @db.Timestamp(0)
+  chat_participants chat_participants[]
+  user              user                @relation(fields: [created_by], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_chats_created_by")
+  organization      organization        @relation(fields: [organization_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_chats_organization")
+  subject           subject?            @relation(fields: [subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_chats_subject")
+  messages          messages[]
+
+  @@index([created_by], map: "fk_chats_created_by")
+  @@index([organization_id], map: "idx_chats_organization_id")
+  @@index([subject_id], map: "idx_chats_subject_id")
+  @@index([type], map: "idx_chats_type")
+}
+
+model comment {
+  id            Int            @id @default(autoincrement())
+  lesson_id     Int?
+  asset_id      Int?
+  User_id       Int
+  time          DateTime       @default(now()) @db.Timestamp(0)
+  content       String         @db.Text
+  lesson_assets lesson_assets? @relation(fields: [asset_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_comment_asset")
+  lesson        lesson?        @relation(fields: [lesson_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_comment_lesson")
+  user          user           @relation(fields: [User_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_comment_user")
+
+  @@index([asset_id], map: "idx_comment_asset_id")
+  @@index([lesson_id], map: "idx_comment_lesson_id")
+  @@index([User_id], map: "idx_comment_user_id")
+}
+
+model course {
+  id           Int          @id @default(autoincrement())
+  Org_id       Int
+  Name         String       @db.VarChar(255)
+  Description  String?      @db.Text
+  Thumbnail    String?      @db.VarChar(500)
+  Start        DateTime?    @db.Date
+  End          DateTime?    @db.Date
+  organization organization @relation(fields: [Org_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_course_org")
+  student      student[]
+  subject      subject[]
+
+  @@index([Org_id], map: "idx_course_org_id")
+}
+
+model enrollment {
+  user_Academy_id Int
+  OrgId           Int
+  academy_user    academy_user @relation(fields: [user_Academy_id], references: [user_academy_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_enrollment_academy_user")
+  organization    organization @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_enrollment_org")
+
+  @@id([user_Academy_id, OrgId])
+  @@index([OrgId], map: "fk_enrollment_org")
+}
+
+model lesson {
+  id            Int             @id @default(autoincrement())
+  Subject_id    Int
+  name          String          @db.VarChar(255)
+  comment       comment[]
+  subject       subject         @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_subject")
+  lesson_assets lesson_assets[]
+
+  @@index([Subject_id], map: "idx_lesson_subject_id")
+}
+
+model lesson_assets {
+  id          Int       @id @default(autoincrement())
+  Lesson_id   Int
+  Name        String    @db.VarChar(255)
+  Description String?   @db.Text
+  Url         String?   @db.VarChar(500)
+  Files       String?   @db.VarChar(500)
+  comment     comment[]
+  lesson      lesson    @relation(fields: [Lesson_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_assets_lesson")
+
+  @@index([Lesson_id], map: "idx_lesson_assets_lesson_id")
+}
+
+model marks {
+  id         Int       @id @default(autoincrement())
+  User_id    Int
+  Subject_id Int
+  Numbers    Decimal   @db.Decimal(5, 2)
+  time       DateTime? @db.Date
+  subject    subject   @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_marks_subject")
+  user       user      @relation(fields: [User_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_marks_user")
+
+  @@index([Subject_id], map: "idx_marks_subject_id")
+  @@index([User_id], map: "idx_marks_user_id")
+}
+
+model message_attachments {
+  id          Int      @id @default(autoincrement())
+  message_id  Int
+  file_name   String   @db.VarChar(255)
+  file_url    String   @db.VarChar(500)
+  file_type   String?  @db.VarChar(100)
+  file_size   BigInt?
+  uploaded_at DateTime @default(now()) @db.Timestamp(0)
+  messages    messages @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_message_attachments_message")
+
+  @@index([message_id], map: "idx_message_attachments_message_id")
+}
+
+model messages {
+  id                  Int                    @id @default(autoincrement())
+  chat_id             Int
+  sender_user_id      Int
+  message_type        messages_message_type? @default(text)
+  content             String                 @db.Text
+  sent_at             DateTime               @default(now()) @db.Timestamp(0)
+  edited_at           DateTime?              @db.Timestamp(0)
+  is_deleted          Boolean?               @default(false)
+  message_attachments message_attachments[]
+  chats               chats                  @relation(fields: [chat_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_messages_chat")
+  user                user                   @relation(fields: [sender_user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_messages_sender")
+
+  @@index([chat_id], map: "idx_messages_chat_id")
+  @@index([sender_user_id], map: "idx_messages_sender_user_id")
+  @@index([sent_at], map: "idx_messages_sent_at")
+}
+
+model notification {
+  id      Int      @id @default(autoincrement())
+  User_id Int
+  content String   @db.Text
+  Type    String   @db.VarChar(100)
+  Url     String?  @db.VarChar(500)
+  isSeen  Boolean? @default(false)
+  user    user     @relation(fields: [User_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_notification_user")
+
+  @@index([User_id], map: "idx_notification_user_id")
+}
+
+model organization {
+  id              Int               @id @default(autoincrement())
+  Name            String            @db.VarChar(255)
+  Email           String            @unique(map: "Email") @db.VarChar(255)
+  Password_Hashed String            @db.VarChar(255)
+  Phone           String?           @db.VarChar(50)
+  Founded         DateTime?         @db.Date
+  Address         String?           @db.VarChar(255)
+  PhoneNumber     String?           @db.VarChar(50)
+  Description     String?           @db.Text
+  Role            organization_Role
+  academy_user    academy_user[]
+  chats           chats[]
+  course          course[]
+  enrollment      enrollment[]
+  student         student[]
+}
+
+model parent {
+  Parent_id Int       @id
+  Work      String?   @db.VarChar(255)
+  user      user      @relation(fields: [Parent_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_parent_user")
+  student   student[]
+}
+
+model student {
+  Student_id   Int          @id
+  Parent_id    Int?
+  OrgId        Int
+  Course_id    Int?
+  course       course?      @relation(fields: [Course_id], references: [id], onUpdate: Restrict, map: "fk_student_course")
+  organization organization @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_org")
+  parent       parent?      @relation(fields: [Parent_id], references: [Parent_id], onUpdate: Restrict, map: "fk_student_parent")
+  user         user         @relation(fields: [Student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_user")
+
+  @@index([Course_id], map: "idx_student_course_id")
+  @@index([OrgId], map: "idx_student_org_id")
+  @@index([Parent_id], map: "idx_student_parent_id")
+}
+
+model subject {
+  id          Int      @id @default(autoincrement())
+  Course_id   Int
+  Teacher_id  Int
+  name        String   @db.VarChar(255)
+  Description String?  @db.Text
+  chats       chats[]
+  lesson      lesson[]
+  marks       marks[]
+  course      course   @relation(fields: [Course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_course")
+  teacher     teacher  @relation(fields: [Teacher_id], references: [Teacher_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_teacher")
+
+  @@index([Course_id], map: "idx_subject_course_id")
+  @@index([Teacher_id], map: "idx_subject_teacher_id")
+}
+
+model teacher {
+  Teacher_id Int       @id
+  Work       String?   @db.VarChar(255)
+  subject    subject[]
+  user       user      @relation(fields: [Teacher_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_teacher_user")
+}
+
+model user {
+  id                Int                 @id @default(autoincrement())
+  Name              String              @db.VarChar(255)
+  age               Int?
+  Gender            user_Gender?
+  Email             String              @unique(map: "Email") @db.VarChar(255)
+  Password_Hashed   String              @db.VarChar(255)
+  role_pk           String?             @db.VarChar(100)
+  Address           String?             @db.VarChar(255)
+  Role              user_Role
+  academy_user      academy_user?
+  chat_participants chat_participants[]
+  chats             chats[]
+  comment           comment[]
+  marks             marks[]
+  messages          messages[]
+  notification      notification[]
+  parent            parent?
+  student           student?
+  teacher           teacher?
+}
+
+enum chat_participants_role_in_chat {
+  member
+  admin
+  teacher
+  student
+}
+
+enum messages_message_type {
+  text
+  image
+  file
+  voice
+}
+
+enum user_Gender {
+  Female
+  Male
+}
+
+enum chats_type {
+  group
+  private
+}
+
+enum user_Role {
+  Student
+  Parent
+  Admin
+  Academy
+  Teacher
+}
+
+enum organization_Role {
+  Academy
+  School
+}
