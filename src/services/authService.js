@@ -1,41 +1,94 @@
 import prisma from '../utils/prisma.js';
 import { hashPassword, comparePassword } from '../utils/hashPassword.js';
 import generateToken from '../utils/generateToken.js';
-import AppError from '../utils/appError.js';
 
-const register = async ({ Name, age, Gender, Email, Password, Address, Role }) => {
-  const existing = await prisma.user.findUnique({ where: { Email } });
-  if (existing) throw new AppError('Email already in use', 409);
-
-  const Password_Hashed = await hashPassword(Password);
-  const user = await prisma.user.create({
-    data: { Name, age, Gender, Email, Password_Hashed, Address, Role },
+export const registerOrganization = async (data) => {
+  const existingOrganization = await prisma.organization.findUnique({
+    where: {
+      Email: data.Email,
+    },
   });
 
-  const { Password_Hashed: _, ...safeUser } = user;
-  return safeUser;
+  if (existingOrganization) {
+    throw new Error('Organization email already exists');
+  }
+
+  const hashedPassword = await hashPassword(data.password);
+
+  const organization = await prisma.organization.create({
+    data: {
+      Name: data.Name,
+      Email: data.Email,
+      Password_Hashed: hashedPassword,
+      Phone: data.Phone ?? null,
+      Founded: data.Founded ? new Date(data.Founded) : null,
+      Address: data.Address ?? null,
+      PhoneNumber: data.PhoneNumber ?? null,
+      Description: data.Description ?? null,
+      Role: data.Role,
+      status: 'PENDING',
+    },
+    select: {
+      id: true,
+      Name: true,
+      Email: true,
+      Phone: true,
+      Founded: true,
+      Address: true,
+      PhoneNumber: true,
+      Description: true,
+      Role: true,
+      status: true,
+    },
+  });
+
+  return organization;
 };
 
-const login = async ({ Email, Password }) => {
-  const user = await prisma.user.findUnique({ where: { Email } });
-  if (!user) throw new AppError('Invalid credentials', 401);
+export const loginOrganization = async ({ Email, password }) => {
+  const organization = await prisma.organization.findUnique({
+    where: {
+      Email,
+    },
+  });
 
-  const valid = await comparePassword(Password, user.Password_Hashed);
-  if (!valid) throw new AppError('Invalid credentials', 401);
+  if (!organization) {
+    throw new Error('Invalid email or password');
+  }
 
-  const token = generateToken({ id: user.id, role: user.Role });
-  return { token, role: user.Role, id: user.id };
+  const isPasswordValid = await comparePassword(
+    password,
+    organization.Password_Hashed
+  );
+
+  if (!isPasswordValid) {
+    throw new Error('Invalid email or password');
+  }
+
+  if (organization.status !== 'APPROVED') {
+    throw new Error('Organization account is not approved yet');
+  }
+
+  const token = generateToken({
+    id: organization.id,
+    email: organization.Email,
+    role: organization.Role,
+    accountType: 'organization',
+  });
+
+  return {
+    organization: {
+      id: organization.id,
+      Name: organization.Name,
+      Email: organization.Email,
+      Phone: organization.Phone,
+      Founded: organization.Founded,
+      Address: organization.Address,
+      PhoneNumber: organization.PhoneNumber,
+      Description: organization.Description,
+      Role: organization.Role,
+      status: organization.status,
+    },
+    token,
+  };
 };
-
-const loginOrg = async ({ Email, Password }) => {
-  const org = await prisma.organization.findUnique({ where: { Email } });
-  if (!org) throw new AppError('Invalid credentials', 401);
-
-  const valid = await comparePassword(Password, org.Password_Hashed);
-  if (!valid) throw new AppError('Invalid credentials', 401);
-
-  const token = generateToken({ id: org.id, role: org.Role });
-  return { token, role: org.Role, id: org.id };
-};
-
-export { register, login, loginOrg };

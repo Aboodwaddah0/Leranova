@@ -1,31 +1,31 @@
-import * as authService from '../services/authService.js';
-import catchAsync from '../utils/catchAsync.js';
-import { sendSuccess } from '../utils/apiResponse.js';
-import { registerSchema, loginSchema } from '../validations/authValidation.js';
-import AppError from '../utils/appError.js';
+import {
+  registerOrganization,
+  loginOrganization,
+} from '../services/authService.js';
 
-const register = catchAsync(async (req, res, next) => {
-  const { error } = registerSchema.validate(req.body);
-  if (error) return next(new AppError(error.details[0].message, 400));
+export const register = async (req, res, next) => {
+  try {
+    const result = await registerOrganization(req.body);
 
-  const data = await authService.register(req.body);
-  sendSuccess(res, data, 201);
-});
+    return res.status(201).json({
+      message: 'Organization registered successfully and is pending approval',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
-const login = catchAsync(async (req, res, next) => {
-  const { error } = loginSchema.validate(req.body);
-  if (error) return next(new AppError(error.details[0].message, 400));
+export const login = async (req, res, next) => {
+  try {
+    const result = await loginOrganization(req.body);
 
-  const data = await authService.login(req.body);
-  sendSuccess(res, data);
-});
+    return res.status(200).json({
+      message: 'Organization logged in successfully',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
-const loginOrg = catchAsync(async (req, res, next) => {
-  const { error } = loginSchema.validate(req.body);
-  if (error) return next(new AppError(error.details[0].message, 400));
-
-  const data = await authService.loginOrg(req.body);
-  sendSuccess(res, data);
-});
-
-export { register, login, loginOrg };

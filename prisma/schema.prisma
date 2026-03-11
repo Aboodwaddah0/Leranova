@@ -188,6 +188,7 @@ model organization {
   course          course[]
   enrollment      enrollment[]
   student         student[]
+  status          organization_status @default(PENDING)
 }
 
 model parent {
@@ -293,3 +294,11 @@ enum organization_Role {
   Academy
   School
 }
+
+enum organization_status {
+  PENDING
+  APPROVED
+  REJECTED
+}
+    
+    
