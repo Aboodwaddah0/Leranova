@@ -1,6 +1,7 @@
 import prisma from '../utils/prisma.js';
 import { hashPassword, comparePassword } from '../utils/hashPassword.js';
 import generateToken from '../utils/generateToken.js';
+import AppError from '../utils/appError.js';
 
 export const registerOrganization = async (data) => {
   const existingOrganization = await prisma.organization.findUnique({
@@ -10,7 +11,7 @@ export const registerOrganization = async (data) => {
   });
 
   if (existingOrganization) {
-    throw new Error('Organization email already exists');
+    throw new AppError('Organization email already exists', 400);
   }
 
   const hashedPassword = await hashPassword(data.password);
@@ -53,7 +54,7 @@ export const loginOrganization = async ({ Email, password }) => {
   });
 
   if (!organization) {
-    throw new Error('Invalid email or password');
+    throw new AppError('Invalid email or password', 401);
   }
 
   const isPasswordValid = await comparePassword(
@@ -62,11 +63,11 @@ export const loginOrganization = async ({ Email, password }) => {
   );
 
   if (!isPasswordValid) {
-    throw new Error('Invalid email or password');
+    throw new AppError('Invalid email or password', 401);
   }
 
   if (organization.status !== 'APPROVED') {
-    throw new Error('Organization account is not approved yet');
+    throw new AppError('Organization account is not approved yet', 403);
   }
 
   const token = generateToken({
