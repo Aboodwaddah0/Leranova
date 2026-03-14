@@ -7,11 +7,11 @@ import {
   deleteCourseController,
 } from '../controllers/courseController.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
-import { orgAuthMiddleware } from '../middlewares/isOrganization.js';
+import { isOrganization } from '../middlewares/isOrganization.js';
 
 const router = Router();
 
-router.use(authMiddleware, orgAuthMiddleware);
+router.use(authMiddleware, isOrganization);
 
 router.post('/', createCourseController);
 router.get('/', getCoursesController);
