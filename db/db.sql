@@ -8,12 +8,12 @@ CREATE TABLE User (
     id INT AUTO_INCREMENT PRIMARY KEY,
     Name VARCHAR(255) NOT NULL,
     age INT NULL,
-    Gender ENUM('Female', 'Male') NULL,
+    Gender ENUM('FEMALE', 'MALE') NULL,
     Email VARCHAR(255) NOT NULL UNIQUE,
     Password_Hashed VARCHAR(255) NOT NULL,
     role_pk VARCHAR(100) NULL,
     Address VARCHAR(255) NULL,
-    Role ENUM('Student', 'Parent', 'Admin', 'Academy', 'Teacher') NOT NULL
+    Role ENUM('STUDENT', 'PARENT', 'ADMIN', 'ACADEMY', 'TEACHER') NOT NULL
 );
 
 -- =========================================
@@ -29,7 +29,7 @@ CREATE TABLE Organization (
     Address VARCHAR(255) NULL,
     PhoneNumber VARCHAR(50) NULL,
     Description TEXT NULL,
-    Role ENUM('Academy', 'School') NOT NULL
+    Role ENUM('ACADEMY', 'SCHOOL') NOT NULL
 );
 
 -- =========================================
@@ -248,7 +248,7 @@ CREATE TABLE chats (
     organization_id INT NOT NULL,
     subject_id INT NULL,
     created_by INT NOT NULL,
-    type ENUM('group', 'private') NOT NULL,
+    type ENUM('GROUP', 'PRIVATE') NOT NULL,
     title VARCHAR(255) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 

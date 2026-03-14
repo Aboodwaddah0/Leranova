@@ -238,14 +238,14 @@ model teacher {
 
 model user {
   id                Int                 @id @default(autoincrement())
-  Name              String              @db.VarChar(255)
+  name              String              @db.VarChar(255)
   age               Int?
-  Gender            user_Gender?
-  Email             String              @unique(map: "Email") @db.VarChar(255)
-  Password_Hashed   String              @db.VarChar(255)
+  gender            user_Gender?
+  email             String              @unique(map: "Email") @db.VarChar(255)
+  passwordHashed    String              @db.VarChar(255)
   role_pk           String?             @db.VarChar(100)
-  Address           String?             @db.VarChar(255)
-  Role              user_Role
+  address           String?             @db.VarChar(255)
+  role              user_Role
   academy_user      academy_user?
   chat_participants chat_participants[]
   chats             chats[]
@@ -273,26 +273,26 @@ enum messages_message_type {
 }
 
 enum user_Gender {
-  Female
-  Male
+  FEMALE
+  MALE
 }
 
 enum chats_type {
-  group
-  private
+  GROUP
+  PRIVATE
 }
 
 enum user_Role {
-  Student
-  Parent
-  Admin
-  Academy
-  Teacher
+  STUDENT
+  PARENT
+  ADMIN
+  ACADEMY
+  TEACHER
 }
 
 enum organization_Role {
-  Academy
-  School
+  ACADEMY
+  SCHOOL
 }
 
 enum organization_status {
