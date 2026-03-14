@@ -1,0 +1,11 @@
+ALTER TABLE `user`
+  CHANGE COLUMN `Name` `name` VARCHAR(255) NOT NULL,
+  CHANGE COLUMN `Gender` `gender` ENUM('FEMALE','MALE') NULL,
+  CHANGE COLUMN `Email` `email` VARCHAR(255) NOT NULL,
+  CHANGE COLUMN `Password_Hashed` `passwordHashed` VARCHAR(255) NOT NULL,
+  CHANGE COLUMN `Address` `address` VARCHAR(255) NULL,
+  CHANGE COLUMN `Role` `role` ENUM('STUDENT','PARENT','ADMIN','ACADEMY','TEACHER') NOT NULL;
+
+ALTER TABLE `user`
+  DROP INDEX `Email`,
+  ADD UNIQUE INDEX `Email` (`email`);
