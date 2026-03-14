@@ -3,6 +3,8 @@ import { hashPassword, comparePassword } from '../utils/hashPassword.js';
 import generateToken from '../utils/generateToken.js';
 
 export const registerOrganization = async (data) => {
+  const normalizedRole = String(data.Role || '').trim().toUpperCase();
+
   const existingOrganization = await prisma.organization.findUnique({
     where: {
       Email: data.Email,
@@ -25,7 +27,7 @@ export const registerOrganization = async (data) => {
       Address: data.Address ?? null,
       PhoneNumber: data.PhoneNumber ?? null,
       Description: data.Description ?? null,
-      Role: data.Role,
+      Role: normalizedRole,
       status: 'PENDING',
     },
     select: {
@@ -45,10 +47,10 @@ export const registerOrganization = async (data) => {
   return organization;
 };
 
-export const loginOrganization = async ({ Email, password }) => {
+export const loginOrganization = async ({ email, password }) => {
   const organization = await prisma.organization.findUnique({
     where: {
-      Email,
+      Email:email,
     },
   });
 
@@ -69,12 +71,12 @@ export const loginOrganization = async ({ Email, password }) => {
     throw new Error('Organization account is not approved yet');
   }
 
-  const token = generateToken({
-    id: organization.id,
-    email: organization.Email,
-    role: organization.Role,
-    accountType: 'organization',
-  });
+const token = generateToken({
+  id: organization.id,
+  name: organization.Name,
+  email: organization.Email,
+  role: organization.Role,
+});
 
   return {
     organization: {
@@ -92,3 +94,39 @@ export const loginOrganization = async ({ Email, password }) => {
     token,
   };
 };
+
+
+export const loginUser=async(data)=>{
+  
+  const user=await prisma.user.findUnique({
+    where:{
+      email:data.email
+    }
+  });
+
+  if (!user)  throw new Error('user is not exist in the system');
+
+  const isPasswordValid= await comparePassword(data.password,user.passwordHashed);
+  if (!isPasswordValid)  throw new Error('Invalid email or password');
+
+  const token = generateToken({
+    id: user.id,
+    name:user.name,
+    email: user.email,
+    role: user.role,
+  });
+
+  return {
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    },
+    token,
+  };
+   
+}
+
+
+
