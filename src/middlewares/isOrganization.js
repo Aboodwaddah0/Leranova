@@ -5,7 +5,9 @@ export const isOrganization = (req, res, next) => {
     });
   }
 
-  if (req.user.role !== ' ACADEMY || SCHOOL') {
+  const role = String(req.user.role || '').trim().toUpperCase();
+
+  if (!['ACADEMY', 'SCHOOL'].includes(role)) {
     return res.status(403).json({
       message: 'Access denied. Organization account required.',
     });

@@ -156,12 +156,6 @@ export const validateExcelData = (data) => {
 			errors.push(`Row ${rowNumber}: Address is required`);
 		}
 
-		if (role === 'STUDENT' && (orgIdValue === null || !Number.isInteger(orgIdValue) || orgIdValue <= 0)) {
-			errors.push(`Row ${rowNumber}: orgId is required and must be a valid positive integer for STUDENT role`);
-		}
-
-		const studentOrgIdValid = role !== 'STUDENT' || (Number.isInteger(orgIdValue) && orgIdValue > 0);
-
 		if (
 			name &&
 			role &&
@@ -170,8 +164,7 @@ export const validateExcelData = (data) => {
 			ageValue >= 0 &&
 			gender &&
 			USER_GENDERS.has(gender) &&
-			address &&
-			studentOrgIdValid
+			address
 		) {
 			validatedRows.push({
 				name,
