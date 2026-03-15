@@ -9,7 +9,7 @@ import {
 } from '../validations/authValidation.js';
 import AppError from '../utils/appError.js';
 
- export const register = async (req, res) => {
+ export const register = async (req, res,next) => {
   try {
     const { error, value } = registerOrganizationSchema.validate(req.body);
 
@@ -23,14 +23,12 @@ import AppError from '../utils/appError.js';
       message: 'Organization registered successfully and is pending approval',
       data: result,
     });
-  }
-
- catch (error) {
-   return res.status(500).json({message:"Server Error"})
+  } catch (error) {
+    return next(error);
   }
 };
 
-  export const login = async (req, res) => {
+  export const login = async (req, res, next) => {
   try {
     const { error, value } = loginOrganizationSchema.validate(req.body);
 
@@ -44,13 +42,12 @@ import AppError from '../utils/appError.js';
       message: 'Organization logged in successfully',
       data: result,
     });
-
   } catch (error) {
-   return res.status(500).json({message:"Server Error"})
+    return next(error);
   }
 };
 
-export const loginUserController=async (req,res)=>{
+export const loginUserController=async (req,res,next)=>{
   try{
      const result = await loginUser(req.body);
       return res.status(200).json({
@@ -58,7 +55,7 @@ export const loginUserController=async (req,res)=>{
       data: result,
     });
   }catch (error){
-      return res.status(500).json({message:"Server Error"})
+      return next(error);
   }
 }
 

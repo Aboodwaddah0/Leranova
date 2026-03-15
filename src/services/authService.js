@@ -48,10 +48,10 @@ export const registerOrganization = async (data) => {
   return organization;
 };
 
-export const loginOrganization = async ({ email, password }) => {
+export const loginOrganization = async ({ Email, password }) => {
   const organization = await prisma.organization.findUnique({
     where: {
-      Email:email,
+      Email,
     },
   });
 

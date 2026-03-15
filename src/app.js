@@ -14,7 +14,7 @@ const app = express();
 app.use(express.json());
 
 
-app.use('/api/auth/org', authRoutes);
+
 app.use('/api/courses', courseRoutes);
 app.use('/api/subjects', subjectRoutes);
 app.use('/api/organizations', organizationRoutes);
