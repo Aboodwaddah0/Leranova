@@ -13,3 +13,6 @@ router.get("/",authMiddleware,isOrganization,getAllUsersController);
 router.put("/:id",authMiddleware,isOrganization,updateUserController);
 router.delete("/:id",authMiddleware,isOrganization,deleteUserController);
 export default router;
+
+
+

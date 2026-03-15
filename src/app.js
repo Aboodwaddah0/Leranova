@@ -3,6 +3,7 @@ import authRoutes from './routes/authRoutes.js';
 
 import courseRoutes from './routes/courseRoutes.js';
 import subjectRoutes from './routes/subjectRoutes.js';
+import organizationRoutes from './routes/organizationRoutes.js';
 
 import userRoutes from './routes/userRoutes.js';
 
@@ -16,6 +17,7 @@ app.use(express.json());
 app.use('/api/auth/org', authRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/subjects', subjectRoutes);
+app.use('/api/organizations', organizationRoutes);
 
 
 // auth routes
