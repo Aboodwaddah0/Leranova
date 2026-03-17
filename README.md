@@ -1,207 +1,251 @@
 # Learnova Backend
 
-## Project Overview
-Learnova Backend is a Node.js and Express API project that uses Prisma ORM with a MariaDB/MySQL database.
+A production-ready backend for an academy-style learning platform, built with Node.js + Express and integrated with a Python RAG microservice for transcript processing and vector search.
 
-Tech stack:
-- Node.js + Express
-- Prisma ORM
-- MariaDB/MySQL
+## Tech Stack
 
-## Project Idea (Quick Summary)
-Learnova Backend powers an academy-style learning platform where organizations can register, authenticate, and manage learning operations through API endpoints.
+| Layer | Technology |
+|---|---|
+| API Server | Node.js 20, Express 5, Prisma ORM |
+| Relational DB | MariaDB 11 |
+| RAG Service | Python 3.11, FastAPI, Uvicorn |
+| Transcription | faster-whisper (Whisper small, CPU) |
+| Embeddings | sentence-transformers (BAAI/bge-small-en) |
+| Vector DB | Qdrant |
+| Media Processing | FFmpeg |
+| Storage | Cloudinary |
 
-Who it serves:
-- Learning organizations and academy admins
-- Platform operators managing approvals and user access
-- Developers integrating frontend or mobile clients with the API
+## Architecture
 
-Main backend capabilities:
-- Authentication and organization account workflows
-- Domain modules for courses, lessons, users, chats, comments, notifications, and enrollments
-- Centralized validation, error handling, and database access through Prisma
+```text
+Client
+  |
+  v
+Node API (5000)
+  |- Prisma -> MariaDB
+  |- Cloudinary (video URLs)
+  '- POST /process-lesson -> Python RAG Service (8000)
+                                |- download video
+                                |- extract audio (ffmpeg)
+                                |- transcribe (whisper)
+                                |- chunk transcript
+                                |- embed chunks
+                                '- upsert vectors -> Qdrant
+```
 
-## Architecture (High-Level)
-The project follows a layered Express architecture to keep responsibilities clear and maintainable:
+## Project Structure
 
-- `routes/`: Defines API endpoints and maps requests to controllers.
-- `controllers/`: Handles HTTP request/response flow and delegates business logic.
-- `services/`: Contains core business logic and Prisma operations.
-- `middlewares/`: Manages cross-cutting concerns like auth and error handling.
-- `utils/`: Shared helpers (token generation, password hashing, API response helpers, Prisma client).
-- `prisma/`: Schema and migrations for database structure/versioning.
+```text
+Leranova/
+|- server.js
+|- package.json
+|- Dockerfile
+|- docker-compose.yml
+|- .env.example
+|- prisma/
+|  |- schema.prisma
+|  '- migrations/
+|- src/
+|  |- app.js
+|  |- routes/
+|  |- controllers/
+|  |- services/
+|  |- middlewares/
+|  |- validations/
+|  '- utils/
+'- rag-service/
+   |- Dockerfile
+   |- requirements.txt
+   |- main.py
+   |- config.py
+   |- models/
+   |- services/
+   '- utils/
+```
 
-Practical request flow:
-`Route -> Controller -> Service -> Prisma/DB -> Response`
+## Dockerized Services
 
-## Prerequisites
-Before you start, make sure you have:
-- Node.js (LTS recommended)
-- npm
-- A running MariaDB/MySQL database (local, Docker, or cloud)
+`docker-compose.yml` runs the full stack:
 
-## Installation
-Clone the repository and install dependencies:
+- `api`: Node.js Express backend (port `5000` exposed)
+- `rag-service`: Python FastAPI RAG service (internal)
+- `db`: MariaDB (internal)
+- `qdrant`: Vector database (port `6333` exposed)
+
+Persistent storage uses named volumes:
+
+- `mariadb_data`
+- `qdrant_data`
+
+## Quick Start (Recommended)
+
+1. Clone project:
 
 ```bash
 git clone https://github.com/Aboodwaddah0/Leranova.git
 cd Leranova
-npm install
 ```
 
-## Environment Variables (.env)
-Create your own `.env` file in the project root (same level as `package.json`).
-
-You can copy from this `.env.example` template:
-
-```env
-DATABASE_URL="mysql://USER:PASSWORD@HOST:PORT/DB_NAME"
-PORT=5000
-JWT_SECRET=your_strong_secret_here
-```
-
-Variable notes:
-- `DATABASE_URL`: Prisma connection string to your database.
-- `PORT`: Server port.
-- `JWT_SECRET`: Secret used to sign and verify JWT tokens.
-- `RAG_SERVICE_URL`: Base URL for the Python RAG service (default: `http://rag-service:8000`).
-- `RAG_TRIGGER_TIMEOUT_MS`: Timeout for trigger requests in milliseconds (default: `10000`).
-
-Security note:
-- Never commit or push `.env` to GitHub.
-- Never place real secrets in `README.md`.
-
-## Database Setup (Docker Optional)
-I personally use Docker for local database setup, but this is optional.
-
-You can use any environment that works for you:
-- Docker
-- Local MariaDB/MySQL installation
-- Cloud database provider
-
-The only requirement is that `DATABASE_URL` in `.env` points to your actual database.
-
-Optional Docker example:
+2. Create environment file:
 
 ```bash
-docker run --name learnova-db -p 3307:3306 -e MYSQL_ROOT_PASSWORD=your_password -d mariadb:latest
+cp .env.example .env
 ```
 
-Then your `DATABASE_URL` might look like:
+3. Edit `.env` and fill required secrets (`DB_ROOT_PASSWORD`, `JWT_SECRET`, `CLOUDINARY_*`).
 
-```env
-DATABASE_URL="mysql://root:your_password@127.0.0.1:3307/learnova_db"
-```
-
-## Prisma Commands (db push / generate / studio)
-After setting `.env`, run Prisma commands:
+4. Build and run:
 
 ```bash
-npx prisma db push
-npx prisma generate
+docker compose up --build -d
 ```
 
-Optional database UI:
+5. Follow logs:
 
 ```bash
-npx prisma studio
+docker compose logs -f api
+docker compose logs -f rag-service
 ```
 
-## Run the Server (dev/start)
-Development mode (nodemon):
-
-```bash
-npm run dev
-```
-
-Standard run:
-
-```bash
-npm start
-```
-
-## API Base URL
-Local base URL:
+API base URL:
 
 ```text
 http://localhost:5000
 ```
 
-Current auth routes are mounted at:
+## Environment Variables
 
-```text
-/api/auth/org
+Use root `.env` (template in `.env.example`):
+
+```env
+DB_ROOT_PASSWORD=change_me
+DATABASE_URL=mysql://root:change_me@db:3306/learnova_db
+PORT=5000
+JWT_SECRET=change_me_strong_secret
+
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+
+RAG_SERVICE_URL=http://rag-service:8000
+RAG_TRIGGER_TIMEOUT_MS=10000
+
+QDRANT_URL=http://qdrant:6333
+QDRANT_API_KEY=
+EMBEDDING_MODEL_NAME=BAAI/bge-small-en
+WHISPER_MODEL_NAME=small
 ```
 
-Example full path:
+Notes:
 
-```text
-http://localhost:5000/api/auth/org
+- `DATABASE_URL` must use host `db` inside Docker network.
+- `RAG_SERVICE_URL` must stay `http://rag-service:8000` for container-to-container calls.
+- `QDRANT_URL` should be `http://qdrant:6333`.
+
+## RAG Integration Flow
+
+On lesson creation (with video URL):
+
+1. Node backend saves lesson record in MariaDB.
+2. Node service sends `POST /process-lesson` to `rag-service`.
+3. Request payload includes:
+   - `lessonId` (string)
+   - `organizationId` (string)
+   - `videoUrl` (string URL)
+4. Python processes in background and stores chunk embeddings in Qdrant collection `learnova_lesson_chunks`.
+
+## Prisma and Migrations
+
+The API container starts with:
+
+```sh
+npx prisma migrate deploy && node server.js
 ```
 
-## Lesson Video RAG Trigger Flow
-When a lesson is created with a video, Node.js triggers a separate Python RAG service.
+This guarantees schema is migrated before serving requests.
 
-Architecture:
+Create new migration when schema changes:
 
-```text
-Node Backend -> Python RAG Service -> Qdrant
+```bash
+# inside running api container
+docker compose exec api npx prisma migrate dev --name your_change_name
 ```
 
-Node responsibilities:
-- Upload lesson video to Cloudinary.
-- Create the lesson record in MariaDB.
-- Trigger Python processing by calling:
-  - `POST {RAG_SERVICE_URL}/process-lesson`
-  - Payload:
-    - `lessonId`
-    - `videoUrl`
-    - `organizationId`
+## Useful Docker Commands
 
-Python service responsibilities (outside this Node project):
-- Download video from Cloudinary.
-- Extract audio via ffmpeg.
-- Transcribe with Whisper.
-- Chunk transcript.
-- Generate embeddings.
-- Store vectors in Qdrant.
+Start all services:
 
-### Transcript Storage Table
-Node database includes `lesson_transcripts` for transcript persistence:
-- `id`
-- `lesson_id`
-- `transcript`
-- `created_at`
+```bash
+docker compose up --build -d
+```
 
-This table was added via Prisma migration:
-- `prisma/migrations/20260317042506_add_lesson_transcripts_for_rag`
+Stop services:
 
-### Security Boundary
-RAG processing is triggered only after lesson creation succeeds for an authenticated organization-owned subject.
-Node sends `organizationId` to the Python service so it can enforce organization-level checks before processing.
+```bash
+docker compose down
+```
+
+Stop and remove data volumes:
+
+```bash
+docker compose down -v
+```
+
+Rebuild API only (after Node dependencies change):
+
+```bash
+docker compose build api
+docker compose up -d api
+```
+
+Rebuild RAG service only (after Python dependencies change):
+
+```bash
+docker compose build rag-service
+docker compose up -d rag-service
+```
+
+Inspect service status:
+
+```bash
+docker compose ps
+```
+
+## Manual Run (Without Docker)
+
+### Node.js API
+
+```bash
+npm install
+npx prisma generate
+npx prisma migrate deploy
+npm run dev
+```
+
+### Python RAG service
+
+```bash
+cd rag-service
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
 
 ## Troubleshooting
-- `Invalid token` errors:
-  - Make sure `JWT_SECRET` is set in `.env`.
-  - Restart the server after changing `.env`.
 
-- Database connection errors:
-  - Verify your database is running.
-  - Confirm `DATABASE_URL` host, port, username, password, and database name.
-
-- Prisma sync issues:
-  - Re-run:
-    ```bash
-    npx prisma db push
-    npx prisma generate
-    ```
-
-- Environment variables not loading:
-  - Ensure `.env` is in the project root.
-  - This project loads env vars from `server.js` using `import 'dotenv/config';`.
+- API fails on startup:
+  - Check `docker compose logs api`
+  - Verify `DATABASE_URL` and DB credentials
+- RAG not processing:
+  - Check `docker compose logs rag-service`
+  - Verify `QDRANT_URL` and that `qdrant` is healthy
+- Prisma issues:
+  - `docker compose exec api npx prisma migrate status`
+  - `docker compose exec api npx prisma generate`
 
 ## Security Notes
-- Never commit or push `.env` to GitHub.
-- Keep `JWT_SECRET` and database credentials private.
-- Use placeholders only in documentation and examples.
 
+- Never commit `.env`.
+- Keep JWT and Cloudinary credentials private.
+- Use strong secrets in production.

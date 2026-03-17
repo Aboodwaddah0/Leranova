@@ -1,0 +1,10 @@
+node_modules
+npm-debug.log*
+.git
+.gitignore
+.env
+.env.*
+*.log
+rag-service/.venv
+rag-service/__pycache__
+rag-service/.env
