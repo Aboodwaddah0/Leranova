@@ -1,0 +1,8 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+faster-whisper==1.0.3
+qdrant-client==1.11.3
+requests==2.32.3
+python-dotenv==1.0.1
+sentence-transformers==3.2.1
+torch==2.4.1

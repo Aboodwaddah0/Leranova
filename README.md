@@ -64,6 +64,8 @@ Variable notes:
 - `DATABASE_URL`: Prisma connection string to your database.
 - `PORT`: Server port.
 - `JWT_SECRET`: Secret used to sign and verify JWT tokens.
+- `RAG_SERVICE_URL`: Base URL for the Python RAG service (default: `http://rag-service:8000`).
+- `RAG_TRIGGER_TIMEOUT_MS`: Timeout for trigger requests in milliseconds (default: `10000`).
 
 Security note:
 - Never commit or push `.env` to GitHub.
@@ -136,6 +138,47 @@ Example full path:
 ```text
 http://localhost:5000/api/auth/org
 ```
+
+## Lesson Video RAG Trigger Flow
+When a lesson is created with a video, Node.js triggers a separate Python RAG service.
+
+Architecture:
+
+```text
+Node Backend -> Python RAG Service -> Qdrant
+```
+
+Node responsibilities:
+- Upload lesson video to Cloudinary.
+- Create the lesson record in MariaDB.
+- Trigger Python processing by calling:
+  - `POST {RAG_SERVICE_URL}/process-lesson`
+  - Payload:
+    - `lessonId`
+    - `videoUrl`
+    - `organizationId`
+
+Python service responsibilities (outside this Node project):
+- Download video from Cloudinary.
+- Extract audio via ffmpeg.
+- Transcribe with Whisper.
+- Chunk transcript.
+- Generate embeddings.
+- Store vectors in Qdrant.
+
+### Transcript Storage Table
+Node database includes `lesson_transcripts` for transcript persistence:
+- `id`
+- `lesson_id`
+- `transcript`
+- `created_at`
+
+This table was added via Prisma migration:
+- `prisma/migrations/20260317042506_add_lesson_transcripts_for_rag`
+
+### Security Boundary
+RAG processing is triggered only after lesson creation succeeds for an authenticated organization-owned subject.
+Node sends `organizationId` to the Python service so it can enforce organization-level checks before processing.
 
 ## Troubleshooting
 - `Invalid token` errors:

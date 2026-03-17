@@ -1,6 +1,7 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { uploadVideo, deleteVideo } from './cloudinary.service.js';
+import { triggerLessonRagProcessing } from './rag.service.js';
 
 const serializeLesson = (lesson) => ({
 	id: lesson.id,
@@ -70,6 +71,18 @@ export const createLesson = async (orgId, subjectId, data, videoBuffer) => {
 			videoResourceType: videoMeta?.videoResourceType ?? null,
 		},
 	});
+
+	if (lesson.videoUrl) {
+		try {
+			await triggerLessonRagProcessing({
+				lessonId: lesson.id,
+				videoUrl: lesson.videoUrl,
+				organizationId: orgId,
+			});
+		} catch (error) {
+			console.error(`RAG trigger failed for lesson ${lesson.id}:`, error.message);
+		}
+	}
 
 	return serializeLesson(lesson);
 };

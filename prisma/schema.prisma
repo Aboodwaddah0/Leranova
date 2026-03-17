@@ -102,10 +102,21 @@ model lesson {
   videoPublicId String?         @db.VarChar(255)
   videoResourceType String?     @db.VarChar(50)
   comment       comment[]
+  lesson_transcripts lesson_transcripts[]
   subject       subject         @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_subject")
   lesson_assets lesson_assets[]
 
   @@index([Subject_id], map: "idx_lesson_subject_id")
+}
+
+model lesson_transcripts {
+  id         Int      @id @default(autoincrement())
+  lesson_id  Int
+  transcript String   @db.LongText
+  created_at DateTime @default(now()) @db.Timestamp(0)
+  lesson     lesson   @relation(fields: [lesson_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_transcripts_lesson")
+
+  @@index([lesson_id], map: "idx_lesson_transcripts_lesson_id")
 }
 
 model lesson_assets {
