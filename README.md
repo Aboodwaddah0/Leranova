@@ -342,5 +342,3 @@ QDRANT_URL=http://qdrant:6333
 Learnova transforms static video lessons into searchable AI-powered knowledge using a fully local RAG pipeline.
 
 ---
-
-RAG don
