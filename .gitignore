@@ -1,36 +1,10 @@
-# Node
 node_modules/
-npm-debug.log*
-
-# Environment
+.venv/
+venv/
+**pycache**/
+*.pyc
 .env
-.env.*
-
-# Build outputs
 dist/
 build/
 coverage/
-
-# Prisma client generated output
-/src/generated/prisma
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.venv/
-venv/
-rag-service/.venv/
-rag-service/__pycache__/
-rag-service/**/__pycache__/
-
-# Docker
-*.log
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Postman (contains environment files with secrets)
-postman/
+.cache/
