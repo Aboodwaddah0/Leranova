@@ -1,44 +1,42 @@
 services:
-  db:
-    image: mariadb:11
-    container_name: learnova-db
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-      MYSQL_DATABASE: learnova_db
-    volumes:
-      - mariadb_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_ROOT_PASSWORD}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
-
-  qdrant:
-    image: qdrant/qdrant:v1.11.3
-    container_name: learnova-qdrant
-    restart: unless-stopped
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: learnova-api
+    container_name: learnova-api
     ports:
-      - "6333:6333"
-    volumes:
-      - qdrant_data:/qdrant/storage
+      - "5000:5000"
+    environment:
+      DATABASE_URL: mysql://root:root@db:3306/learnova
+      PORT: 5000
+      JWT_SECRET: ${JWT_SECRET:-learnova_super_secret_key_2026_backend_api}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      RAG_SERVICE_URL: http://rag-service:8000
+      RAG_TRIGGER_TIMEOUT_MS: ${RAG_TRIGGER_TIMEOUT_MS:-10000}
+    depends_on:
+      db:
+        condition: service_healthy
 
   rag-service:
     build:
       context: ./rag-service
       dockerfile: Dockerfile
+    image: learnova-rag-service
     container_name: learnova-rag-service
-    restart: unless-stopped
+    ports:
+      - "8000:8000"
     environment:
       APP_NAME: Learnova RAG Service
       APP_HOST: 0.0.0.0
       APP_PORT: 8000
-      QDRANT_URL: ${QDRANT_URL}
-      QDRANT_API_KEY: ${QDRANT_API_KEY}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
       QDRANT_COLLECTION: learnova_lesson_chunks
-      EMBEDDING_MODEL_NAME: ${EMBEDDING_MODEL_NAME}
-      WHISPER_MODEL_NAME: ${WHISPER_MODEL_NAME}
+      EMBEDDING_MODEL_NAME: ${EMBEDDING_MODEL_NAME:-BAAI/bge-small-en}
+      WHISPER_MODEL_NAME: ${WHISPER_MODEL_NAME:-small}
       WHISPER_DEVICE: cpu
       WHISPER_COMPUTE_TYPE: int8
       FFMPEG_BIN: ffmpeg
@@ -46,41 +44,43 @@ services:
       REQUEST_TIMEOUT_SECONDS: 120
     depends_on:
       - qdrant
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
-    mem_limit: 4g
-    deploy:
-      resources:
-        limits:
-          memory: 4g
 
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: learnova-api
-    restart: unless-stopped
-    ports:
-      - "5000:5000"
+  db:
+    image: mariadb:10.6
+    container_name: learnova-db
+    restart: always
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      PORT: ${PORT}
-      JWT_SECRET: ${JWT_SECRET}
-      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
-      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
-      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
-      RAG_SERVICE_URL: ${RAG_SERVICE_URL}
-      RAG_TRIGGER_TIMEOUT_MS: ${RAG_TRIGGER_TIMEOUT_MS}
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: learnova
+      MYSQL_USER: learnova
+      MYSQL_PASSWORD: learnova123
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: learnova-phpmyadmin
+    restart: always
+    ports:
+      - "8080:80"
+    environment:
+      PMA_HOST: db
+      MYSQL_ROOT_PASSWORD: root
     depends_on:
-      db:
-        condition: service_healthy
-      rag-service:
-        condition: service_healthy
+      - db
+
+  qdrant:
+    image: qdrant/qdrant
+    container_name: learnova-qdrant
+    ports:
+      - "6333:6333"
 
 volumes:
-  mariadb_data:
-  qdrant_data:
+  db_data:
