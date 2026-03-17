@@ -4,9 +4,6 @@ import { hashPassword } from "../utils/hashPassword.js";
 
 const buildRoleNested = (data) => {
   const role = String(data.role || '').toUpperCase();
-  if (role === 'TEACHER') {
-    return { teacher: { create: { Work: data.work ?? null } } };
-  }
   if (role === 'PARENT') {
     return { parent: { create: { Work: data.work ?? null } } };
   }
@@ -33,6 +30,7 @@ export const generateUsers = async (data, domain) => {
 
     const createdUser = await prisma.user.create({
       data: {
+        OrgId: user.orgId ?? null,
         name: user.name,
         email,
         passwordHashed: passwordHashed,
@@ -74,6 +72,7 @@ if (isUserExist)  {
 const hashedPassword= await hashPassword(data.password);
 const user=await prisma.user.create({
     data:{
+  OrgId: data.orgId ?? null,
   name:data.name,
    age:data.age,
   email:data.email,

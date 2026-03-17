@@ -9,15 +9,15 @@ import {
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { isOrganization } from '../middlewares/isOrganization.js';
 
-const router = Router();
+const router = Router({ mergeParams: true });
 
 router.use(authMiddleware, isOrganization);
 
 router.post('/', createSubjectController);
 router.get('/', getSubjectsController);
-router.get('/:id', getSubjectByIdController);
-router.patch('/:id', updateSubjectController);
-router.delete('/:id', deleteSubjectController);
+router.get('/:subjectId', getSubjectByIdController);
+router.patch('/:subjectId', updateSubjectController);
+router.delete('/:subjectId', deleteSubjectController);
 
 export default router;
 

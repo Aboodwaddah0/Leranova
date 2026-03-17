@@ -1,0 +1,16 @@
+name,email,password,role,age,gender,address
+Ahmad Saleh,ahmad.saleh@student.com,Student@123,STUDENT,13,MALE,Amman - Jabal Al Hussein
+Lina Khaled,lina.khaled@student.com,Student@123,STUDENT,12,FEMALE,Amman - Sweifieh
+Yousef Nasser,yousef.nasser@student.com,Student@123,STUDENT,14,MALE,Zarqa - New Zarqa
+Maya Samer,maya.samer@student.com,Student@123,STUDENT,11,FEMALE,Irbid - Al Husn
+Omar Hani,omar.hani@student.com,Student@123,STUDENT,15,MALE,Amman - Abdoun
+Rana Tareq,rana.tareq@student.com,Student@123,STUDENT,13,FEMALE,Salt - Al Balqa
+Tareq Wael,tareq.wael@student.com,Student@123,STUDENT,12,MALE,Madaba - City Center
+Jana Adel,jana.adel@student.com,Student@123,STUDENT,14,FEMALE,Amman - Khalda
+Zaid Fadi,zaid.fadi@student.com,Student@123,STUDENT,16,MALE,Aqaba - Downtown
+Nour Majed,nour.majed@student.com,Student@123,STUDENT,10,FEMALE,Karak - Al Qasr
+Karam Iyad,karam.iyad@student.com,Student@123,STUDENT,15,MALE,Amman - Tlaa Al Ali
+Sara Nabil,sara.nabil@student.com,Student@123,STUDENT,13,FEMALE,Irbid - University St
+Hassan Murad,hassan.murad@student.com,Student@123,STUDENT,12,MALE,Zarqa - Russeifa
+Dima Raed,dima.raed@student.com,Student@123,STUDENT,11,FEMALE,Amman - Shmeisani
+Ali Mahmoud,ali.mahmoud@student.com,Student@123,STUDENT,14,MALE,Jerash - Downtown

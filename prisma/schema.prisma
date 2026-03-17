@@ -97,6 +97,10 @@ model lesson {
   id            Int             @id @default(autoincrement())
   Subject_id    Int
   name          String          @db.VarChar(255)
+  Description   String?         @db.Text
+  videoUrl      String?         @db.VarChar(500)
+  videoPublicId String?         @db.VarChar(255)
+  videoResourceType String?     @db.VarChar(50)
   comment       comment[]
   subject       subject         @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_subject")
   lesson_assets lesson_assets[]
@@ -189,6 +193,8 @@ model organization {
   course          course[]
   enrollment      enrollment[]
   student         student[]
+  teacher         teacher[]
+    user            user[]
   status          organization_status @default(PENDING)
 }
 
@@ -231,14 +237,22 @@ model subject {
 }
 
 model teacher {
-  Teacher_id Int       @id
-  Work       String?   @db.VarChar(255)
-  subject    subject[]
-  user       user      @relation(fields: [Teacher_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_teacher_user")
+  Teacher_id     Int           @id
+  OrgId          Int
+  Work           String?       @db.VarChar(255)
+  specialization String?       @db.VarChar(255)
+  bio            String?       @db.Text
+  createdAt      DateTime      @default(now()) @db.Timestamp(0)
+  organization   organization  @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_teacher_org")
+  subject        subject[]
+  user           user          @relation(fields: [Teacher_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_teacher_user")
+
+  @@index([OrgId], map: "idx_teacher_org_id")
 }
 
 model user {
   id                Int                 @id @default(autoincrement())
+  OrgId             Int?
   name              String              @db.VarChar(255)
   age               Int?
   gender            user_Gender?
@@ -254,9 +268,12 @@ model user {
   marks             marks[]
   messages          messages[]
   notification      notification[]
+  organization      organization?       @relation(fields: [OrgId], references: [id], onDelete: SetNull, onUpdate: Restrict, map: "fk_user_org")
   parent            parent?
   student           student?
   teacher           teacher?
+
+  @@index([OrgId], map: "idx_user_org_id")
 }
 
 enum chat_participants_role_in_chat {

@@ -1,0 +1,9 @@
+name,email,password,role,age,gender,address,work,specialization,bio
+Ahmad Teacher,ahmad.teacher01@example.com,Teach@1234,TEACHER,32,MALE,Amman - Abdali,Mathematics,Algebra,Experienced middle school math teacher
+Rania Teacher,rania.teacher02@example.com,Teach@1234,TEACHER,29,FEMALE,Amman - Khalda,Science,Physics,Focuses on practical experiments
+Yazan Teacher,yazan.teacher03@example.com,Teach@1234,TEACHER,35,MALE,Irbid - Downtown,English,Grammar,Helps students improve writing skills
+Maha Teacher,maha.teacher04@example.com,Teach@1234,TEACHER,31,FEMALE,Zarqa - New Zarqa,Arabic,Literature,Specialist in Arabic literature
+Khaled Teacher,khaled.teacher05@example.com,Teach@1234,TEACHER,38,MALE,Salt - Al Balqa,History,Modern History,Uses interactive storytelling in class
+Noor Teacher,noor.teacher06@example.com,Teach@1234,TEACHER,27,FEMALE,Amman - Sweifieh,Biology,Human Biology,Passionate about life sciences
+Samer Teacher,samer.teacher07@example.com,Teach@1234,TEACHER,33,MALE,Madaba - Center,Chemistry,Organic Chemistry,Simplifies complex chemistry topics
+Dana Teacher,dana.teacher08@example.com,Teach@1234,TEACHER,30,FEMALE,Aqaba - Downtown,Computer,Programming,Teaches coding with project-based approach

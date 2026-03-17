@@ -1,4 +1,4 @@
-export const isOrganization = (req, res, next) => {
+export const isTeacher = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({
       message: 'Unauthorized',
@@ -7,7 +7,7 @@ export const isOrganization = (req, res, next) => {
 
   if (req.user.role !== 'TEACHER') {
     return res.status(403).json({
-      message: 'Access denied. Organization account required.',
+      message: 'Access denied. Teacher account required.',
     });
   }
 

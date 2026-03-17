@@ -1,47 +1,29 @@
--- Expand enum sets temporarily to allow in-place value updates.
+-- Convert enum columns through VARCHAR first because MySQL treats enum values
+-- case-insensitively under the default collation and will reject pairs like
+-- 'Female' and 'FEMALE' in the same enum definition.
 ALTER TABLE `user`
-  MODIFY COLUMN `Gender` ENUM('Female','Male','FEMALE','MALE') NULL,
-  MODIFY COLUMN `Role` ENUM('Student','Parent','Admin','Academy','Teacher','STUDENT','PARENT','ADMIN','ACADEMY','TEACHER') NOT NULL;
+  MODIFY COLUMN `Gender` VARCHAR(10) NULL,
+  MODIFY COLUMN `Role` VARCHAR(20) NOT NULL;
 
 ALTER TABLE `organization`
-  MODIFY COLUMN `Role` ENUM('Academy','School','ACADEMY','SCHOOL') NOT NULL;
+  MODIFY COLUMN `Role` VARCHAR(20) NOT NULL;
 
 ALTER TABLE `chats`
-  MODIFY COLUMN `type` ENUM('group','private','GROUP','PRIVATE') NOT NULL;
-
--- Convert existing values to uppercase target set.
-UPDATE `user`
-SET `Gender` = CASE
-  WHEN `Gender` = 'Female' THEN 'FEMALE'
-  WHEN `Gender` = 'Male' THEN 'MALE'
-  ELSE `Gender`
-END;
+  MODIFY COLUMN `type` VARCHAR(20) NOT NULL;
 
 UPDATE `user`
-SET `Role` = CASE
-  WHEN `Role` = 'Student' THEN 'STUDENT'
-  WHEN `Role` = 'Parent' THEN 'PARENT'
-  WHEN `Role` = 'Admin' THEN 'ADMIN'
-  WHEN `Role` = 'Academy' THEN 'ACADEMY'
-  WHEN `Role` = 'Teacher' THEN 'TEACHER'
-  ELSE `Role`
-END;
+SET `Gender` = UPPER(`Gender`)
+WHERE `Gender` IS NOT NULL;
+
+UPDATE `user`
+SET `Role` = UPPER(`Role`);
 
 UPDATE `organization`
-SET `Role` = CASE
-  WHEN `Role` = 'Academy' THEN 'ACADEMY'
-  WHEN `Role` = 'School' THEN 'SCHOOL'
-  ELSE `Role`
-END;
+SET `Role` = UPPER(`Role`);
 
 UPDATE `chats`
-SET `type` = CASE
-  WHEN `type` = 'group' THEN 'GROUP'
-  WHEN `type` = 'private' THEN 'PRIVATE'
-  ELSE `type`
-END;
+SET `type` = UPPER(`type`);
 
--- Lock enums to uppercase-only values.
 ALTER TABLE `user`
   MODIFY COLUMN `Gender` ENUM('FEMALE','MALE') NULL,
   MODIFY COLUMN `Role` ENUM('STUDENT','PARENT','ADMIN','ACADEMY','TEACHER') NOT NULL;

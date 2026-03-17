@@ -1,4 +1,4 @@
-const USER_ROLES = new Set(["STUDENT", "PARENT", "ADMIN", "ACADEMY", "TEACHER"]);
+const USER_ROLES = new Set(["STUDENT", "PARENT", "ADMIN", "ACADEMY"]);
 const USER_GENDERS = new Set(["FEMALE", "MALE"]);
 
 const normalizeKey = (key) => String(key).trim().toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -10,7 +10,6 @@ const normalizeRole = (value) => {
 		parent: "PARENT",
 		admin: "ADMIN",
 		academy: "ACADEMY",
-		teacher: "TEACHER",
 	};
 
 	return roleMap[role] || null;
@@ -76,7 +75,7 @@ export const validateAddUserData = (data) => {
 	}
 
 	if (!role || !USER_ROLES.has(role)) {
-		errors.push("Role is required and must be one of STUDENT, PARENT, ADMIN, ACADEMY, TEACHER");
+		errors.push("Role is required and must be one of STUDENT, PARENT, ADMIN, ACADEMY");
 	}
 
 	if (role === 'STUDENT' && (!orgId || !Number.isInteger(orgId) || orgId <= 0)) {
@@ -139,7 +138,7 @@ export const validateExcelData = (data) => {
 		}
 
 		if (!rawRole || !role || !USER_ROLES.has(role)) {
-			errors.push(`Row ${rowNumber}: Role is required and must be one of STUDENT, PARENT, ADMIN, ACADEMY, TEACHER`);
+			errors.push(`Row ${rowNumber}: Role is required and must be one of STUDENT, PARENT, ADMIN, ACADEMY`);
 		}
 
 		if (rawAge === null || rawAge === undefined || rawAge === "") {

@@ -19,27 +19,28 @@ const ensureCourseBelongsToOrg = async (orgId, courseId) => {
   return course;
 };
 
-const ensureTeacherExists = async (teacherId) => {
-  const teacher = await prisma.teacher.findUnique({
+const ensureTeacherBelongsToOrg = async (orgId, teacherId) => {
+  const teacher = await prisma.teacher.findFirst({
     where: {
       Teacher_id: teacherId,
+      OrgId: orgId,
     },
   });
 
   if (!teacher) {
-    throw new AppError('Teacher not found', 404);
+    throw new AppError('Teacher not found or does not belong to your organization', 404);
   }
 
   return teacher;
 };
 
-export const createSubject = async (orgId, data) => {
-  await ensureCourseBelongsToOrg(orgId, data.Course_id);
-  await ensureTeacherExists(data.Teacher_id);
+export const createSubject = async (orgId, courseId, data) => {
+  await ensureCourseBelongsToOrg(orgId, courseId);
+  await ensureTeacherBelongsToOrg(orgId, data.Teacher_id);
 
   const subject = await prisma.subject.create({
     data: {
-      Course_id: data.Course_id,
+      Course_id: courseId,
       Teacher_id: data.Teacher_id,
       name: data.name,
       Description: data.Description ?? null,
@@ -50,18 +51,15 @@ export const createSubject = async (orgId, data) => {
 };
 
 export const getSubjects = async (orgId, courseId) => {
-  const where = {
-    course: {
-      Org_id: orgId,
-    },
-  };
-
-  if (courseId) {
-    where.Course_id = courseId;
-  }
+  await ensureCourseBelongsToOrg(orgId, courseId);
 
   const subjects = await prisma.subject.findMany({
-    where,
+    where: {
+      Course_id: courseId,
+      course: {
+        Org_id: orgId,
+      },
+    },
     orderBy: {
       id: 'asc',
     },
@@ -70,10 +68,15 @@ export const getSubjects = async (orgId, courseId) => {
   return subjects;
 };
 
-export const getSubjectById = async (orgId, subjectId) => {
+export const getSubjectById = async (orgId, courseId, subjectId) => {
+  if (courseId) {
+    await ensureCourseBelongsToOrg(orgId, courseId);
+  }
+
   const subject = await prisma.subject.findFirst({
     where: {
       id: subjectId,
+      ...(courseId ? { Course_id: courseId } : {}),
       course: {
         Org_id: orgId,
       },
@@ -81,21 +84,17 @@ export const getSubjectById = async (orgId, subjectId) => {
   });
 
   if (!subject) {
-    throw new AppError('Subject not found', 404);
+    throw new AppError('Subject not found or does not belong to this course', 404);
   }
 
   return subject;
 };
 
-export const updateSubject = async (orgId, subjectId, data) => {
-  const existing = await getSubjectById(orgId, subjectId);
-
-  if (data.Course_id && data.Course_id !== existing.Course_id) {
-    await ensureCourseBelongsToOrg(orgId, data.Course_id);
-  }
+export const updateSubject = async (orgId, courseId, subjectId, data) => {
+  const existing = await getSubjectById(orgId, courseId, subjectId);
 
   if (data.Teacher_id && data.Teacher_id !== existing.Teacher_id) {
-    await ensureTeacherExists(data.Teacher_id);
+    await ensureTeacherBelongsToOrg(orgId, data.Teacher_id);
   }
 
   const updated = await prisma.subject.update({
@@ -103,7 +102,7 @@ export const updateSubject = async (orgId, subjectId, data) => {
       id: subjectId,
     },
     data: {
-      Course_id: data.Course_id ?? undefined,
+      Course_id: courseId ?? existing.Course_id,
       Teacher_id: data.Teacher_id ?? undefined,
       name: data.name ?? undefined,
       Description: data.Description ?? undefined,
@@ -113,8 +112,8 @@ export const updateSubject = async (orgId, subjectId, data) => {
   return updated;
 };
 
-export const deleteSubject = async (orgId, subjectId) => {
-  await getSubjectById(orgId, subjectId);
+export const deleteSubject = async (orgId, courseId, subjectId) => {
+  await getSubjectById(orgId, courseId, subjectId);
 
   await prisma.subject.delete({
     where: {
