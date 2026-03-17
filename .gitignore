@@ -32,5 +32,5 @@ rag-service/**/__pycache__/
 .DS_Store
 Thumbs.db
 
-# Postman (environment files with secrets)
-postman/*.json
+# Postman (contains environment files with secrets)
+postman/
