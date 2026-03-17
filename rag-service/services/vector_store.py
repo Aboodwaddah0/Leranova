@@ -1,4 +1,4 @@
-from typing import List
+from typing import Any, Dict, List, Optional
 import hashlib
 from qdrant_client import QdrantClient, models as qmodels
 
@@ -28,8 +28,8 @@ def _ensure_collection(client: QdrantClient, vector_size: int) -> None:
         )
 
 
-def _build_point_id(lesson_id: str, chunk_index: int) -> int:
-    key = f'{lesson_id}:{chunk_index}'.encode('utf-8')
+def _build_point_id(lesson_id: str, source_type: str, source_ref: str, chunk_index: int) -> int:
+    key = f'{lesson_id}:{source_type}:{source_ref}:{chunk_index}'.encode('utf-8')
     digest = hashlib.sha256(key).hexdigest()[:16]
     return int(digest, 16)
 
@@ -39,6 +39,10 @@ def store_lesson_chunks(
     organization_id: str,
     chunks: List[str],
     embeddings: List[List[float]],
+    source_type: str = 'video',
+    source_name: str = 'legacy-video',
+    source_ref: str = 'legacy-video',
+    chunk_metadata: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     if not chunks or not embeddings:
         return
@@ -52,16 +56,31 @@ def store_lesson_chunks(
 
     points = []
     for index, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
-        point_id = _build_point_id(lesson_id, index)
+        point_id = _build_point_id(lesson_id, source_type, source_ref, index)
+        meta = chunk_metadata[index] if chunk_metadata and index < len(chunk_metadata) else {}
+        timestamp = meta.get('timestamp')
+        page = meta.get('page')
+        section = meta.get('section')
+
         points.append(
             qmodels.PointStruct(
                 id=point_id,
                 vector=embedding,
                 payload={
+                    "lessonId": lesson_id,
+                    "sourceType": source_type,
+                    "sourceName": source_name,
                     "lesson_id": lesson_id,
                     "organization_id": organization_id,
+                    "source_type": source_type,
+                    "source_name": source_name,
                     "chunk_index": index,
                     "chunk_text": chunk_text,
+                    "chunkIndex": index,
+                    "chunkText": chunk_text,
+                    "timestamp": timestamp,
+                    "page": page,
+                    "section": section,
                 },
             )
         )
@@ -71,3 +90,59 @@ def store_lesson_chunks(
         points=points,
         wait=True,
     )
+
+
+def retrieve_lesson_chunks(
+    query_vector: List[float],
+    lesson_id: Optional[str] = None,
+    limit: int = 5,
+) -> List[Dict[str, Any]]:
+    client = _get_client()
+
+    query_filter = None
+    if lesson_id:
+        query_filter = qmodels.Filter(
+            must=[
+                qmodels.FieldCondition(
+                    key='lessonId',
+                    match=qmodels.MatchValue(value=lesson_id),
+                )
+            ]
+        )
+
+    hits = client.search(
+        collection_name=settings.qdrant_collection,
+        query_vector=query_vector,
+        query_filter=query_filter,
+        limit=limit,
+        with_payload=True,
+    )
+
+    results: List[Dict[str, Any]] = []
+    for hit in hits:
+        payload = hit.payload or {}
+        source_type = payload.get('sourceType') or payload.get('source_type')
+        source_name = payload.get('sourceName') or payload.get('source_name')
+        timestamp = payload.get('timestamp')
+        page = payload.get('page')
+
+        source_hint = None
+        if source_type == 'video' and timestamp is not None:
+            source_hint = f"Source: video at {int(float(timestamp) // 60):02d}:{int(float(timestamp) % 60):02d}"
+        elif source_type == 'pdf' and page is not None:
+            source_hint = f"Source: page {page}"
+
+        results.append(
+            {
+                'text': payload.get('chunkText') or payload.get('chunk_text'),
+                'sourceType': source_type,
+                'sourceName': source_name,
+                'timestamp': timestamp,
+                'page': page,
+                'section': payload.get('section'),
+                'score': hit.score,
+                'sourceHint': source_hint,
+            }
+        )
+
+    return results

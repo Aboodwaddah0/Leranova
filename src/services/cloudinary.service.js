@@ -45,3 +45,36 @@ export const deleteVideo = async (publicId, resourceType = 'video') => {
     type: 'upload',
   });
 };
+
+export const uploadLessonAssetFile = async (fileBuffer, options = {}) => {
+  const client = configureCloudinary();
+
+  if (!Buffer.isBuffer(fileBuffer)) {
+    throw new Error('Expected file buffer for lesson asset upload');
+  }
+
+  const result = await new Promise((resolve, reject) => {
+    const uploadStream = client.uploader.upload_stream(
+      {
+        resource_type: 'raw',
+        ...options,
+      },
+      (error, response) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve(response);
+      }
+    );
+
+    uploadStream.end(fileBuffer);
+  });
+
+  return {
+    fileUrl: result.secure_url,
+    filePublicId: result.public_id,
+    fileResourceType: result.resource_type,
+  };
+};

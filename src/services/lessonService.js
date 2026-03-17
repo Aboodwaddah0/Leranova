@@ -76,6 +76,9 @@ export const createLesson = async (orgId, subjectId, data, videoBuffer) => {
 		try {
 			await triggerLessonRagProcessing({
 				lessonId: lesson.id,
+				fileUrl: lesson.videoUrl,
+				fileType: 'video',
+				sourceName: lesson.videoPublicId ?? `lesson-${lesson.id}-video`,
 				videoUrl: lesson.videoUrl,
 				organizationId: orgId,
 			});

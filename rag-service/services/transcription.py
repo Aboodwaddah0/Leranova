@@ -13,8 +13,28 @@ def _get_model() -> WhisperModel:
     )
 
 
-def transcribe_audio(audio_path: str) -> str:
+def transcribe_audio_segments(audio_path: str):
     model = _get_model()
     segments, _ = model.transcribe(audio_path)
-    transcript = " ".join(segment.text.strip() for segment in segments if segment.text.strip())
+
+    normalized = []
+    for segment in segments:
+        text = (segment.text or '').strip()
+        if not text:
+            continue
+
+        normalized.append(
+            {
+                "start": float(getattr(segment, 'start', 0.0) or 0.0),
+                "end": float(getattr(segment, 'end', 0.0) or 0.0),
+                "text": text,
+            }
+        )
+
+    return normalized
+
+
+def transcribe_audio(audio_path: str) -> str:
+    segments = transcribe_audio_segments(audio_path)
+    transcript = " ".join(segment["text"] for segment in segments)
     return transcript.strip()

@@ -105,8 +105,23 @@ model lesson {
   lesson_transcripts lesson_transcripts[]
   subject       subject         @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_subject")
   lesson_assets lesson_assets[]
+  rag_assets    lesson_rag_asset[]
 
   @@index([Subject_id], map: "idx_lesson_subject_id")
+}
+
+model lesson_rag_asset {
+  id            Int      @id @default(autoincrement())
+  lessonId      Int
+  type          String   @db.VarChar(20)
+  fileUrl       String   @db.VarChar(500)
+  extractedText String?  @db.LongText
+  sourceName    String?  @db.VarChar(255)
+  createdAt     DateTime @default(now()) @db.Timestamp(0)
+  lesson        lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_rag_asset_lesson")
+
+  @@index([lessonId], map: "idx_lesson_rag_asset_lesson_id")
+  @@index([type], map: "idx_lesson_rag_asset_type")
 }
 
 model lesson_transcripts {

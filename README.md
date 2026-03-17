@@ -18,6 +18,18 @@ It automatically:
 
 ---
 
+## ✨ Features
+
+* Multi-source lesson knowledge (video + documents)
+* Supports PDF, DOCX, TXT attachments
+* Automatic RAG processing for all uploaded files
+* Semantic search across all lesson content
+* Source traceability:
+  * Video timestamps
+  * PDF page references
+
+---
+
 ## 🧱 Tech Stack
 
 | Layer         | Technology             |
@@ -43,14 +55,14 @@ Client
   v
 Node API (5000)
   |- MariaDB (Prisma)
-  |- Cloudinary (video URLs)
-  '- POST /process-lesson
+  |- Cloudinary (video + assets)
+  |- POST /api/subjects/:subjectId/lessons
+  '- POST /api/lessons/:lessonId/assets
         |
         v
    RAG Service (8000)
-        |- Download Video
-        |- Extract Audio (ffmpeg)
-        |- Transcribe (Whisper)
+        |- Video: extract audio + transcribe
+        |- Docs: extract text (pdf/docx/txt)
         |- Chunk Text
         |- Generate Embeddings
         '- Store → Qdrant
@@ -146,19 +158,51 @@ docker compose up --build
 
 ## 🧠 RAG Flow
 
-1. Create lesson with video URL
-2. API triggers RAG service
-3. RAG processes:
+1. Create lesson with video or upload attachment asset.
+2. API triggers RAG service automatically.
+3. RAG processes by source type:
 
-   * audio extraction
-   * transcription
-   * chunking
-   * embedding
+  * Video: video -> audio -> transcription -> chunk -> embedding
+  * Documents: file -> extract text -> chunk -> embedding
 4. Data stored in:
 
 ```text
 Qdrant → learnova_lesson_chunks
 ```
+
+---
+
+## 📎 Upload Attachments
+
+Endpoint:
+
+```text
+POST /api/lessons/:lessonId/assets
+```
+
+Supported file types:
+
+* PDF
+* DOCX
+* TXT
+
+Each uploaded file is:
+
+* stored in Cloudinary
+* processed by RAG
+* converted into embeddings in Qdrant
+
+---
+
+## 🧭 Traceability
+
+RAG payload metadata keeps source traceability:
+
+* Video chunks include timestamps
+* PDF chunks include page numbers
+* DOCX/TXT chunks can include section info
+
+This improves answer quality and UX because responses can reference exact source locations.
 
 ---
 
@@ -196,6 +240,35 @@ docker compose up
 * Health → GET /health
 * RAG → /docs
 * Qdrant → collection appears after processing
+
+---
+
+## 🧪 Testing
+
+1. Start services:
+
+```bash
+docker compose up -d
+```
+
+2. Upload a file via Postman:
+
+```text
+POST /api/lessons/:lessonId/assets
+```
+
+3. Check RAG logs:
+
+```bash
+docker compose logs -f rag-service
+```
+
+Expected log examples:
+
+```text
+[RAG] processing fileType=pdf
+[RAG] chunks stored=...
+```
 
 ---
 

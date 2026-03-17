@@ -4,6 +4,7 @@ import authRoutes from './routes/authRoutes.js';
 import courseRoutes from './routes/courseRoutes.js';
 import subjectRoutes from './routes/subjectRoutes.js';
 import lessonRoutes from './routes/lessonRoutes.js';
+import lessonRagAssetRoutes from './routes/lessonRagAssetRoutes.js';
 import organizationRoutes from './routes/organizationRoutes.js';
 import teacherRoutes from './routes/teacherRoutes.js';
 
@@ -31,6 +32,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/courses', courseRoutes);
 app.use('/api/subjects', subjectRoutes);
 app.use('/api/subjects/:subjectId/lessons', lessonRoutes);
+app.use('/api/lessons/:lessonId/assets', lessonRagAssetRoutes);
 app.use('/api/organizations', organizationRoutes);
 app.use('/api/teachers', teacherRoutes);
 
