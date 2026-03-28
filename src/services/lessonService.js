@@ -1,16 +1,12 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
-import { uploadVideo, deleteVideo } from './cloudinary.service.js';
-import { triggerLessonRagProcessing } from './rag.service.js';
+import { deleteUploadedFile } from './cloudinary.service.js';
 
 const serializeLesson = (lesson) => ({
 	id: lesson.id,
 	subjectId: lesson.Subject_id,
 	title: lesson.name,
 	description: lesson.Description,
-	videoUrl: lesson.videoUrl,
-	videoPublicId: lesson.videoPublicId,
-	videoResourceType: lesson.videoResourceType,
 });
 
 const ensureSubjectBelongsToOrganization = async (orgId, subjectId) => {
@@ -51,43 +47,18 @@ const ensureLessonBelongsToSubject = async (orgId, subjectId, lessonId) => {
 	return lesson;
 };
 
-export const createLesson = async (orgId, subjectId, data, videoBuffer) => {
-	await ensureSubjectBelongsToOrganization(orgId, subjectId);
+export const createLesson = async (orgId, subjectId, data) => {
+  await ensureSubjectBelongsToOrganization(orgId, subjectId);
 
-	let videoMeta = null;
-	if (videoBuffer) {
-		videoMeta = await uploadVideo(videoBuffer, {
-			folder: 'learnova/lessons/videos',
-		});
-	}
+  const lesson = await prisma.lesson.create({
+    data: {
+      Subject_id: subjectId,
+      name: data.title,
+      Description: data.description ?? null,
+    },
+  });
 
-	const lesson = await prisma.lesson.create({
-		data: {
-			Subject_id: subjectId,
-			name: data.title,
-			Description: data.description ?? null,
-			videoUrl: videoMeta?.videoUrl ?? null,
-			videoPublicId: videoMeta?.videoPublicId ?? null,
-			videoResourceType: videoMeta?.videoResourceType ?? null,
-		},
-	});
-
-	if (lesson.videoUrl) {
-		try {
-			await triggerLessonRagProcessing({
-				lessonId: lesson.id,
-				fileUrl: lesson.videoUrl,
-				fileType: 'video',
-				sourceName: lesson.videoPublicId ?? `lesson-${lesson.id}-video`,
-				videoUrl: lesson.videoUrl,
-				organizationId: orgId,
-			});
-		} catch (error) {
-			console.error(`RAG trigger failed for lesson ${lesson.id}:`, error.message);
-		}
-	}
-
-	return serializeLesson(lesson);
+  return serializeLesson(lesson);
 };
 
 export const getLessons = async (orgId, subjectId) => {
@@ -115,20 +86,8 @@ export const getLessonById = async (orgId, subjectId, lessonId) => {
 	return serializeLesson(lesson);
 };
 
-export const updateLesson = async (orgId, subjectId, lessonId, data, videoBuffer) => {
-	const existing = await ensureLessonBelongsToSubject(orgId, subjectId, lessonId);
-
-	let nextVideo = null;
-
-	if (videoBuffer) {
-		if (existing.videoPublicId) {
-			await deleteVideo(existing.videoPublicId, existing.videoResourceType ?? 'video');
-		}
-
-		nextVideo = await uploadVideo(videoBuffer, {
-			folder: 'learnova/lessons/videos',
-		});
-	}
+export const updateLesson = async (orgId, subjectId, lessonId, data) => {
+	await ensureLessonBelongsToSubject(orgId, subjectId, lessonId);
 
 	const updated = await prisma.lesson.update({
 		where: {
@@ -137,9 +96,6 @@ export const updateLesson = async (orgId, subjectId, lessonId, data, videoBuffer
 		data: {
 			name: data.title ?? undefined,
 			Description: data.description ?? undefined,
-			videoUrl: nextVideo?.videoUrl ?? undefined,
-			videoPublicId: nextVideo?.videoPublicId ?? undefined,
-			videoResourceType: nextVideo?.videoResourceType ?? undefined,
 		},
 	});
 
@@ -147,10 +103,33 @@ export const updateLesson = async (orgId, subjectId, lessonId, data, videoBuffer
 };
 
 export const deleteLesson = async (orgId, subjectId, lessonId) => {
-	const existing = await ensureLessonBelongsToSubject(orgId, subjectId, lessonId);
+	await ensureLessonBelongsToSubject(orgId, subjectId, lessonId);
 
-	if (existing.videoPublicId) {
-		await deleteVideo(existing.videoPublicId, existing.videoResourceType ?? 'video');
+	const attachments = await prisma.lesson_attachment.findMany({
+		where: { lessonId },
+		select: {
+			id: true,
+			filePublicId: true,
+			fileResourceType: true,
+		},
+	});
+
+	for (const attachment of attachments) {
+		if (!attachment.filePublicId) {
+			continue;
+		}
+
+		try {
+			await deleteUploadedFile(
+				attachment.filePublicId,
+				attachment.fileResourceType || 'raw'
+			);
+		} catch (error) {
+			console.error(
+				`Cloudinary cleanup failed for lesson attachment ${attachment.id}:`,
+				error.message
+			);
+		}
 	}
 
 	await prisma.lesson.delete({

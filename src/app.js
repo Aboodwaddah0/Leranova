@@ -2,11 +2,13 @@ import express from 'express';
 import authRoutes from './routes/authRoutes.js';
 
 import courseRoutes from './routes/courseRoutes.js';
+import enrollmentRoutes from './routes/enrollmentRoutes.js';
 import subjectRoutes from './routes/subjectRoutes.js';
 import lessonRoutes from './routes/lessonRoutes.js';
-import lessonRagAssetRoutes from './routes/lessonRagAssetRoutes.js';
+import lessonAttachmentRoutes from './routes/lessonAttachmentRoutes.js';
 import organizationRoutes from './routes/organizationRoutes.js';
 import teacherRoutes from './routes/teacherRoutes.js';
+import marksRoutes from './routes/marksRoutes.js';
 
 import userRoutes from './routes/userRoutes.js';
 
@@ -30,11 +32,19 @@ app.get('/health', (_req, res) => {
 
 
 app.use('/api/courses', courseRoutes);
-app.use('/api/subjects', subjectRoutes);
+
+app.use('/api/enrollments', enrollmentRoutes);
+
+app.use('/api/courses/:courseId/subjects', subjectRoutes);
+
 app.use('/api/subjects/:subjectId/lessons', lessonRoutes);
-app.use('/api/lessons/:lessonId/assets', lessonRagAssetRoutes);
+app.use('/api/lessons/:lessonId/attachments', lessonAttachmentRoutes);
+app.use('/api/lessons/:lessonId/assets', lessonAttachmentRoutes);
+
 app.use('/api/organizations', organizationRoutes);
+
 app.use('/api/teachers', teacherRoutes);
+app.use('/api/marks', marksRoutes);
 
 // auth routes
 app.use('/api/auth', authRoutes);

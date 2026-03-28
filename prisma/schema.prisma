@@ -13,6 +13,8 @@ model academy_user {
   organization    organization @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_academy_user_org")
   user            user         @relation(fields: [user_academy_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_academy_user_user")
   enrollment      enrollment[]
+  createdAt       DateTime     @default(now()) @db.Timestamp(0)
+  updatedAt       DateTime     @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([OrgId], map: "fk_academy_user_org")
 }
@@ -53,17 +55,14 @@ model chats {
 }
 
 model comment {
-  id            Int            @id @default(autoincrement())
-  lesson_id     Int?
-  asset_id      Int?
-  User_id       Int
-  time          DateTime       @default(now()) @db.Timestamp(0)
-  content       String         @db.Text
-  lesson_assets lesson_assets? @relation(fields: [asset_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_comment_asset")
-  lesson        lesson?        @relation(fields: [lesson_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_comment_lesson")
-  user          user           @relation(fields: [User_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_comment_user")
+  id        Int      @id @default(autoincrement())
+  lesson_id Int?
+  User_id   Int
+  time      DateTime @default(now()) @db.Timestamp(0)
+  content   String   @db.Text
+  lesson    lesson?  @relation(fields: [lesson_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_comment_lesson")
+  user      user     @relation(fields: [User_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_comment_user")
 
-  @@index([asset_id], map: "idx_comment_asset_id")
   @@index([lesson_id], map: "idx_comment_lesson_id")
   @@index([User_id], map: "idx_comment_user_id")
 }
@@ -79,35 +78,57 @@ model course {
   organization organization @relation(fields: [Org_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_course_org")
   student      student[]
   subject      subject[]
+  enrollment   enrollment[]
+  createdAt    DateTime     @default(now()) @db.Timestamp(0)
+  updatedAt    DateTime     @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([Org_id], map: "idx_course_org_id")
 }
 
 model enrollment {
   user_Academy_id Int
-  OrgId           Int
+  Course_id       Int
   academy_user    academy_user @relation(fields: [user_Academy_id], references: [user_academy_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_enrollment_academy_user")
-  organization    organization @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_enrollment_org")
+  course          course       @relation(fields: [Course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_enrollment_course")
+  createdAt       DateTime     @default(now()) @db.Timestamp(0)
+  updatedAt       DateTime     @default(now()) @updatedAt @db.Timestamp(0)
 
-  @@id([user_Academy_id, OrgId])
-  @@index([OrgId], map: "fk_enrollment_org")
+  @@id([user_Academy_id, Course_id])
+  @@index([Course_id], map: "fk_enrollment_course")
 }
 
 model lesson {
-  id            Int             @id @default(autoincrement())
-  Subject_id    Int
-  name          String          @db.VarChar(255)
-  Description   String?         @db.Text
-  videoUrl      String?         @db.VarChar(500)
-  videoPublicId String?         @db.VarChar(255)
-  videoResourceType String?     @db.VarChar(50)
-  comment       comment[]
+  id                Int                @id @default(autoincrement())
+  Subject_id        Int
+  name              String             @db.VarChar(255)
+  Description       String?            @db.Text
+  comment           comment[]
   lesson_transcripts lesson_transcripts[]
-  subject       subject         @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_subject")
-  lesson_assets lesson_assets[]
-  rag_assets    lesson_rag_asset[]
+  subject           subject            @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_subject")
+  rag_assets        lesson_rag_asset[]
+  attachments       lesson_attachment[]
+  createdAt         DateTime           @default(now()) @db.Timestamp(0)
+  updatedAt         DateTime           @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([Subject_id], map: "idx_lesson_subject_id")
+}
+
+model lesson_attachment {
+  id               Int      @id @default(autoincrement())
+  lessonId         Int
+  fileUrl          String   @db.VarChar(500)
+  filePublicId     String   @db.VarChar(255)
+  fileResourceType String   @db.VarChar(50)
+  mimeType         String?  @db.VarChar(100)
+  originalName     String?  @db.VarChar(255)
+  fileType         lesson_attachment_file_type
+  sizeBytes        BigInt?
+  createdAt        DateTime @default(now()) @db.Timestamp(0)
+  updatedAt        DateTime @default(now()) @updatedAt @db.Timestamp(0)
+  lesson           lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_attachment_lesson")
+
+  @@index([lessonId], map: "idx_lesson_attachment_lesson_id")
+  @@index([fileType], map: "idx_lesson_attachment_file_type")
 }
 
 model lesson_rag_asset {
@@ -134,30 +155,22 @@ model lesson_transcripts {
   @@index([lesson_id], map: "idx_lesson_transcripts_lesson_id")
 }
 
-model lesson_assets {
-  id          Int       @id @default(autoincrement())
-  Lesson_id   Int
-  Name        String    @db.VarChar(255)
-  Description String?   @db.Text
-  Url         String?   @db.VarChar(500)
-  Files       String?   @db.VarChar(500)
-  comment     comment[]
-  lesson      lesson    @relation(fields: [Lesson_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_assets_lesson")
-
-  @@index([Lesson_id], map: "idx_lesson_assets_lesson_id")
-}
-
 model marks {
   id         Int       @id @default(autoincrement())
-  User_id    Int
+  Student_id Int
   Subject_id Int
   Numbers    Decimal   @db.Decimal(5, 2)
+  OutOf      Decimal   @default(100) @db.Decimal(5, 2)
+  ExamPercentage Decimal @default(100) @db.Decimal(5, 2)
+  MarkType   String    @default("EXAM") @db.VarChar(50)
   time       DateTime? @db.Date
+  student    student   @relation(fields: [Student_id], references: [Student_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_marks_student")
   subject    subject   @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_marks_subject")
-  user       user      @relation(fields: [User_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_marks_user")
+  createdAt  DateTime  @default(now()) @db.Timestamp(0)
+  updatedAt  DateTime  @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([Subject_id], map: "idx_marks_subject_id")
-  @@index([User_id], map: "idx_marks_user_id")
+  @@index([Student_id], map: "idx_marks_student_id")
 }
 
 model message_attachments {
@@ -192,13 +205,15 @@ model messages {
 }
 
 model notification {
-  id      Int      @id @default(autoincrement())
-  User_id Int
-  content String   @db.Text
-  Type    String   @db.VarChar(100)
-  Url     String?  @db.VarChar(500)
-  isSeen  Boolean? @default(false)
-  user    user     @relation(fields: [User_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_notification_user")
+  id        Int      @id @default(autoincrement())
+  User_id   Int
+  content   String   @db.Text
+  Type      String   @db.VarChar(100)
+  Url       String?  @db.VarChar(500)
+  isSeen    Boolean? @default(false)
+  user      user     @relation(fields: [User_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_notification_user")
+  createdAt DateTime @default(now()) @db.Timestamp(0)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([User_id], map: "idx_notification_user_id")
 }
@@ -217,18 +232,20 @@ model organization {
   academy_user    academy_user[]
   chats           chats[]
   course          course[]
-  enrollment      enrollment[]
   student         student[]
   teacher         teacher[]
-    user            user[]
   status          organization_status @default(PENDING)
+  createdAt       DateTime          @default(now()) @db.Timestamp(0)
+  updatedAt       DateTime          @default(now()) @updatedAt @db.Timestamp(0)
 }
 
 model parent {
-  Parent_id Int       @id
-  Work      String?   @db.VarChar(255)
-  user      user      @relation(fields: [Parent_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_parent_user")
+  Parent_id Int      @id
+  Work      String?  @db.VarChar(255)
+  user      user     @relation(fields: [Parent_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_parent_user")
   student   student[]
+  createdAt DateTime @default(now()) @db.Timestamp(0)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamp(0)
 }
 
 model student {
@@ -237,9 +254,12 @@ model student {
   OrgId        Int
   Course_id    Int?
   course       course?      @relation(fields: [Course_id], references: [id], onUpdate: Restrict, map: "fk_student_course")
+  marks        marks[]
   organization organization @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_org")
   parent       parent?      @relation(fields: [Parent_id], references: [Parent_id], onUpdate: Restrict, map: "fk_student_parent")
   user         user         @relation(fields: [Student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_user")
+  createdAt    DateTime     @default(now()) @db.Timestamp(0)
+  updatedAt    DateTime     @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([Course_id], map: "idx_student_course_id")
   @@index([OrgId], map: "idx_student_org_id")
@@ -257,6 +277,8 @@ model subject {
   marks       marks[]
   course      course   @relation(fields: [Course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_course")
   teacher     teacher  @relation(fields: [Teacher_id], references: [Teacher_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_teacher")
+  createdAt   DateTime @default(now()) @db.Timestamp(0)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([Course_id], map: "idx_subject_course_id")
   @@index([Teacher_id], map: "idx_subject_teacher_id")
@@ -278,28 +300,24 @@ model teacher {
 
 model user {
   id                Int                 @id @default(autoincrement())
-  OrgId             Int?
   name              String              @db.VarChar(255)
   age               Int?
   gender            user_Gender?
   email             String              @unique(map: "Email") @db.VarChar(255)
   passwordHashed    String              @db.VarChar(255)
-  role_pk           String?             @db.VarChar(100)
   address           String?             @db.VarChar(255)
   role              user_Role
   academy_user      academy_user?
   chat_participants chat_participants[]
   chats             chats[]
   comment           comment[]
-  marks             marks[]
   messages          messages[]
   notification      notification[]
-  organization      organization?       @relation(fields: [OrgId], references: [id], onDelete: SetNull, onUpdate: Restrict, map: "fk_user_org")
   parent            parent?
   student           student?
   teacher           teacher?
-
-  @@index([OrgId], map: "idx_user_org_id")
+  createdAt         DateTime            @default(now()) @db.Timestamp(0)
+  updatedAt         DateTime            @default(now()) @updatedAt @db.Timestamp(0)
 }
 
 enum chat_participants_role_in_chat {
@@ -343,6 +361,16 @@ enum organization_status {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum lesson_attachment_file_type {
+  PDF
+  DOCX
+  TXT
+  IMAGE
+  VIDEO
+  AUDIO
+  OTHER
 }
     
     

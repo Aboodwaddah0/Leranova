@@ -25,25 +25,10 @@ const getCourseIdFromParams = (req) => {
   return courseId;
 };
 
-const getOptionalCourseIdFromParams = (req) => {
-  if (req.params.courseId === undefined) {
-    return undefined;
-  }
-
-  const courseId = Number(req.params.courseId);
-
-  if (Number.isNaN(courseId)) {
-    throw new AppError('Invalid course id', 400);
-  }
-
-  return courseId;
-};
-
 // Sample manual test (Subject):
 // - Authorization: Bearer <org-jwt>
-// - POST /api/subjects
+// - POST /api/courses/:courseId/subjects
 //   {
-//     "Course_id": 1,
 //     "Teacher_id": 1,
 //     "name": "Algebra",
 //     "Description": "Intro to algebra"
@@ -93,7 +78,7 @@ export const getSubjectsController = async (req, res, next) => {
 export const getSubjectByIdController = async (req, res, next) => {
   try {
     const orgId = req.user.id;
-    const courseId = getOptionalCourseIdFromParams(req);
+    const courseId = getCourseIdFromParams(req);
     const subjectId = Number(req.params.subjectId);
 
     if (Number.isNaN(subjectId)) {
@@ -113,7 +98,7 @@ export const getSubjectByIdController = async (req, res, next) => {
 
 export const updateSubjectController = async (req, res, next) => {
   try {
-    const courseId = getOptionalCourseIdFromParams(req);
+    const courseId = getCourseIdFromParams(req);
     const subjectId = Number(req.params.subjectId);
 
     if (Number.isNaN(subjectId)) {
@@ -141,7 +126,7 @@ export const updateSubjectController = async (req, res, next) => {
 
 export const deleteSubjectController = async (req, res, next) => {
   try {
-    const courseId = getOptionalCourseIdFromParams(req);
+    const courseId = getCourseIdFromParams(req);
     const subjectId = Number(req.params.subjectId);
 
     if (Number.isNaN(subjectId)) {
