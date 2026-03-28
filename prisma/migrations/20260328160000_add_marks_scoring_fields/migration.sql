@@ -1,0 +1,12 @@
+ALTER TABLE `marks`
+ADD COLUMN `OutOf` DECIMAL(5,2) NOT NULL DEFAULT 100.00,
+ADD COLUMN `ExamPercentage` DECIMAL(5,2) NOT NULL DEFAULT 100.00,
+ADD COLUMN `MarkType` VARCHAR(50) NOT NULL DEFAULT 'EXAM';
+
+UPDATE `marks`
+SET `OutOf` = 100.00
+WHERE `OutOf` <= 0;
+
+UPDATE `marks`
+SET `ExamPercentage` = 100.00
+WHERE `ExamPercentage` < 0 OR `ExamPercentage` > 100;

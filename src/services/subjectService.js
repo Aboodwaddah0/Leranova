@@ -69,14 +69,12 @@ export const getSubjects = async (orgId, courseId) => {
 };
 
 export const getSubjectById = async (orgId, courseId, subjectId) => {
-  if (courseId) {
-    await ensureCourseBelongsToOrg(orgId, courseId);
-  }
+  await ensureCourseBelongsToOrg(orgId, courseId);
 
   const subject = await prisma.subject.findFirst({
     where: {
       id: subjectId,
-      ...(courseId ? { Course_id: courseId } : {}),
+      Course_id: courseId,
       course: {
         Org_id: orgId,
       },
@@ -102,7 +100,7 @@ export const updateSubject = async (orgId, courseId, subjectId, data) => {
       id: subjectId,
     },
     data: {
-      Course_id: courseId ?? existing.Course_id,
+      Course_id: existing.Course_id,
       Teacher_id: data.Teacher_id ?? undefined,
       name: data.name ?? undefined,
       Description: data.Description ?? undefined,

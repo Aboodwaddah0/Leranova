@@ -13,7 +13,7 @@ import {
 } from '../services/lessonService.js';
 import AppError from '../utils/appError.js';
 
-const normalizeLessonPayload = (body) => ({
+const normalizeLessonPayload = (body = {}) => ({
 	title: body.title,
 	description: body.description,
 });
@@ -49,7 +49,7 @@ export const createLessonController = async (req, res, next) => {
 			return next(new AppError(error.details[0].message, 400));
 		}
 
-		const lesson = await createLesson(req.user.id, subjectId, value, req.file?.buffer);
+		const lesson = await createLesson(req.user.id, subjectId, value);
 
 		return res.status(201).json({
 			message: 'Lesson created successfully',
@@ -100,7 +100,7 @@ export const updateLessonController = async (req, res, next) => {
 			return next(new AppError(error.details[0].message, 400));
 		}
 
-		const lesson = await updateLesson(req.user.id, subjectId, lessonId, value, req.file?.buffer);
+		const lesson = await updateLesson(req.user.id, subjectId, lessonId, value);
 
 		return res.status(200).json({
 			message: 'Lesson updated successfully',

@@ -1,4 +1,5 @@
-const USER_ROLES = new Set(["STUDENT", "PARENT", "ADMIN", "ACADEMY"]);
+const USER_ROLES = new Set(["STUDENT", "PARENT", "ADMIN", "ACADEMY", "TEACHER"]);
+const USER_ROLES_TEXT = "STUDENT, PARENT, ADMIN, ACADEMY, TEACHER";
 const USER_GENDERS = new Set(["FEMALE", "MALE"]);
 
 const normalizeKey = (key) => String(key).trim().toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -10,6 +11,7 @@ const normalizeRole = (value) => {
 		parent: "PARENT",
 		admin: "ADMIN",
 		academy: "ACADEMY",
+		teacher: "TEACHER"
 	};
 
 	return roleMap[role] || null;
@@ -54,6 +56,12 @@ export const validateAddUserData = (data) => {
 			: String(rawAddress).trim();
 	const rawOrgId = data?.orgId;
 	const orgId = rawOrgId === undefined || rawOrgId === null || rawOrgId === "" ? null : Number(rawOrgId);
+	const orgRole = String(data?.orgRole ?? "").trim().toUpperCase();
+
+	const rawParentId = data?.parentId;
+	const parentId = rawParentId === undefined || rawParentId === null || rawParentId === "" ? null : Number(rawParentId);
+	const rawCourseId = data?.courseId;
+	const courseId = rawCourseId === undefined || rawCourseId === null || rawCourseId === "" ? null : Number(rawCourseId);
 
 	if (!name) {
 		errors.push("Name is required");
@@ -75,7 +83,7 @@ export const validateAddUserData = (data) => {
 	}
 
 	if (!role || !USER_ROLES.has(role)) {
-		errors.push("Role is required and must be one of STUDENT, PARENT, ADMIN, ACADEMY");
+		errors.push(`Role is required and must be one of ${USER_ROLES_TEXT}`);
 	}
 
 	if (role === 'STUDENT' && (!orgId || !Number.isInteger(orgId) || orgId <= 0)) {
@@ -90,6 +98,15 @@ export const validateAddUserData = (data) => {
 		errors.push("Gender must be FEMALE or MALE");
 	}
 
+	// Validate student-specific fields
+	if (parentId !== null && (!Number.isInteger(parentId) || parentId <= 0)) {
+		errors.push("parentId must be a valid positive integer");
+	}
+
+	if (courseId !== null && (!Number.isInteger(courseId) || courseId <= 0)) {
+		errors.push("courseId must be a valid positive integer");
+	}
+
 	return {
 		errors,
 		validatedData: {
@@ -101,6 +118,9 @@ export const validateAddUserData = (data) => {
 			gender,
 			address,
 			orgId,
+			orgRole,
+			parentId,
+			courseId,
 		},
 	};
 };
@@ -124,21 +144,19 @@ export const validateExcelData = (data) => {
 		const rawAge = getRowValue(row, "age");
 		const rawGender = getRowValue(row, "Gender");
 		const rawAddress = getRowValue(row, "Address");
-		const rawOrgId = getRowValue(row, "orgId");
 
 		const name = String(rawName || "").trim();
 		const role = normalizeRole(rawRole);
 		const gender = normalizeGender(rawGender);
 		const address = String(rawAddress || "").trim();
 		const ageValue = rawAge === null || rawAge === undefined || rawAge === "" ? null : Number(rawAge);
-		const orgIdValue = rawOrgId === null || rawOrgId === undefined || rawOrgId === "" ? null : Number(rawOrgId);
 
 		if (!name) {
 			errors.push(`Row ${rowNumber}: Name is required`);
 		}
 
 		if (!rawRole || !role || !USER_ROLES.has(role)) {
-			errors.push(`Row ${rowNumber}: Role is required and must be one of STUDENT, PARENT, ADMIN, ACADEMY`);
+			errors.push(`Row ${rowNumber}: Role is required and must be one of ${USER_ROLES_TEXT}`);
 		}
 
 		if (rawAge === null || rawAge === undefined || rawAge === "") {
@@ -171,7 +189,6 @@ export const validateExcelData = (data) => {
 				age: ageValue,
 				gender,
 				address,
-				orgId: orgIdValue,
 			});
 		}
 	});

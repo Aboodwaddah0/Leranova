@@ -11,7 +11,6 @@ CREATE TABLE User (
     Gender ENUM('FEMALE', 'MALE') NULL,
     Email VARCHAR(255) NOT NULL UNIQUE,
     Password_Hashed VARCHAR(255) NOT NULL,
-    role_pk VARCHAR(100) NULL,
     Address VARCHAR(255) NULL,
     Role ENUM('STUDENT', 'PARENT', 'ADMIN', 'ACADEMY', 'TEACHER') NOT NULL
 );

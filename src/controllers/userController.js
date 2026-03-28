@@ -54,9 +54,11 @@ export const generateUsersFromExcel = async (req, res) => {
       });
     }
 
-    // Inject orgId from token for STUDENT rows
-    const rowsWithOrg = validatedRows.map((row) =>
-      row.role === 'STUDENT' ? { ...row, orgId: organizationId } : row
+    // Keep Excel rows limited to profile fields; orgId is server-side from token.
+    const rowsWithOrg = validatedRows.map(({ name, role, age, gender, address }) =>
+      role === 'STUDENT' || role === 'TEACHER'
+        ? { name, role, age, gender, address, orgId: organizationId, orgRole: req.user?.role }
+        : { name, role, age, gender, address }
     );
     const organization = await prisma.organization.findUnique({
       where: { id: organizationId },
@@ -116,7 +118,7 @@ export const generateUsersFromExcel = async (req, res) => {
 
 export const  addUserController=async (req,res)=>{
   try {
-const bodyWithOrg = { ...req.body, orgId: req.user?.id };
+const bodyWithOrg = { ...req.body, orgId: req.user?.id, orgRole: req.user?.role };
 const { errors, validatedData } = validateAddUserData(bodyWithOrg);
 
 if (errors.length > 0) {
