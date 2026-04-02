@@ -1,53 +1,27 @@
-# 🚀 Learnova Backend
+# Learnova Backend
 
-> AI-powered learning platform backend with full RAG pipeline (Video → Transcription → Embeddings → Vector Search)
+Learnova is a backend for an academy and course platform, built with Node.js, Prisma, and MariaDB, with a companion Python RAG service for lesson content indexing.
 
----
+The system supports:
 
-## 📌 Overview
+- organization and user flows
+- courses, subjects, lessons, enrollments, marks
+- lesson file attachments (PDF, DOCX, TXT, audio/video)
+- automatic content processing into vector search using Qdrant
 
-Learnova is a production-ready backend for an academy-style platform that transforms video lessons into searchable knowledge using a Retrieval-Augmented Generation (RAG) system.
+## Tech Stack
 
-It automatically:
+- API: Node.js, Express 5
+- ORM: Prisma
+- Database: MariaDB
+- RAG service: FastAPI
+- Embeddings: sentence-transformers
+- Transcription: faster-whisper
+- Vector database: Qdrant
+- File/media: Cloudinary + FFmpeg
+- Infra: Docker Compose
 
-* extracts audio from videos
-* transcribes speech
-* splits content into chunks
-* generates embeddings
-* stores them in a vector database for semantic search
-
----
-
-## ✨ Features
-
-* Multi-source lesson knowledge (video + documents)
-* Supports PDF, DOCX, TXT attachments
-* Automatic RAG processing for all uploaded files
-* Semantic search across all lesson content
-* Source traceability:
-  * Video timestamps
-  * PDF page references
-
----
-
-## 🧱 Tech Stack
-
-| Layer         | Technology             |
-| ------------- | ---------------------- |
-| API           | Node.js 20, Express 5  |
-| ORM           | Prisma                 |
-| DB            | MariaDB                |
-| RAG           | Python FastAPI         |
-| Transcription | faster-whisper         |
-| Embeddings    | sentence-transformers  |
-| Vector DB     | Qdrant                 |
-| Media         | FFmpeg                 |
-| Storage       | Cloudinary             |
-| Infra         | Docker, Docker Compose |
-
----
-
-## 🧠 Architecture
+## Architecture
 
 ```text
 Client
@@ -55,290 +29,237 @@ Client
   v
 Node API (5000)
   |- MariaDB (Prisma)
-  |- Cloudinary (video + assets)
-  |- POST /api/subjects/:subjectId/lessons
-  '- POST /api/lessons/:lessonId/assets
-        |
-        v
-   RAG Service (8000)
-        |- Video: extract audio + transcribe
-        |- Docs: extract text (pdf/docx/txt)
-        |- Chunk Text
-        |- Generate Embeddings
-        '- Store → Qdrant
+  |- Cloudinary file storage
+  |- Triggers RAG processing for lesson assets
+  |
+  v
+RAG Service (8000)
+  |- Text extraction (PDF/DOCX/TXT)
+  |- Audio extraction + transcription (video/audio)
+  |- Chunking + embedding generation
+  '- Store vectors in Qdrant (6333)
 ```
 
----
-
-## 📁 Project Structure
+## Repository Layout
 
 ```text
 Leranova/
-├── server.js
-├── docker-compose.yml
-├── Dockerfile
-├── prisma/
-├── src/
-└── rag-service/
+├─ src/                 # Express app, controllers, routes, middlewares
+├─ prisma/              # Prisma schema and migrations
+├─ rag-service/         # FastAPI microservice for RAG ingestion
+├─ db/                  # SQL bootstrap scripts
+├─ docker-compose.yml
+├─ Dockerfile
+├─ server.js
+└─ package.json
 ```
 
----
+## Service Ports (Docker)
 
-## 🐳 Docker Services
+- API: 5000
+- RAG service: 8000
+- MariaDB: 3306
+- phpMyAdmin: 8080
+- Qdrant: 6333
 
-| Service    | Port | Description    |
-| ---------- | ---- | -------------- |
-| API        | 5000 | Backend server |
-| RAG        | 8000 | AI processing  |
-| DB         | 3306 | MariaDB        |
-| phpMyAdmin | 8080 | DB UI          |
-| Qdrant     | 6333 | Vector DB      |
+## Prerequisites
 
----
+For Docker workflow:
 
-## 🌐 Service URLs
+- Docker Desktop
+- Docker Compose
 
-* API → http://localhost:5000
-* RAG Docs → http://localhost:8000/docs
-* phpMyAdmin → http://localhost:8080
-* Qdrant UI → http://localhost:6333
+For local API workflow (without Docker):
 
----
+- Node.js 20+
+- MariaDB 10.6+
+- Python 3.11+ (for rag-service)
+- FFmpeg
 
-## ⚡ Quick Start
+## Quick Start (Recommended: Docker)
+
+1. Clone and open the project.
+2. Start all services:
 
 ```bash
-git clone <repo>
-cd Leranova
-cp .env.example .env
 docker compose up --build
 ```
 
----
+3. Verify health:
 
-## 🔁 Daily Usage
+- API root: http://localhost:5000/
+- API health: http://localhost:5000/health
+- RAG docs: http://localhost:8000/docs
+- phpMyAdmin: http://localhost:8080
+
+## Daily Docker Commands
+
+Start services:
 
 ```bash
 docker compose up
 ```
 
----
-
-## 🛑 Stop System
+Stop services:
 
 ```bash
 docker compose down
 ```
 
----
-
-## 💥 Full Reset (Deletes Data)
+Stop and delete volumes (destructive):
 
 ```bash
 docker compose down -v
-docker compose up --build
 ```
 
----
-
-## 📦 Data Persistence (IMPORTANT)
-
-| Command    | Data             |
-| ---------- | ---------------- |
-| up         | ✅ محفوظ          |
-| up --build | ✅ محفوظ          |
-| down       | ✅ محفوظ          |
-| down -v    | ❌ يتم حذف كل شيء |
-
-* MariaDB uses volumes → persistent
-* Qdrant stores embeddings → persistent
-* Data is only lost with -v
-
----
-
-## 🧠 RAG Flow
-
-1. Create lesson with video or upload attachment asset.
-2. API triggers RAG service automatically.
-3. RAG processes by source type:
-
-  * Video: video -> audio -> transcription -> chunk -> embedding
-  * Documents: file -> extract text -> chunk -> embedding
-4. Data stored in:
-
-```text
-Qdrant → learnova_lesson_chunks
-```
-
----
-
-## 📎 Upload Attachments
-
-Endpoint:
-
-```text
-POST /api/lessons/:lessonId/assets
-```
-
-Supported file types:
-
-* PDF
-* DOCX
-* TXT
-
-Each uploaded file is:
-
-* stored in Cloudinary
-* processed by RAG
-* converted into embeddings in Qdrant
-
----
-
-## 🧭 Traceability
-
-RAG payload metadata keeps source traceability:
-
-* Video chunks include timestamps
-* PDF chunks include page numbers
-* DOCX/TXT chunks can include section info
-
-This improves answer quality and UX because responses can reference exact source locations.
-
----
-
-## 📊 Logs & Debugging
-
-### View all logs
+View logs:
 
 ```bash
 docker compose logs -f
-```
-
-### RAG logs
-
-```bash
-docker compose logs -f rag-service
-```
-
-### API logs
-
-```bash
 docker compose logs -f api
-```
-
-### Live logs
-
-```bash
-docker compose up
-```
-
----
-
-## 🧪 Verification
-
-* API works → GET /
-* Health → GET /health
-* RAG → /docs
-* Qdrant → collection appears after processing
-
----
-
-## 🧪 Testing
-
-1. Start services:
-
-```bash
-docker compose up -d
-```
-
-2. Upload a file via Postman:
-
-```text
-POST /api/lessons/:lessonId/assets
-```
-
-3. Check RAG logs:
-
-```bash
 docker compose logs -f rag-service
 ```
 
-Expected log examples:
+## Local Development (API Only)
 
-```text
-[RAG] processing fileType=pdf
-[RAG] chunks stored=...
+1. Install dependencies:
+
+```bash
+npm install
 ```
 
----
+2. Create a .env file in the project root (example below).
 
-## 🧩 Qdrant Behavior
+3. Run Prisma migrations:
 
-* Collection: learnova_lesson_chunks
-* Empty collection = RAG not triggered
-* Chunks remain even after rebuild
+```bash
+npx prisma migrate deploy
+```
 
----
+4. Start API:
 
-## ⚠️ Common Issues
+```bash
+npm run dev
+```
 
-### API not responding
+## Local Development (RAG Service)
 
-* Check logs
-* Ensure binding 0.0.0.0
+```bash
+cd rag-service
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
 
-### No chunks
+## Environment Variables
 
-* RAG not triggered
-
-### DB reset
-
-* You used -v
-
-### phpMyAdmin error
-
-* Wrong credentials
-
----
-
-## 🧠 Best Practices
-
-* Do NOT run --build every time
-* Use Docker service names (db, rag-service)
-* Never commit .env
-* Keep dependencies inside containers
-
----
-
-## 🔐 Environment Variables
+Root .env example:
 
 ```env
+PORT=5000
 DATABASE_URL=mysql://root:root@db:3306/learnova
+JWT_SECRET=learnova_super_secret_key_2026_backend_api
+JWT_EXPIRES_IN=7d
 RAG_SERVICE_URL=http://rag-service:8000
-QDRANT_URL=http://qdrant:6333
+RAG_TRIGGER_TIMEOUT_MS=10000
+
+# Optional Cloudinary config
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
 ```
 
----
+rag-service/.env example:
 
-## 🚀 Next Steps
+```env
+APP_NAME=Learnova RAG Service
+APP_HOST=0.0.0.0
+APP_PORT=8000
 
-* /ask endpoint (semantic search)
-* LLM integration (Groq / local)
-* ranking improvements
-* caching layer
+QDRANT_URL=http://qdrant:6333
+QDRANT_API_KEY=
+QDRANT_COLLECTION=learnova_lesson_chunks
 
----
+EMBEDDING_MODEL_NAME=BAAI/bge-small-en
+WHISPER_MODEL_NAME=small
+WHISPER_DEVICE=cpu
+WHISPER_COMPUTE_TYPE=int8
 
-## 💡 Developer Notes
+FFMPEG_BIN=ffmpeg
+TEMP_DIR=/tmp
+CHUNK_SIZE_WORDS=400
+CHUNK_OVERLAP_WORDS=50
+REQUEST_TIMEOUT_SECONDS=120
+```
 
-* System is fully containerized
-* No local dependencies required
-* Designed for scalability
+## API Route Groups
 
----
+Mounted route groups include:
 
-## ⭐ Summary
+- /api/auth
+- /api/users
+- /api/courses
+- /api/enrollments
+- /api/courses/:courseId/subjects
+- /api/subjects/:subjectId/lessons
+- /api/lessons/:lessonId/attachments
+- /api/lessons/:lessonId/assets
+- /api/organizations
+- /api/teachers
+- /api/marks
 
-Learnova transforms static video lessons into searchable AI-powered knowledge using a fully local RAG pipeline.
+Health endpoints:
 
----
+- GET /
+- GET /health
+
+## Attachment and RAG Flow
+
+1. Create a lesson under a subject.
+2. Upload lesson attachments via:
+
+```text
+POST /api/lessons/:lessonId/attachments
+```
+
+3. API stores files (Cloudinary) and triggers the RAG service.
+4. RAG service extracts text/transcript, chunks content, generates embeddings.
+5. Vectors are stored in Qdrant collection:
+
+```text
+learnova_lesson_chunks
+```
+
+## Available NPM Scripts
+
+- npm run dev: start API with nodemon
+- npm start: start API with node
+- npm run test:api: run Postman collection via Newman
+
+## Common Issues
+
+API does not start:
+
+- confirm DATABASE_URL is valid
+- check DB container health in docker compose logs
+
+RAG ingestion not happening:
+
+- confirm RAG_SERVICE_URL is reachable from API container
+- inspect rag-service logs for extraction/transcription errors
+
+No vectors in Qdrant:
+
+- verify Qdrant is up on port 6333
+- verify collection name is learnova_lesson_chunks
+
+Auth failures:
+
+- confirm JWT_SECRET is present and identical across environments
+
+## Notes
+
+- Prisma schema is in prisma/schema.prisma
+- API entry point is server.js
+- Express setup and route mounting are in src/app.js

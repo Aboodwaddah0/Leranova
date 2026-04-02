@@ -15,6 +15,8 @@ const organizationSelect = {
   status: true,
 };
 
+const normalizeOrganizationRole = (role) => String(role || '').trim().toUpperCase();
+
 export const createOrganization = async (data) => {
   const existingOrganization = await prisma.organization.findUnique({
     where: {
@@ -38,7 +40,7 @@ export const createOrganization = async (data) => {
       Address: data.Address ?? null,
       PhoneNumber: data.PhoneNumber ?? null,
       Description: data.Description ?? null,
-      Role: data.Role,
+      Role: normalizeOrganizationRole(data.Role),
       status: data.status ?? 'PENDING',
     },
     select: organizationSelect,
@@ -106,7 +108,7 @@ export const updateOrganization = async (organizationId, data) => {
       Address: data.Address ?? undefined,
       PhoneNumber: data.PhoneNumber ?? undefined,
       Description: data.Description ?? undefined,
-      Role: data.Role,
+      Role: data.Role ? normalizeOrganizationRole(data.Role) : undefined,
       status: data.status,
     },
     select: organizationSelect,

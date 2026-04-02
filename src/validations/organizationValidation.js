@@ -13,7 +13,7 @@ export const createOrganizationSchema = Joi.object({
 	PhoneNumber: Joi.string().max(50).allow('', null),
 	Description: Joi.string().allow('', null),
 	Role: Joi.string()
-		.valid(...organizationRoleValues)
+		.valid(...organizationRoleValues, 'Academy', 'School')
 		.required(),
 	status: Joi.string()
 		.valid(...organizationStatusValues)
@@ -29,7 +29,7 @@ export const updateOrganizationSchema = Joi.object({
 	Address: Joi.string().max(255).allow('', null),
 	PhoneNumber: Joi.string().max(50).allow('', null),
 	Description: Joi.string().allow('', null),
-	Role: Joi.string().valid(...organizationRoleValues),
+	Role: Joi.string().valid(...organizationRoleValues, 'Academy', 'School'),
 	status: Joi.string().valid(...organizationStatusValues),
 }).min(1);
 
