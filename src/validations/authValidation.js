@@ -4,7 +4,7 @@ export const registerOrganizationSchema = Joi.object({
   Name: Joi.string().max(255).required(),
   Email: Joi.string().email().max(255).required(),
   password: Joi.string().min(6).required(),
-  Role: Joi.string().valid('Academy', 'School').required(),
+  Role: Joi.string().valid('ACADEMY', 'SCHOOL', 'Academy', 'School').required(),
   Phone: Joi.string().max(50).allow('', null),
   Founded: Joi.date().iso().allow(null),
   Address: Joi.string().max(255).allow('', null),
