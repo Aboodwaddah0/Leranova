@@ -11,6 +11,15 @@ services:
       DATABASE_URL: mysql://root:root@db:3306/learnova
       PORT: 5000
       JWT_SECRET: ${JWT_SECRET:-learnova_super_secret_key_2026_backend_api}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      PASSWORD_RESET_URL_BASE: ${PASSWORD_RESET_URL_BASE:-http://localhost:5173/reset-password}
+      EMAIL_HOST: ${EMAIL_HOST:-smtp.gmail.com}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_SECURE: ${EMAIL_SECURE:-false}
+      EMAIL_TLS_REJECT_UNAUTHORIZED: ${EMAIL_TLS_REJECT_UNAUTHORIZED:-true}
+      EMAIL_USER: ${EMAIL_USER:-}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD:-}
+      EMAIL_FROM: ${EMAIL_FROM:-Learnova <no-reply@learnova.local>}
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}

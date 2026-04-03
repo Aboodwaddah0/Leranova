@@ -161,6 +161,15 @@ PORT=5000
 DATABASE_URL=mysql://root:root@db:3306/learnova
 JWT_SECRET=learnova_super_secret_key_2026_backend_api
 JWT_EXPIRES_IN=7d
+PASSWORD_RESET_URL_BASE=http://localhost:3000/reset-password
+
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_SECURE=false
+EMAIL_USER=
+EMAIL_PASSWORD=
+EMAIL_FROM=Learnova <no-reply@learnova.local>
+
 RAG_SERVICE_URL=http://rag-service:8000
 RAG_TRIGGER_TIMEOUT_MS=10000
 
@@ -237,6 +246,45 @@ Request body example:
 ```
 
 Response includes generated `email` and plain `password` once at creation time under `credentials`.
+
+## Password Reset Endpoints
+
+Request reset link (generic response for existing/non-existing email):
+
+```text
+POST /api/auth/forgot-password
+```
+
+Request body:
+
+```json
+{
+  "email": "teacher@example.com",
+  "accountType": "USER"
+}
+```
+
+`accountType` is optional and can be `USER` or `ORGANIZATION`.
+
+Reset password with token:
+
+```text
+POST /api/auth/reset-password
+```
+
+Request body:
+
+```json
+{
+  "token": "reset-token-from-email",
+  "newPassword": "StrongPass1"
+}
+```
+
+Notes:
+
+- Reset token expires after 15 minutes.
+- Successful reset does not auto-login or return JWT.
 
 ## Attachment and RAG Flow
 
