@@ -109,6 +109,42 @@ return user;
 
 }
 
+export const addUserWithGeneratedCredentials = async (data, domain) => {
+  const { email, password } = await generateUserCredentials(data.name, domain);
+  const passwordHashed = await hashPassword(password);
+
+  const createdUser = await prisma.user.create({
+    data: {
+      name: data.name,
+      email,
+      passwordHashed,
+      role: data.role,
+      age: data.age,
+      gender: data.gender,
+      address: data.address,
+      ...buildRoleNested(data),
+      ...buildAcademyUserNested(data),
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      age: true,
+      gender: true,
+      address: true,
+    },
+  });
+
+  return {
+    user: createdUser,
+    credentials: {
+      email,
+      password,
+    },
+  };
+};
+
 export const getAllUsers = async () => {
   const users = await prisma.user.findMany({
     select: {

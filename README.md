@@ -214,6 +214,30 @@ Health endpoints:
 - GET /
 - GET /health
 
+## Users Endpoints Highlights
+
+Create one user with auto-generated credentials (organization only):
+
+```text
+POST /api/users/auto-generate
+```
+
+Request body example:
+
+```json
+{
+  "name": "Jane Doe",
+  "role": "STUDENT",
+  "age": 15,
+  "gender": "FEMALE",
+  "address": "Cairo",
+  "parentId": 12,
+  "courseId": 8
+}
+```
+
+Response includes generated `email` and plain `password` once at creation time under `credentials`.
+
 ## Attachment and RAG Flow
 
 1. Create a lesson under a subject.
