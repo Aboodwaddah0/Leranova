@@ -2,9 +2,6 @@ import {
   registerOrganization,
   loginOrganization,
   loginUser,
-  handleGoogleOAuthCallback,
-  sendLoginCodeToUser,
-  verifyLoginCodeAndGenerateToken,
 } from '../services/authService.js';
 import {
   registerOrganizationSchema,
@@ -50,67 +47,14 @@ export const login = async (req, res, next) => {
   }
 };
 
-// Teacher/Student login step 1: email + password -> send OTP.
+// Teacher/Student login with email and password.
 export const loginUserController = async (req, res, next) => {
   try {
     const result = await loginUser(req.body);
 
     return res.status(200).json({
-      message: 'OTP sent successfully',
-      data: result,
-    });
-  } catch (error) {
-    return next(error);
-  }
-};
-
-// Optional compatibility endpoint for requesting OTP.
-export const requestLoginCode = async (req, res, next) => {
-  try {
-    const result = await sendLoginCodeToUser(req.body);
-
-    return res.status(200).json({
-      message: 'OTP sent successfully',
-      data: result,
-    });
-  } catch (error) {
-    return next(error);
-  }
-};
-
-// Teacher/Student login step 2: email + code -> JWT.
-export const verifyLoginCodeController = async (req, res, next) => {
-  try {
-    const result = await verifyLoginCodeAndGenerateToken(req.body);
-
-    return res.status(200).json({
       message: 'Login successful',
       data: result,
-    });
-  } catch (error) {
-    return next(error);
-  }
-};
-
-export const googleOAuthCallback = async (req, res, next) => {
-  try {
-    const organization = await handleGoogleOAuthCallback(req.user);
-
-    const responseData = {
-      id: organization.id,
-      Name: organization.Name,
-      Email: organization.Email,
-      Role: organization.Role,
-      status: organization.status,
-      oauthProvider: organization.oauthProvider,
-    };
-
-    return res.status(200).json({
-      message:
-        organization.status === 'PENDING'
-          ? 'OAuth registration successful. Your organization is pending admin approval.'
-          : 'Organization already registered',
-      data: responseData,
     });
   } catch (error) {
     return next(error);

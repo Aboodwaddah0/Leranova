@@ -235,8 +235,6 @@ model organization {
   student         student[]
   teacher         teacher[]
   status          organization_status @default(PENDING)
-  oauthProvider   String?           @db.VarChar(50)
-  oauthId         String?           @unique @db.VarChar(255)
   createdAt       DateTime          @default(now()) @db.Timestamp(0)
   updatedAt       DateTime          @default(now()) @updatedAt @db.Timestamp(0)
 }
@@ -318,9 +316,6 @@ model user {
   parent            parent?
   student           student?
   teacher           teacher?
-    oauthProvider     String?            @db.VarChar(50)
-    oauthId           String?            @unique @db.VarChar(255)
-    loginCodes        login_code[]
   createdAt         DateTime            @default(now()) @db.Timestamp(0)
   updatedAt         DateTime            @default(now()) @updatedAt @db.Timestamp(0)
 }
@@ -378,18 +373,3 @@ enum lesson_attachment_file_type {
   OTHER
 }
 
-model login_code {
-  id          Int      @id @default(autoincrement())
-  userId      Int
-  code        String   @db.VarChar(10)
-  attempts    Int      @default(0)
-  expiresAt   DateTime
-  isUsed      Boolean  @default(false)
-  user        user     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now()) @db.Timestamp(0)
-
-  @@index([userId], map: "idx_login_code_user_id")
-  @@index([expiresAt], map: "idx_login_code_expires_at")
-}
-    
-    
