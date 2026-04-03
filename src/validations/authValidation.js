@@ -16,3 +16,19 @@ export const loginOrganizationSchema = Joi.object({
   Email: Joi.string().email().max(255).required(),
   password: Joi.string().required(),
 });
+
+export const forgotPasswordSchema = Joi.object({
+  email: Joi.string().email().max(255).required(),
+  accountType: Joi.string().valid('USER', 'ORGANIZATION').optional(),
+});
+
+export const resetPasswordSchema = Joi.object({
+  token: Joi.string().min(20).required(),
+  newPassword: Joi.string()
+    .min(8)
+    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/)
+    .required()
+    .messages({
+      'string.pattern.base': 'newPassword must contain uppercase, lowercase, and a number',
+    }),
+});

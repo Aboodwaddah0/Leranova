@@ -223,6 +223,9 @@ model organization {
   Name            String            @db.VarChar(255)
   Email           String            @unique(map: "Email") @db.VarChar(255)
   Password_Hashed String            @db.VarChar(255)
+  PasswordResetToken String?        @db.VarChar(255)
+  PasswordResetExpiresAt DateTime?  @db.Timestamp(0)
+  PasswordChangedAt DateTime?       @db.Timestamp(0)
   Phone           String?           @db.VarChar(50)
   Founded         DateTime?         @db.Date
   Address         String?           @db.VarChar(255)
@@ -305,6 +308,9 @@ model user {
   gender            user_Gender?
   email             String              @unique(map: "Email") @db.VarChar(255)
   passwordHashed    String              @db.VarChar(255)
+  passwordResetToken String?            @db.VarChar(255)
+  passwordResetExpiresAt DateTime?      @db.Timestamp(0)
+  passwordChangedAt DateTime?           @db.Timestamp(0)
   address           String?             @db.VarChar(255)
   role              user_Role
   academy_user      academy_user?

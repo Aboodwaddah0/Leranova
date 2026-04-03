@@ -2,10 +2,14 @@ import {
   registerOrganization,
   loginOrganization,
   loginUser,
+  forgotPassword,
+  resetPassword,
 } from '../services/authService.js';
 import {
   registerOrganizationSchema,
   loginOrganizationSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
 } from '../validations/authValidation.js';
 import AppError from '../utils/appError.js';
 
@@ -55,6 +59,42 @@ export const loginUserController = async (req, res, next) => {
     return res.status(200).json({
       message: 'Login successful',
       data: result,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const forgotPasswordController = async (req, res, next) => {
+  try {
+    const { error, value } = forgotPasswordSchema.validate(req.body);
+
+    if (error) {
+      return next(new AppError(error.details[0].message, 400));
+    }
+
+    await forgotPassword(value);
+
+    return res.status(200).json({
+      message: 'If the account exists, a password reset link was sent',
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const resetPasswordController = async (req, res, next) => {
+  try {
+    const { error, value } = resetPasswordSchema.validate(req.body);
+
+    if (error) {
+      return next(new AppError(error.details[0].message, 400));
+    }
+
+    await resetPassword(value);
+
+    return res.status(200).json({
+      message: 'Password reset successfully',
     });
   } catch (error) {
     return next(error);
