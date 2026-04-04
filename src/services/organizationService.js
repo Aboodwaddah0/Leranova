@@ -5,6 +5,7 @@ import { hashPassword } from '../utils/hashPassword.js';
 const organizationSelect = {
   id: true,
   Name: true,
+  subdomain: true,
   Email: true,
   Phone: true,
   Founded: true,
@@ -16,8 +17,11 @@ const organizationSelect = {
 };
 
 const normalizeOrganizationRole = (role) => String(role || '').trim().toUpperCase();
+const normalizeSubdomain = (subdomain) => String(subdomain || '').trim().toLowerCase();
 
 export const createOrganization = async (data) => {
+  const normalizedSubdomain = normalizeSubdomain(data.subdomain);
+
   const existingOrganization = await prisma.organization.findUnique({
     where: {
       Email: data.Email,
@@ -28,11 +32,25 @@ export const createOrganization = async (data) => {
     throw new AppError('Organization email already exists', 400);
   }
 
+  const existingSubdomain = await prisma.organization.findUnique({
+    where: {
+      subdomain: normalizedSubdomain,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (existingSubdomain) {
+    throw new AppError('Organization subdomain already exists', 400);
+  }
+
   const hashedPassword = await hashPassword(data.password);
 
   const organization = await prisma.organization.create({
     data: {
       Name: data.Name,
+      subdomain: normalizedSubdomain,
       Email: data.Email,
       Password_Hashed: hashedPassword,
       Phone: data.Phone ?? null,
@@ -80,6 +98,8 @@ export const getOrganizationById = async (organizationId) => {
 export const updateOrganization = async (organizationId, data) => {
   await getOrganizationById(organizationId);
 
+  const normalizedSubdomain = data.subdomain ? normalizeSubdomain(data.subdomain) : undefined;
+
   if (data.Email) {
     const emailOwner = await prisma.organization.findUnique({
       where: {
@@ -95,12 +115,28 @@ export const updateOrganization = async (organizationId, data) => {
     }
   }
 
+  if (normalizedSubdomain) {
+    const subdomainOwner = await prisma.organization.findUnique({
+      where: {
+        subdomain: normalizedSubdomain,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (subdomainOwner && subdomainOwner.id !== organizationId) {
+      throw new AppError('Organization subdomain already exists', 400);
+    }
+  }
+
   const updated = await prisma.organization.update({
     where: {
       id: organizationId,
     },
     data: {
       Name: data.Name,
+      subdomain: normalizedSubdomain,
       Email: data.Email,
       Password_Hashed: data.password ? await hashPassword(data.password) : undefined,
       Phone: data.Phone ?? undefined,

@@ -43,17 +43,76 @@ const buildAcademyUserNested= (data)=>{
 };
 
 export const generateUsers = async (data, domain) => {
-  const users = [];
+  const createdUsers = [];
+  const skippedUsers = [];
+  const batchEmails = new Set();
+  const preparedRows = [];
 
   for (const user of data) {
-    const { email, password } = await generateUserCredentials(user.name, domain);
-    const passwordHashed = await hashPassword(password);
+    let finalEmail = user.email ? String(user.email).trim().toLowerCase() : null;
+    let finalPassword = user.password ? String(user.password) : null;
+
+    if (!finalEmail || !finalPassword) {
+      const generatedCredentials = await generateUserCredentials(user.name, domain);
+
+      if (!finalEmail) {
+        finalEmail = generatedCredentials.email;
+      }
+
+      if (!finalPassword) {
+        finalPassword = generatedCredentials.password;
+      }
+    }
+
+    if (batchEmails.has(finalEmail)) {
+      skippedUsers.push({
+        name: user.name,
+        email: finalEmail,
+        reason: 'Duplicate email in uploaded file',
+      });
+      continue;
+    }
+
+    batchEmails.add(finalEmail);
+    preparedRows.push({
+      ...user,
+      finalEmail,
+      finalPassword,
+    });
+  }
+
+  const existingUsers = preparedRows.length
+    ? await prisma.user.findMany({
+      where: {
+        email: {
+          in: preparedRows.map((row) => row.finalEmail),
+        },
+      },
+      select: {
+        email: true,
+      },
+    })
+    : [];
+
+  const existingEmails = new Set(existingUsers.map((existingUser) => String(existingUser.email).toLowerCase()));
+
+  for (const user of preparedRows) {
+    if (existingEmails.has(user.finalEmail)) {
+      skippedUsers.push({
+        name: user.name,
+        email: user.finalEmail,
+        reason: 'Email already exists in system',
+      });
+      continue;
+    }
+
+    const passwordHashed = await hashPassword(user.finalPassword);
 
     const createdUser = await prisma.user.create({
       data: {
         name: user.name,
-        email,
-        passwordHashed: passwordHashed,
+        email: user.finalEmail,
+        passwordHashed,
         role: user.role,
         age: user.age,
         gender: user.gender,
@@ -63,11 +122,11 @@ export const generateUsers = async (data, domain) => {
       },
     });
 
-    users.push({
+    createdUsers.push({
       id: createdUser.id,
       name: createdUser.name,
       email: createdUser.email,
-      password,
+      password: user.finalPassword,
       role: createdUser.role,
       age: createdUser.age,
       gender: createdUser.gender,
@@ -75,7 +134,10 @@ export const generateUsers = async (data, domain) => {
     });
   }
 
-  return users;
+  return {
+    createdUsers,
+    skippedUsers,
+  };
 };
 
 

@@ -221,6 +221,7 @@ model notification {
 model organization {
   id              Int               @id @default(autoincrement())
   Name            String            @db.VarChar(255)
+  subdomain       String            @unique @db.VarChar(63)
   Email           String            @unique(map: "Email") @db.VarChar(255)
   Password_Hashed String            @db.VarChar(255)
   PasswordResetToken String?        @db.VarChar(255)

@@ -1,7 +1,10 @@
 import Joi from 'joi';
 
+const subdomainPattern = /^[a-z0-9-]+$/;
+
 export const registerOrganizationSchema = Joi.object({
   Name: Joi.string().max(255).required(),
+  subdomain: Joi.string().trim().lowercase().max(63).pattern(subdomainPattern).required(),
   Email: Joi.string().email().max(255).required(),
   password: Joi.string().min(6).required(),
   Role: Joi.string().valid('ACADEMY', 'SCHOOL', 'Academy', 'School').required(),

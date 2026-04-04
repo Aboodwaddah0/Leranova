@@ -2,9 +2,11 @@ import Joi from 'joi';
 
 const organizationRoleValues = ['ACADEMY', 'SCHOOL'];
 const organizationStatusValues = ['PENDING', 'APPROVED', 'REJECTED'];
+const subdomainPattern = /^[a-z0-9-]+$/;
 
 export const createOrganizationSchema = Joi.object({
 	Name: Joi.string().max(255).required(),
+	subdomain: Joi.string().trim().lowercase().max(63).pattern(subdomainPattern).required(),
 	Email: Joi.string().email().max(255).required(),
 	password: Joi.string().min(6).required(),
 	Phone: Joi.string().max(50).allow('', null),
@@ -22,6 +24,7 @@ export const createOrganizationSchema = Joi.object({
 
 export const updateOrganizationSchema = Joi.object({
 	Name: Joi.string().max(255),
+	subdomain: Joi.string().trim().lowercase().max(63).pattern(subdomainPattern),
 	Email: Joi.string().email().max(255),
 	password: Joi.string().min(6),
 	Phone: Joi.string().max(50).allow('', null),

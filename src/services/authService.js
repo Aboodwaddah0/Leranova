@@ -10,9 +10,11 @@ import {
 import { sendPasswordResetEmail } from '../utils/emailService.js';
 
 const PASSWORD_RESET_EXPIRY_MINUTES = 15;
+const normalizeSubdomain = (subdomain) => String(subdomain || '').trim().toLowerCase();
 
 export const registerOrganization = async (data) => {
   const normalizedRole = String(data.Role || '').trim().toUpperCase();
+  const normalizedSubdomain = normalizeSubdomain(data.subdomain);
 
   const existingOrganization = await prisma.organization.findUnique({
     where: { Email: data.Email },
@@ -22,11 +24,21 @@ export const registerOrganization = async (data) => {
     throw new AppError('Organization email already exists', 400);
   }
 
+  const existingSubdomain = await prisma.organization.findUnique({
+    where: { subdomain: normalizedSubdomain },
+    select: { id: true },
+  });
+
+  if (existingSubdomain) {
+    throw new AppError('Organization subdomain already exists', 400);
+  }
+
   const hashedPassword = await hashPassword(data.password);
 
   const organization = await prisma.organization.create({
     data: {
       Name: data.Name,
+      subdomain: normalizedSubdomain,
       Email: data.Email,
       Password_Hashed: hashedPassword,
       Phone: data.Phone ?? null,
@@ -40,6 +52,7 @@ export const registerOrganization = async (data) => {
     select: {
       id: true,
       Name: true,
+      subdomain: true,
       Email: true,
       Phone: true,
       Founded: true,
@@ -83,6 +96,7 @@ export const loginOrganization = async ({ Email, password }) => {
     organization: {
       id: organization.id,
       Name: organization.Name,
+      subdomain: organization.subdomain,
       Email: organization.Email,
       Phone: organization.Phone,
       Founded: organization.Founded,
