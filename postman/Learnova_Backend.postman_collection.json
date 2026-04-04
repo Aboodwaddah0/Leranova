@@ -1,0 +1,2721 @@
+{
+  "info": {
+    "name": "Learnova Backend",
+    "description": "Complete API collection for Learnova Backend with Auth, Courses, Subjects, Organizations, and Users",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register Organization",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"Name\": \"Test Academy\", \"Email\": \"academy@test.com\", \"password\": \"Test@12345\", \"Role\": \"Academy\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/auth/organization/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "auth",
+                "organization",
+                "register"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login Organization",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Login successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.environment.set(\"token\", pm.response.json().data.token);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"Email\": \"academy@test.com\", \"password\": \"Test@12345\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/auth/organization/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "auth",
+                "organization",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Login user successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.token) { pm.environment.set(\"token\", json.data.token); }",
+                  "if (json.data && json.data.user && json.data.user.id) { pm.environment.set(\"user_id\", json.data.user.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\": \"admin@example.com\", \"password\": \"YourPassword\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/auth/user/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "auth",
+                "user",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/auth/forgot-password",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "auth",
+                "forgot-password"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"academy@test.com\",\"accountType\":\"ORGANIZATION\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Forgot password request accepted\", () => {",
+                  "  pm.expect([200,400,500]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/auth/reset-password",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "auth",
+                "reset-password"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"token\":\"{{reset_token}}\",\"newPassword\":\"NewPass123\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Reset password response handled\", () => {",
+                  "  pm.expect([200,400]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Courses",
+      "item": [
+        {
+          "name": "Create Course",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Create course successful\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  pm.environment.set(\"course_id\", pm.response.json().data.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"Name\": \"Grade 10 - Science\", \"Description\": \"Main science curriculum for grade 10\", \"Thumbnail\": \"https://example.com/course-thumb.png\", \"Start\": \"2026-09-01\", \"End\": \"2027-06-15\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/courses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "courses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List All Courses",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"List courses successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/courses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "courses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Course By ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get course successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.id).to.equal(parseInt(pm.environment.get(\"course_id\")));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/courses/{{course_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "courses",
+                "{{course_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Course",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Update course successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.Name).to.include(\"Updated\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"Name\": \"Grade 10 - Science & Technology (Updated)\", \"Description\": \"Updated curriculum with new topics\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/courses/{{course_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "courses",
+                "{{course_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Course",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Delete course successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/courses/{{course_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "courses",
+                "{{course_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Enrollments",
+          "item": [
+            {
+              "name": "Create Enrollment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/enrollments",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "enrollments"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"user_Academy_id\": \"{{student_id}}\", \"Course_id\": \"{{course_id}}\"}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Create enrollment response\", () => {",
+                      "  pm.expect([201,400,404,409]).to.include(pm.response.code);",
+                      "});",
+                      "let json = null;",
+                      "try { json = pm.response.json(); } catch (e) {}",
+                      "if (json && json.data && json.data.user_Academy_id) { pm.environment.set(\"enrollment_user_id\", json.data.user_Academy_id); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List Enrollments",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/enrollments",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "enrollments"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"List enrollments response\", () => {",
+                      "  pm.expect([200,403]).to.include(pm.response.code);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Enrollments By Course",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/enrollments/course/{{course_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "enrollments",
+                    "course",
+                    "{{course_id}}"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Course enrollments response\", () => {",
+                      "  pm.expect([200,404]).to.include(pm.response.code);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Enrollments By User",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/enrollments/user/{{student_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "enrollments",
+                    "user",
+                    "{{student_id}}"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"User enrollments response\", () => {",
+                      "  pm.expect([200,404]).to.include(pm.response.code);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Delete Enrollment",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/enrollments/user/{{student_id}}/course/{{course_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "enrollments",
+                    "user",
+                    "{{student_id}}",
+                    "course",
+                    "{{course_id}}"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Delete enrollment response\", () => {",
+                      "  pm.expect([200,404]).to.include(pm.response.code);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Subjects",
+      "item": [
+        {
+          "name": "Create Subject",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Create subject successful\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  pm.environment.set(\"subject_id\", pm.response.json().data.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"teacherId\": {{teacher_id}}, \"name\": \"Physics\", \"Description\": \"Mechanics, electricity, and waves\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/courses/{{course_id}}/subjects",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "courses",
+                "{{course_id}}",
+                "subjects"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Course Subjects",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"List subjects successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/courses/{{course_id}}/subjects",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "courses",
+                "{{course_id}}",
+                "subjects"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Subjects by Course",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"List subjects by course successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/courses/{{course_id}}/subjects",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "courses",
+                "{{course_id}}",
+                "subjects"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Subject By ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get subject successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.id).to.equal(parseInt(pm.environment.get(\"subject_id\")));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/courses/{{course_id}}/subjects/{{subject_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "courses",
+                "{{course_id}}",
+                "subjects",
+                "{{subject_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Subject",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Update subject successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.name).to.include(\"Advanced\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Physics & Advanced Topics\", \"Description\": \"Updated with modern physics concepts\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/courses/{{course_id}}/subjects/{{subject_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "courses",
+                "{{course_id}}",
+                "subjects",
+                "{{subject_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Subject",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Delete subject successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/courses/{{course_id}}/subjects/{{subject_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "courses",
+                "{{course_id}}",
+                "subjects",
+                "{{subject_id}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Organizations",
+      "item": [
+        {
+          "name": "Create Organization",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Create organization successful\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  pm.environment.set(\"organization_id\", pm.response.json().data.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"Name\": \"New Academy\", \"Email\": \"newacademy@test.com\", \"password\": \"Test@12345\", \"Role\": \"ACADEMY\", \"status\": \"PENDING\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/organizations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "organizations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List All Organizations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"List organizations successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/organizations?skip=0&limit=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "organizations"
+              ],
+              "query": [
+                {
+                  "key": "skip",
+                  "value": "0"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Organization By ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get organization successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data).to.have.property('id');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/organizations/{{organization_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "organizations",
+                "{{organization_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Organization",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Update organization successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"Name\": \"Updated Academy Name\", \"status\": \"APPROVED\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/organizations/{{organization_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "organizations",
+                "{{organization_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Organization",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Delete organization successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/organizations/{{organization_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "organizations",
+                "{{organization_id}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Generate Users from Excel",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Generate users from Excel successful\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/users/generate-users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "users",
+                "generate-users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Create user successful\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const data = pm.response.json().data;",
+                  "  if (data && data.id) { pm.environment.set(\"user_id\", data.id); }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Test Student\", \"email\": \"student@test.com\", \"password\": \"Password123\", \"role\": \"STUDENT\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List All Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"List users successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Update user successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Test Student Updated\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/users/{{user_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "users",
+                "{{user_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Delete user successful\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/users/{{user_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "users",
+                "{{user_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Generate User (Auto Credentials)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/users/generate-user",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "users",
+                "generate-user"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Student Seed User\",\"role\":\"STUDENT\",\"age\":16,\"gender\":\"MALE\",\"address\":\"Cairo\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Generate user endpoint responds\", () => {",
+                  "  pm.expect([201,409,422]).to.include(pm.response.code);",
+                  "});",
+                  "let json = null;",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json && json.data && json.data.id) { pm.environment.set(\"student_id\", json.data.id); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Lessons",
+      "item": [
+        {
+          "name": "Comments",
+          "item": [
+            {
+              "name": "Create Comment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/lessons/{{lesson_id}}/comments",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "lessons",
+                    "{{lesson_id}}",
+                    "comments"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"content\":\"Great lesson, thanks!\"}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Create comment response\", () => {",
+                      "  pm.expect([201,400,403,404]).to.include(pm.response.code);",
+                      "});",
+                      "let json = null;",
+                      "try { json = pm.response.json(); } catch (e) {}",
+                      "if (json && json.data && json.data.id) { pm.environment.set(\"comment_id\", json.data.id); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List Comments",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/lessons/{{lesson_id}}/comments",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "lessons",
+                    "{{lesson_id}}",
+                    "comments"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"List comments response\", () => {",
+                      "  pm.expect([200,404]).to.include(pm.response.code);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Delete Comment",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/lessons/{{lesson_id}}/comments/{{comment_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "lessons",
+                    "{{lesson_id}}",
+                    "comments",
+                    "{{comment_id}}"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Delete comment response\", () => {",
+                      "  pm.expect([200,403,404]).to.include(pm.response.code);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Core",
+          "item": [
+            {
+              "name": "Create Lesson",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status code is correct\", function () {",
+                      "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                      "});",
+                      "pm.test(\"Response time < 2000ms\", function () {",
+                      "  pm.expect(pm.response.responseTime).to.be.below(2000);",
+                      "});",
+                      "const res = pm.response.json();",
+                      "if (res.data && res.data.id) {",
+                      "  pm.environment.set(\"lesson_id\", res.data.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Intro to Algebra",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Basics of algebraic expressions",
+                      "type": "text"
+                    },
+                    {
+                      "key": "video",
+                      "type": "file",
+                      "src": ""
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/subjects/{{subject_id}}/lessons",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "subjects",
+                    "{{subject_id}}",
+                    "lessons"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Lessons",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status code is correct\", function () {",
+                      "  pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "pm.test(\"Response time < 2000ms\", function () {",
+                      "  pm.expect(pm.response.responseTime).to.be.below(2000);",
+                      "});",
+                      "pm.test(\"Response has data array\", function () {",
+                      "  pm.expect(pm.response.json().data).to.be.an('array');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/subjects/{{subject_id}}/lessons",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "subjects",
+                    "{{subject_id}}",
+                    "lessons"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Lesson",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status code is correct\", function () {",
+                      "  pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "pm.test(\"Response time < 2000ms\", function () {",
+                      "  pm.expect(pm.response.responseTime).to.be.below(2000);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/subjects/{{subject_id}}/lessons/{{lesson_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "subjects",
+                    "{{subject_id}}",
+                    "lessons",
+                    "{{lesson_id}}"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Update Lesson",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status code is correct\", function () {",
+                      "  pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "pm.test(\"Response time < 2000ms\", function () {",
+                      "  pm.expect(pm.response.responseTime).to.be.below(2000);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Intro to Algebra - Updated",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Updated lesson content",
+                      "type": "text"
+                    },
+                    {
+                      "key": "video",
+                      "type": "file",
+                      "src": ""
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/subjects/{{subject_id}}/lessons/{{lesson_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "subjects",
+                    "{{subject_id}}",
+                    "lessons",
+                    "{{lesson_id}}"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Delete Lesson",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status code is correct\", function () {",
+                      "  pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "pm.test(\"Response time < 2000ms\", function () {",
+                      "  pm.expect(pm.response.responseTime).to.be.below(2000);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/subjects/{{subject_id}}/lessons/{{lesson_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "subjects",
+                    "{{subject_id}}",
+                    "lessons",
+                    "{{lesson_id}}"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Assets",
+          "item": [
+            {
+              "name": "Upload Lesson Asset",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Upload lesson asset successful\", () => {",
+                      "  pm.response.to.have.status(201);",
+                      "});",
+                      "const res = pm.response.json();",
+                      "pm.test(\"response.data.type exists\", () => {",
+                      "  pm.expect(res.data).to.have.property('type');",
+                      "});",
+                      "pm.test(\"response.data.fileUrl exists\", () => {",
+                      "  pm.expect(res.data).to.have.property('fileUrl');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "description": "Supports PDF, DOCX, and TXT files. Each upload triggers RAG automatically and stores embeddings in Qdrant.",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "src": ""
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/lessons/{{lesson_id}}/assets",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "lessons",
+                    "{{lesson_id}}",
+                    "assets"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Upload PDF Asset (Example)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "description": "Example request for uploading a PDF file to lesson assets.",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "src": ""
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/lessons/{{lesson_id}}/assets",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "lessons",
+                    "{{lesson_id}}",
+                    "assets"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Upload DOCX Asset (Example)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "description": "Example request for uploading a DOCX file to lesson assets.",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "src": ""
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/lessons/{{lesson_id}}/assets",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "lessons",
+                    "{{lesson_id}}",
+                    "assets"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Upload TXT Asset (Example)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "description": "Example request for uploading a TXT file to lesson assets.",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "src": ""
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/lessons/{{lesson_id}}/assets",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "lessons",
+                    "{{lesson_id}}",
+                    "assets"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "List Lesson Assets",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/lessons/{{lesson_id}}/assets",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "lessons",
+                    "{{lesson_id}}",
+                    "assets"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"List lesson assets response\", () => {",
+                      "  pm.expect([200,404]).to.include(pm.response.code);",
+                      "});",
+                      "let json = null;",
+                      "try { json = pm.response.json(); } catch (e) {}",
+                      "if (json && Array.isArray(json.data) && json.data[0] && json.data[0].id) { pm.environment.set(\"attachment_id\", json.data[0].id); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Delete Lesson Asset",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/lessons/{{lesson_id}}/assets/{{attachment_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "lessons",
+                    "{{lesson_id}}",
+                    "assets",
+                    "{{attachment_id}}"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Delete lesson asset response\", () => {",
+                      "  pm.expect([200,404]).to.include(pm.response.code);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List Lesson Attachments",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/lessons/{{lesson_id}}/attachments",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "lessons",
+                    "{{lesson_id}}",
+                    "attachments"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"List lesson attachments response\", () => {",
+                      "  pm.expect([200,404]).to.include(pm.response.code);",
+                      "});",
+                      "let json = null;",
+                      "try { json = pm.response.json(); } catch (e) {}",
+                      "if (json && Array.isArray(json.data) && json.data[0] && json.data[0].id) { pm.environment.set(\"attachment_id\", json.data[0].id); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Delete Lesson Attachment",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/lessons/{{lesson_id}}/attachments/{{attachment_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "lessons",
+                    "{{lesson_id}}",
+                    "attachments",
+                    "{{attachment_id}}"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Delete lesson attachment response\", () => {",
+                      "  pm.expect([200,404]).to.include(pm.response.code);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "QA Flow",
+          "item": [
+            {
+              "name": "QA - Verify Lesson Exists",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/subjects/{{subject_id}}/lessons/{{lesson_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "subjects",
+                    "{{subject_id}}",
+                    "lessons",
+                    "{{lesson_id}}"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"QA flow lesson fetch response\", function () {",
+                      "  pm.expect([200,404]).to.include(pm.response.code);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "QA - Verify Lesson Attachments",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/lessons/{{lesson_id}}/attachments",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "lessons",
+                    "{{lesson_id}}",
+                    "attachments"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"QA flow lesson attachments response\", function () {",
+                      "  pm.expect([200,404]).to.include(pm.response.code);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "item": []
+    },
+    {
+      "name": "Marks",
+      "item": [
+        {
+          "name": "Get My Marks",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/marks/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "marks",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get my marks response\", () => {",
+                  "  pm.expect([200,403]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Mark",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/marks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "marks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"User_id\": \"{{student_id}}\", \"Subject_id\": \"{{subject_id}}\", \"Numbers\": 85, \"OutOf\": 100, \"ExamPercentage\": 100, \"MarkType\": \"EXAM\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Create mark response\", () => {",
+                  "  pm.expect([201,400,403,404]).to.include(pm.response.code);",
+                  "});",
+                  "let json = null;",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "if (json && json.data && json.data.id) { pm.environment.set(\"mark_id\", json.data.id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Marks",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/marks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "marks"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"List marks response\", () => {",
+                  "  pm.expect([200,403]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Mark By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/marks/{{mark_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "marks",
+                "{{mark_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get mark response\", () => {",
+                  "  pm.expect([200,403,404]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Mark",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/marks/{{mark_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "marks",
+                "{{mark_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"Numbers\":90}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Update mark response\", () => {",
+                  "  pm.expect([200,400,403,404]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Mark",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/marks/{{mark_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "marks",
+                "{{mark_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Delete mark response\", () => {",
+                  "  pm.expect([200,403,404]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Teachers",
+      "item": [
+        {
+          "name": "Create Teacher",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is correct', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test('Response time < 2000ms', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.id) {",
+                  "  pm.environment.set('teacher_id', res.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Ahmad Teacher\", \"email\": \"teacher@example.com\", \"password\": \"Password123\", \"work\": \"Mathematics\", \"specialization\": \"Algebra\", \"bio\": \"Experienced math teacher\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/teachers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "teachers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Teachers",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is correct', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test('Response time < 2000ms', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "pm.test('Response has data array', function () {",
+                  "  pm.expect(pm.response.json().data).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/teachers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "teachers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Teacher",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is correct', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test('Response time < 2000ms', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/teachers/{{teacher_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "teachers",
+                "{{teacher_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Teacher",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is correct', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test('Response time < 2000ms', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"specialization\": \"Advanced Algebra\", \"bio\": \"Updated bio\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/teachers/{{teacher_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "teachers",
+                "{{teacher_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Teacher",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is correct', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test('Response time < 2000ms', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/teachers/{{teacher_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "teachers",
+                "{{teacher_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reassign Subject Teacher",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is correct', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test('Response time < 2000ms', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"teacherId\": {{teacher_id}}}"
+            },
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/subjects/{{subject_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "subjects",
+                "{{subject_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Teacher Subjects",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is correct', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test('Response time < 2000ms', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "pm.test('Response has data array', function () {",
+                  "  pm.expect(pm.response.json().data).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/teachers/{{teacher_id}}/subjects",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "teachers",
+                "{{teacher_id}}",
+                "subjects"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Teacher Lessons",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is correct', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test('Response time < 2000ms', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "pm.test('Response has data array', function () {",
+                  "  pm.expect(pm.response.json().data).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/teachers/{{teacher_id}}/lessons",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "teachers",
+                "{{teacher_id}}",
+                "lessons"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

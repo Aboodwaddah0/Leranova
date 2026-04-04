@@ -90,6 +90,9 @@ services:
     container_name: learnova-qdrant
     ports:
       - "6333:6333"
+    volumes:
+    - leranova_qdrant_data:/qdrant/storage
 
 volumes:
   db_data:
+  leranova_qdrant_data:
