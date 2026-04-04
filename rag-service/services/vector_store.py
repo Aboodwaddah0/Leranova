@@ -42,6 +42,9 @@ def store_lesson_chunks(
     source_type: str = 'video',
     source_name: str = 'legacy-video',
     source_ref: str = 'legacy-video',
+    file_url: Optional[str] = None,
+    course_id: Optional[int] = None,
+    subject_id: Optional[int] = None,
     chunk_metadata: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     if not chunks or not embeddings:
@@ -67,11 +70,17 @@ def store_lesson_chunks(
                 id=point_id,
                 vector=embedding,
                 payload={
+                    "text": chunk_text,
+                    "file_type": source_type,
+                    "file_url": file_url or source_ref,
                     "lessonId": lesson_id,
                     "sourceType": source_type,
                     "sourceName": source_name,
+                    "course_id": course_id,
+                    "subject_id": subject_id,
                     "lesson_id": lesson_id,
                     "organization_id": organization_id,
+                    "source_ref": source_ref,
                     "source_type": source_type,
                     "source_name": source_name,
                     "chunk_index": index,
@@ -146,3 +155,23 @@ def retrieve_lesson_chunks(
         )
 
     return results
+
+
+def count_lesson_chunks(lesson_id: str) -> int:
+    client = _get_client()
+    query_filter = qmodels.Filter(
+        must=[
+            qmodels.FieldCondition(
+                key='lessonId',
+                match=qmodels.MatchValue(value=lesson_id),
+            )
+        ]
+    )
+
+    count_result = client.count(
+        collection_name=settings.qdrant_collection,
+        count_filter=query_filter,
+        exact=True,
+    )
+
+    return int(count_result.count or 0)

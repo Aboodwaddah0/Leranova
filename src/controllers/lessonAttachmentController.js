@@ -31,7 +31,7 @@ const parseAttachmentId = (req) => {
 export const uploadLessonAttachmentController = async (req, res, next) => {
   try {
     const lessonId = parseLessonId(req);
-    const attachment = await createLessonAttachment({
+    const { attachment, ingestion, warning } = await createLessonAttachment({
       orgId: req.user.id,
       lessonId,
       file: req.file,
@@ -40,6 +40,8 @@ export const uploadLessonAttachmentController = async (req, res, next) => {
     return res.status(201).json({
       message: 'Lesson attachment uploaded successfully',
       data: attachment,
+      ingestion,
+      warning,
     });
   } catch (error) {
     return next(error);

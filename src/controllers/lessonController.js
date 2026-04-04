@@ -60,17 +60,24 @@ export const createLessonController = async (req, res, next) => {
 
 		const lesson = await createLesson(req.user.id, subjectId, value);
 		let videoAttachment = null;
+		let ingestion = null;
+		let warning = null;
 
 		if (video) {
-			videoAttachment = await createLessonAttachment({
+			const uploadResult = await createLessonAttachment({
 				orgId: req.user.id,
 				lessonId: lesson.id,
 				file: video,
 			});
+			videoAttachment = uploadResult.attachment;
+			ingestion = uploadResult.ingestion;
+			warning = uploadResult.warning;
 		}
 
 		return res.status(201).json({
 			message: 'Lesson created successfully',
+			ingestion,
+			warning,
 			data: videoAttachment
 				? {
 					...lesson,
@@ -142,17 +149,24 @@ export const updateLessonController = async (req, res, next) => {
 			? await updateLesson(req.user.id, subjectId, lessonId, value)
 			: await getLessonById(req.user.id, subjectId, lessonId);
 		let videoAttachment = null;
+		let ingestion = null;
+		let warning = null;
 
 		if (video) {
-			videoAttachment = await createLessonAttachment({
+			const uploadResult = await createLessonAttachment({
 				orgId: req.user.id,
 				lessonId,
 				file: video,
 			});
+			videoAttachment = uploadResult.attachment;
+			ingestion = uploadResult.ingestion;
+			warning = uploadResult.warning;
 		}
 
 		return res.status(200).json({
 			message: 'Lesson updated successfully',
+			ingestion,
+			warning,
 			data: videoAttachment
 				? {
 					...lesson,
