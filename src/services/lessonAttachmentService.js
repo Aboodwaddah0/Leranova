@@ -1,7 +1,11 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
-import { uploadAttachment, deleteUploadedFile } from './cloudinary.service.js';
-import { triggerLessonRagDirectFileProcessing } from './rag.service.js';
+import {
+  uploadAttachment,
+  deleteUploadedFile,
+  buildLessonUploadPublicId,
+} from './cloudinary.service.js';
+import { triggerLessonRagIngestion } from './rag.service.js';
 
 const toAttachmentType = (mimeType) => {
   const normalized = String(mimeType || '').toLowerCase();
@@ -38,8 +42,6 @@ const toAttachmentType = (mimeType) => {
   return 'OTHER';
 };
 
-const toRagFileType = (fileType) => String(fileType || 'OTHER').toLowerCase();
-
 const toJsonSafeSize = (value) => {
   if (value === null || value === undefined) {
     return null;
@@ -53,18 +55,33 @@ const toJsonSafeSize = (value) => {
   return value;
 };
 
-const serializeAttachment = (attachment) => ({
+const serializeAttachment = (attachment, context = {}) => ({
   id: attachment.id,
   lessonId: attachment.lessonId,
+  subjectId: context.subjectId ?? null,
+  courseId: context.courseId ?? null,
   fileUrl: attachment.fileUrl,
   filePublicId: attachment.filePublicId,
   fileResourceType: attachment.fileResourceType,
+  url: attachment.fileUrl,
+  public_id: attachment.filePublicId,
+  resource_type: attachment.fileResourceType,
   mimeType: attachment.mimeType,
   originalName: attachment.originalName,
   fileType: attachment.fileType,
+  type: String(attachment.fileType || '').toLowerCase(),
   sizeBytes: toJsonSafeSize(attachment.sizeBytes),
   createdAt: attachment.createdAt,
 });
+
+const mapFileTypeToIngestionType = (fileType) => {
+  const normalized = String(fileType || '').toUpperCase();
+  if (normalized === 'VIDEO') return 'video';
+  if (normalized === 'PDF') return 'pdf';
+  if (normalized === 'DOCX') return 'docx';
+  if (normalized === 'TXT') return 'txt';
+  return null;
+};
 
 const ensureLessonBelongsToOrganization = async (orgId, lessonId) => {
   const lesson = await prisma.lesson.findFirst({
@@ -78,12 +95,25 @@ const ensureLessonBelongsToOrganization = async (orgId, lessonId) => {
     },
     select: {
       id: true,
+      Subject_id: true,
+      subject: {
+        select: {
+          id: true,
+          Course_id: true,
+        },
+      },
     },
   });
 
   if (!lesson) {
     throw new AppError('Lesson not found or does not belong to your organization', 404);
   }
+
+  return {
+    lessonId: lesson.id,
+    subjectId: lesson.subject?.id || lesson.Subject_id,
+    courseId: lesson.subject?.Course_id,
+  };
 };
 
 export const createLessonAttachment = async ({ orgId, lessonId, file }) => {
@@ -91,17 +121,25 @@ export const createLessonAttachment = async ({ orgId, lessonId, file }) => {
     throw new AppError('file is required', 400);
   }
 
-  await ensureLessonBelongsToOrganization(orgId, lessonId);
-
-  const uploaded = await uploadAttachment(file.buffer, {
-    folder: 'learnova/lessons/attachments',
-    use_filename: true,
-    unique_filename: true,
-    filename_override: file.originalname,
-  });
+  const lessonContext = await ensureLessonBelongsToOrganization(orgId, lessonId);
 
   const mimeType = String(file.mimetype || '').toLowerCase() || null;
   const fileType = toAttachmentType(mimeType);
+  const ingestionFileType = mapFileTypeToIngestionType(fileType);
+
+  const cloudinaryPublicId = buildLessonUploadPublicId({
+    courseId: lessonContext.courseId,
+    subjectId: lessonContext.subjectId,
+    lessonId,
+    fileType: ingestionFileType || String(fileType).toLowerCase(),
+  });
+
+  const uploaded = await uploadAttachment(file.buffer, {
+    resource_type: ingestionFileType === 'video' ? 'video' : 'raw',
+    public_id: cloudinaryPublicId,
+    unique_filename: false,
+    overwrite: false,
+  });
 
   const attachment = await prisma.lesson_attachment.create({
     data: {
@@ -116,20 +154,51 @@ export const createLessonAttachment = async ({ orgId, lessonId, file }) => {
     },
   });
 
-  try {
-    await triggerLessonRagDirectFileProcessing({
-      lessonId,
+  let warning = null;
+
+  if (ingestionFileType) {
+    triggerLessonRagIngestion({
+      fileUrl: uploaded.fileUrl,
+      fileType: ingestionFileType,
       organizationId: orgId,
-      fileType: toRagFileType(fileType),
-      sourceName: file.originalname,
-      fileBuffer: file.buffer,
-      mimeType,
+      courseId: lessonContext.courseId,
+      subjectId: lessonContext.subjectId,
+      lessonId,
+    }).catch((error) => {
+      console.error('[RAG ERROR] ingestion failed', {
+        lessonId,
+        subjectId: lessonContext.subjectId,
+        courseId: lessonContext.courseId,
+        fileType: ingestionFileType,
+        error: error.message,
+      });
     });
-  } catch (error) {
-    console.error(`RAG trigger failed for lesson attachment ${attachment.id}:`, error.message);
+  } else {
+    warning = {
+      code: 'RAG_FILE_TYPE_UNSUPPORTED',
+      message: 'File uploaded but skipped RAG ingestion due to unsupported type.',
+      details: `Unsupported type: ${fileType}`,
+    };
+    console.warn('[RAG ERROR] ingestion failed', {
+      lessonId,
+      subjectId: lessonContext.subjectId,
+      courseId: lessonContext.courseId,
+      fileType,
+      error: 'Unsupported file type for ingestion',
+    });
   }
 
-  return serializeAttachment(attachment);
+  return {
+    attachment: serializeAttachment(attachment, lessonContext),
+    ingestion: ingestionFileType ? {
+      status: 'queued',
+      fileType: ingestionFileType,
+      courseId: lessonContext.courseId,
+      subjectId: lessonContext.subjectId,
+      lessonId,
+    } : null,
+    warning,
+  };
 };
 
 export const listLessonAttachments = async ({ orgId, lessonId }) => {

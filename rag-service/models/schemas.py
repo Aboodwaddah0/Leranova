@@ -2,6 +2,24 @@ from typing import Literal
 from pydantic import BaseModel, AnyHttpUrl, model_validator
 
 
+class IngestRequest(BaseModel):
+    file_url: AnyHttpUrl
+    file_type: Literal["video", "pdf", "docx", "txt"]
+    course_id: int
+    subject_id: int
+    lesson_id: int
+    organization_id: int | None = None
+
+
+class IngestResponse(BaseModel):
+    status: str
+
+
+class QdrantChunkCountResponse(BaseModel):
+    lesson_id: int
+    count: int
+
+
 class ProcessLessonRequest(BaseModel):
     lessonId: str
     organizationId: str

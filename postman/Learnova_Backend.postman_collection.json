@@ -1752,6 +1752,21 @@
                   "mode": "formdata",
                   "formdata": [
                     {
+                      "key": "course_id",
+                      "value": "{{course_id}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "subject_id",
+                      "value": "{{subject_id}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "lesson_id",
+                      "value": "{{lesson_id}}",
+                      "type": "text"
+                    },
+                    {
                       "key": "file",
                       "type": "file",
                       "src": ""
@@ -1787,6 +1802,21 @@
                 "body": {
                   "mode": "formdata",
                   "formdata": [
+                    {
+                      "key": "course_id",
+                      "value": "{{course_id}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "subject_id",
+                      "value": "{{subject_id}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "lesson_id",
+                      "value": "{{lesson_id}}",
+                      "type": "text"
+                    },
                     {
                       "key": "file",
                       "type": "file",
@@ -1824,6 +1854,21 @@
                   "mode": "formdata",
                   "formdata": [
                     {
+                      "key": "course_id",
+                      "value": "{{course_id}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "subject_id",
+                      "value": "{{subject_id}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "lesson_id",
+                      "value": "{{lesson_id}}",
+                      "type": "text"
+                    },
+                    {
                       "key": "file",
                       "type": "file",
                       "src": ""
@@ -1859,6 +1904,21 @@
                 "body": {
                   "mode": "formdata",
                   "formdata": [
+                    {
+                      "key": "course_id",
+                      "value": "{{course_id}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "subject_id",
+                      "value": "{{subject_id}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "lesson_id",
+                      "value": "{{lesson_id}}",
+                      "type": "text"
+                    },
                     {
                       "key": "file",
                       "type": "file",
@@ -2714,6 +2774,61 @@
               ]
             }
           }
+        }
+      ]
+    },
+    {
+      "name": "Chatbot",
+      "item": [
+        {
+          "name": "Ask Question",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"Summarize the main lesson materials for this lesson\",\n  \"course_id\": 1,\n  \"subject_id\": 1,\n  \"lesson_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}:{{port}}/api/chatbot/ask",
+              "host": [
+                "{{base_url}}"
+              ],
+              "port": "{{port}}",
+              "path": [
+                "api",
+                "chatbot",
+                "ask"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Chatbot works\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const res = pm.response.json();",
+                  "  pm.expect(res.data).to.have.property(\"answer\");",
+                  "  pm.expect(res.data).to.have.property(\"explanation\");",
+                  "  pm.expect(res.data).to.have.property(\"references\");",
+                  "  pm.expect(res.data).to.have.property(\"confidence\");",
+                  "  pm.expect(res.data).to.have.property(\"fallback\");",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     }
