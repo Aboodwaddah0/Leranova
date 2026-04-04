@@ -46,42 +46,62 @@ const ensureTeacherBelongsToOrg = async (orgId, teacherId) => {
 };
 
 export const createTeacher = async (orgId, data) => {
+  console.info('Creating teacher', { orgId, email: data.email });
+
   const existingEmail = await prisma.user.findUnique({
     where: { email: data.email },
     select: { id: true },
   });
 
   if (existingEmail) {
+    console.warn('Teacher creation rejected due to duplicate email', { orgId, email: data.email });
     throw new AppError('User email already exists', 409);
   }
 
   const passwordHashed = await hashPassword(data.password);
 
-  const teacher = await prisma.$transaction(async (tx) => {
-    const user = await tx.user.create({
-      data: {
-        OrgId: orgId,
-        name: data.name,
-        email: data.email,
-        passwordHashed,
-        role: 'TEACHER',
-        age: data.age ?? null,
-        gender: data.gender ?? null,
-        address: data.address ?? null,
-      },
-    });
+  let teacher;
 
-    return tx.teacher.create({
-      data: {
-        Teacher_id: user.id,
-        OrgId: orgId,
-        Work: data.work ?? null,
-        specialization: data.specialization ?? null,
-        bio: data.bio ?? null,
-      },
-      select: teacherSelect,
+  try {
+    teacher = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          name: data.name,
+          email: data.email,
+          passwordHashed,
+          role: 'TEACHER',
+          age: data.age ?? null,
+          gender: data.gender ?? null,
+          address: data.address ?? null,
+          academy_user: {
+            create: {
+              OrgId: orgId,
+            },
+          },
+          teacher: {
+            create: {
+              OrgId: orgId,
+              Work: data.work ?? null,
+              specialization: data.specialization ?? null,
+              bio: data.bio ?? null,
+            },
+          },
+        },
+        select: {
+          teacher: {
+            select: teacherSelect,
+          },
+        },
+      });
+
+      return user.teacher;
     });
-  });
+  } catch (error) {
+    console.error('Teacher creation failed', { orgId, email: data.email, error: error.message });
+    throw error;
+  }
+
+  console.info('Teacher created successfully', { orgId, email: data.email, teacherId: teacher.Teacher_id });
 
   return serializeTeacher(teacher);
 };
