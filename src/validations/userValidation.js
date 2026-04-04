@@ -215,12 +215,37 @@ export const validateExcelData = (data) => {
 		const rawAge = getRowValue(row, "age");
 		const rawGender = getRowValue(row, "Gender");
 		const rawAddress = getRowValue(row, "Address");
+		const rawEmail = getRowValue(row, "Email");
+		const rawPassword = getRowValue(row, "Password");
 
 		const name = String(rawName || "").trim();
 		const role = normalizeRole(rawRole);
 		const gender = normalizeGender(rawGender);
 		const address = String(rawAddress || "").trim();
 		const ageValue = rawAge === null || rawAge === undefined || rawAge === "" ? null : Number(rawAge);
+		const email =
+			rawEmail === null || rawEmail === undefined || String(rawEmail).trim() === ""
+				? null
+				: String(rawEmail).trim().toLowerCase();
+		const password =
+			rawPassword === null || rawPassword === undefined || String(rawPassword) === ""
+				? null
+				: String(rawPassword);
+
+		let isEmailValid = true;
+		if (email) {
+			const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+			if (!emailRegex.test(email)) {
+				isEmailValid = false;
+				errors.push(`Row ${rowNumber}: Email must be valid`);
+			}
+		}
+
+		let isPasswordValid = true;
+		if (password && password.length < 8) {
+			isPasswordValid = false;
+			errors.push(`Row ${rowNumber}: Password must be at least 8 characters`);
+		}
 
 		if (!name) {
 			errors.push(`Row ${rowNumber}: Name is required`);
@@ -252,7 +277,9 @@ export const validateExcelData = (data) => {
 			ageValue >= 0 &&
 			gender &&
 			USER_GENDERS.has(gender) &&
-			address
+			address &&
+			isEmailValid &&
+			isPasswordValid
 		) {
 			validatedRows.push({
 				name,
@@ -260,6 +287,8 @@ export const validateExcelData = (data) => {
 				age: ageValue,
 				gender,
 				address,
+				email,
+				password,
 			});
 		}
 	});
