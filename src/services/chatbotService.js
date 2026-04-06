@@ -7,32 +7,58 @@ const GROQ_API_URL = process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
 const SCOPE_THRESHOLDS = {
-  lesson: 0.65,
-  subject: 0.72,
-  course: 0.78,
+  lesson: 0.4,
+  subject: 0.4,
+  course: 0.4,
 };
 
-const MAX_CONTEXT_CHUNKS = 5;
+const MAX_CONTEXT_CHUNKS = 8;
 const MIN_CONTEXT_CHUNKS = 1;
+const MIN_CONFIDENCE_TO_ANSWER = 0.35;
+const MIN_CHUNK_SCORE = 0.2;
 const ALLOWED_SOURCE_TYPES = new Set(['video', 'pdf', 'docx', 'txt']);
 const ORG_ROLES = new Set(['ACADEMY', 'SCHOOL']);
 
 const REFUSAL_ANSWER = 'هذا غير مغطى بشكل واضح في محتوى هذه الحصة.';
+const BLOCKED_FILLER_PHRASES = [
+  'هذا يظهر',
+  'هذا التعبير يظهر',
+  'بالإضافة إلى ذلك',
+  'في الوقت نفسه',
+];
 
 const CHATBOT_SYSTEM_PROMPT = [
-  'أنت مساعد أكاديمي صارم في Learnova.',
-  'استخدم فقط السياق المزوَّد من مواد الدرس.',
-  'ممنوع استخدام أي معرفة خارجية أو افتراضات غير مدعومة.',
-  `إذا لم يكن الدعم كافيًا فارجع النص حرفيًا: "${REFUSAL_ANSWER}".`,
-  'لا تدمج مقاطع غير مرتبطة في ادعاء واحد.',
-  'إذا كان الدعم جزئيًا صرّح بذلك بوضوح دون اختلاق.',
-  'قدّم جوابًا عربيًا واضحًا ومباشرًا للطالب: دقيق، مختصر، غير مكرر.',
-  'للأسئلة التحليلية: خلاصة قوية ثم شرح منظم قصير.',
-  'للأسئلة المباشرة: جواب مباشر موجز.',
-  'للملخص: نقاط مركزة غير مكررة.',
-  'تجنب الحشو والمبالغة والعبارات العامة غير المفيدة.',
-  'أعط المعنى المقصود في الدرس لا تفسيرًا عامًا بعيدًا.',
+  'أنت مساعد تعلم ذكي في Learnova بجودة عالية.',
+  'افهم العربية الفصحى والعامية الشامية (فلسطيني/أردني) والكتابة غير الدقيقة.',
+  'استخدم فقط السياق المزوَّد من مواد الدرس، وممنوع المعرفة الخارجية.',
+  `إن لم توجد أدلة كافية فارجع نص الرفض حرفيًا: "${REFUSAL_ANSWER}".`,
+  'قدّم إجابة دقيقة ومختصرة وغير مكررة.',
+  'للسؤال العام عن موضوع الحصة: قدّم ملخصًا مندمجًا من جميع المصادر المتاحة.',
+  'إذا لم يكن الجواب حرفيًا لكن الأدلة كافية: اسمح باستنتاج آمن دون تجاوز السياق.',
+  'إذا كان جزء من السؤال خارج السياق: أجب المدعوم فقط واذكر بوضوح أن الجزء الآخر غير مغطى.',
+  'لا تدمج أفكارًا غير مرتبطة ولا تخمّن.',
 ].join(' ');
+
+const DIALECT_TOKEN_MAP = new Map([
+  ['شو', 'ماذا'],
+  ['ايش', 'ماذا'],
+  ['إيش', 'ماذا'],
+  ['ليش', 'لماذا'],
+  ['عن شو', 'ما موضوع'],
+  ['احكيلي', 'اشرح'],
+  ['احكي لي', 'اشرح'],
+  ['قديش', 'كم'],
+  ['هالحصة', 'هذه الحصة'],
+  ['هالدرس', 'هذا الدرس'],
+]);
+
+const TYPO_TOKEN_MAP = new Map([
+  ['مكنتها', 'مكانتها'],
+  ['مكانتو', 'مكانته'],
+  ['الكدس', 'القدس'],
+  ['عنون', 'عنوان'],
+  ['مووضوع', 'موضوع'],
+]);
 
 const parseJsonResponse = async (response) => {
   const text = await response.text().catch(() => '');
@@ -95,9 +121,46 @@ const normalizeArabicText = (text) => String(text || '')
   .replace(/[‘’]/g, "'")
   .replace(/[٫]/g, '.')
   .replace(/[،]{2,}/g, '،')
+  .replace(/[؟?]{2,}/g, '؟')
   .replace(/[.]{2,}/g, '.')
   .replace(/[\s\t\r\n]+/g, ' ')
   .trim();
+
+const applyTokenMap = (input, tokenMap) => {
+  let output = input;
+  for (const [from, to] of tokenMap.entries()) {
+    const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    output = output.replace(new RegExp(`(^|\\s)${escaped}(?=\\s|$)`, 'giu'), `$1${to}`);
+  }
+  return output;
+};
+
+const normalizeUserQuestion = (rawQuestion) => {
+  let normalized = normalizeArabicText(rawQuestion).toLowerCase();
+  normalized = applyTokenMap(normalized, DIALECT_TOKEN_MAP);
+  normalized = applyTokenMap(normalized, TYPO_TOKEN_MAP);
+
+  if (/شو\s*بحكي\s*الدرس|ماذا\s*بحكي\s*الدرس|ما\s*بحكي\s*الدرس|عن\s*شو\s*الدرس|شو\s*موضوع\s*الحصة|شو\s*موضوع\s*الدرس/u.test(normalized)) {
+    normalized = 'ما موضوع هذا الدرس';
+  }
+
+  if (/^ما\s*عنوان$/u.test(normalized) || /^عنوان$/u.test(normalized)) {
+    normalized = 'ما عنوان الدرس';
+  }
+  if (/^ماذا\s*عن\s*القدس$/u.test(normalized) || /^شو\s*عن\s*القدس$/u.test(normalized)) {
+    normalized = 'اشرح موضوع القدس في هذا الدرس';
+  }
+  if (/^ماذا\s*موضوع\s*هذا\s*الدرس$/u.test(normalized) || /^ما\s*موضوع\s*الدرس$/u.test(normalized)) {
+    normalized = 'ما موضوع هذا الدرس';
+  }
+
+  const summaryIntent = /ما\s*موضوع|ماذا\s*بحكي\s*الدرس|ما\s*بحكي\s*الدرس|موضوع\s*الحصة|عن\s*شو\s*الدرس|لخص|ملخص|summarize|summary/u.test(normalized);
+  return {
+    normalizedQuestion: normalized,
+    retrievalQuestion: normalized,
+    intent: summaryIntent ? 'summary' : 'direct',
+  };
+};
 
 const isCorruptedFragment = (text) => {
   if (!text) return true;
@@ -126,7 +189,7 @@ const toTokenSet = (text) => {
 };
 
 const QUESTION_STOP_TOKENS = new Set([
-  'ما', 'ماذا', 'كيف', 'لماذا', 'هل', 'من', 'متى', 'اين', 'أين', 'كم',
+  'ما', 'شو','ماذا', 'كيف', 'لماذا', 'هل', 'من', 'متى', 'اين', 'أين', 'كم',
   'اشرح', 'فسر', 'وضح', 'حلل', 'لخص', 'ملخص', 'نقاط', 'قصيرة', 'بإيجاز',
   'حصة', 'الحصة', 'درس', 'الدرس', 'هذه', 'هذا', 'ذلك', 'تلك',
   'في', 'على', 'من', 'إلى', 'الى', 'عن', 'مع', 'بين', 'ثم', 'او', 'أو', 'كما',
@@ -145,9 +208,146 @@ const jaccardSimilarity = (a, b) => {
 
 const detectQuestionStyle = (question) => {
   const q = normalizeArabicText(question).toLowerCase();
-  if (/لخص|summarize|summary|ملخص/.test(q)) return 'summary';
+  if (/لخص|summarize|summary|ملخص|عن شو|موضوع الحصة|موضوع الدرس|ما موضوع/.test(q)) return 'summary';
   if (/حلل|فسر|وضح|لماذا|كيف|compare|analy/.test(q)) return 'analytical';
   return 'factual';
+};
+
+const splitAnswerSentences = (text) => normalizeArabicText(text)
+  .split(/(?<=[.!؟\n])\s+/u)
+  .map((part) => part.trim())
+  .filter(Boolean);
+
+const removeFillerPhrases = (text) => {
+  let cleaned = String(text || '');
+
+  cleaned = cleaned
+    .replace(/\bالجواب\s+هو\s*[:：]?\s*/giu, '')
+    .replace(/\bالجواب\s*[:：]?\s*/giu, '')
+    .replace(/\bالإجابة\s+هي\s*[:：]?\s*/giu, '')
+    .replace(/\bالشرح\s*[:：]?\s*/giu, '')
+    .replace(/\bالتفسير\s*[:：]?\s*/giu, '');
+
+  const explanationMarker = cleaned.search(/\b(?:الشرح|التفسير)\s*[:：]/iu);
+  if (explanationMarker >= 0) {
+    cleaned = cleaned.slice(0, explanationMarker).trim();
+  }
+
+  for (const phrase of BLOCKED_FILLER_PHRASES) {
+    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    cleaned = cleaned.replace(new RegExp(escaped, 'gi'), '');
+  }
+  return normalizeArabicText(cleaned).replace(/\s{2,}/g, ' ').trim();
+};
+
+const clipToMaxLength = (text, maxLength) => {
+  const normalized = normalizeArabicText(text);
+  if (normalized.length <= maxLength) return normalized;
+
+  const slice = normalized.slice(0, maxLength);
+  const pivot = Math.max(
+    slice.lastIndexOf('،'),
+    slice.lastIndexOf('.'),
+    slice.lastIndexOf('؟'),
+    slice.lastIndexOf('!'),
+    slice.lastIndexOf(';')
+  );
+
+  if (pivot > 60) {
+    return slice.slice(0, pivot + 1).trim();
+  }
+
+  return `${slice.trim()}...`;
+};
+
+const dedupeAnswerSentences = (sentences) => {
+  const unique = [];
+
+  for (const sentence of sentences) {
+    const tokens = toTokenSet(sentence);
+    const isDuplicate = unique.some((existing) => {
+      const sim = jaccardSimilarity(tokens, toTokenSet(existing));
+      return sim >= 0.9;
+    });
+
+    if (!isDuplicate) unique.push(sentence);
+  }
+
+  return unique;
+};
+
+const getQuestionContentTokens = (question) => {
+  const questionTokens = toTokenSet(question);
+  return new Set(
+    Array.from(questionTokens).filter((token) => !QUESTION_STOP_TOKENS.has(token))
+  );
+};
+
+const keepAlignedSentences = (question, sentences) => {
+  const contentTokens = getQuestionContentTokens(question);
+  if (!contentTokens.size) return sentences;
+
+  const aligned = sentences.filter((sentence) => {
+    const tokens = toTokenSet(sentence);
+    for (const token of contentTokens) {
+      if (tokens.has(token)) return true;
+    }
+    return false;
+  });
+
+  return aligned.length ? aligned : sentences.slice(0, 1);
+};
+
+const formatByQuestionStyle = (questionStyle, sentences) => {
+  if (!sentences.length) return '';
+
+  if (questionStyle === 'factual') {
+    return clipToMaxLength(sentences[0], 180);
+  }
+
+  if (questionStyle === 'analytical') {
+    return clipToMaxLength(sentences[0], 220);
+  }
+
+  return clipToMaxLength(sentences.slice(0, 6).join(' '), 760);
+};
+
+const ensureSummaryDepth = (answer, chunks) => {
+  const answerSentences = dedupeAnswerSentences(splitAnswerSentences(answer));
+  if (answerSentences.length >= 3) {
+    return clipToMaxLength(answerSentences.join(' '), 760);
+  }
+
+  const fromChunks = dedupeAnswerSentences(
+    chunks
+      .flatMap((chunk) => splitAnswerSentences(chunk.text || ''))
+      .filter((sentence) => sentence.length > 20)
+  );
+
+  const merged = [...answerSentences];
+  for (const sentence of fromChunks) {
+    const simExists = merged.some((existing) => jaccardSimilarity(toTokenSet(existing), toTokenSet(sentence)) >= 0.85);
+    if (!simExists) merged.push(sentence);
+    if (merged.length >= 5)break;
+  }
+
+  return clipToMaxLength(merged.join(' '), 760);
+};
+
+const polishAnswer = ({ rawAnswer, question, questionStyle, chunks }) => {
+  const cleaned = removeFillerPhrases(rawAnswer);
+  if (!cleaned) return '';
+
+  const sentences = splitAnswerSentences(cleaned);
+  const deduped = dedupeAnswerSentences(sentences);
+  const aligned = questionStyle === 'summary' ? deduped : keepAlignedSentences(question, deduped);
+  const styled = formatByQuestionStyle(questionStyle, aligned);
+
+  if (questionStyle === 'summary') {
+    return normalizeArabicText(ensureSummaryDepth(styled, chunks || []));
+  }
+
+  return normalizeArabicText(styled);
 };
 
 const resolveRequesterContext = async (tokenUser) => {
@@ -280,7 +480,7 @@ const queryRagFallbackRetrieve = async ({ question, lessonIds }) => {
       body: JSON.stringify({
         query: question,
         lessonId: String(id),
-        limit: 5,
+        limit: 8,
       }),
     });
 
@@ -385,21 +585,19 @@ const buildReferences = (chunks) => chunks.map((chunk) => ({
   score: Number((chunk.score || 0).toFixed(3)),
 }));
 
-const makeRefusal = ({ scope, fallback, reason }) => ({
+const makeRefusal = ({ scope, reason, mode = 'direct' }) => ({
   answer: REFUSAL_ANSWER,
   explanation: reason || 'لا تتوفر أدلة كافية وموثوقة داخل مواد الدرس للإجابة بدقة.',
   references: [],
   confidence: 0,
+  mode,
   scope,
-  fallback,
+  fallback: false,
 });
 
 const isVagueQuestion = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
   if (!normalized) return true;
-
-  const tokenCount = normalized.split(/\s+/).filter(Boolean).length;
-  if (tokenCount < 3) return true;
 
   const vaguePatterns = [
     /^tell me anything[.!?]*$/,
@@ -422,13 +620,8 @@ const isStrongEnough = ({ chunks, scope }) => {
   const threshold = SCOPE_THRESHOLDS[scope] || SCOPE_THRESHOLDS.course;
   const topScore = calculateTopScore(chunks);
   const confidence = calculateConfidence(chunks);
-  const topTwoAvg = chunks.slice(0, 2).reduce((sum, chunk) => sum + Number(chunk.score || 0), 0) / Math.min(2, chunks.length);
-
-  if (topScore < threshold) return false;
-  if (confidence < threshold) return false;
-  if (topTwoAvg < (threshold - 0.05)) return false;
-
-  return true;
+  if (topScore >= threshold) return true;
+  return confidence >= threshold;
 };
 
 const hasTopicalSupport = (question, chunks) => {
@@ -445,10 +638,15 @@ const hasTopicalSupport = (question, chunks) => {
 
   let maxOverlap = 0;
   let maxSharedCount = 0;
+  const allChunkTokens = new Set();
 
   for (const chunk of chunks) {
     const chunkTokens = toTokenSet(chunk.text);
     if (!chunkTokens.size) continue;
+
+    for (const token of chunkTokens) {
+      allChunkTokens.add(token);
+    }
 
     let shared = 0;
     for (const token of contentTokens) {
@@ -460,9 +658,48 @@ const hasTopicalSupport = (question, chunks) => {
     maxSharedCount = Math.max(maxSharedCount, shared);
   }
 
+  if (contentTokens.size >= 3 && maxSharedCount < 1) return false;
   if (maxSharedCount === 0) return false;
-  if (maxOverlap < 0.08) return false;
+  if (maxOverlap < 0.03) return false;
   return true;
+};
+
+const rerankChunks = (chunks, question) => {
+  const qTokens = toTokenSet(question);
+
+  return chunks
+    .map((chunk) => {
+      const chunkTokens = toTokenSet(chunk.text);
+      const overlap = jaccardSimilarity(qTokens, chunkTokens);
+      const baseScore = Number(chunk.score || 0);
+      const rerankedScore = Number((baseScore * 0.75 + overlap * 0.25).toFixed(4));
+
+      return {
+        ...chunk,
+        score: rerankedScore,
+      };
+    })
+    .filter((chunk) => Number(chunk.score || 0) >= MIN_CHUNK_SCORE)
+    .sort((a, b) => b.score - a.score);
+};
+
+const isAnswerAlignedWithQuestion = ({ question, answer, confidence, mode }) => {
+  if (mode === 'summary') return true;
+  if (Number(confidence || 0) >= 0.5) return true;
+
+  const contentTokens = getQuestionContentTokens(question);
+  if (!contentTokens.size) return true;
+
+  const answerTokens = toTokenSet(answer);
+  if (!answerTokens.size) return false;
+
+  let shared = 0;
+  for (const token of contentTokens) {
+    if (answerTokens.has(token)) shared += 1;
+  }
+
+  if (contentTokens.size >= 3) return shared >= 1;
+  return shared >= 1;
 };
 
 const selectStageChunks = async ({
@@ -483,7 +720,7 @@ const selectStageChunks = async ({
     subjectId,
     lessonId,
     organizationId,
-    limit: 10,
+    limit: 16,
   });
 
   const retrieved = await queryRagFallbackRetrieve({
@@ -492,16 +729,16 @@ const selectStageChunks = async ({
   });
 
   const allowed = new Set(candidateLessonIds);
-  const merged = dedupeAndSortChunks(
+  const merged = rerankChunks(dedupeAndSortChunks(
     enrichSubjectIds([...direct, ...retrieved], lessonToSubject)
       .filter((chunk) => allowed.has(chunk.lesson_id))
       .filter((chunk) => !chunk.organization_id || chunk.organization_id === organizationId)
-  , question);
+  , question), question);
 
   return keepCohesiveChunks(merged, scope).slice(0, MAX_CONTEXT_CHUNKS);
 };
 
-const askGroq = async ({ question, chunks, questionStyle, scope }) => {
+const askGroq = async ({ question, chunks, questionStyle, scope, modeHint }) => {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new AppError('GROQ_API_KEY is not configured', 500);
 
@@ -532,6 +769,7 @@ const askGroq = async ({ question, chunks, questionStyle, scope }) => {
           role: 'user',
           content: [
             `نمط السؤال: ${questionStyle}`,
+            `نمط الإجابة المطلوب: ${modeHint}`,
             `النطاق المستخدم: ${scope}`,
             `السؤال: ${question}`,
             'السياق المعتمد (JSON):',
@@ -553,13 +791,16 @@ const askGroq = async ({ question, chunks, questionStyle, scope }) => {
 };
 
 export const askChatbot = async ({ tokenUser, question, courseId, subjectId, lessonId }) => {
-  const normalizedQuestion = normalizeArabicText(question);
+  const normalizedInput = normalizeUserQuestion(question);
+  const normalizedQuestion = normalizedInput.normalizedQuestion;
+  const retrievalQuestion = normalizedInput.retrievalQuestion;
+  const refusalMode = normalizedInput.intent === 'summary' ? 'summary' : 'direct';
 
   if (isVagueQuestion(question)) {
     return makeRefusal({
       scope: lessonId ? 'lesson' : (subjectId ? 'subject' : 'course'),
-      fallback: !lessonId,
       reason: 'السؤال عام جدًا ولا يسمح بإجابة دقيقة من سياق الحصة فقط.',
+      mode: refusalMode,
     });
   }
 
@@ -617,7 +858,7 @@ export const askChatbot = async ({ tokenUser, question, courseId, subjectId, les
     }
 
     const chunks = await selectStageChunks({
-      question: normalizedQuestion,
+      question: retrievalQuestion,
       scope: stage.scope,
       courseId,
       subjectId: stage.subjectId,
@@ -627,10 +868,14 @@ export const askChatbot = async ({ tokenUser, question, courseId, subjectId, les
       lessonToSubject,
     });
 
-    if (
-      isStrongEnough({ chunks, scope: stage.scope })
-      && hasTopicalSupport(normalizedQuestion, chunks)
-    ) {
+    const stageConfidence = calculateConfidence(chunks);
+    const strongEnough = isStrongEnough({ chunks, scope: stage.scope })
+      || stageConfidence >= 0.35
+      || (normalizedInput.intent === 'summary' && chunks.length >= 2);
+    const topicalEnough = hasTopicalSupport(normalizedQuestion, chunks)
+      || normalizedInput.intent === 'summary';
+
+    if (strongEnough && topicalEnough) {
       selected = {
         ...stage,
         chunks,
@@ -643,31 +888,32 @@ export const askChatbot = async ({ tokenUser, question, courseId, subjectId, les
   if (!selected) {
     return makeRefusal({
       scope: lessonId ? 'lesson' : (resolvedSubjectId ? 'subject' : 'course'),
-      fallback: fallbackAttempted,
       reason: 'لا توجد مقاطع كافية وعالية الثقة ضمن هذا النطاق للإجابة بأمان.',
+      mode: refusalMode,
+    });
+  }
+
+  if (!selected.chunks.length) {
+    return makeRefusal({
+      scope: selected.scope,
+      reason: 'لا توجد مقاطع ذات صلة كافية داخل سياق الدرس.',
+      mode: refusalMode,
     });
   }
 
   const confidence = calculateConfidence(selected.chunks);
-  const threshold = SCOPE_THRESHOLDS[selected.scope] || SCOPE_THRESHOLDS.course;
-  if (confidence < threshold) {
+  if (confidence < MIN_CONFIDENCE_TO_ANSWER) {
     return makeRefusal({
       scope: selected.scope,
-      fallback: selected.fallback,
-      reason: 'الثقة في الاسترجاع أقل من الحد المطلوب، لذلك تم رفض الإجابة لتجنب التخمين.',
-    });
-  }
-
-  const topScore = calculateTopScore(selected.chunks);
-  if (topScore < threshold) {
-    return makeRefusal({
-      scope: selected.scope,
-      fallback: selected.fallback,
-      reason: 'أفضل دليل متاح غير كافٍ لإجابة دقيقة.',
+      reason: 'الثقة أقل من الحد الأدنى الآمن للإجابة.',
+      mode: refusalMode,
     });
   }
 
   const questionStyle = detectQuestionStyle(normalizedQuestion);
+  const answerMode = questionStyle === 'summary'
+    ? 'summary'
+    : (questionStyle === 'analytical' ? 'inferred' : (normalizedInput.intent === 'summary' ? 'summary' : 'direct'));
 
   let answer = REFUSAL_ANSWER;
   try {
@@ -676,27 +922,48 @@ export const askChatbot = async ({ tokenUser, question, courseId, subjectId, les
       chunks: selected.chunks,
       questionStyle,
       scope: selected.scope,
+      modeHint: answerMode,
     });
   } catch (error) {
     return makeRefusal({
       scope: selected.scope,
-      fallback: selected.fallback,
       reason: `تعذر توليد إجابة موثوقة من السياق فقط: ${error.message}`,
+      mode: answerMode,
     });
   }
 
-  const normalizedAnswer = normalizeArabicText(answer);
+  const normalizedAnswer = polishAnswer({
+    rawAnswer: answer,
+    question: normalizedQuestion,
+    questionStyle,
+    chunks: selected.chunks,
+  });
   if (!normalizedAnswer || normalizedAnswer === REFUSAL_ANSWER) {
     return makeRefusal({
       scope: selected.scope,
-      fallback: selected.fallback,
       reason: 'النموذج لم يجد دعمًا كافيًا داخل مواد الدرس للإجابة بأمان.',
+      mode: answerMode,
+    });
+  }
+
+  if (!isAnswerAlignedWithQuestion({
+    question: normalizedQuestion,
+    answer: normalizedAnswer,
+    confidence,
+    mode: answerMode,
+  })) {
+    return makeRefusal({
+      scope: selected.scope,
+      reason: 'الإجابة المتولدة غير متطابقة موضوعيًا مع السؤال المطلوب ضمن مواد الدرس.',
+      mode: answerMode,
     });
   }
 
   const references = buildReferences(selected.chunks.slice(0, MAX_CONTEXT_CHUNKS));
   const explanationParts = [
     `تمت الإجابة من نطاق ${selected.scope === 'lesson' ? 'الحصة' : selected.scope === 'subject' ? 'المادة' : 'المقرر'}.`,
+    `نمط الإجابة: ${answerMode}.`,
+    `عدد المقاطع المستخدمة: ${selected.chunks.length}.`,
     `الثقة: ${confidence.toFixed(3)}.`,
   ];
 
@@ -709,6 +976,7 @@ export const askChatbot = async ({ tokenUser, question, courseId, subjectId, les
     explanation: explanationParts.join(' '),
     references,
     confidence,
+    mode: answerMode,
     scope: selected.scope,
     fallback: selected.fallback,
   };

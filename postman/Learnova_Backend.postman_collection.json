@@ -2183,7 +2183,238 @@
     },
     {
       "name": "Chat",
-      "item": []
+      "item": [
+        {
+          "name": "Chatbot",
+          "item": [
+            {
+              "name": "Send Message",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "description": "Main chatbot flow. Auto-creates/fetches chat, stores user message, gets AI reply, stores bot message.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"content\": \"احكيلي عن القدس\",\n  \"course_id\": {{course_id}},\n  \"subject_id\": {{subject_id}},\n  \"lesson_id\": {{lesson_id}},\n  \"enable_chatbot\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/chats/messages",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "chats",
+                    "messages"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200 or 201', function () { pm.expect([200, 201]).to.include(pm.response.code); });",
+                      "const json = pm.response.json();",
+                      "pm.test('Has data object', function () { pm.expect(json).to.have.property('data'); });",
+                      "if (json && json.data && json.data.chat_id) pm.environment.set('chat_id', json.data.chat_id);",
+                      "if (json && json.data && json.data.user_message && json.data.user_message.id) pm.environment.set('user_message_id', json.data.user_message.id);",
+                      "if (json && json.data && json.data.bot_message && json.data.bot_message.id) pm.environment.set('bot_message_id', json.data.bot_message.id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Messages",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "description": "Get paginated chat messages.",
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/chats/{{chat_id}}/messages?limit=20&offset=0",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "chats",
+                    "{{chat_id}}",
+                    "messages"
+                  ],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "offset",
+                      "value": "0"
+                    }
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                      "const json = pm.response.json();",
+                      "pm.test('Messages array exists', function () { pm.expect(json.data).to.have.property('messages'); pm.expect(json.data.messages).to.be.an('array'); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Chat Details",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "description": "Get chat details by chat_id.",
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/chats/{{chat_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "chats",
+                    "{{chat_id}}"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Delete Message",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "description": "Soft-delete message by id under chat.",
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/chats/{{chat_id}}/messages/{{user_message_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "chats",
+                    "{{chat_id}}",
+                    "messages",
+                    "{{user_message_id}}"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200 or 204', function () { pm.expect([200, 204]).to.include(pm.response.code); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Clear Chat",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "description": "Clear all chat messages (soft-delete) for the given chat_id.",
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/chats/{{chat_id}}/clear",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "chats",
+                    "{{chat_id}}",
+                    "clear"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200 or 204', function () { pm.expect([200, 204]).to.include(pm.response.code); });"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "Marks",
@@ -2774,61 +3005,6 @@
               ]
             }
           }
-        }
-      ]
-    },
-    {
-      "name": "Chatbot",
-      "item": [
-        {
-          "name": "Ask Question",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"question\": \"Summarize the main lesson materials for this lesson\",\n  \"course_id\": 1,\n  \"subject_id\": 1,\n  \"lesson_id\": 1\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}:{{port}}/api/chatbot/ask",
-              "host": [
-                "{{base_url}}"
-              ],
-              "port": "{{port}}",
-              "path": [
-                "api",
-                "chatbot",
-                "ask"
-              ]
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Chatbot works\", () => {",
-                  "  pm.response.to.have.status(200);",
-                  "  const res = pm.response.json();",
-                  "  pm.expect(res.data).to.have.property(\"answer\");",
-                  "  pm.expect(res.data).to.have.property(\"explanation\");",
-                  "  pm.expect(res.data).to.have.property(\"references\");",
-                  "  pm.expect(res.data).to.have.property(\"confidence\");",
-                  "  pm.expect(res.data).to.have.property(\"fallback\");",
-                  "});"
-                ]
-              }
-            }
-          ]
         }
       ]
     }
