@@ -25,7 +25,7 @@ export const configureCloudinary = () => {
 
   configured = true;
 
-  return cloudinary;``
+  return cloudinary;
 };
 
 export default cloudinary;
