@@ -11,6 +11,7 @@ import { sendPasswordResetEmail } from '../utils/emailService.js';
 
 const PASSWORD_RESET_EXPIRY_MINUTES = 15;
 const normalizeSubdomain = (subdomain) => String(subdomain || '').trim().toLowerCase();
+const normalizeNationalId = (nationalId) => String(nationalId || '').trim().replace(/[\s-]/g, '');
 
 export const registerOrganization = async (data) => {
   const normalizedRole = String(data.Role || '').trim().toUpperCase();
@@ -143,6 +144,52 @@ export const loginUser = async ({ email, password }) => {
       name: user.name,
       email: user.email,
       role: user.role,
+    },
+    token,
+  };
+};
+
+export const loginParent = async ({ nationalId, password }) => {
+  const normalizedNationalId = normalizeNationalId(nationalId);
+
+  if (!normalizedNationalId || !password) {
+    throw new AppError('National ID and password are required', 400);
+  }
+
+  const parent = await prisma.parent.findUnique({
+    where: { nationalId: normalizedNationalId },
+    include: {
+      user: true,
+    },
+  });
+
+  if (!parent?.user) {
+    throw new AppError('Invalid national ID or password', 401);
+  }
+
+  if (parent.user.role !== 'PARENT') {
+    throw new AppError('Invalid national ID or password', 401);
+  }
+
+  const isPasswordValid = await comparePassword(password, parent.user.passwordHashed);
+  if (!isPasswordValid) {
+    throw new AppError('Invalid national ID or password', 401);
+  }
+
+  const token = generateToken({
+    id: parent.user.id,
+    name: parent.user.name,
+    email: parent.user.email,
+    role: parent.user.role,
+  });
+
+  return {
+    user: {
+      id: parent.user.id,
+      name: parent.user.name,
+      email: parent.user.email,
+      role: parent.user.role,
+      nationalId: parent.nationalId,
     },
     token,
   };

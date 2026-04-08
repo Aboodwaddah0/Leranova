@@ -228,7 +228,7 @@ Health endpoints:
 Create one user with auto-generated credentials (organization only):
 
 ```text
-POST /api/users/auto-generate
+POST /api/users/generate-user
 ```
 
 Request body example:
@@ -246,6 +246,33 @@ Request body example:
 ```
 
 Response includes generated `email` and plain `password` once at creation time under `credentials`.
+
+Bulk import users from Excel (organization only):
+
+```text
+POST /api/users/generate-users
+```
+
+Supported identity column in Excel:
+
+- `ParentNationalId`: required for `PARENT` rows (used as the father's ID) and used in `STUDENT` rows to link the student to the parent account
+
+If a `STUDENT` row has `ParentNationalId` and no matching parent exists, the system auto-creates a parent account and links the student to it. The generated parent credentials are returned in `autoCreatedParents`.
+
+Parent accounts can now log in with national ID:
+
+```text
+POST /api/auth/parent/login
+```
+
+Request body:
+
+```json
+{
+  "nationalId": "1234567890",
+  "password": "Parent@123"
+}
+```
 
 ## Password Reset Endpoints
 

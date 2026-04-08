@@ -20,6 +20,11 @@ export const loginOrganizationSchema = Joi.object({
   password: Joi.string().required(),
 });
 
+export const loginParentSchema = Joi.object({
+  nationalId: Joi.string().trim().min(5).max(50).required(),
+  password: Joi.string().required(),
+});
+
 export const forgotPasswordSchema = Joi.object({
   email: Joi.string().email().max(255).required(),
   accountType: Joi.string().valid('USER', 'ORGANIZATION').optional(),
