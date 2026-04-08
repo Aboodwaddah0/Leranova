@@ -1,5 +1,46 @@
 import { configureCloudinary } from '../utils/cloudinary.js';
 
+const sanitizePathSegment = (value) => String(value ?? '').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+const toLowerType = (value) => String(value || 'other').trim().toLowerCase();
+
+export const buildLessonCloudinaryPath = ({ courseId, subjectId, lessonId, fileType }) => {
+  const type = toLowerType(fileType);
+  const basePath = [
+    'learnova',
+    'courses',
+    sanitizePathSegment(courseId),
+    'subjects',
+    sanitizePathSegment(subjectId),
+    'lessons',
+    sanitizePathSegment(lessonId),
+  ].join('/');
+
+  if (type === 'video') {
+    return `${basePath}/videos`;
+  }
+
+  if (type === 'pdf' || type === 'docx' || type === 'txt') {
+    return `${basePath}/documents/${type}`;
+  }
+
+  return `${basePath}/documents/other`;
+};
+
+export const buildLessonUploadPublicId = ({ courseId, subjectId, lessonId, fileType }) => {
+  const type = toLowerType(fileType);
+  const folder = buildLessonCloudinaryPath({ courseId, subjectId, lessonId, fileType: type });
+  const baseName = [
+    `course_${sanitizePathSegment(courseId)}`,
+    `subject_${sanitizePathSegment(subjectId)}`,
+    `lesson_${sanitizePathSegment(lessonId)}`,
+    type,
+    Date.now(),
+  ].join('_');
+
+  return `${folder}/${baseName}`;
+};
+
 export const uploadAttachment = async (fileBuffer, options = {}) => {
   const client = configureCloudinary();
 

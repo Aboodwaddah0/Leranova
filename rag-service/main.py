@@ -1,16 +1,24 @@
 from pathlib import Path
 import tempfile
-from fastapi import FastAPI, BackgroundTasks, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, BackgroundTasks, File, Form, HTTPException, UploadFile, Query
 from urllib.parse import urlparse, unquote
 
 from config import settings
-from models.schemas import ProcessLessonRequest, ProcessLessonResponse, RetrieveRequest, RetrieveResponse
+from models.schemas import (
+    ProcessLessonRequest,
+    ProcessLessonResponse,
+    RetrieveRequest,
+    RetrieveResponse,
+    IngestRequest,
+    IngestResponse,
+    QdrantChunkCountResponse,
+)
 from services.downloader import download_file
 from services.audio_extractor import extract_audio_to_wav
 from services.transcription import transcribe_audio_segments
 from services.chunking import split_into_chunk_records, split_segments_into_chunk_records
 from services.embedding import embed_chunks, embed_text
-from services.vector_store import store_lesson_chunks, retrieve_lesson_chunks
+from services.vector_store import store_lesson_chunks, retrieve_lesson_chunks, count_lesson_chunks
 from services.text_extractor import extract_pdf_pages, extract_docx_sections, extract_txt_sections
 from utils.logger import get_logger
 
@@ -46,7 +54,11 @@ def _build_chunk_records_from_file(file_type: str, file_path: Path) -> list[dict
     chunk_records: list[dict] = []
 
     if file_type == "pdf":
+        logger.info("[RAG] fileType=pdf")
         pages = extract_pdf_pages(file_path)
+        if not pages:
+            logger.warning("[RAG] PDF extraction returned no text. File may be scanned image-only.")
+            raise ValueError("PDF text extraction returned empty text")
         for page in pages:
             chunk_records.extend(
                 split_into_chunk_records(
@@ -55,7 +67,10 @@ def _build_chunk_records_from_file(file_type: str, file_path: Path) -> list[dict
                 )
             )
     elif file_type == "docx":
+        logger.info("[RAG] fileType=docx")
         sections = extract_docx_sections(file_path)
+        if not sections:
+            raise ValueError("DOCX extraction returned empty text")
         for section in sections:
             chunk_records.extend(
                 split_into_chunk_records(
@@ -64,7 +79,10 @@ def _build_chunk_records_from_file(file_type: str, file_path: Path) -> list[dict
                 )
             )
     elif file_type == "txt":
+        logger.info("[RAG] fileType=txt")
         sections = extract_txt_sections(file_path)
+        if not sections:
+            raise ValueError("TXT extraction returned empty text")
         for section in sections:
             chunk_records.extend(
                 split_into_chunk_records(
@@ -78,13 +96,14 @@ def _build_chunk_records_from_file(file_type: str, file_path: Path) -> list[dict
     return chunk_records
 
 
-def process_lesson_pipeline(payload: ProcessLessonRequest) -> None:
+def process_lesson_pipeline(payload: ProcessLessonRequest, course_id: int | None = None, subject_id: int | None = None) -> None:
     file_path: Path | None = None
     audio_path: Path | None = None
 
     try:
         source_name = _infer_source_name(payload)
         file_type = str(payload.fileType).lower()
+        logger.info("[RAG] fileType=%s", file_type)
         logger.info(
             "[RAG] processing fileType=%s lesson_id=%s org_id=%s sourceName=%s",
             file_type,
@@ -110,12 +129,17 @@ def process_lesson_pipeline(payload: ProcessLessonRequest) -> None:
             raise ValueError(f"Unsupported fileType: {file_type}")
 
         extracted_text = " ".join(record.get("chunkText", "") for record in chunk_records).strip()
-        logger.info("[RAG] extracted text length=%d", len(extracted_text or ""))
-        if not extracted_text or not chunk_records:
-            logger.warning("Empty extracted text for lesson_id=%s", payload.lessonId)
-            return
+        logger.info("[RAG] Extracted text length=%d", len(extracted_text or ""))
+        if not extracted_text:
+            raise ValueError("Extracted text is empty")
+        if not chunk_records:
+            logger.error("[RAG ERROR] No chunks created")
+            raise ValueError("No chunks created")
 
         chunks = [record.get("chunkText", "") for record in chunk_records]
+        if not chunks:
+            logger.error("[RAG ERROR] No chunks created")
+            raise ValueError("No chunks created")
         embeddings = embed_chunks(chunks)
         store_lesson_chunks(
             lesson_id=payload.lessonId,
@@ -125,6 +149,9 @@ def process_lesson_pipeline(payload: ProcessLessonRequest) -> None:
             source_type=file_type,
             source_name=source_name,
             source_ref=str(payload.fileUrl),
+            file_url=str(payload.fileUrl),
+            course_id=course_id,
+            subject_id=subject_id,
             chunk_metadata=chunk_records,
         )
 
@@ -134,9 +161,12 @@ def process_lesson_pipeline(payload: ProcessLessonRequest) -> None:
             if record.get("page") is not None:
                 logger.info("[RAG] chunk page=%s", record.get("page"))
 
-        logger.info("[RAG] chunks stored=%d", len(chunks))
+        indexed_count = count_lesson_chunks(payload.lessonId)
+        logger.info("[RAG] chunks=%d", len(chunks))
+        logger.info("[RAG SUCCESS] Indexed lesson_id=%s chunks=%d qdrant_count=%d", payload.lessonId, len(chunks), indexed_count)
         logger.info("Pipeline finished for lesson_id=%s with %d chunks", payload.lessonId, len(chunks))
     except Exception as error:
+        logger.error("[RAG ERROR] ingestion failed lesson_id=%s error=%s", payload.lessonId, str(error))
         logger.exception("Pipeline failed for lesson_id=%s: %s", payload.lessonId, error)
     finally:
         if audio_path and audio_path.exists():
@@ -157,6 +187,28 @@ def process_lesson(request: ProcessLessonRequest, background_tasks: BackgroundTa
 
     background_tasks.add_task(process_lesson_pipeline, request)
     return ProcessLessonResponse(status="processing_started")
+
+
+@app.post("/ingest", response_model=IngestResponse)
+def ingest(request: IngestRequest, background_tasks: BackgroundTasks) -> IngestResponse:
+    if not settings.qdrant_url:
+        raise HTTPException(status_code=500, detail="QDRANT_URL is not configured")
+
+    payload = ProcessLessonRequest(
+        lessonId=str(request.lesson_id),
+        organizationId=str(request.organization_id if request.organization_id is not None else request.course_id),
+        fileUrl=request.file_url,
+        fileType=request.file_type,
+        sourceName=None,
+    )
+
+    background_tasks.add_task(
+        process_lesson_pipeline,
+        payload,
+        int(request.course_id),
+        int(request.subject_id),
+    )
+    return IngestResponse(status="processing_started")
 
 
 def process_direct_file_pipeline(
@@ -181,12 +233,17 @@ def process_direct_file_pipeline(
         chunk_records = _build_chunk_records_from_file(file_type, file_path)
 
         extracted_text = " ".join(record.get("chunkText", "") for record in chunk_records).strip()
-        logger.info("[RAG] extracted text length=%d", len(extracted_text or ""))
-        if not extracted_text or not chunk_records:
-            logger.warning("Empty extracted text for lesson_id=%s", lesson_id)
-            return
+        logger.info("[RAG] Extracted text length=%d", len(extracted_text or ""))
+        if not extracted_text:
+            raise ValueError("Extracted text is empty")
+        if not chunk_records:
+            logger.error("[RAG ERROR] No chunks created")
+            raise ValueError("No chunks created")
 
         chunks = [record.get("chunkText", "") for record in chunk_records]
+        if not chunks:
+            logger.error("[RAG ERROR] No chunks created")
+            raise ValueError("No chunks created")
         embeddings = embed_chunks(chunks)
 
         # Keep current point ID strategy while using a stable direct source reference.
@@ -199,6 +256,7 @@ def process_direct_file_pipeline(
             source_type=file_type,
             source_name=source_name,
             source_ref=direct_source_ref,
+            file_url=direct_source_ref,
             chunk_metadata=chunk_records,
         )
 
@@ -206,8 +264,10 @@ def process_direct_file_pipeline(
             if record.get("page") is not None:
                 logger.info("[RAG] chunk page=%s", record.get("page"))
 
-        logger.info("[RAG] chunks stored=%d", len(chunks))
+        logger.info("[RAG] chunks=%d", len(chunks))
+        logger.info("[RAG SUCCESS] Indexed lesson_id=%s chunks=%d", lesson_id, len(chunks))
     except Exception as error:
+        logger.error("[RAG ERROR] ingestion failed lesson_id=%s error=%s", lesson_id, str(error))
         logger.exception("Direct file pipeline failed for lesson_id=%s: %s", lesson_id, error)
     finally:
         if file_path and file_path.exists():
@@ -257,3 +317,9 @@ def retrieve(request: RetrieveRequest) -> RetrieveResponse:
     )
 
     return RetrieveResponse(matches=matches)
+
+
+@app.get("/qdrant/chunks/count", response_model=QdrantChunkCountResponse)
+def get_lesson_chunk_count(lesson_id: int = Query(..., ge=1)) -> QdrantChunkCountResponse:
+    count = count_lesson_chunks(str(lesson_id))
+    return QdrantChunkCountResponse(lesson_id=lesson_id, count=count)

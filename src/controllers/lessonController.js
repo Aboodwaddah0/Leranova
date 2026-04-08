@@ -11,6 +11,7 @@ import {
 	updateLesson,
 	deleteLesson,
 } from '../services/lessonService.js';
+import { createLessonAttachment } from '../services/lessonAttachmentService.js';
 import AppError from '../utils/appError.js';
 
 const normalizeLessonPayload = (body = {}) => ({
@@ -43,17 +44,46 @@ const parseLessonId = (req) => {
 export const createLessonController = async (req, res, next) => {
 	try {
 		const subjectId = parseSubjectId(req);
-		const { error, value } = createLessonSchema.validate(normalizeLessonPayload(req.body));
+		const { title, description } = req.body;
+		const video = req.file;
+
+		// Temporary debug log for multipart troubleshooting.
+		console.log(req.body, req.file);
+
+		const { error, value } = createLessonSchema.validate(
+			normalizeLessonPayload({ title, description })
+		);
 
 		if (error) {
 			return next(new AppError(error.details[0].message, 400));
 		}
 
 		const lesson = await createLesson(req.user.id, subjectId, value);
+		let videoAttachment = null;
+		let ingestion = null;
+		let warning = null;
+
+		if (video) {
+			const uploadResult = await createLessonAttachment({
+				orgId: req.user.id,
+				lessonId: lesson.id,
+				file: video,
+			});
+			videoAttachment = uploadResult.attachment;
+			ingestion = uploadResult.ingestion;
+			warning = uploadResult.warning;
+		}
 
 		return res.status(201).json({
 			message: 'Lesson created successfully',
-			data: lesson,
+			ingestion,
+			warning,
+			data: videoAttachment
+				? {
+					...lesson,
+					videoAttachment,
+				}
+				: lesson,
 		});
 	} catch (error) {
 		return next(error);
@@ -94,17 +124,55 @@ export const updateLessonController = async (req, res, next) => {
 	try {
 		const subjectId = parseSubjectId(req);
 		const lessonId = parseLessonId(req);
-		const { error, value } = updateLessonSchema.validate(normalizeLessonPayload(req.body));
+		const { title, description } = req.body;
+		const video = req.file;
 
-		if (error) {
-			return next(new AppError(error.details[0].message, 400));
+		// Temporary debug log for multipart troubleshooting.
+		console.log(req.body, req.file);
+
+		const hasTextPayload = title !== undefined || description !== undefined;
+		let value = {};
+
+		if (hasTextPayload) {
+			const validation = updateLessonSchema.validate(
+				normalizeLessonPayload({ title, description })
+			);
+			if (validation.error) {
+				return next(new AppError(validation.error.details[0].message, 400));
+			}
+			value = validation.value;
+		} else if (!video) {
+			return next(new AppError('At least one of title, description, or video is required', 400));
 		}
 
-		const lesson = await updateLesson(req.user.id, subjectId, lessonId, value);
+		const lesson = hasTextPayload
+			? await updateLesson(req.user.id, subjectId, lessonId, value)
+			: await getLessonById(req.user.id, subjectId, lessonId);
+		let videoAttachment = null;
+		let ingestion = null;
+		let warning = null;
+
+		if (video) {
+			const uploadResult = await createLessonAttachment({
+				orgId: req.user.id,
+				lessonId,
+				file: video,
+			});
+			videoAttachment = uploadResult.attachment;
+			ingestion = uploadResult.ingestion;
+			warning = uploadResult.warning;
+		}
 
 		return res.status(200).json({
 			message: 'Lesson updated successfully',
-			data: lesson,
+			ingestion,
+			warning,
+			data: videoAttachment
+				? {
+					...lesson,
+					videoAttachment,
+				}
+				: lesson,
 		});
 	} catch (error) {
 		return next(error);

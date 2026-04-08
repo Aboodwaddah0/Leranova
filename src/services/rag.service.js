@@ -8,6 +8,92 @@ const parseRagErrorResponse = async (response) => {
 	return text || response.statusText;
 };
 
+export const verifyQdrantLessonChunks = async (lessonId) => {
+	try {
+		const response = await fetch(`${RAG_SERVICE_URL}/qdrant/chunks/count?lesson_id=${encodeURIComponent(String(lessonId))}`);
+		if (!response.ok) {
+			return null;
+		}
+
+		const body = await response.json().catch(() => null);
+		const count = Number(body?.count ?? 0);
+		return Number.isFinite(count) ? count : 0;
+	} catch (_error) {
+		return null;
+	}
+};
+
+export const triggerLessonRagIngestion = async ({
+	fileUrl,
+	fileType,
+	organizationId,
+	courseId,
+	subjectId,
+	lessonId,
+}) => {
+	if (!fileUrl || !fileType || !courseId || !subjectId || !lessonId) {
+		throw new AppError('Missing required ingestion fields', 400);
+	}
+
+	const payload = {
+		file_url: String(fileUrl),
+		file_type: String(fileType).toLowerCase(),
+		course_id: Number(courseId),
+		subject_id: Number(subjectId),
+		lesson_id: Number(lessonId),
+		organization_id: organizationId ? Number(organizationId) : null,
+	};
+
+	console.info(`[RAG] fileType=${payload.file_type}`, {
+		lessonId: payload.lesson_id,
+		subjectId: payload.subject_id,
+		courseId: payload.course_id,
+	});
+
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), RAG_TRIGGER_TIMEOUT_MS);
+
+	try {
+		const response = await fetch(`${RAG_SERVICE_URL}/ingest`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify(payload),
+			signal: controller.signal,
+		});
+
+		if (!response.ok) {
+			const message = await parseRagErrorResponse(response);
+			throw new AppError(`Ingestion trigger failed: ${message}`, 502);
+		}
+
+		console.info('[RAG SUCCESS] ingestion accepted', {
+			lessonId: payload.lesson_id,
+			subjectId: payload.subject_id,
+			courseId: payload.course_id,
+			fileType: payload.file_type,
+		});
+
+		return {
+			accepted: true,
+			payload,
+		};
+	} catch (error) {
+		if (error.name === 'AbortError') {
+			throw new AppError('Ingestion trigger timed out', 504);
+		}
+
+		if (error instanceof AppError) {
+			throw error;
+		}
+
+		throw new AppError(`Ingestion trigger unreachable: ${error.message}`, 502);
+	} finally {
+		clearTimeout(timeout);
+	}
+};
+
 export const triggerLessonRagProcessing = async (lesson) => {
 	const fileUrl = lesson?.fileUrl ?? lesson?.videoUrl;
 	const fileType = lesson?.fileType ?? 'video';
