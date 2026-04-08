@@ -2,12 +2,14 @@ import {
   registerOrganization,
   loginOrganization,
   loginUser,
+  loginParent,
   forgotPassword,
   resetPassword,
 } from '../services/authService.js';
 import {
   registerOrganizationSchema,
   loginOrganizationSchema,
+  loginParentSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
 } from '../validations/authValidation.js';
@@ -58,6 +60,25 @@ export const loginUserController = async (req, res, next) => {
 
     return res.status(200).json({
       message: 'Login successful',
+      data: result,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const loginParentController = async (req, res, next) => {
+  try {
+    const { error, value } = loginParentSchema.validate(req.body);
+
+    if (error) {
+      return next(new AppError(error.details[0].message, 400));
+    }
+
+    const result = await loginParent(value);
+
+    return res.status(200).json({
+      message: 'Parent login successful',
       data: result,
     });
   } catch (error) {
