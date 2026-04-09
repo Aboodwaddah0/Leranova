@@ -12,12 +12,17 @@ import chatRoutes from './routes/chatRoutes.js';
 import organizationRoutes from './routes/organizationRoutes.js';
 import teacherRoutes from './routes/teacherRoutes.js';
 import marksRoutes from './routes/marksRoutes.js';
+import adminPlanRoutes from './routes/adminPlanRoutes.js';
 
 import userRoutes from './routes/userRoutes.js';
+import subscriptionRoutes from './routes/subscriptionRoutes.js';
+import { handleStripeWebhook } from './controllers/stripeWebhookController.js';
 
 import { errorMiddleware } from './middlewares/errorMiddleware.js';
 
 const app = express();
+
+app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
 
 app.use(express.json());
 
@@ -49,6 +54,7 @@ app.use('/api/organizations', organizationRoutes);
 
 app.use('/api/teachers', teacherRoutes);
 app.use('/api/marks', marksRoutes);
+app.use('/api/admin/plans', adminPlanRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/chats', chatRoutes);
 
@@ -57,6 +63,9 @@ app.use('/api/auth', authRoutes);
 
 // users routes
 app.use("/api/users", userRoutes);
+
+// subscription routes
+app.use('/api/subscriptions', subscriptionRoutes);
 
 
 
@@ -67,3 +76,7 @@ app.use("/api/users", userRoutes);
 app.use(errorMiddleware);
 
 export default app;
+
+
+
+

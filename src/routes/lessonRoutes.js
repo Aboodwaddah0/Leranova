@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
-import { isTeacherOrOrganization } from '../middlewares/isTeacherOrOrganization.js';
+import { isOrganization } from '../middlewares/isOrganization.js';
 import {
 	createLessonController,
 	getLessonsController,
@@ -12,8 +12,7 @@ import {
 
 const router = Router({ mergeParams: true });
 
-
-router.use(authMiddleware, isTeacherOrOrganization);
+router.use(authMiddleware, isOrganization);
 
 const lessonUpload = multer({
 	storage: multer.memoryStorage(),
@@ -21,10 +20,6 @@ const lessonUpload = multer({
 		fileSize: 500 * 1024 * 1024,
 	},
 });
-
-router.use(authMiddleware, isOrganization);
-
-
 router.post('/', lessonUpload.single('video'), createLessonController);
 router.get('/', getLessonsController);
 router.get('/:lessonId', getLessonByIdController);
