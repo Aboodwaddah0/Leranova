@@ -26,7 +26,7 @@ export const register = async (req, res, next) => {
     const result = await registerOrganization(value);
 
     return res.status(201).json({
-      message: 'Organization registered successfully and is pending approval',
+      message: 'Organization registered successfully. Complete payment via Stripe checkout URL.',
       data: result,
     });
   } catch (error) {

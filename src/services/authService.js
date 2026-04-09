@@ -8,6 +8,10 @@ import {
   buildPasswordResetLink,
 } from '../utils/passwordReset.js';
 import { sendPasswordResetEmail } from '../utils/emailService.js';
+import {
+  createRegistrationCheckoutSession,
+  ensureStripeConfigured,
+} from './stripeService.js';
 
 const PASSWORD_RESET_EXPIRY_MINUTES = 15;
 const normalizeSubdomain = (subdomain) => String(subdomain || '').trim().toLowerCase();
@@ -34,38 +38,122 @@ export const registerOrganization = async (data) => {
     throw new AppError('Organization subdomain already exists', 400);
   }
 
-  const hashedPassword = await hashPassword(data.password);
-
-  const organization = await prisma.organization.create({
-    data: {
-      Name: data.Name,
-      subdomain: normalizedSubdomain,
-      Email: data.Email,
-      Password_Hashed: hashedPassword,
-      Phone: data.Phone ?? null,
-      Founded: data.Founded ? new Date(data.Founded) : null,
-      Address: data.Address ?? null,
-      PhoneNumber: data.PhoneNumber ?? null,
-      Description: data.Description ?? null,
-      Role: normalizedRole,
-      status: 'PENDING',
-    },
+  const selectedPlan = await prisma.plan.findUnique({
+    where: { id: Number(data.planId) },
     select: {
       id: true,
-      Name: true,
-      subdomain: true,
-      Email: true,
-      Phone: true,
-      Founded: true,
-      Address: true,
-      PhoneNumber: true,
-      Description: true,
-      Role: true,
-      status: true,
+      name: true,
+      price: true,
+      durationDays: true,
+      description: true,
     },
   });
 
-  return organization;
+  if (!selectedPlan) {
+    throw new AppError('Selected plan not found', 404);
+  }
+
+  ensureStripeConfigured();
+
+  const hashedPassword = await hashPassword(data.password);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const organization = await tx.organization.create({
+      data: {
+        Name: data.Name,
+        subdomain: normalizedSubdomain,
+        Email: data.Email,
+        Password_Hashed: hashedPassword,
+        Phone: data.Phone ?? null,
+        Founded: data.Founded ? new Date(data.Founded) : null,
+        Address: data.Address ?? null,
+        PhoneNumber: data.PhoneNumber ?? null,
+        Description: data.Description ?? null,
+        Role: normalizedRole,
+        status: 'PENDING',
+      },
+      select: {
+        id: true,
+        Name: true,
+        subdomain: true,
+        Email: true,
+        Phone: true,
+        Founded: true,
+        Address: true,
+        PhoneNumber: true,
+        Description: true,
+        Role: true,
+        status: true,
+      },
+    });
+
+    const startDate = new Date();
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + selectedPlan.durationDays);
+
+    const subscription = await tx.subscription.create({
+      data: {
+        organizationId: organization.id,
+        planId: selectedPlan.id,
+        startDate,
+        endDate,
+        status: 'PENDING',
+        autoRenew: true,
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        planId: true,
+        startDate: true,
+        endDate: true,
+        status: true,
+        autoRenew: true,
+        createdAt: true,
+      },
+    });
+
+    const payment = await tx.payment.create({
+      data: {
+        subscriptionId: subscription.id,
+        organizationId: organization.id,
+        amount: selectedPlan.price,
+        paymentMethod: 'STRIPE',
+        status: 'PENDING',
+      },
+      select: {
+        id: true,
+        subscriptionId: true,
+        organizationId: true,
+        amount: true,
+        paymentDate: true,
+        paymentMethod: true,
+        status: true,
+      },
+    });
+
+    return {
+      organization,
+      plan: selectedPlan,
+      subscription,
+      payment,
+    };
+  });
+
+  const checkoutSession = await createRegistrationCheckoutSession({
+    organization: result.organization,
+    plan: result.plan,
+    subscription: result.subscription,
+    payment: result.payment,
+  });
+
+  return {
+    ...result,
+    checkout: {
+      sessionId: checkoutSession.id,
+      checkoutUrl: checkoutSession.url,
+      status: 'PENDING_PAYMENT',
+    },
+  };
 };
 
 export const loginOrganization = async ({ Email, password }) => {

@@ -238,9 +238,64 @@ model organization {
   course          course[]
   student         student[]
   teacher         teacher[]
+  subscriptions   subscription[]
+  payments        payment[]
   status          organization_status @default(PENDING)
   createdAt       DateTime          @default(now()) @db.Timestamp(0)
   updatedAt       DateTime          @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@index([status], map: "idx_org_status")
+}
+
+model plan {
+  id            Int           @id @default(autoincrement())
+  name          String        @db.VarChar(100)
+  price         Decimal       @db.Decimal(10, 2)
+  durationDays  Int
+  description   String?       @db.Text
+  features      Json?
+  subscriptions subscription[]
+  createdAt     DateTime      @default(now()) @db.Timestamp(0)
+  updatedAt     DateTime      @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@index([name], map: "idx_plan_name")
+}
+
+model subscription {
+  id               Int         @id @default(autoincrement())
+  organizationId   Int
+  planId           Int
+  startDate        DateTime    @default(now()) @db.Timestamp(0)
+  endDate          DateTime    @db.Timestamp(0)
+  status           String      @default("ACTIVE") @db.VarChar(50)
+  autoRenew        Boolean     @default(true)
+  organization     organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subscription_org")
+  plan             plan         @relation(fields: [planId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_subscription_plan")
+  payments         payment[]
+  createdAt        DateTime    @default(now()) @db.Timestamp(0)
+  updatedAt        DateTime    @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@index([organizationId], map: "idx_subscription_org_id")
+  @@index([planId], map: "idx_subscription_plan_id")
+  @@index([status], map: "idx_subscription_status")
+  @@index([endDate], map: "idx_subscription_end_date")
+}
+
+model payment {
+  id               Int         @id @default(autoincrement())
+  subscriptionId   Int?
+  organizationId   Int
+  amount           Decimal     @db.Decimal(10, 2)
+  paymentDate      DateTime    @default(now()) @db.Timestamp(0)
+  paymentMethod    String      @db.VarChar(50)
+  status           String      @db.VarChar(50)
+  organization     organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_payment_org")
+  subscription     subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull, onUpdate: Restrict, map: "fk_payment_subscription")
+  createdAt        DateTime    @default(now()) @db.Timestamp(0)
+  updatedAt        DateTime    @default(now()) @updatedAt @db.Timestamp(0)
+  @@index([organizationId], map: "idx_payment_org_id")
+  @@index([subscriptionId], map: "idx_payment_subscription_id")
+  @@index([status], map: "idx_payment_status")
 }
 
 model parent {
