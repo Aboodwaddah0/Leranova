@@ -1,5 +1,6 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
+import { getGradeCourseName } from './gradePlacementService.js';
 
 export const createCourse = async (orgId, data) => {
   const course = await prisma.course.create({
@@ -73,4 +74,48 @@ export const deleteCourse = async (orgId, courseId) => {
   });
 
   return { id: courseId };
+};
+
+export const ensureCourseForGradeLevel = async (orgId, gradeLevel, tx = prisma) => {
+  const existingByGrade = await tx.course.findFirst({
+    where: {
+      Org_id: orgId,
+      GradeLevel: gradeLevel,
+    },
+    orderBy: { id: 'asc' },
+  });
+
+  if (existingByGrade) {
+    return existingByGrade;
+  }
+
+  const courseName = getGradeCourseName(gradeLevel);
+
+  const existingByName = await tx.course.findFirst({
+    where: {
+      Org_id: orgId,
+      Name: courseName,
+    },
+    orderBy: { id: 'asc' },
+  });
+
+  if (existingByName) {
+    if (!existingByName.GradeLevel) {
+      return tx.course.update({
+        where: { id: existingByName.id },
+        data: { GradeLevel: gradeLevel },
+      });
+    }
+
+    return existingByName;
+  }
+
+  return tx.course.create({
+    data: {
+      Org_id: orgId,
+      Name: courseName,
+      GradeLevel: gradeLevel,
+      Description: `Auto-created grade course for level ${gradeLevel}`,
+    },
+  });
 };

@@ -19,7 +19,6 @@ model academy_user {
   @@index([OrgId], map: "fk_academy_user_org")
 }
 
-
 model chat_participants {
   id           Int                             @id @default(autoincrement())
   chat_id      Int
@@ -71,6 +70,7 @@ model course {
   id           Int          @id @default(autoincrement())
   Org_id       Int
   Name         String       @db.VarChar(255)
+  GradeLevel   Int?
   Description  String?      @db.Text
   Thumbnail    String?      @db.VarChar(500)
   Start        DateTime?    @db.Date
@@ -83,6 +83,7 @@ model course {
   updatedAt    DateTime     @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([Org_id], map: "idx_course_org_id")
+  @@index([GradeLevel], map: "idx_course_grade_level")
 }
 
 model enrollment {
@@ -98,34 +99,34 @@ model enrollment {
 }
 
 model lesson {
-  id                Int                @id @default(autoincrement())
-  Subject_id        Int
-  name              String             @db.VarChar(255)
-  Description       String?            @db.Text
-  comment           comment[]
+  id                 Int                  @id @default(autoincrement())
+  Subject_id         Int
+  name               String               @db.VarChar(255)
+  Description        String?              @db.Text
+  comment            comment[]
   lesson_transcripts lesson_transcripts[]
-  subject           subject            @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_subject")
-  rag_assets        lesson_rag_asset[]
-  attachments       lesson_attachment[]
-  createdAt         DateTime           @default(now()) @db.Timestamp(0)
-  updatedAt         DateTime           @default(now()) @updatedAt @db.Timestamp(0)
+  subject            subject              @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_subject")
+  rag_assets         lesson_rag_asset[]
+  attachments        lesson_attachment[]
+  createdAt          DateTime             @default(now()) @db.Timestamp(0)
+  updatedAt          DateTime             @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([Subject_id], map: "idx_lesson_subject_id")
 }
 
 model lesson_attachment {
-  id               Int      @id @default(autoincrement())
+  id               Int                         @id @default(autoincrement())
   lessonId         Int
-  fileUrl          String   @db.VarChar(500)
-  filePublicId     String   @db.VarChar(255)
-  fileResourceType String   @db.VarChar(50)
-  mimeType         String?  @db.VarChar(100)
-  originalName     String?  @db.VarChar(255)
+  fileUrl          String                      @db.VarChar(500)
+  filePublicId     String                      @db.VarChar(255)
+  fileResourceType String                      @db.VarChar(50)
+  mimeType         String?                     @db.VarChar(100)
+  originalName     String?                     @db.VarChar(255)
   fileType         lesson_attachment_file_type
   sizeBytes        BigInt?
-  createdAt        DateTime @default(now()) @db.Timestamp(0)
-  updatedAt        DateTime @default(now()) @updatedAt @db.Timestamp(0)
-  lesson           lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_attachment_lesson")
+  createdAt        DateTime                    @default(now()) @db.Timestamp(0)
+  updatedAt        DateTime                    @default(now()) @updatedAt @db.Timestamp(0)
+  lesson           lesson                      @relation(fields: [lessonId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_attachment_lesson")
 
   @@index([lessonId], map: "idx_lesson_attachment_lesson_id")
   @@index([fileType], map: "idx_lesson_attachment_file_type")
@@ -156,18 +157,18 @@ model lesson_transcripts {
 }
 
 model marks {
-  id         Int       @id @default(autoincrement())
-  Student_id Int
-  Subject_id Int
-  Numbers    Decimal   @db.Decimal(5, 2)
-  OutOf      Decimal   @default(100) @db.Decimal(5, 2)
-  ExamPercentage Decimal @default(100) @db.Decimal(5, 2)
-  MarkType   String    @default("EXAM") @db.VarChar(50)
-  time       DateTime? @db.Date
-  student    student   @relation(fields: [Student_id], references: [Student_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_marks_student")
-  subject    subject   @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_marks_subject")
-  createdAt  DateTime  @default(now()) @db.Timestamp(0)
-  updatedAt  DateTime  @default(now()) @updatedAt @db.Timestamp(0)
+  id             Int       @id @default(autoincrement())
+  Student_id     Int
+  Subject_id     Int
+  Numbers        Decimal   @db.Decimal(5, 2)
+  OutOf          Decimal   @default(100) @db.Decimal(5, 2)
+  ExamPercentage Decimal   @default(100) @db.Decimal(5, 2)
+  MarkType       String    @default("EXAM") @db.VarChar(50)
+  time           DateTime? @db.Date
+  student        student   @relation(fields: [Student_id], references: [Student_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_marks_student")
+  subject        subject   @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_marks_subject")
+  createdAt      DateTime  @default(now()) @db.Timestamp(0)
+  updatedAt      DateTime  @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([Subject_id], map: "idx_marks_subject_id")
   @@index([Student_id], map: "idx_marks_student_id")
@@ -219,61 +220,63 @@ model notification {
 }
 
 model organization {
-  id              Int               @id @default(autoincrement())
-  Name            String            @db.VarChar(255)
-  subdomain       String            @unique @db.VarChar(63)
-  Email           String            @unique(map: "Email") @db.VarChar(255)
-  Password_Hashed String            @db.VarChar(255)
-  PasswordResetToken String?        @db.VarChar(255)
-  PasswordResetExpiresAt DateTime?  @db.Timestamp(0)
-  PasswordChangedAt DateTime?       @db.Timestamp(0)
-  Phone           String?           @db.VarChar(50)
-  Founded         DateTime?         @db.Date
-  Address         String?           @db.VarChar(255)
-  PhoneNumber     String?           @db.VarChar(50)
-  Description     String?           @db.Text
-  Role            organization_Role
-  academy_user    academy_user[]
-  chats           chats[]
-  course          course[]
-  student         student[]
-  teacher         teacher[]
-  subscriptions   subscription[]
-  payments        payment[]
-  status          organization_status @default(PENDING)
-  createdAt       DateTime          @default(now()) @db.Timestamp(0)
-  updatedAt       DateTime          @default(now()) @updatedAt @db.Timestamp(0)
+  id                     Int                           @id @default(autoincrement())
+  Name                   String                        @db.VarChar(255)
+  subdomain              String                        @unique @db.VarChar(63)
+  Email                  String                        @unique(map: "Email") @db.VarChar(255)
+  Password_Hashed        String                        @db.VarChar(255)
+  PasswordResetToken     String?                       @db.VarChar(255)
+  PasswordResetExpiresAt DateTime?                     @db.Timestamp(0)
+  PasswordChangedAt      DateTime?                     @db.Timestamp(0)
+  Phone                  String?                       @db.VarChar(50)
+  Founded                DateTime?                     @db.Date
+  Address                String?                       @db.VarChar(255)
+  PhoneNumber            String?                       @db.VarChar(50)
+  Description            String?                       @db.Text
+  Role                   organization_Role
+  academy_user           academy_user[]
+  chats                  chats[]
+  course                 course[]
+  student                student[]
+  teacher                teacher[]
+  subscriptions          subscription[]
+  payments               payment[]
+  school_settings        organization_school_settings?
+  promotion_runs         organization_promotion_run[]
+  status                 organization_status           @default(PENDING)
+  createdAt              DateTime                      @default(now()) @db.Timestamp(0)
+  updatedAt              DateTime                      @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([status], map: "idx_org_status")
 }
 
 model plan {
-  id            Int           @id @default(autoincrement())
-  name          String        @db.VarChar(100)
-  price         Decimal       @db.Decimal(10, 2)
+  id            Int            @id @default(autoincrement())
+  name          String         @db.VarChar(100)
+  price         Decimal        @db.Decimal(10, 2)
   durationDays  Int
-  description   String?       @db.Text
+  description   String?        @db.Text
   features      Json?
   subscriptions subscription[]
-  createdAt     DateTime      @default(now()) @db.Timestamp(0)
-  updatedAt     DateTime      @default(now()) @updatedAt @db.Timestamp(0)
+  createdAt     DateTime       @default(now()) @db.Timestamp(0)
+  updatedAt     DateTime       @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([name], map: "idx_plan_name")
 }
 
 model subscription {
-  id               Int         @id @default(autoincrement())
-  organizationId   Int
-  planId           Int
-  startDate        DateTime    @default(now()) @db.Timestamp(0)
-  endDate          DateTime    @db.Timestamp(0)
-  status           String      @default("ACTIVE") @db.VarChar(50)
-  autoRenew        Boolean     @default(true)
-  organization     organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subscription_org")
-  plan             plan         @relation(fields: [planId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_subscription_plan")
-  payments         payment[]
-  createdAt        DateTime    @default(now()) @db.Timestamp(0)
-  updatedAt        DateTime    @default(now()) @updatedAt @db.Timestamp(0)
+  id             Int          @id @default(autoincrement())
+  organizationId Int
+  planId         Int
+  startDate      DateTime     @default(now()) @db.Timestamp(0)
+  endDate        DateTime     @db.Timestamp(0)
+  status         String       @default("ACTIVE") @db.VarChar(50)
+  autoRenew      Boolean      @default(true)
+  organization   organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subscription_org")
+  plan           plan         @relation(fields: [planId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_subscription_plan")
+  payments       payment[]
+  createdAt      DateTime     @default(now()) @db.Timestamp(0)
+  updatedAt      DateTime     @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([organizationId], map: "idx_subscription_org_id")
   @@index([planId], map: "idx_subscription_plan_id")
@@ -282,47 +285,102 @@ model subscription {
 }
 
 model payment {
-  id               Int         @id @default(autoincrement())
-  subscriptionId   Int?
-  organizationId   Int
-  amount           Decimal     @db.Decimal(10, 2)
-  paymentDate      DateTime    @default(now()) @db.Timestamp(0)
-  paymentMethod    String      @db.VarChar(50)
-  status           String      @db.VarChar(50)
-  organization     organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_payment_org")
-  subscription     subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull, onUpdate: Restrict, map: "fk_payment_subscription")
-  createdAt        DateTime    @default(now()) @db.Timestamp(0)
-  updatedAt        DateTime    @default(now()) @updatedAt @db.Timestamp(0)
+  id             Int           @id @default(autoincrement())
+  subscriptionId Int?
+  organizationId Int
+  amount         Decimal       @db.Decimal(10, 2)
+  paymentDate    DateTime      @default(now()) @db.Timestamp(0)
+  paymentMethod  String        @db.VarChar(50)
+  status         String        @db.VarChar(50)
+  organization   organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_payment_org")
+  subscription   subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull, onUpdate: Restrict, map: "fk_payment_subscription")
+  createdAt      DateTime      @default(now()) @db.Timestamp(0)
+  updatedAt      DateTime      @default(now()) @updatedAt @db.Timestamp(0)
+
   @@index([organizationId], map: "idx_payment_org_id")
   @@index([subscriptionId], map: "idx_payment_subscription_id")
   @@index([status], map: "idx_payment_status")
 }
 
 model parent {
-  Parent_id Int      @id
-  Work      String?  @db.VarChar(255)
-  user      user     @relation(fields: [Parent_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_parent_user")
+  Parent_id Int       @id
+  Work      String?   @db.VarChar(255)
+  user      user      @relation(fields: [Parent_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_parent_user")
   student   student[]
-  createdAt DateTime @default(now()) @db.Timestamp(0)
-  updatedAt DateTime @default(now()) @updatedAt @db.Timestamp(0)
+  createdAt DateTime  @default(now()) @db.Timestamp(0)
+  updatedAt DateTime  @default(now()) @updatedAt @db.Timestamp(0)
 }
 
 model student {
-  Student_id   Int          @id
-  Parent_id    Int?
-  OrgId        Int
-  Course_id    Int?
-  course       course?      @relation(fields: [Course_id], references: [id], onUpdate: Restrict, map: "fk_student_course")
-  marks        marks[]
-  organization organization @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_org")
-  parent       parent?      @relation(fields: [Parent_id], references: [Parent_id], onUpdate: Restrict, map: "fk_student_parent")
-  user         user         @relation(fields: [Student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_user")
-  createdAt    DateTime     @default(now()) @db.Timestamp(0)
-  updatedAt    DateTime     @default(now()) @updatedAt @db.Timestamp(0)
+  Student_id        Int                         @id
+  Parent_id         Int?
+  OrgId             Int
+  Course_id         Int?
+  DOB               DateTime?                   @db.Date
+  GradeLevel        Int?
+  AcademicStatus    String                      @default("ACTIVE") @db.VarChar(20)
+  course            course?                     @relation(fields: [Course_id], references: [id], onUpdate: Restrict, map: "fk_student_course")
+  promotion_history student_promotion_history[]
+  marks             marks[]
+  organization      organization                @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_org")
+  parent            parent?                     @relation(fields: [Parent_id], references: [Parent_id], onUpdate: Restrict, map: "fk_student_parent")
+  user              user                        @relation(fields: [Student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_user")
+  createdAt         DateTime                    @default(now()) @db.Timestamp(0)
+  updatedAt         DateTime                    @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([Course_id], map: "idx_student_course_id")
+  @@index([GradeLevel], map: "idx_student_grade_level")
+  @@index([AcademicStatus], map: "idx_student_academic_status")
   @@index([OrgId], map: "idx_student_org_id")
   @@index([Parent_id], map: "idx_student_parent_id")
+}
+
+model organization_school_settings {
+  id                       Int          @id @default(autoincrement())
+  OrgId                    Int          @unique
+  schoolYearStartMonth     Int          @default(9)
+  schoolYearStartDay       Int          @default(1)
+  promotionMonth           Int          @default(9)
+  promotionDay             Int          @default(1)
+  entryGradeMinAge         Int          @default(6)
+  passThresholdPercentage  Decimal      @default(50) @db.Decimal(5, 2)
+  minSubjectPassPercentage Decimal      @default(50) @db.Decimal(5, 2)
+  requireAllSubjectsPass   Boolean      @default(true)
+  organization             organization @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_school_settings_org")
+  createdAt                DateTime     @default(now()) @db.Timestamp(0)
+  updatedAt                DateTime     @default(now()) @updatedAt @db.Timestamp(0)
+}
+
+model organization_promotion_run {
+  id           Int          @id @default(autoincrement())
+  OrgId        Int
+  schoolYear   Int
+  status       String       @default("SUCCESS") @db.VarChar(20)
+  summary      Json?
+  organization organization @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_promotion_run_org")
+  createdAt    DateTime     @default(now()) @db.Timestamp(0)
+
+  @@unique([OrgId, schoolYear], map: "uq_org_promotion_run_school_year")
+  @@index([OrgId], map: "idx_org_promotion_run_org")
+}
+
+model student_promotion_history {
+  id              Int      @id @default(autoincrement())
+  Student_id      Int
+  OrgId           Int
+  fromGradeLevel  Int?
+  toGradeLevel    Int?
+  decision        String   @db.VarChar(20)
+  finalPercentage Decimal? @db.Decimal(5, 2)
+  reason          String?  @db.VarChar(255)
+  schoolYear      Int
+  promotedAt      DateTime @default(now()) @db.Timestamp(0)
+  student         student  @relation(fields: [Student_id], references: [Student_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_promotion_history_student")
+
+  @@unique([Student_id, schoolYear], map: "uq_student_promotion_history_school_year")
+  @@index([OrgId], map: "idx_student_promotion_history_org")
+  @@index([Student_id], map: "idx_student_promotion_history_student")
+  @@index([schoolYear], map: "idx_student_promotion_history_school_year")
 }
 
 model subject {
@@ -344,42 +402,42 @@ model subject {
 }
 
 model teacher {
-  Teacher_id     Int           @id
+  Teacher_id     Int          @id
   OrgId          Int
-  Work           String?       @db.VarChar(255)
-  specialization String?       @db.VarChar(255)
-  bio            String?       @db.Text
-  createdAt      DateTime      @default(now()) @db.Timestamp(0)
-  organization   organization  @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_teacher_org")
+  Work           String?      @db.VarChar(255)
+  specialization String?      @db.VarChar(255)
+  bio            String?      @db.Text
+  createdAt      DateTime     @default(now()) @db.Timestamp(0)
+  organization   organization @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_teacher_org")
   subject        subject[]
-  user           user          @relation(fields: [Teacher_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_teacher_user")
+  user           user         @relation(fields: [Teacher_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_teacher_user")
 
   @@index([OrgId], map: "idx_teacher_org_id")
 }
 
 model user {
-  id                Int                 @id @default(autoincrement())
-  name              String              @db.VarChar(255)
-  age               Int?
-  gender            user_Gender?
-  email             String              @unique(map: "Email") @db.VarChar(255)
-  passwordHashed    String              @db.VarChar(255)
-  passwordResetToken String?            @db.VarChar(255)
-  passwordResetExpiresAt DateTime?      @db.Timestamp(0)
-  passwordChangedAt DateTime?           @db.Timestamp(0)
-  address           String?             @db.VarChar(255)
-  role              user_Role
-  academy_user      academy_user?
-  chat_participants chat_participants[]
-  chats             chats[]
-  comment           comment[]
-  messages          messages[]
-  notification      notification[]
-  parent            parent?
-  student           student?
-  teacher           teacher?
-  createdAt         DateTime            @default(now()) @db.Timestamp(0)
-  updatedAt         DateTime            @default(now()) @updatedAt @db.Timestamp(0)
+  id                     Int                 @id @default(autoincrement())
+  name                   String              @db.VarChar(255)
+  age                    Int?
+  gender                 user_Gender?
+  email                  String              @unique(map: "Email") @db.VarChar(255)
+  passwordHashed         String              @db.VarChar(255)
+  passwordResetToken     String?             @db.VarChar(255)
+  passwordResetExpiresAt DateTime?           @db.Timestamp(0)
+  passwordChangedAt      DateTime?           @db.Timestamp(0)
+  address                String?             @db.VarChar(255)
+  role                   user_Role
+  academy_user           academy_user?
+  chat_participants      chat_participants[]
+  chats                  chats[]
+  comment                comment[]
+  messages               messages[]
+  notification           notification[]
+  parent                 parent?
+  student                student?
+  teacher                teacher?
+  createdAt              DateTime            @default(now()) @db.Timestamp(0)
+  updatedAt              DateTime            @default(now()) @updatedAt @db.Timestamp(0)
 }
 
 enum chat_participants_role_in_chat {
@@ -434,4 +492,3 @@ enum lesson_attachment_file_type {
   AUDIO
   OTHER
 }
-

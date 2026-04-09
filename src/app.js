@@ -13,6 +13,7 @@ import organizationRoutes from './routes/organizationRoutes.js';
 import teacherRoutes from './routes/teacherRoutes.js';
 import marksRoutes from './routes/marksRoutes.js';
 import adminPlanRoutes from './routes/adminPlanRoutes.js';
+import schoolSettingsRoutes from './routes/schoolSettingsRoutes.js';
 
 import userRoutes from './routes/userRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
@@ -55,6 +56,7 @@ app.use('/api/organizations', organizationRoutes);
 app.use('/api/teachers', teacherRoutes);
 app.use('/api/marks', marksRoutes);
 app.use('/api/admin/plans', adminPlanRoutes);
+app.use('/api/school-settings', schoolSettingsRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/chats', chatRoutes);
 

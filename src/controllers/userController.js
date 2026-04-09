@@ -54,10 +54,10 @@ export const generateUsersFromExcel = async (req, res) => {
     }
 
     // Keep orgId server-side from token and allow optional email/password from Excel.
-    const rowsWithOrg = validatedRows.map(({ name, role, age, gender, address, email, password }) =>
+    const rowsWithOrg = validatedRows.map(({ name, role, age, gender, address, email, password, dob }) =>
       role === 'STUDENT' || role === 'TEACHER'
-        ? { name, role, age, gender, address, email, password, orgId: organizationId, orgRole: req.user?.role }
-        : { name, role, age, gender, address, email, password }
+        ? { name, role, age, gender, address, email, password, dob, orgId: organizationId, orgRole: req.user?.role }
+        : { name, role, age, gender, address, email, password, dob }
     );
     const organization = await prisma.organization.findUnique({
       where: { id: organizationId },

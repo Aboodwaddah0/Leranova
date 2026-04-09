@@ -1,6 +1,43 @@
 import prisma from "../utils/prisma.js";
 import { generateUserCredentials } from "../utils/generateUsersAccount.js";
 import { hashPassword } from "../utils/hashPassword.js";
+import AppError from "../utils/appError.js";
+import { ensureCourseForGradeLevel } from "./courseService.js";
+import { computeGradeLevelFromDob, parseDobInput } from "./gradePlacementService.js";
+import { getOrCreateSchoolSettings } from "./schoolSettingsService.js";
+
+const isSchoolStudent = (data) => {
+  const role = String(data.role || '').trim().toUpperCase();
+  const orgRole = String(data.orgRole || '').trim().toUpperCase();
+  return role === 'STUDENT' && orgRole === 'SCHOOL';
+};
+
+const prepareSchoolPlacement = async (data, tx = prisma) => {
+  if (!isSchoolStudent(data)) {
+    return {
+      dob: data.dob ? parseDobInput(data.dob) : null,
+      gradeLevel: data.gradeLevel ?? null,
+      courseId: data.courseId ?? null,
+      academicStatus: 'ACTIVE',
+    };
+  }
+
+  const dob = parseDobInput(data.dob);
+  if (!dob) {
+    throw new AppError('DOB is required for school student creation', 400);
+  }
+
+  const settings = await getOrCreateSchoolSettings(data.orgId, tx);
+  const gradeLevel = computeGradeLevelFromDob(dob, settings);
+  const course = await ensureCourseForGradeLevel(data.orgId, gradeLevel, tx);
+
+  return {
+    dob,
+    gradeLevel,
+    courseId: course.id,
+    academicStatus: 'ACTIVE',
+  };
+};
 
 const buildRoleNested = (data) => {
   const role = String(data.role || '').toUpperCase();
@@ -24,6 +61,9 @@ const buildRoleNested = (data) => {
           OrgId: data.orgId,
           Parent_id: data.parentId ?? null,
           Course_id: data.courseId ?? null,
+          DOB: data.dob ? new Date(data.dob) : null,
+          GradeLevel: data.gradeLevel ?? null,
+          AcademicStatus: data.academicStatus ?? 'ACTIVE',
         },
       },
     };
@@ -106,19 +146,38 @@ export const generateUsers = async (data, domain) => {
       continue;
     }
 
+    const schoolPlacement = await prepareSchoolPlacement(user);
+    const userPayload = {
+      ...user,
+      dob: schoolPlacement.dob,
+      gradeLevel: schoolPlacement.gradeLevel,
+      courseId: schoolPlacement.courseId ?? user.courseId ?? null,
+      academicStatus: schoolPlacement.academicStatus,
+    };
+
     const passwordHashed = await hashPassword(user.finalPassword);
 
     const createdUser = await prisma.user.create({
       data: {
-        name: user.name,
+        name: userPayload.name,
         email: user.finalEmail,
         passwordHashed,
-        role: user.role,
-        age: user.age,
-        gender: user.gender,
-        address: user.address,
-        ...buildRoleNested(user),
-        ...buildAcademyUserNested(user),
+        role: userPayload.role,
+        age: userPayload.age,
+        gender: userPayload.gender,
+        address: userPayload.address,
+        ...buildRoleNested(userPayload),
+        ...buildAcademyUserNested(userPayload),
+      },
+      include: {
+        student: {
+          select: {
+            DOB: true,
+            GradeLevel: true,
+            Course_id: true,
+            AcademicStatus: true,
+          },
+        },
       },
     });
 
@@ -131,6 +190,10 @@ export const generateUsers = async (data, domain) => {
       age: createdUser.age,
       gender: createdUser.gender,
       address: createdUser.address,
+      dob: createdUser.student?.DOB ?? null,
+      gradeLevel: createdUser.student?.GradeLevel ?? null,
+      courseId: createdUser.student?.Course_id ?? null,
+      academicStatus: createdUser.student?.AcademicStatus ?? null,
     });
   }
 
@@ -152,18 +215,27 @@ if (isUserExist)  {
     throw new Error('user email already exists')
 }
 
+const placement = await prepareSchoolPlacement(data);
+const payload = {
+  ...data,
+  dob: placement.dob,
+  gradeLevel: placement.gradeLevel,
+  courseId: placement.courseId ?? data.courseId ?? null,
+  academicStatus: placement.academicStatus,
+};
+
 const hashedPassword= await hashPassword(data.password);
 const user=await prisma.user.create({
     data:{
-  name:data.name,
-   age:data.age,
-  email:data.email,
+  name:payload.name,
+   age:payload.age,
+  email:payload.email,
   passwordHashed: hashedPassword,
-  gender:data.gender,
-  role:data.role,
-  address:data.address,
-  ...buildRoleNested(data),
-  ...buildAcademyUserNested(data),
+  gender:payload.gender,
+  role:payload.role,
+  address:payload.address,
+  ...buildRoleNested(payload),
+  ...buildAcademyUserNested(payload),
     }
 });
 
@@ -174,18 +246,26 @@ return user;
 export const addUserWithGeneratedCredentials = async (data, domain) => {
   const { email, password } = await generateUserCredentials(data.name, domain);
   const passwordHashed = await hashPassword(password);
+  const placement = await prepareSchoolPlacement(data);
+  const payload = {
+    ...data,
+    dob: placement.dob,
+    gradeLevel: placement.gradeLevel,
+    courseId: placement.courseId ?? data.courseId ?? null,
+    academicStatus: placement.academicStatus,
+  };
 
   const createdUser = await prisma.user.create({
     data: {
-      name: data.name,
+      name: payload.name,
       email,
       passwordHashed,
-      role: data.role,
-      age: data.age,
-      gender: data.gender,
-      address: data.address,
-      ...buildRoleNested(data),
-      ...buildAcademyUserNested(data),
+      role: payload.role,
+      age: payload.age,
+      gender: payload.gender,
+      address: payload.address,
+      ...buildRoleNested(payload),
+      ...buildAcademyUserNested(payload),
     },
     select: {
       id: true,
