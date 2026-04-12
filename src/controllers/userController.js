@@ -42,7 +42,9 @@ export const generateUsersFromExcel = async (req, res) => {
 
     const organizationId = req.user?.id;
 
-    const { errors, validatedRows } = validateExcelData(data);
+    const { errors, validatedRows } = validateExcelData(data, {
+      organizationRole: req.user?.role,
+    });
 
     if (errors.length > 0) {
       await deleteFromCloudinary(uploadedFile.public_id, uploadedFile.resource_type);
@@ -54,10 +56,10 @@ export const generateUsersFromExcel = async (req, res) => {
     }
 
     // Keep orgId server-side from token and allow optional email/password from Excel.
-    const rowsWithOrg = validatedRows.map(({ name, role, age, gender, address, email, password, dob }) =>
+    const rowsWithOrg = validatedRows.map(({ name, role, age, gender, address, email, password, dob, work, specialization, bio, parentNationalId }) =>
       role === 'STUDENT' || role === 'TEACHER'
-        ? { name, role, age, gender, address, email, password, dob, orgId: organizationId, orgRole: req.user?.role }
-        : { name, role, age, gender, address, email, password, dob }
+        ? { name, role, age, gender, address, email, password, dob, work, specialization, bio, parentNationalId, orgId: organizationId, orgRole: req.user?.role }
+        : { name, role, age, gender, address, email, password, dob, work, specialization, bio, parentNationalId }
     );
     const organization = await prisma.organization.findUnique({
       where: { id: organizationId },
@@ -78,7 +80,7 @@ export const generateUsersFromExcel = async (req, res) => {
       });
     }
 
-    const { createdUsers, skippedUsers } = await generateUsers(rowsWithOrg, domain);
+    const { createdUsers, createdParents = [], skippedUsers } = await generateUsers(rowsWithOrg, domain);
 
     return res.status(201).json({
       message: "Users import completed",
@@ -92,6 +94,7 @@ export const generateUsersFromExcel = async (req, res) => {
         public_id: uploadedFile.public_id,
       },
       users: createdUsers,
+      autoCreatedParents: createdParents,
       skipped: skippedUsers,
     });
   } catch (error) {
@@ -195,7 +198,7 @@ export const createUserWithGeneratedCredentialsController = async (req, res) => 
 
 export const getAllUsersController = async (req, res) => {
   try {
-    const users = await getAllUsers();
+    const users = await getAllUsers(req.user?.id, req.user?.role);
     return res.status(200).json({
       message: 'Users retrieved successfully',
       total: users.length,
@@ -213,7 +216,7 @@ export const updateUserController = async (req, res) => {
       return res.status(400).json({ message: 'Invalid user id' });
     }
 
-    const updated = await updateUser(id, req.body);
+    const updated = await updateUser(id, req.body, req.user?.id, req.user?.role);
     return res.status(200).json({
       message: 'User updated successfully',
       data: updated,
@@ -236,7 +239,7 @@ export const deleteUserController = async (req, res) => {
       return res.status(400).json({ message: 'Invalid user id' });
     }
 
-    await deleteUser(id);
+    await deleteUser(id, req.user?.id, req.user?.role);
     return res.status(200).json({ message: 'User deleted successfully' });
   } catch (error) {
     if (error.message === 'user not found') {

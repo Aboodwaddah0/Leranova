@@ -6,7 +6,10 @@ const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 export const ensureStripeConfigured = () => {
   if (!stripeSecretKey) {
-    throw new AppError('Stripe is not configured. Missing STRIPE_SECRET_KEY', 500);
+    throw new AppError(
+      'Payment setup is incomplete on the server (missing STRIPE_SECRET_KEY). Register without selecting a paid plan, or configure Stripe in backend .env.',
+      400,
+    );
   }
 };
 

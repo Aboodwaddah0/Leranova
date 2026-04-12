@@ -257,11 +257,41 @@ model plan {
   durationDays  Int
   description   String?        @db.Text
   features      Json?
+  planFeatures  plan_feature[]
   subscriptions subscription[]
   createdAt     DateTime       @default(now()) @db.Timestamp(0)
   updatedAt     DateTime       @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([name], map: "idx_plan_name")
+}
+
+model feature {
+  id            Int            @id @default(autoincrement())
+  featureKey    String         @unique @db.VarChar(100)
+  name          String         @db.VarChar(255)
+  description   String?        @db.Text
+  hasLimit      Boolean        @default(false)
+  defaultLimit  Int?
+  planFeatures  plan_feature[]
+  createdAt     DateTime       @default(now()) @db.Timestamp(0)
+  updatedAt     DateTime       @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@index([featureKey], map: "idx_feature_feature_key")
+}
+
+model plan_feature {
+  id           Int      @id @default(autoincrement())
+  planId       Int
+  featureId    Int
+  featureLimit Int?
+  plan         plan     @relation(fields: [planId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_plan_feature_plan")
+  feature      feature  @relation(fields: [featureId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_plan_feature_feature")
+  createdAt    DateTime @default(now()) @db.Timestamp(0)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@unique([planId, featureId], map: "uq_plan_feature_plan_feature")
+  @@index([planId], map: "idx_plan_feature_plan_id")
+  @@index([featureId], map: "idx_plan_feature_feature_id")
 }
 
 model subscription {
