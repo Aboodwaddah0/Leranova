@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import authRoutes from './routes/authRoutes.js';
 
 import courseRoutes from './routes/courseRoutes.js';
@@ -10,10 +11,13 @@ import commentRoutes from './routes/commentRoutes.js';
 import chatbotRoutes from './routes/chatbotRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import organizationRoutes from './routes/organizationRoutes.js';
+import organizationSelfRoutes from './routes/organizationSelfRoutes.js';
 import teacherRoutes from './routes/teacherRoutes.js';
 import marksRoutes from './routes/marksRoutes.js';
 import adminPlanRoutes from './routes/adminPlanRoutes.js';
+import adminFeatureRoutes from './routes/adminFeatureRoutes.js';
 import schoolSettingsRoutes from './routes/schoolSettingsRoutes.js';
+import adminAnalyticsRoutes from './routes/adminAnalyticsRoutes.js';
 
 import userRoutes from './routes/userRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
@@ -25,6 +29,7 @@ const app = express();
 
 app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
 
+app.use(cors());
 app.use(express.json());
 
 app.get('/', (_req, res) => {
@@ -52,10 +57,13 @@ app.use('/api/lessons/:lessonId/assets', lessonAttachmentRoutes);
 app.use('/api/lessons/:lessonId/comments', commentRoutes);
 
 app.use('/api/organizations', organizationRoutes);
+app.use('/api/organization-profile', organizationSelfRoutes);
 
 app.use('/api/teachers', teacherRoutes);
 app.use('/api/marks', marksRoutes);
 app.use('/api/admin/plans', adminPlanRoutes);
+app.use('/api/admin', adminFeatureRoutes);
+app.use('/api/admin/analytics', adminAnalyticsRoutes);
 app.use('/api/school-settings', schoolSettingsRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/chats', chatRoutes);

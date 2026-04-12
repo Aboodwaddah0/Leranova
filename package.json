@@ -6,6 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "plan:add": "node scripts/addPlan.js",
+    "plan:seed": "node scripts/addPlan.js --seed-defaults",
+    "admin:setup": "node scripts/setupAdminUser.js",
     "test:api": "newman run postman/Learnova_Backend.postman_collection.json -e postman/Learnova_Local.postman_environment.json",
     "migrate:cloudinary:paths:dry": "node scripts/migrateCloudinaryLessonPaths.js",
     "migrate:cloudinary:paths": "node scripts/migrateCloudinaryLessonPaths.js --apply"

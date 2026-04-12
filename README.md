@@ -1,13 +1,15 @@
 # Learnova Backend
 
-Learnova is a backend for an academy and course platform, built with Node.js, Prisma, and MariaDB, with a companion Python RAG service for lesson content indexing.
+Learnova is the backend for an academy platform. It provides user and organization management, course and lesson workflows, subscriptions, and AI-assisted lesson content retrieval through a dedicated RAG service.
 
-The system supports:
+## Core Features
 
-- organization and user flows
-- courses, subjects, lessons, enrollments, marks
-- lesson file attachments (PDF, DOCX, TXT, audio/video)
-- automatic content processing into vector search using Qdrant
+- Organizations, users, parents, students, teachers
+- Courses, subjects, lessons, enrollments, marks
+- Lesson attachments (PDF, DOCX, TXT, audio/video) with ingestion to Qdrant
+- Password reset by email and parent login by national ID
+- Subscriptions and plan management with Stripe webhook support
+- Chat and chatbot APIs (RAG + LLM response flow)
 
 ## Tech Stack
 
@@ -30,6 +32,7 @@ Client
 Node API (5000)
   |- MariaDB (Prisma)
   |- Cloudinary file storage
+  |- Stripe webhook endpoint
   |- Triggers RAG processing for lesson assets
   |
   v
@@ -48,6 +51,8 @@ Leranova/
 ├─ prisma/              # Prisma schema and migrations
 ├─ rag-service/         # FastAPI microservice for RAG ingestion
 ├─ db/                  # SQL bootstrap scripts
+├─ postman/             # Collection and local environment
+├─ scripts/             # Utility and migration scripts
 ├─ docker-compose.yml
 ├─ Dockerfile
 ├─ server.js
@@ -59,17 +64,17 @@ Leranova/
 - API: 5000
 - RAG service: 8000
 - MariaDB: 3306
-- phpMyAdmin: 8080
+- phpMyAdmin: 8081
 - Qdrant: 6333
 
 ## Prerequisites
 
-For Docker workflow:
+Docker workflow:
 
 - Docker Desktop
 - Docker Compose
 
-For local API workflow (without Docker):
+Local workflow:
 
 - Node.js 20+
 - MariaDB 10.6+
@@ -78,49 +83,52 @@ For local API workflow (without Docker):
 
 ## Quick Start (Recommended: Docker)
 
-1. Clone and open the project.
-2. Start all services:
+1. Start all services:
 
 ```bash
 docker compose up --build
 ```
 
-3. Verify health:
+2. Verify health:
 
 - API root: http://localhost:5000/
 - API health: http://localhost:5000/health
 - RAG docs: http://localhost:8000/docs
-- phpMyAdmin: http://localhost:8080
+- phpMyAdmin: http://localhost:8081
 
-## Daily Docker Commands
-
-Start services:
-
-```bash
-docker compose up
-```
-
-Stop services:
+3. Stop services:
 
 ```bash
 docker compose down
 ```
 
-Stop and delete volumes (destructive):
+Useful commands:
 
 ```bash
+docker compose up
 docker compose down -v
-```
-
-View logs:
-
-```bash
 docker compose logs -f
 docker compose logs -f api
 docker compose logs -f rag-service
 ```
 
-## Local Development (API Only)
+## Plan Seeding Script
+
+If signup shows no plans, add plans directly from CLI:
+
+```bash
+npm run plan:add -- --name=Starter --price=49 --days=30 --description="Starter monthly" --features="Students,Courses"
+```
+
+Seed three default plans:
+
+```bash
+npm run plan:seed
+```
+
+## Local Development
+
+### API (Node)
 
 1. Install dependencies:
 
@@ -128,11 +136,12 @@ docker compose logs -f rag-service
 npm install
 ```
 
-2. Create a .env file in the project root (example below).
+2. Create `.env` in project root.
 
-3. Run Prisma migrations:
+3. Generate Prisma client and apply migrations:
 
 ```bash
+npx prisma generate
 npx prisma migrate deploy
 ```
 
@@ -142,7 +151,7 @@ npx prisma migrate deploy
 npm run dev
 ```
 
-## Local Development (RAG Service)
+### RAG Service (Python)
 
 ```bash
 cd rag-service
@@ -154,32 +163,55 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 ## Environment Variables
 
-Root .env example:
+### API `.env` example (Docker network)
 
 ```env
 PORT=5000
 DATABASE_URL=mysql://root:root@db:3306/learnova
+
 JWT_SECRET=learnova_super_secret_key_2026_backend_api
 JWT_EXPIRES_IN=7d
-PASSWORD_RESET_URL_BASE=http://localhost:3000/reset-password
+PASSWORD_RESET_URL_BASE=http://localhost:5173/reset-password
 
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_SECURE=false
+EMAIL_TLS_REJECT_UNAUTHORIZED=true
 EMAIL_USER=
 EMAIL_PASSWORD=
 EMAIL_FROM=Learnova <no-reply@learnova.local>
 
 RAG_SERVICE_URL=http://rag-service:8000
 RAG_TRIGGER_TIMEOUT_MS=10000
+RAG_QUERY_TIMEOUT_MS=10000
 
-# Optional Cloudinary config
+GROQ_API_KEY=
+GROQ_API_URL=https://api.groq.com/openai/v1/chat/completions
+GROQ_MODEL=llama-3.3-70b-versatile
+
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_CHECKOUT_SUCCESS_URL=http://localhost:5173/subscription/success
+STRIPE_CHECKOUT_CANCEL_URL=http://localhost:5173/subscription/cancel
+
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
+
+SYSTEM_BOT_USER_ID=
+ENABLE_PROMOTION_RUNNER=false
 ```
 
-rag-service/.env example:
+### API `.env` note for full local run
+
+If you run API and RAG outside Docker, switch hostnames to localhost:
+
+```env
+DATABASE_URL=mysql://root:root@localhost:3306/learnova
+RAG_SERVICE_URL=http://localhost:8000
+```
+
+### `rag-service/.env` example
 
 ```env
 APP_NAME=Learnova RAG Service
@@ -202,163 +234,81 @@ CHUNK_OVERLAP_WORDS=50
 REQUEST_TIMEOUT_SECONDS=120
 ```
 
+If rag-service runs locally outside Docker, use:
+
+```env
+QDRANT_URL=http://localhost:6333
+```
+
 ## API Route Groups
 
-Mounted route groups include:
+- GET `/`
+- GET `/health`
+- POST `/api/webhooks/stripe`
+- `/api/auth`
+- `/api/users`
+- `/api/courses`
+- `/api/enrollments`
+- `/api/courses/:courseId/subjects`
+- `/api/subjects/:subjectId/lessons`
+- `/api/lessons/:lessonId/attachments`
+- `/api/lessons/:lessonId/assets`
+- `/api/lessons/:lessonId/comments`
+- `/api/organizations`
+- `/api/teachers`
+- `/api/marks`
+- `/api/admin/plans`
+- `/api/school-settings`
+- `/api/chatbot`
+- `/api/chats`
+- `/api/subscriptions`
 
-- /api/auth
-- /api/users
-- /api/courses
-- /api/enrollments
-- /api/courses/:courseId/subjects
-- /api/subjects/:subjectId/lessons
-- /api/lessons/:lessonId/attachments
-- /api/lessons/:lessonId/assets
-- /api/organizations
-- /api/teachers
-- /api/marks
+## Users and Auth Highlights
 
-Health endpoints:
+- `POST /api/users/generate-user`: create one user with generated credentials
+- `POST /api/users/generate-users`: bulk import users from Excel
+- `POST /api/auth/parent/login`: parent login using national ID and password
+- `POST /api/auth/forgot-password`: request password reset link
+- `POST /api/auth/reset-password`: reset password using token
 
-- GET /
-- GET /health
+Bulk import note:
 
-## Users Endpoints Highlights
-
-Create one user with auto-generated credentials (organization only):
-
-```text
-POST /api/users/generate-user
-```
-
-Request body example:
-
-```json
-{
-  "name": "Jane Doe",
-  "role": "STUDENT",
-  "age": 15,
-  "gender": "FEMALE",
-  "address": "Cairo",
-  "parentId": 12,
-  "courseId": 8
-}
-```
-
-Response includes generated `email` and plain `password` once at creation time under `credentials`.
-
-Bulk import users from Excel (organization only):
-
-```text
-POST /api/users/generate-users
-```
-
-Supported identity column in Excel:
-
-- `ParentNationalId`: required for `PARENT` rows (used as the father's ID) and used in `STUDENT` rows to link the student to the parent account
-
-If a `STUDENT` row has `ParentNationalId` and no matching parent exists, the system auto-creates a parent account and links the student to it. The generated parent credentials are returned in `autoCreatedParents`.
-
-Parent accounts can now log in with national ID:
-
-```text
-POST /api/auth/parent/login
-```
-
-Request body:
-
-```json
-{
-  "nationalId": "1234567890",
-  "password": "Parent@123"
-}
-```
-
-## Password Reset Endpoints
-
-Request reset link (generic response for existing/non-existing email):
-
-```text
-POST /api/auth/forgot-password
-```
-
-Request body:
-
-```json
-{
-  "email": "teacher@example.com",
-  "accountType": "USER"
-}
-```
-
-`accountType` is optional and can be `USER` or `ORGANIZATION`.
-
-Reset password with token:
-
-```text
-POST /api/auth/reset-password
-```
-
-Request body:
-
-```json
-{
-  "token": "reset-token-from-email",
-  "newPassword": "StrongPass1"
-}
-```
-
-Notes:
-
-- Reset token expires after 15 minutes.
-- Successful reset does not auto-login or return JWT.
+- `ParentNationalId` links `STUDENT` rows to an existing parent.
+- If no parent exists, the system auto-creates one and returns credentials in `autoCreatedParents`.
 
 ## Attachment and RAG Flow
 
 1. Create a lesson under a subject.
-2. Upload lesson attachments via:
+2. Upload lesson attachments via `POST /api/lessons/:lessonId/attachments`.
+3. API stores files and triggers rag-service.
+4. rag-service extracts text/transcript, chunks content, and generates embeddings.
+5. Vectors are stored in `learnova_lesson_chunks` collection.
 
-```text
-POST /api/lessons/:lessonId/attachments
-```
+## NPM Scripts
 
-3. API stores files (Cloudinary) and triggers the RAG service.
-4. RAG service extracts text/transcript, chunks content, generates embeddings.
-5. Vectors are stored in Qdrant collection:
+- `npm run dev`: start API with nodemon
+- `npm start`: start API with node
+- `npm run test:api`: run Postman collection via Newman
+- `npm run migrate:cloudinary:paths:dry`: dry-run Cloudinary path migration
+- `npm run migrate:cloudinary:paths`: apply Cloudinary path migration
 
-```text
-learnova_lesson_chunks
-```
-
-## Available NPM Scripts
-
-- npm run dev: start API with nodemon
-- npm start: start API with node
-- npm run test:api: run Postman collection via Newman
-
-## Common Issues
+## Troubleshooting
 
 API does not start:
 
-- confirm DATABASE_URL is valid
-- check DB container health in docker compose logs
+- Verify `DATABASE_URL`.
+- If Docker is used, check DB health and logs.
 
 RAG ingestion not happening:
 
-- confirm RAG_SERVICE_URL is reachable from API container
-- inspect rag-service logs for extraction/transcription errors
+- Verify `RAG_SERVICE_URL` from API runtime environment.
+- Inspect rag-service logs for extraction/transcription errors.
 
 No vectors in Qdrant:
 
-- verify Qdrant is up on port 6333
-- verify collection name is learnova_lesson_chunks
+- Verify Qdrant is available on port 6333.
+- Verify collection name is `learnova_lesson_chunks`.
 
 Auth failures:
 
-- confirm JWT_SECRET is present and identical across environments
-
-## Notes
-
-- Prisma schema is in prisma/schema.prisma
-- API entry point is server.js
-- Express setup and route mounting are in src/app.js
+- Verify `JWT_SECRET` is present and consistent.

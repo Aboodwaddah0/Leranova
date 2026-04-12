@@ -24,9 +24,12 @@ export const register = async (req, res, next) => {
     }
 
     const result = await registerOrganization(value);
+    const hasCheckout = Boolean(result?.checkout?.checkoutUrl);
 
     return res.status(201).json({
-      message: 'Organization registered successfully. Complete payment via Stripe checkout URL.',
+      message: hasCheckout
+        ? 'Organization registered successfully. Complete payment via Stripe checkout URL.'
+        : 'Organization registered successfully.',
       data: result,
     });
   } catch (error) {
