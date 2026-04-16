@@ -51,10 +51,77 @@ export const pushCourseMessage = async (courseId, message) => {
       content: String(content),
       sender_user_id: Number(senderUserId),
       created_at: message.created_at ?? createdAt,
+      seen_by: {
+        [String(senderUserId)]: true,
+      },
     });
 
     console.log('✅ Firebase push success');
 
+    return true;
+  } catch (error) {
+    console.error('❌ Firebase push failed:', error);
+    throw error;
+  }
+};
+
+export const markMessageSeen = async (courseId, messageId, userId) => {
+  try {
+    if (!db) {
+      throw new Error('Firebase Realtime Database is not initialized');
+    }
+
+    if (!courseId || !messageId || !userId) {
+      throw new Error('Missing seen payload fields');
+    }
+
+    const ref = db.ref(`course_chats/${courseId}/messages/${messageId}/seen_by/${userId}`);
+    await ref.set(true);
+    return true;
+  } catch (error) {
+    console.error('❌ Firebase push failed:', error);
+    throw error;
+  }
+};
+
+export const setTyping = async (courseId, userId, isTyping) => {
+  try {
+    if (!db) {
+      throw new Error('Firebase Realtime Database is not initialized');
+    }
+
+    if (!courseId || !userId) {
+      throw new Error('Missing typing payload fields');
+    }
+
+    const ref = db.ref(`course_chats/${courseId}/typing/${userId}`);
+
+    if (isTyping) {
+      await ref.set(true);
+    } else {
+      await ref.remove();
+    }
+
+    return true;
+  } catch (error) {
+    console.error('❌ Firebase push failed:', error);
+    throw error;
+  }
+};
+
+export const setOnline = async (courseId, userId) => {
+  try {
+    if (!db) {
+      throw new Error('Firebase Realtime Database is not initialized');
+    }
+
+    if (!courseId || !userId) {
+      throw new Error('Missing online payload fields');
+    }
+
+    const ref = db.ref(`course_chats/${courseId}/online/${userId}`);
+    await ref.set(true);
+    ref.onDisconnect().remove();
     return true;
   } catch (error) {
     console.error('❌ Firebase push failed:', error);

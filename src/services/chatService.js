@@ -1,7 +1,12 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { askChatbot } from './chatbotService.js';
-import { pushCourseMessage } from './firebaseService.js';
+import {
+  pushCourseMessage,
+  markMessageSeen,
+  setTyping,
+  setOnline,
+} from './firebaseService.js';
 
 const SYSTEM_BOT_EMAIL = 'system-bot@learnova.local';
 const COURSE_CHAT_TYPE = 'COURSE_GROUP';
@@ -678,12 +683,57 @@ export const sendCourseChatMessage = async ({
     messageId: message.id,
   });
 
+  console.log('📦 Course chat ensured:', courseId);
+
   await pushCourseMessage(courseId, message);
+
+  await setOnline(courseId, userId);
 
   return {
     chatId: chat.id,
     courseId,
     message: serializeCourseMessage(message),
+  };
+};
+
+export const setCourseMessageSeen = async ({ courseId, messageId, userId, tokenUser }) => {
+  const chat = await getCourseChatByCourseId({
+    courseId,
+    userId,
+    tokenUser,
+  });
+
+  if (!chat) {
+    throw new AppError('Course chat not found', 404);
+  }
+
+  await markMessageSeen(courseId, messageId, userId);
+
+  return {
+    courseId,
+    messageId,
+    userId,
+    seen: true,
+  };
+};
+
+export const setCourseTyping = async ({ courseId, userId, isTyping, tokenUser }) => {
+  const chat = await getCourseChatByCourseId({
+    courseId,
+    userId,
+    tokenUser,
+  });
+
+  if (!chat) {
+    throw new AppError('Course chat not found', 404);
+  }
+
+  await setTyping(courseId, userId, Boolean(isTyping));
+
+  return {
+    courseId,
+    userId,
+    is_typing: Boolean(isTyping),
   };
 };
 

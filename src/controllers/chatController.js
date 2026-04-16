@@ -5,6 +5,8 @@ import {
   sendMessageWithBotReply,
   sendMessageWithAutoChat,
   sendCourseChatMessage,
+  setCourseMessageSeen,
+  setCourseTyping,
   getChatMessages,
   deleteMessage,
   clearChatMessages,
@@ -37,6 +39,16 @@ const getMessagesSchema = Joi.object({
 const courseMessageQuerySchema = Joi.object({
   limit: Joi.number().integer().min(1).max(100).default(20),
   offset: Joi.number().integer().min(0).default(0),
+});
+
+const courseSeenSchema = Joi.object({
+  course_id: Joi.number().integer().positive().required(),
+  message_id: Joi.number().integer().positive().required(),
+});
+
+const courseTypingSchema = Joi.object({
+  course_id: Joi.number().integer().positive().required(),
+  is_typing: Joi.boolean().required(),
 });
 
 /**
@@ -375,6 +387,68 @@ export const clearCourseChat = async (req, res, next) => {
         course_id: result.courseId,
         cleared_messages_count: result.clearedCount,
       },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * POST /api/chats/course/seen
+ * Mark course message as seen
+ */
+export const markCourseMessageSeen = async (req, res, next) => {
+  try {
+    const { error, value } = courseSeenSchema.validate(req.body, {
+      abortEarly: true,
+      stripUnknown: true,
+    });
+
+    if (error) {
+      return next(new AppError(error.details[0].message, 400));
+    }
+
+    const result = await setCourseMessageSeen({
+      courseId: value.course_id,
+      messageId: value.message_id,
+      userId: req.user.id,
+      tokenUser: req.user,
+    });
+
+    return res.status(200).json({
+      message: 'Course message marked as seen',
+      data: result,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * POST /api/chats/course/typing
+ * Update course typing indicator
+ */
+export const courseTyping = async (req, res, next) => {
+  try {
+    const { error, value } = courseTypingSchema.validate(req.body, {
+      abortEarly: true,
+      stripUnknown: true,
+    });
+
+    if (error) {
+      return next(new AppError(error.details[0].message, 400));
+    }
+
+    const result = await setCourseTyping({
+      courseId: value.course_id,
+      userId: req.user.id,
+      isTyping: value.is_typing,
+      tokenUser: req.user,
+    });
+
+    return res.status(200).json({
+      message: 'Course typing status updated',
+      data: result,
     });
   } catch (error) {
     return next(error);
