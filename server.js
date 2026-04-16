@@ -1,6 +1,8 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import app from './src/app.js';
 import { runDuePromotions } from './src/services/studentPromotionService.js';
+
+dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 const ENABLE_PROMOTION_RUNNER = String(process.env.ENABLE_PROMOTION_RUNNER || 'false').toLowerCase() === 'true';

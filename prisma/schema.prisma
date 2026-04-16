@@ -36,6 +36,7 @@ model chat_participants {
 model chats {
   id                Int                 @id @default(autoincrement())
   organization_id   Int
+  course_id         Int?                @unique
   subject_id        Int?
   created_by        Int
   type              chats_type
@@ -44,11 +45,13 @@ model chats {
   chat_participants chat_participants[]
   user              user                @relation(fields: [created_by], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_chats_created_by")
   organization      organization        @relation(fields: [organization_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_chats_organization")
+  course            course?             @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_chats_course")
   subject           subject?            @relation(fields: [subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_chats_subject")
   messages          messages[]
 
   @@index([created_by], map: "fk_chats_created_by")
   @@index([organization_id], map: "idx_chats_organization_id")
+  @@index([course_id], map: "idx_chats_course_id")
   @@index([subject_id], map: "idx_chats_subject_id")
   @@index([type], map: "idx_chats_type")
 }
@@ -78,6 +81,7 @@ model course {
   organization organization @relation(fields: [Org_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_course_org")
   student      student[]
   subject      subject[]
+  chats        chats[]
   enrollment   enrollment[]
   createdAt    DateTime     @default(now()) @db.Timestamp(0)
   updatedAt    DateTime     @default(now()) @updatedAt @db.Timestamp(0)
@@ -462,6 +466,7 @@ enum user_Gender {
 enum chats_type {
   GROUP
   PRIVATE
+  COURSE_GROUP
 }
 
 enum user_Role {

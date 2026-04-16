@@ -1,3 +1,4 @@
+import './config/env.js';
 import express from 'express';
 import authRoutes from './routes/authRoutes.js';
 

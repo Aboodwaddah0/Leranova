@@ -1,13 +1,52 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { askChatbot } from './chatbotService.js';
+import { pushCourseMessage } from './firebaseService.js';
 
 const SYSTEM_BOT_EMAIL = 'system-bot@learnova.local';
+const COURSE_CHAT_TYPE = 'COURSE_GROUP';
 let CACHED_SYSTEM_BOT_USER_ID = process.env.SYSTEM_BOT_USER_ID
   ? Number(process.env.SYSTEM_BOT_USER_ID)
   : null;
 
 const MAX_MESSAGE_LENGTH = 5000;
+
+const serializeCourseChat = (chat) => {
+  if (!chat) {
+    return null;
+  }
+
+  return {
+    id: chat.id,
+    organization_id: chat.organization_id,
+    course_id: chat.course_id,
+    subject_id: chat.subject_id ?? null,
+    created_by: chat.created_by,
+    type: String(chat.type || '').toLowerCase(),
+    title: chat.title ?? null,
+    created_at: chat.created_at,
+  };
+};
+
+const serializeCourseMessage = (message) => ({
+  id: message.id,
+  chat_id: message.chat_id,
+  course_id: message.chats?.course_id ?? null,
+  sender_user_id: message.sender_user_id,
+  message_type: message.message_type ?? 'text',
+  content: message.content,
+  created_at: message.sent_at,
+  sent_at: message.sent_at,
+  edited_at: message.edited_at ?? null,
+  is_deleted: Boolean(message.is_deleted),
+  sender: message.user
+    ? {
+        id: message.user.id,
+        email: message.user.email,
+        name: message.user.name ?? null,
+      }
+    : null,
+});
 
 const getSystemBotUserId = async () => {
   if (CACHED_SYSTEM_BOT_USER_ID) {
@@ -40,6 +79,7 @@ const getSystemBotUserId = async () => {
 
 const resolveOrganizationId = async (tokenUser, userId) => {
   const role = String(tokenUser?.role || '').toUpperCase();
+
   if (role === 'ACADEMY' || role === 'SCHOOL') {
     return Number(tokenUser?.orgId || userId);
   }
@@ -81,6 +121,171 @@ const resolveSubjectIdForCourse = async ({ courseId, subjectId }) => {
   }
 
   return firstSubject.id;
+};
+
+const getCourseById = async (courseId) => {
+  const course = await prisma.course.findFirst({
+    where: { id: courseId },
+    select: {
+      id: true,
+      Org_id: true,
+      Name: true,
+    },
+  });
+
+  if (!course) {
+    throw new AppError('Course not found', 404);
+  }
+
+  return course;
+};
+
+const resolveCourseEnrollment = async ({ courseId, userId, tokenUser }) => {
+  const course = await getCourseById(courseId);
+  const role = String(tokenUser?.role || '').trim().toUpperCase();
+
+  if (role === 'STUDENT') {
+    const schoolStudent = await prisma.student.findFirst({
+      where: {
+        Student_id: userId,
+        OrgId: course.Org_id,
+        Course_id: courseId,
+      },
+      select: { Student_id: true },
+    });
+
+    if (schoolStudent) {
+      return course;
+    }
+
+    const academyUser = await prisma.academy_user.findFirst({
+      where: {
+        user_academy_id: userId,
+        OrgId: course.Org_id,
+      },
+      select: { user_academy_id: true },
+    });
+
+    if (academyUser) {
+      const enrollment = await prisma.enrollment.findUnique({
+        where: {
+          user_Academy_id_Course_id: {
+            user_Academy_id: userId,
+            Course_id: courseId,
+          },
+        },
+        select: { user_Academy_id: true },
+      });
+
+      if (enrollment) {
+        return course;
+      }
+    }
+  }
+
+  if (role === 'TEACHER') {
+    const teacher = await prisma.teacher.findFirst({
+      where: {
+        Teacher_id: userId,
+        OrgId: course.Org_id,
+      },
+      select: {
+        Teacher_id: true,
+      },
+    });
+
+    if (!teacher) {
+      throw new AppError('You are not assigned to this course', 403);
+    }
+
+    const assignedSubject = await prisma.subject.findFirst({
+      where: {
+        Course_id: courseId,
+        Teacher_id: userId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (assignedSubject) {
+      return course;
+    }
+  }
+
+  throw new AppError('You are not enrolled in this course', 403);
+};
+
+export const ensureCourseChatForCourse = async ({
+  organizationId,
+  courseId,
+  title,
+  createdByUserId,
+  tx = prisma,
+}) => {
+  const courseChatCreatorId = createdByUserId || (await getSystemBotUserId());
+
+  const existingChat = await tx.chats.findUnique({
+    where: { course_id: courseId },
+    select: {
+      id: true,
+      organization_id: true,
+      course_id: true,
+      subject_id: true,
+      created_by: true,
+      type: true,
+      title: true,
+      created_at: true,
+    },
+  });
+
+  if (existingChat) {
+    return existingChat;
+  }
+
+  return tx.chats.create({
+    data: {
+      organization_id: organizationId,
+      course_id: courseId,
+      created_by: courseChatCreatorId,
+      type: COURSE_CHAT_TYPE,
+      title: title || null,
+    },
+    select: {
+      id: true,
+      organization_id: true,
+      course_id: true,
+      subject_id: true,
+      created_by: true,
+      type: true,
+      title: true,
+      created_at: true,
+    },
+  });
+};
+
+export const getCourseChatByCourseId = async ({ courseId, userId, tokenUser }) => {
+  await resolveCourseEnrollment({ courseId, userId, tokenUser });
+
+  const chat = await prisma.chats.findUnique({
+    where: { course_id: courseId },
+    select: {
+      id: true,
+      organization_id: true,
+      course_id: true,
+      subject_id: true,
+      created_by: true,
+      type: true,
+      title: true,
+      created_at: true,
+    },
+  });
+
+  if (!chat || chat.type !== COURSE_CHAT_TYPE) {
+    throw new AppError('Course chat not found', 404);
+  }
+
+  return serializeCourseChat(chat);
 };
 
 export const findOrCreateUserCourseChat = async ({
@@ -171,9 +376,6 @@ export const findOrCreateUserCourseChat = async ({
   return created;
 };
 
-/**
- * Verify user is participant in chat
- */
 export const verifyUserChatAccess = async (chatId, userId) => {
   const isParticipant = await prisma.chat_participants.findUnique({
     where: {
@@ -188,9 +390,6 @@ export const verifyUserChatAccess = async (chatId, userId) => {
   return true;
 };
 
-/**
- * Get chat with full context (organization, course, participants)
- */
 export const getChatWithContext = async (chatId, userId) => {
   const chat = await prisma.chats.findFirst({
     where: { id: chatId },
@@ -210,15 +409,11 @@ export const getChatWithContext = async (chatId, userId) => {
     throw new AppError('Chat not found', 404);
   }
 
-  // Verify authorization
   await verifyUserChatAccess(chatId, userId);
 
   return chat;
 };
 
-/**
- * Save user message to database
- */
 export const saveUserMessage = async ({
   chatId,
   senderId,
@@ -252,6 +447,7 @@ export const saveUserMessage = async ({
         select: {
           id: true,
           email: true,
+          name: true,
         },
       },
     },
@@ -260,9 +456,6 @@ export const saveUserMessage = async ({
   return message;
 };
 
-/**
- * Save bot message to database
- */
 export const saveBotMessage = async ({
   chatId,
   botContent,
@@ -289,6 +482,7 @@ export const saveBotMessage = async ({
         select: {
           id: true,
           email: true,
+          name: true,
         },
       },
     },
@@ -297,16 +491,9 @@ export const saveBotMessage = async ({
   return message;
 };
 
-/**
- * Determine chatbot context from chat
- * For group chats: course_id is known, extract from DB or request
- * For private chats: use course_id + optional lesson_id from request
- */
 export const resolveChatbotContext = async (chat, requestContext = {}) => {
   const { courseId: requestCourseId, subjectId: requestSubjectId, lessonId: requestLessonId } = requestContext;
 
-  // For now: assume courseId must be provided or determinable from chat
-  // In a full implementation, you might store course_id on group chats
   if (!requestCourseId) {
     throw new AppError('Could not determine course context for chatbot', 400);
   }
@@ -318,9 +505,6 @@ export const resolveChatbotContext = async (chat, requestContext = {}) => {
   };
 };
 
-/**
- * Call chatbot and handle response
- */
 export const triggerChatbot = async ({
   question,
   courseId,
@@ -345,28 +529,16 @@ export const triggerChatbot = async ({
   }
 };
 
-/**
- * Send message to chat with optional bot reply
- *
- * Flow:
- * 1. Verify user is participant
- * 2. Save user message
- * 3. Trigger chatbot if context is available
- * 4. Save bot message if response received
- * 5. Return messages
- */
 export const sendMessageWithBotReply = async ({
   chatId,
   userId,
   content,
   tokenUser,
-  chatbotContext = null, // { courseId, subjectId, lessonId }
+  chatbotContext = null,
   enableChatbot = true,
 }) => {
-  // 1. Verify access
-  const chat = await getChatWithContext(chatId, userId);
+  await getChatWithContext(chatId, userId);
 
-  // 2. Save user message
   const userMessage = await saveUserMessage({
     chatId,
     senderId: userId,
@@ -376,7 +548,6 @@ export const sendMessageWithBotReply = async ({
   let botMessage = null;
   let chatbotResponse = null;
 
-  // 3. Trigger chatbot if enabled and context available
   if (enableChatbot && chatbotContext) {
     try {
       chatbotResponse = await triggerChatbot({
@@ -387,7 +558,6 @@ export const sendMessageWithBotReply = async ({
         tokenUser,
       });
 
-      // 4. Save bot message if response received
       if (chatbotResponse && chatbotResponse.answer) {
         botMessage = await saveBotMessage({
           chatId,
@@ -401,7 +571,6 @@ export const sendMessageWithBotReply = async ({
       }
     } catch (error) {
       console.error('[CHATBOT] Failed to get bot reply:', error.message);
-      // Graceful: message saved, just no bot reply
     }
   }
 
@@ -434,8 +603,6 @@ export const sendMessageWithAutoChat = async ({
     lessonId,
   });
 
-  console.info(`[CHAT] user message saved flow started chat_id=${chatId} user_id=${userId}`);
-
   const chatbotContext = {
     courseId,
     subjectId: subjectId || null,
@@ -451,14 +618,6 @@ export const sendMessageWithAutoChat = async ({
     enableChatbot,
   });
 
-  if (enableChatbot) {
-    if (result.botMessage) {
-      console.info(`[CHATBOT] reply saved chat_id=${chatId}`);
-    } else {
-      console.warn(`[CHATBOT ERROR] reply was not saved chat_id=${chatId}`);
-    }
-  }
-
   return {
     chatId,
     userMessage: result.userMessage,
@@ -467,19 +626,75 @@ export const sendMessageWithAutoChat = async ({
   };
 };
 
-/**
- * Get paginated messages from chat
- */
+export const sendCourseChatMessage = async ({
+  userId,
+  tokenUser,
+  content,
+  courseId,
+}) => {
+  if (!courseId) {
+    throw new AppError('course_id is required for course chat messages', 400);
+  }
+
+  const chat = await getCourseChatByCourseId({
+    courseId,
+    userId,
+    tokenUser,
+  });
+
+  const cleanedContent = String(content || '').trim();
+  if (!cleanedContent) {
+    throw new AppError('Message content cannot be empty', 400);
+  }
+
+  const message = await prisma.messages.create({
+    data: {
+      chat_id: chat.id,
+      sender_user_id: userId,
+      message_type: 'text',
+      content: cleanedContent,
+      sent_at: new Date(),
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+        },
+      },
+      chats: {
+        select: {
+          course_id: true,
+          organization_id: true,
+          type: true,
+        },
+      },
+    },
+  });
+
+  console.log('📡 Calling Firebase push...', {
+    courseId,
+    messageId: message.id,
+  });
+
+  await pushCourseMessage(courseId, message);
+
+  return {
+    chatId: chat.id,
+    courseId,
+    message: serializeCourseMessage(message),
+  };
+};
+
 export const getChatMessages = async ({
   chatId,
   userId,
   limit = 20,
   offset = 0,
 }) => {
-  // Verify access
   await verifyUserChatAccess(chatId, userId);
 
-  // Validate pagination
   const validatedLimit = Math.min(Math.max(1, limit || 20), 100);
   const validatedOffset = Math.max(0, offset || 0);
 
@@ -493,6 +708,7 @@ export const getChatMessages = async ({
         select: {
           id: true,
           email: true,
+          name: true,
         },
       },
     },
@@ -511,7 +727,7 @@ export const getChatMessages = async ({
   });
 
   return {
-    messages: messages.reverse(), // Reverse to get chronological order
+    messages: messages.reverse(),
     total,
     limit: validatedLimit,
     offset: validatedOffset,
@@ -519,9 +735,190 @@ export const getChatMessages = async ({
   };
 };
 
-/**
- * Soft-delete message
- */
+export const getCourseChatMessages = async ({
+  courseId,
+  userId,
+  tokenUser,
+  limit = 20,
+  offset = 0,
+}) => {
+  const chat = await getCourseChatByCourseId({
+    courseId,
+    userId,
+    tokenUser,
+  });
+
+  const validatedLimit = Math.min(Math.max(1, limit || 20), 100);
+  const validatedOffset = Math.max(0, offset || 0);
+
+  const messages = await prisma.messages.findMany({
+    where: {
+      chat_id: chat.id,
+      is_deleted: false,
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+        },
+      },
+      chats: {
+        select: {
+          course_id: true,
+          organization_id: true,
+          type: true,
+        },
+      },
+    },
+    orderBy: {
+      sent_at: 'desc',
+    },
+    take: validatedLimit,
+    skip: validatedOffset,
+  });
+
+  const total = await prisma.messages.count({
+    where: {
+      chat_id: chat.id,
+      is_deleted: false,
+    },
+  });
+
+  return {
+    chatId: chat.id,
+    courseId,
+    messages: messages.reverse().map(serializeCourseMessage),
+    total,
+    limit: validatedLimit,
+    offset: validatedOffset,
+    hasMore: validatedOffset + validatedLimit < total,
+  };
+};
+
+export const getCourseChatDetails = async ({ courseId, userId, tokenUser }) => {
+  return getCourseChatByCourseId({ courseId, userId, tokenUser });
+};
+
+export const deleteCourseChatMessage = async ({ messageId, userId, tokenUser }) => {
+  const message = await prisma.messages.findFirst({
+    where: { id: messageId },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+        },
+      },
+      chats: {
+        include: {
+          course: {
+            select: {
+              id: true,
+              Org_id: true,
+              Name: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!message || !message.chats || message.chats.type !== COURSE_CHAT_TYPE || !message.chats.course_id) {
+    throw new AppError('Message not found', 404);
+  }
+
+  const role = String(tokenUser?.role || '').trim().toUpperCase();
+  const courseOrgId = message.chats.course?.Org_id ?? message.chats.organization_id;
+  const isOwner = message.sender_user_id === userId;
+
+  let canDelete = isOwner;
+
+  if (!canDelete && role === 'TEACHER') {
+    const teacher = await prisma.teacher.findFirst({
+      where: {
+        Teacher_id: userId,
+        OrgId: courseOrgId,
+      },
+      select: {
+        Teacher_id: true,
+      },
+    });
+
+    canDelete = Boolean(teacher);
+  }
+
+  if (!canDelete && role === 'ADMIN') {
+    const adminOrgId = await resolveOrganizationId(tokenUser, userId);
+    canDelete = adminOrgId === courseOrgId;
+  }
+
+  if (!canDelete) {
+    throw new AppError('You cannot delete this message', 403);
+  }
+
+  const updatedMessage = await prisma.messages.update({
+    where: { id: messageId },
+    data: { is_deleted: true },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+        },
+      },
+      chats: {
+        select: {
+          course_id: true,
+          organization_id: true,
+          type: true,
+        },
+      },
+    },
+  });
+
+  return serializeCourseMessage(updatedMessage);
+};
+
+export const clearCourseChatMessages = async ({ courseId, userId, tokenUser }) => {
+  const chat = await getCourseChatByCourseId({
+    courseId,
+    userId,
+    tokenUser,
+  });
+
+  const role = String(tokenUser?.role || '').trim().toUpperCase();
+  if (!['TEACHER', 'ADMIN'].includes(role)) {
+    throw new AppError('Only teacher or admin can clear course chat', 403);
+  }
+
+  if (role === 'ADMIN') {
+    const adminOrgId = await resolveOrganizationId(tokenUser, userId);
+    if (adminOrgId !== chat.organization_id) {
+      throw new AppError('Cross-organization access denied', 403);
+    }
+  }
+
+  const result = await prisma.messages.updateMany({
+    where: {
+      chat_id: chat.id,
+      is_deleted: false,
+    },
+    data: {
+      is_deleted: true,
+    },
+  });
+
+  return {
+    chatId: chat.id,
+    courseId,
+    clearedCount: result.count,
+  };
+};
+
 export const deleteMessage = async ({
   messageId,
   userId,
@@ -540,7 +937,6 @@ export const deleteMessage = async ({
     throw new AppError('Message not found', 404);
   }
 
-  // Only sender or bot can delete
   if (message.sender_user_id !== userId && message.sender_user_id !== systemBotUserId) {
     throw new AppError('You can only delete your own messages', 403);
   }
@@ -551,9 +947,6 @@ export const deleteMessage = async ({
   });
 };
 
-/**
- * Clear chat by soft-deleting all messages in it
- */
 export const clearChatMessages = async ({ chatId, userId }) => {
   const chat = await prisma.chats.findFirst({
     where: { id: chatId },
@@ -580,89 +973,4 @@ export const clearChatMessages = async ({ chatId, userId }) => {
     chatId,
     clearedCount: result.count,
   };
-};
-
-/**
- * Create or get group chat for course
- */
-export const getOrCreateGroupChat = async ({
-  organizationId,
-  courseId,
-  userId,
-}) => {
-  // Check if group chat exists
-  let chat = await prisma.chats.findFirst({
-    where: {
-      organization_id: organizationId,
-      type: 'GROUP',
-      // Note: GROUP chats should be associated with course
-      // This assumes a course_id field; adjust if schema differs
-    },
-  });
-
-  if (chat) {
-    return chat;
-  }
-
-  // Create new group chat
-  chat = await prisma.chats.create({
-    data: {
-      organization_id: organizationId,
-      created_by: userId,
-      type: 'GROUP',
-      title: `Course ${courseId} Discussion`,
-    },
-  });
-
-  return chat;
-};
-
-/**
- * Create or get private chat between teacher and student
- */
-export const getOrCreatePrivateChat = async ({
-  organizationId,
-  user1Id,
-  user2Id,
-  createdByUserId,
-}) => {
-  // Check if private chat exists
-  let chat = await prisma.chats.findFirst({
-    where: {
-      organization_id: organizationId,
-      type: 'PRIVATE',
-      // This is tricky without explicit teacher/student IDs
-      // For now, assume the system can identify unique pairs
-      created_by: createdByUserId,
-    },
-  });
-
-  if (chat) {
-    return chat;
-  }
-
-  // Create new private chat
-  chat = await prisma.chats.create({
-    data: {
-      organization_id: organizationId,
-      created_by: createdByUserId,
-      type: 'PRIVATE',
-    },
-  });
-
-  // Add participants
-  await prisma.chat_participants.createMany({
-    data: [
-      {
-        chat_id: chat.id,
-        user_id: user1Id,
-      },
-      {
-        chat_id: chat.id,
-        user_id: user2Id,
-      },
-    ],
-  });
-
-  return chat;
 };
