@@ -4,12 +4,22 @@ import {
   getChatWithContext,
   sendMessageWithBotReply,
   sendMessageWithAutoChat,
+  sendCourseChatMessage,
   getChatMessages,
   deleteMessage,
   clearChatMessages,
+  getCourseChatMessages,
+  getCourseChatDetails,
+  deleteCourseChatMessage,
+  clearCourseChatMessages,
 } from '../services/chatService.js';
 
 // Validation schemas
+const courseMessageSchema = Joi.object({
+  content: Joi.string().trim().min(1).max(5000).required(),
+  course_id: Joi.number().integer().positive().required(),
+});
+
 const sendMessageSchema = Joi.object({
   content: Joi.string().trim().min(1).max(5000).required(),
   message_type: Joi.string().valid('text', 'image', 'file', 'voice').default('text'),
@@ -20,6 +30,11 @@ const sendMessageSchema = Joi.object({
 });
 
 const getMessagesSchema = Joi.object({
+  limit: Joi.number().integer().min(1).max(100).default(20),
+  offset: Joi.number().integer().min(0).default(0),
+});
+
+const courseMessageQuerySchema = Joi.object({
   limit: Joi.number().integer().min(1).max(100).default(20),
   offset: Joi.number().integer().min(0).default(0),
 });
@@ -79,7 +94,7 @@ export const sendMessage = async (req, res, next) => {
 
 /**
  * POST /api/chats/messages
- * Send a message without providing chat_id (auto-find/create by user + course)
+ * Send a course message by course_id
  */
 export const sendMessageAutoChat = async (req, res, next) => {
   try {
@@ -116,6 +131,118 @@ export const sendMessageAutoChat = async (req, res, next) => {
         bot_message: result.botMessage || null,
         chatbot_response: result.chatbotResponse || null,
       },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * POST /api/chats/course/messages
+ * Send a human message to course shared chat
+ */
+export const sendCourseMessage = async (req, res, next) => {
+  try {
+    const { error, value } = courseMessageSchema.validate(req.body, {
+      abortEarly: true,
+      stripUnknown: true,
+    });
+
+    if (error) {
+      return next(new AppError(error.details[0].message, 400));
+    }
+
+    const userId = req.user.id;
+
+    const result = await sendCourseChatMessage({
+      userId,
+      tokenUser: req.user,
+      content: value.content,
+      courseId: value.course_id,
+    });
+
+    return res.status(201).json({
+      message: 'Course message sent successfully',
+      data: {
+        chat_id: result.chatId,
+        course_id: result.courseId,
+        message: result.message,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * GET /api/chats/course/:course_id
+ * Get paginated messages for a course chat
+ */
+export const getCourseMessages = async (req, res, next) => {
+  try {
+    const { error, value } = courseMessageQuerySchema.validate(req.query, {
+      abortEarly: true,
+      stripUnknown: true,
+    });
+
+    if (error) {
+      return next(new AppError(error.details[0].message, 400));
+    }
+
+    const courseId = Number(req.params.course_id);
+    const userId = req.user.id;
+
+    if (!courseId || Number.isNaN(courseId)) {
+      return next(new AppError('Invalid course id', 400));
+    }
+
+    const result = await getCourseChatMessages({
+      courseId,
+      userId,
+      tokenUser: req.user,
+      limit: value.limit,
+      offset: value.offset,
+    });
+
+    return res.status(200).json({
+      message: 'Course messages retrieved successfully',
+      data: {
+        chat_id: result.chatId,
+        course_id: result.courseId,
+        messages: result.messages,
+        total: result.total,
+        limit: result.limit,
+        offset: result.offset,
+        hasMore: result.hasMore,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * GET /api/chats/course/:course_id
+ * Get course chat details
+ */
+export const getCourseChatInfo = async (req, res, next) => {
+  try {
+    const courseId = Number(req.params.course_id);
+    const userId = req.user.id;
+
+    if (!courseId || Number.isNaN(courseId)) {
+      return next(new AppError('Invalid course id', 400));
+    }
+
+    const chat = await getCourseChatDetails({
+      courseId,
+      userId,
+      tokenUser: req.user,
+    });
+
+    return res.status(200).json({
+      message: 'Course chat details retrieved successfully',
+      data: chat,
     });
   } catch (error) {
     return next(error);
@@ -188,6 +315,66 @@ export const softDeleteMessage = async (req, res, next) => {
     return res.status(200).json({
       message: 'Message deleted successfully',
       data: null,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * DELETE /api/chats/message/:id
+ * Delete a course chat message by message id
+ */
+export const deleteCourseMessage = async (req, res, next) => {
+  try {
+    const messageId = Number(req.params.id);
+    const userId = req.user.id;
+
+    if (!messageId || Number.isNaN(messageId)) {
+      return next(new AppError('Invalid message id', 400));
+    }
+
+    const message = await deleteCourseChatMessage({
+      messageId,
+      userId,
+      tokenUser: req.user,
+    });
+
+    return res.status(200).json({
+      message: 'Message deleted successfully',
+      data: message,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * DELETE /api/chats/course/:course_id/clear
+ * Clear all course chat messages
+ */
+export const clearCourseChat = async (req, res, next) => {
+  try {
+    const courseId = Number(req.params.course_id);
+    const userId = req.user.id;
+
+    if (!courseId || Number.isNaN(courseId)) {
+      return next(new AppError('Invalid course id', 400));
+    }
+
+    const result = await clearCourseChatMessages({
+      courseId,
+      userId,
+      tokenUser: req.user,
+    });
+
+    return res.status(200).json({
+      message: 'Course chat cleared successfully',
+      data: {
+        chat_id: result.chatId,
+        course_id: result.courseId,
+        cleared_messages_count: result.clearedCount,
+      },
     });
   } catch (error) {
     return next(error);

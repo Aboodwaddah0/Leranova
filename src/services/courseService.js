@@ -1,17 +1,38 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { getGradeCourseName } from './gradePlacementService.js';
+import { ensureCourseChatForCourse } from './chatService.js';
 
 export const createCourse = async (orgId, data) => {
-  const course = await prisma.course.create({
-    data: {
-      Org_id: orgId,
-      Name: data.Name,
-      Description: data.Description ?? null,
-      Thumbnail: data.Thumbnail ?? null,
-      Start: data.Start ? new Date(data.Start) : null,
-      End: data.End ? new Date(data.End) : null,
-    },
+  const course = await prisma.$transaction(async (tx) => {
+    const createdCourse = await tx.course.create({
+      data: {
+        Org_id: orgId,
+        Name: data.Name,
+        Description: data.Description ?? null,
+        Thumbnail: data.Thumbnail ?? null,
+        Start: data.Start ? new Date(data.Start) : null,
+        End: data.End ? new Date(data.End) : null,
+      },
+    });
+
+    const courseChat = await ensureCourseChatForCourse({
+      tx,
+      organizationId: orgId,
+      courseId: createdCourse.id,
+      title: `${createdCourse.Name} Course Chat`,
+    });
+
+    return {
+      ...createdCourse,
+      chat: {
+        id: courseChat.id,
+        course_id: courseChat.course_id,
+        type: String(courseChat.type || '').toLowerCase(),
+        title: courseChat.title,
+        created_at: courseChat.created_at,
+      },
+    };
   });
 
   return course;
@@ -86,6 +107,13 @@ export const ensureCourseForGradeLevel = async (orgId, gradeLevel, tx = prisma) 
   });
 
   if (existingByGrade) {
+    await ensureCourseChatForCourse({
+      tx,
+      organizationId: orgId,
+      courseId: existingByGrade.id,
+      title: `${existingByGrade.Name} Course Chat`,
+    });
+
     return existingByGrade;
   }
 
@@ -101,16 +129,32 @@ export const ensureCourseForGradeLevel = async (orgId, gradeLevel, tx = prisma) 
 
   if (existingByName) {
     if (!existingByName.GradeLevel) {
-      return tx.course.update({
+      const updatedCourse = await tx.course.update({
         where: { id: existingByName.id },
         data: { GradeLevel: gradeLevel },
       });
+
+      await ensureCourseChatForCourse({
+        tx,
+        organizationId: orgId,
+        courseId: updatedCourse.id,
+        title: `${updatedCourse.Name} Course Chat`,
+      });
+
+      return updatedCourse;
     }
+
+    await ensureCourseChatForCourse({
+      tx,
+      organizationId: orgId,
+      courseId: existingByName.id,
+      title: `${existingByName.Name} Course Chat`,
+    });
 
     return existingByName;
   }
 
-  return tx.course.create({
+  const createdCourse = await tx.course.create({
     data: {
       Org_id: orgId,
       Name: courseName,
@@ -118,4 +162,13 @@ export const ensureCourseForGradeLevel = async (orgId, gradeLevel, tx = prisma) 
       Description: `Auto-created grade course for level ${gradeLevel}`,
     },
   });
+
+  await ensureCourseChatForCourse({
+    tx,
+    organizationId: orgId,
+    courseId: createdCourse.id,
+    title: `${createdCourse.Name} Course Chat`,
+  });
+
+  return createdCourse;
 };

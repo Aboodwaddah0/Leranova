@@ -217,7 +217,9 @@
                 "exec": [
                   "pm.test(\"Create course successful\", () => {",
                   "  pm.response.to.have.status(201);",
-                  "  pm.environment.set(\"course_id\", pm.response.json().data.id);",
+                  "  const json = pm.response.json();",
+                  "  pm.environment.set(\"course_id\", json.data.id);",
+                  "  if (json.data.chat && json.data.chat.id) { pm.environment.set(\"chat_id\", json.data.chat.id); }",
                   "});"
                 ]
               }
@@ -2203,7 +2205,7 @@
                     "type": "text"
                   }
                 ],
-                "description": "Main chatbot flow. Auto-creates/fetches chat, stores user message, gets AI reply, stores bot message.",
+                "description": "Main chatbot flow. Auto-creates/fetches private chatbot chat, stores user message, gets AI reply, stores bot message.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"content\": \"احكيلي عن القدس\",\n  \"course_id\": {{course_id}},\n  \"subject_id\": {{subject_id}},\n  \"lesson_id\": {{lesson_id}},\n  \"enable_chatbot\": true\n}",
@@ -2255,7 +2257,7 @@
                     "type": "text"
                   }
                 ],
-                "description": "Get paginated chat messages.",
+                "description": "Get paginated chatbot chat messages.",
                 "url": {
                   "raw": "{{base_url}}:{{port}}/api/chats/{{chat_id}}/messages?limit=20&offset=0",
                   "host": [
@@ -2306,7 +2308,7 @@
                     "type": "text"
                   }
                 ],
-                "description": "Get chat details by chat_id.",
+                "description": "Get chatbot chat details by chat_id.",
                 "url": {
                   "raw": "{{base_url}}:{{port}}/api/chats/{{chat_id}}",
                   "host": [
@@ -2344,7 +2346,7 @@
                     "type": "text"
                   }
                 ],
-                "description": "Soft-delete message by id under chat.",
+                "description": "Soft-delete chatbot message by id under chat.",
                 "url": {
                   "raw": "{{base_url}}:{{port}}/api/chats/{{chat_id}}/messages/{{user_message_id}}",
                   "host": [
@@ -2384,7 +2386,7 @@
                     "type": "text"
                   }
                 ],
-                "description": "Clear all chat messages (soft-delete) for the given chat_id.",
+                "description": "Clear all chatbot chat messages (soft-delete) for the given chat_id.",
                 "url": {
                   "raw": "{{base_url}}:{{port}}/api/chats/{{chat_id}}/clear",
                   "host": [
@@ -2407,6 +2409,239 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('Status is 200 or 204', function () { pm.expect([200, 204]).to.include(pm.response.code); });"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Course Chat",
+          "item": [
+            {
+              "name": "Send Message",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "description": "Send a human message to shared course chat.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"content\": \"Hello class\",\n  \"course_id\": {{course_id}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/chats/course/messages",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "chats",
+                    "course",
+                    "messages"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                      "const json = pm.response.json();",
+                      "pm.test('Has data object', function () { pm.expect(json).to.have.property('data'); });",
+                      "if (json && json.data && json.data.chat_id) pm.environment.set('chat_id', json.data.chat_id);",
+                      "if (json && json.data && json.data.message && json.data.message.id) pm.environment.set('user_message_id', json.data.message.id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Course Messages",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "description": "Get paginated messages for shared course chat.",
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/chats/course/{{course_id}}/messages?limit=20&offset=0",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "chats",
+                    "course",
+                    "{{course_id}}",
+                    "messages"
+                  ],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "offset",
+                      "value": "0"
+                    }
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                      "const json = pm.response.json();",
+                      "pm.test('Messages array exists', function () { pm.expect(json.data).to.have.property('messages'); pm.expect(json.data.messages).to.be.an('array'); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Course Chat Details",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "description": "Get shared course chat details by course_id.",
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/chats/course/{{course_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "chats",
+                    "course",
+                    "{{course_id}}"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Delete Message",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "description": "Soft-delete course chat message by id.",
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/chats/course/message/{{user_message_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "chats",
+                    "course",
+                    "message",
+                    "{{user_message_id}}"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200 or 204', function () { pm.expect([200, 204]).to.include(pm.response.code); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Clear Course Chat",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "description": "Clear all shared course chat messages (teacher/admin only).",
+                "url": {
+                  "raw": "{{base_url}}:{{port}}/api/chats/course/{{course_id}}/clear",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "port": "{{port}}",
+                  "path": [
+                    "api",
+                    "chats",
+                    "course",
+                    "{{course_id}}",
+                    "clear"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200 or 403', function () { pm.expect([200, 403]).to.include(pm.response.code); });"
                     ]
                   }
                 }
