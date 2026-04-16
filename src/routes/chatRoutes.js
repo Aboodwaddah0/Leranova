@@ -8,6 +8,8 @@ import {
   getCourseChatInfo,
   deleteCourseMessage,
   clearCourseChat,
+  markCourseMessageSeen,
+  courseTyping,
   getMessages,
   getChatDetails,
   softDeleteMessage,
@@ -36,6 +38,12 @@ router.delete('/course/message/:id', authMiddleware, deleteCourseMessage);
 
 // DELETE /api/chats/course/:course_id/clear - Clear course chat messages
 router.delete('/course/:course_id/clear', authMiddleware, clearCourseChat);
+
+// POST /api/chats/course/seen - Mark a course message as seen
+router.post('/course/seen', authMiddleware, markCourseMessageSeen);
+
+// POST /api/chats/course/typing - Update course typing status
+router.post('/course/typing', authMiddleware, courseTyping);
 
 // POST /api/chats/messages - Send message with auto chatbot chat find/create
 router.post('/messages', authMiddleware, sendMessageAutoChat);
