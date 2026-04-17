@@ -8,7 +8,7 @@
     "dev": "nodemon server.js",
     "db:reset": "node scripts/dbReset.js",
     "db:seed": "node scripts/dbSeed.js",
-    "db:refresh": "npm run db:reset && npm run db:seed",
+    "db:refresh": "npm run db:reset && npm run plan:seed && npm run db:seed",
     "plan:add": "node scripts/addPlan.js",
     "plan:seed": "node scripts/addPlan.js --seed-defaults",
     "admin:setup": "node scripts/setupAdminUser.js",

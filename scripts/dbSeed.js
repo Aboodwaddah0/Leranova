@@ -251,71 +251,32 @@ const ensureAcademyMembership = async ({ userId, orgId, courseIds }) => {
   }
 };
 
-const ensureFeatureAndPlan = async () => {
-  const featureInputs = [
-    { featureKey: "AI_CHAT", name: "AI Chat", description: "AI chatbot for learning", hasLimit: false, defaultLimit: null },
-    { featureKey: "GROUP_CHAT", name: "Group Chat", description: "Course and private chat", hasLimit: false, defaultLimit: null },
-    { featureKey: "NOTIFICATIONS", name: "Notifications", description: "In-app notifications", hasLimit: false, defaultLimit: null },
-    { featureKey: "MARKS_EXPORT", name: "Marks Export", description: "Export marks and reports", hasLimit: true, defaultLimit: 10000 },
-  ];
-
-  const features = [];
-
-  for (const input of featureInputs) {
-    const feature = await prisma.feature.upsert({
-      where: { featureKey: input.featureKey },
-      update: {
-        name: input.name,
-        description: input.description,
-        hasLimit: input.hasLimit,
-        defaultLimit: input.defaultLimit,
+const ensureSeedPlansExist = async () => {
+  const plans = await prisma.plan.findMany({
+    where: {
+      name: {
+        in: ["Starter", "Growth", "Enterprise"],
       },
-      create: input,
-    });
-
-    features.push(feature);
-  }
-
-  const existingPlan = await prisma.plan.findFirst({
-    where: { name: "Demo Unlimited" },
-    orderBy: { id: "asc" },
+    },
+    select: {
+      id: true,
+      name: true,
+    },
   });
 
-  const planData = {
-    name: "Demo Unlimited",
-    price: 0,
-    durationDays: 365,
-    description: "Full local demo plan with all core features enabled",
-    features: features.map((feature) => feature.featureKey),
-  };
+  const planByName = new Map(plans.map((plan) => [plan.name, plan]));
+  const missing = ["Starter", "Growth", "Enterprise"].filter((name) => !planByName.has(name));
 
-  const plan = existingPlan
-    ? await prisma.plan.update({
-        where: { id: existingPlan.id },
-        data: planData,
-      })
-    : await prisma.plan.create({ data: planData });
-
-  for (const feature of features) {
-    await prisma.plan_feature.upsert({
-      where: {
-        planId_featureId: {
-          planId: plan.id,
-          featureId: feature.id,
-        },
-      },
-      update: {
-        featureLimit: feature.defaultLimit,
-      },
-      create: {
-        planId: plan.id,
-        featureId: feature.id,
-        featureLimit: feature.defaultLimit,
-      },
-    });
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing seeded plans: ${missing.join(", ")}. Run \"npm run plan:seed\" before \"npm run db:seed\".`
+    );
   }
 
-  return { features, plan };
+  return {
+    starterPlanId: planByName.get("Starter").id,
+    growthPlanId: planByName.get("Growth").id,
+  };
 };
 
 const ensureActiveSubscription = async ({ orgId, planId }) => {
@@ -570,7 +531,7 @@ const ensureAcademyData = async ({ academyOrg, systemBotUser, academyTeachers })
 const seed = async () => {
   console.log("[DB SEED] Starting full local system seed...");
 
-  const { plan } = await ensureFeatureAndPlan();
+  const { starterPlanId, growthPlanId } = await ensureSeedPlansExist();
 
   const schoolOrg = await ensureOrganization({
     name: "Learnova School",
@@ -588,8 +549,8 @@ const seed = async () => {
     description: "Seeded academy organization for local testing",
   });
 
-  await ensureActiveSubscription({ orgId: schoolOrg.id, planId: plan.id });
-  await ensureActiveSubscription({ orgId: academyOrg.id, planId: plan.id });
+  await ensureActiveSubscription({ orgId: schoolOrg.id, planId: starterPlanId });
+  await ensureActiveSubscription({ orgId: academyOrg.id, planId: growthPlanId });
 
   const adminUser = await ensureUser({
     email: "admin@learnova.com",
