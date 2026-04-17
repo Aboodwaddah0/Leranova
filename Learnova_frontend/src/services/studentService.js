@@ -1,267 +1,560 @@
-import api from "../utils/api";
+import api from '../utils/api';
+import { STORAGE_KEYS } from '../utils/constants';
 
-const DUMMY_COURSES = [
+const fallbackCourses = [
   {
-    id: 901,
-    name: "Fullstack Web Bootcamp",
-    description: "Build production-ready web apps with React, Node.js, and deployment workflows.",
-    thumbnail:
-      "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80",
-    price: 49,
+    id: 101,
+    name: 'UI Design Masterclass',
+    description: 'Build polished interfaces with a strong visual system and practical layouts.',
+    category: 'Design',
+    progress: 75,
+    status: 'ACTIVE',
+    priceStatus: 'PAID',
+    cover: 'https://images.unsplash.com/photo-1558655146-9f40138edfeb?auto=format&fit=crop&w=1200&q=80',
+    teacher: { name: 'Prof. Elena Sterling', title: 'Lead Design Instructor' },
   },
   {
-    id: 902,
-    name: "UI Engineering Foundations",
-    description: "Design systems, reusable components, and maintainable frontend architecture.",
-    thumbnail:
-      "https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=1200&q=80",
-    price: 39,
+    id: 102,
+    name: 'React Application Architecture',
+    description: 'Organize components, state, and routing for scalable frontends.',
+    category: 'Development',
+    progress: 45,
+    status: 'ACTIVE',
+    priceStatus: 'PENDING',
+    cover: 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=1200&q=80',
+    teacher: { name: 'Eng. Sarah Nassar', title: 'Frontend Mentor' },
   },
   {
-    id: 903,
-    name: "Backend API Mastery",
-    description: "Build secure APIs, data models, and integrations for real-world LMS products.",
-    thumbnail:
-      "https://images.unsplash.com/photo-1504639725590-34d0984388bd?auto=format&fit=crop&w=1200&q=80",
-    price: 59,
+    id: 103,
+    name: 'Data Thinking for Students',
+    description: 'Understand charts, assessment data, and decision making from scores.',
+    category: 'Analytics',
+    progress: 92,
+    status: 'ACTIVE',
+    priceStatus: 'PAID',
+    cover: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80',
+    teacher: { name: 'Dr. Omar Khalil', title: 'Analytics Instructor' },
   },
 ];
 
-const DUMMY_SUBJECTS = {
-  901: [
-    { id: 1101, name: "React Fundamentals", courseId: 901 },
-    { id: 1102, name: "Node API Basics", courseId: 901 },
-  ],
-  902: [
-    { id: 1201, name: "Design Tokens", courseId: 902 },
-    { id: 1202, name: "Component Patterns", courseId: 902 },
-  ],
-  903: [
-    { id: 1301, name: "API Security", courseId: 903 },
-    { id: 1302, name: "Database Modeling", courseId: 903 },
-  ],
-};
-
-const DUMMY_LESSONS = {
-  1101: [
-    { id: 2101, name: "JSX and Component Thinking", subjectId: 1101, courseId: 901 },
-    { id: 2102, name: "State and Effects", subjectId: 1101, courseId: 901 },
-  ],
-  1102: [
-    { id: 2103, name: "Express Routing", subjectId: 1102, courseId: 901 },
-    { id: 2104, name: "Service Layer Patterns", subjectId: 1102, courseId: 901 },
-  ],
-  1201: [
-    { id: 2201, name: "Color and Spacing Tokens", subjectId: 1201, courseId: 902 },
-    { id: 2202, name: "Typography Systems", subjectId: 1201, courseId: 902 },
-  ],
-  1202: [
-    { id: 2203, name: "Card Components", subjectId: 1202, courseId: 902 },
-    { id: 2204, name: "Form Accessibility", subjectId: 1202, courseId: 902 },
-  ],
-  1301: [
-    { id: 2301, name: "Auth and JWT", subjectId: 1301, courseId: 903 },
-    { id: 2302, name: "Rate Limiting", subjectId: 1301, courseId: 903 },
-  ],
-  1302: [
-    { id: 2303, name: "Schema Design", subjectId: 1302, courseId: 903 },
-    { id: 2304, name: "Indexing Strategies", subjectId: 1302, courseId: 903 },
-  ],
-};
-
-const DUMMY_LESSON_DETAILS = {
-  2101: {
-    id: 2101,
-    name: "JSX and Component Thinking",
-    subjectId: 1101,
-    courseId: 901,
-    videoUrl: "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
+const fallbackSubjects = [
+  {
+    id: 201,
+    courseId: 101,
+    name: 'Design Foundations',
+    description: 'Typography, spacing, visual hierarchy, and clean component structure.',
+    teacher: { name: 'Prof. Elena Sterling', title: 'Lead Design Instructor' },
   },
-  2102: {
-    id: 2102,
-    name: "State and Effects",
-    subjectId: 1101,
-    courseId: 901,
-    videoUrl: "https://samplelib.com/lib/preview/mp4/sample-10s.mp4",
+  {
+    id: 202,
+    courseId: 101,
+    name: 'Interactive Prototypes',
+    description: 'Create responsive prototypes and polished micro-interactions.',
+    teacher: { name: 'Prof. Elena Sterling', title: 'Lead Design Instructor' },
   },
-};
+  {
+    id: 203,
+    courseId: 102,
+    name: 'Routing and Layout Shells',
+    description: 'Build reusable layouts and route-aware application shells.',
+    teacher: { name: 'Eng. Sarah Nassar', title: 'Frontend Mentor' },
+  },
+  {
+    id: 204,
+    courseId: 103,
+    name: 'Understanding Trends',
+    description: 'Read progress data and make informed learning decisions.',
+    teacher: { name: 'Dr. Omar Khalil', title: 'Analytics Instructor' },
+  },
+];
 
-const DUMMY_ATTACHMENTS = {
-  2101: [
-    { id: "a1", name: "jsx-cheatsheet.pdf", type: "PDF" },
-    { id: "a2", name: "component-patterns.docx", type: "DOCX" },
+const fallbackLessons = [
+  {
+    id: 301,
+    subjectId: 201,
+    title: 'Grid Systems and Structure',
+    duration: '12:45',
+    videoUrl: '',
+    content: 'Learn how to use grid columns, spacing rules, and hierarchy to support readability.',
+  },
+  {
+    id: 302,
+    subjectId: 201,
+    title: 'Color and Contrast',
+    duration: '18:00',
+    videoUrl: '',
+    content: 'Combine accessible color contrast with a deliberate visual rhythm.',
+  },
+  {
+    id: 303,
+    subjectId: 202,
+    title: 'Motion Layers',
+    duration: '16:20',
+    videoUrl: '',
+    content: 'Animate transitions so the UI feels expressive without becoming distracting.',
+  },
+  {
+    id: 304,
+    subjectId: 203,
+    title: 'Building the Shell',
+    duration: '20:10',
+    videoUrl: '',
+    content: 'Create a stable sidebar and header shell that scales across views.',
+  },
+  {
+    id: 305,
+    subjectId: 204,
+    title: 'Weekly Progress Analysis',
+    duration: '09:30',
+    videoUrl: '',
+    content: 'Read the chart, compare sessions, and spot the best time to review.',
+  },
+];
+
+const fallbackMarks = [
+  {
+    id: 401,
+    Numbers: 18,
+    OutOf: 20,
+    MarkType: 'Quiz',
+    time: new Date().toISOString(),
+    subject: {
+      id: 201,
+      name: 'Design Foundations',
+      course: { id: 101, Name: 'UI Design Masterclass', name: 'UI Design Masterclass' },
+    },
+  },
+  {
+    id: 402,
+    Numbers: 14,
+    OutOf: 20,
+    MarkType: 'Assignment',
+    time: new Date(Date.now() - 86400000).toISOString(),
+    subject: {
+      id: 203,
+      name: 'Routing and Layout Shells',
+      course: { id: 102, Name: 'React Application Architecture', name: 'React Application Architecture' },
+    },
+  },
+  {
+    id: 403,
+    Numbers: 19,
+    OutOf: 20,
+    MarkType: 'Quiz',
+    time: new Date(Date.now() - 2 * 86400000).toISOString(),
+    subject: {
+      id: 204,
+      name: 'Understanding Trends',
+      course: { id: 103, Name: 'Data Thinking for Students', name: 'Data Thinking for Students' },
+    },
+  },
+];
+
+const fallbackPurchases = [
+  { course: { id: 101, Name: 'UI Design Masterclass', name: 'UI Design Masterclass' }, status: 'PAID' },
+  { course: { id: 102, Name: 'React Application Architecture', name: 'React Application Architecture' }, status: 'PENDING' },
+  { course: { id: 103, Name: 'Data Thinking for Students', name: 'Data Thinking for Students' }, status: 'PAID' },
+];
+
+const fallbackCommentsByLesson = new Map([
+  [
+    301,
+    [
+      {
+        id: 901,
+        content: 'The spacing breakdown here is very clear.',
+        user: { name: 'Teacher Amina' },
+        createdAt: new Date().toISOString(),
+      },
+    ],
   ],
-  2102: [{ id: "a3", name: "effects-guide.pdf", type: "PDF" }],
+  [
+    303,
+    [
+      {
+        id: 902,
+        content: 'Motion is what makes the interface feel premium.',
+        user: { name: 'Student Omar' },
+        createdAt: new Date().toISOString(),
+      },
+    ],
+  ],
+]);
+
+const fallbackProfile = {
+  id: 1,
+  fullName: 'Academy Student',
+  email: 'academy_student@learnova.com',
+  phone: '+962 7 0000 0000',
+  avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80',
 };
 
-const normalizeCourse = (course) => ({
-  id: course.id,
-  name: course.Name || course.name,
-  description: course.Description || course.description || "",
-  thumbnail: course.Thumbnail || course.thumbnail || "",
-  price: Number(course.price || 0),
-});
-
-export const fetchMyStudentMarks = async () => {
-  try {
-    const { data } = await api.get("/marks/me");
-    return data?.data || [];
-  } catch {
-    return [];
+const readStoredUser = () => {
+  if (typeof window === 'undefined') {
+    return null;
   }
-};
 
-export const fetchStudentCourseCatalog = async () => {
   try {
-    const { data } = await api.get("/courses");
-    const list = data?.data || [];
-    if (!Array.isArray(list) || !list.length) {
-      return DUMMY_COURSES;
-    }
-
-    return list.map(normalizeCourse);
-  } catch {
-    return DUMMY_COURSES;
-  }
-};
-
-export const fetchMyStudentPurchases = async () => {
-  try {
-    const { data } = await api.get("/payment/student/purchases");
-    return data?.data || [];
-  } catch {
-    return [];
-  }
-};
-
-export const fetchCoursePaymentStatus = async (courseId) => {
-  try {
-    const { data } = await api.get(`/payment/courses/${courseId}/payment-status`);
-    return data?.data || null;
+    const raw = window.localStorage.getItem(STORAGE_KEYS.USER);
+    return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 };
 
-export const startCourseCheckout = async (course) => {
-  await new Promise((resolve) => setTimeout(resolve, 400));
-
-  return {
-    success: true,
-    checkoutUrl: "https://checkout.stripe.com/pay/cs_test_placeholder",
-    courseId: course?.id,
-  };
-};
-
-export const fetchCourseSubjects = async (courseId) => {
-  const id = Number(courseId);
+const writeStoredUser = (profile) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
 
   try {
-    const { data } = await api.get(`/courses/${id}/subjects`);
-    const list = data?.data || [];
-    if (Array.isArray(list) && list.length) {
-      return list.map((subject) => ({
-        id: subject.id,
-        name: subject.name || subject.Name,
-        courseId: subject.Course_id || id,
-      }));
+    window.localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(profile));
+  } catch {
+    // Ignore storage issues and keep the in-memory fallback.
+  }
+};
+
+const unwrap = (response, fallbackValue) => response?.data?.data ?? response?.data ?? fallbackValue;
+
+const ensureArray = (value) => {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.items)) return value.items;
+  if (Array.isArray(value?.rows)) return value.rows;
+  if (Array.isArray(value?.courses)) return value.courses;
+  if (Array.isArray(value?.marks)) return value.marks;
+  if (Array.isArray(value?.purchases)) return value.purchases;
+  return [];
+};
+
+const normalizeCourseName = (course) => course?.name || course?.Name || `Course ${course?.id || ''}`;
+
+const buildCourseRecord = (course, paymentStatus = 'PAID') => ({
+  id: course.id,
+  name: normalizeCourseName(course),
+  description: course.description || course.Description || '',
+  category: course.category || 'Academy',
+  progress: Number(course.progress || 0),
+  status: paymentStatus === 'PAID' ? 'ACTIVE' : 'PENDING',
+  priceStatus: paymentStatus,
+  cover: course.cover || course.thumbnail || '',
+  teacher: course.teacher || null,
+});
+
+const decorateCoursesWithPayments = (courses = [], purchases = []) => {
+  const paymentMap = new Map(
+    purchases
+      .map((purchase) => [Number(purchase.course?.id || purchase.courseId), String(purchase.status || 'PAID').toUpperCase()])
+      .filter(([id]) => Number.isFinite(id)),
+  );
+
+  return courses.map((course) => buildCourseRecord(course, paymentMap.get(Number(course.id)) || course.priceStatus || 'PAID'));
+};
+
+const collectCoursesFromSubjects = (subjects = []) => {
+  const courseMap = new Map();
+
+  subjects.forEach((subject) => {
+    const course = subject.course || {};
+    const courseId = Number(course.id || course.Course_id || subject.courseId);
+    if (!courseId) return;
+
+    if (!courseMap.has(courseId)) {
+      courseMap.set(courseId, {
+        id: courseId,
+        name: normalizeCourseName(course),
+        description: course.description || course.Description || '',
+        category: course.category || 'Academy',
+        progress: 0,
+        cover: course.cover || course.thumbnail || '',
+        teacher: subject.teacher || null,
+      });
     }
-  } catch {
-    // Fallback below.
-  }
+  });
 
-  return DUMMY_SUBJECTS[id] || [];
+  return Array.from(courseMap.values());
 };
 
-export const fetchSubjectLessons = async (subjectId) => {
-  const id = Number(subjectId);
+const subjectLookup = () => {
+  const map = new Map();
+  fallbackSubjects.forEach((subject) => map.set(subject.id, subject));
+  return map;
+};
 
+const lessonsForSubject = (subjectId) => fallbackLessons.filter((lesson) => Number(lesson.subjectId) === Number(subjectId));
+
+const findLesson = (lessonId) => fallbackLessons.find((lesson) => Number(lesson.id) === Number(lessonId));
+
+const subjectForLesson = (lessonId) => {
+  const lesson = findLesson(lessonId);
+  return lesson ? fallbackSubjects.find((subject) => Number(subject.id) === Number(lesson.subjectId)) : null;
+};
+
+const storeComments = (lessonId, comments) => {
+  fallbackCommentsByLesson.set(Number(lessonId), comments);
+};
+
+export async function fetchMyStudentMarks() {
   try {
-    const { data } = await api.get(`/subjects/${id}/lessons`);
-    const list = data?.data || [];
-    if (Array.isArray(list) && list.length) {
-      return list.map((lesson) => ({
-        id: lesson.id,
-        name: lesson.name || lesson.title,
-        subjectId: lesson.Subject_id || id,
-      }));
+    const response = await api.get('/marks/me');
+    console.log('Marks API:', response);
+    const payload = unwrap(response, []);
+    const normalized = ensureArray(payload);
+    if (!Array.isArray(normalized)) {
+      console.error('Marks API shape invalid:', payload);
+      return [];
     }
-  } catch {
-    // Fallback below.
-  }
-
-  return DUMMY_LESSONS[id] || [];
-};
-
-export const fetchLessonDetails = async (lessonId, subjectId) => {
-  const id = Number(lessonId);
-  const parentSubjectId = Number(subjectId);
-
-  const fallback = DUMMY_LESSON_DETAILS[id]
-    || (DUMMY_LESSONS[parentSubjectId] || []).find((lesson) => lesson.id === id)
-    || {
-      id,
-      name: `Lesson #${id}`,
-      subjectId: parentSubjectId || null,
-      videoUrl: "",
-    };
-
-  return fallback;
-};
-
-export const fetchLessonAttachments = async (lessonId) => {
-  const id = Number(lessonId);
-  return DUMMY_ATTACHMENTS[id] || [];
-};
-
-export const fetchStudentProfile = async (user) => {
-  return {
-    name: user?.name || "",
-    email: user?.email || "",
-  };
-};
-
-export const updateStudentProfile = async (payload) => {
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  return payload;
-};
-
-export const askStudentTutor = async ({ question, courseId, subjectId, lessonId }) => {
-  const payload = {
-    question,
-    course_id: Number(courseId),
-  };
-
-  if (subjectId) {
-    payload.subject_id = Number(subjectId);
-  }
-
-  if (lessonId) {
-    payload.lesson_id = Number(lessonId);
-  }
-
-  const { data } = await api.post("/chatbot/ask", payload);
-  return data?.data || null;
-};
-
-export const fetchLessonComments = async (lessonId) => {
-  try {
-    const { data } = await api.get(`/lessons/${lessonId}/comments`);
-    return data?.data || [];
-  } catch {
+    return normalized;
+  } catch (error) {
+    console.error('fetchMyStudentMarks error:', error);
     return [];
   }
-};
+}
 
-export const createLessonComment = async (lessonId, content) => {
+export async function fetchMyStudentPurchases() {
   try {
-    const { data } = await api.post(`/lessons/${lessonId}/comments`, { content });
-    return data?.data || null;
+    const response = await api.get('/payment/student/purchases');
+    console.log('Purchases API:', response);
+    const payload = unwrap(response, []);
+    const normalized = ensureArray(payload);
+    if (!Array.isArray(normalized)) {
+      console.error('Purchases API shape invalid:', payload);
+      return [];
+    }
+    return normalized;
+  } catch (error) {
+    console.error('fetchMyStudentPurchases error:', error);
+    return [];
+  }
+}
+
+export async function fetchCoursePaymentStatus(courseId) {
+  try {
+    const response = await api.get(`/payment/courses/${courseId}/payment-status`);
+    return unwrap(response, { courseId, status: 'PAID' });
   } catch {
+    const purchase = fallbackPurchases.find((item) => Number(item.course?.id) === Number(courseId));
     return {
-      id: `local-${Date.now()}`,
-      content,
-      user: { name: "You" },
+      courseId,
+      status: String(purchase?.status || 'PAID').toUpperCase(),
     };
   }
-};
+}
+
+export async function fetchStudentCourseCatalog() {
+  try {
+    const [marks, purchases] = await Promise.all([fetchMyStudentMarks(), fetchMyStudentPurchases()]);
+    console.log('Courses API (derived input):', { marks, purchases });
+    const safeMarks = ensureArray(marks);
+    const safePurchases = ensureArray(purchases);
+    const courses = [
+      ...collectCoursesFromSubjects(safeMarks.map((mark) => ({ course: mark?.subject?.course, teacher: mark?.subject?.teacher }))),
+      ...safePurchases.map((purchase) => ({
+        id: Number(purchase?.course?.id || purchase?.courseId),
+        name: purchase?.course?.Name || purchase?.course?.name || `#${purchase?.course?.id || purchase?.courseId || ''}`,
+        description: purchase?.course?.Description || purchase?.course?.description || '',
+        category: 'Academy',
+        progress: 0,
+        status: String(purchase?.status || '').toUpperCase() === 'PAID' ? 'ACTIVE' : 'PENDING',
+        priceStatus: String(purchase?.status || 'PENDING').toUpperCase(),
+        cover: purchase?.course?.cover || purchase?.course?.thumbnail || '',
+      })),
+    ];
+
+    const uniqueCourses = Array.from(new Map(courses.filter((course) => Number.isFinite(Number(course?.id))).map((course) => [Number(course.id), course])).values());
+    return decorateCoursesWithPayments(uniqueCourses, safePurchases);
+  } catch (error) {
+    console.error('fetchStudentCourseCatalog error:', error);
+    return [];
+  }
+}
+
+export async function fetchCourseSubjects(courseId) {
+  try {
+    const response = await api.get(`/courses/${courseId}/subjects`);
+    const data = unwrap(response, []);
+    if (Array.isArray(data) && data.length) {
+      return data;
+    }
+  } catch {
+    // Use fallback data below.
+  }
+
+  return fallbackSubjects.filter((subject) => Number(subject.courseId) === Number(courseId));
+}
+
+export async function fetchSubjectLessons(subjectId) {
+  try {
+    const response = await api.get(`/subjects/${subjectId}/lessons`);
+    const data = unwrap(response, []);
+    if (Array.isArray(data) && data.length) {
+      return data;
+    }
+  } catch {
+    // Use fallback data below.
+  }
+
+  return lessonsForSubject(subjectId);
+}
+
+export async function fetchLessonDetails(lessonId) {
+  try {
+    const response = await api.get(`/lessons/${lessonId}`);
+    const data = unwrap(response, null);
+    if (data) {
+      return data;
+    }
+  } catch {
+    // Use fallback data below.
+  }
+
+  const lesson = findLesson(lessonId);
+  const subject = lesson ? subjectForLesson(lessonId) : null;
+
+  return lesson
+    ? {
+        ...lesson,
+        title: lesson.title,
+        name: lesson.title,
+        subject,
+        course: subject?.course || fallbackCourses.find((course) => Number(course.id) === Number(subject?.courseId)),
+        attachments: [
+          {
+            id: `${lesson.id}-notes`,
+            name: `${lesson.title} notes.pdf`,
+            url: '#',
+          },
+        ],
+      }
+    : null;
+}
+
+export async function fetchLessonComments(lessonId) {
+  try {
+    const response = await api.get(`/lessons/${lessonId}/comments`);
+    const data = unwrap(response, []);
+    if (Array.isArray(data)) {
+      return data;
+    }
+  } catch {
+    // Use fallback data below.
+  }
+
+  return fallbackCommentsByLesson.get(Number(lessonId)) || [];
+}
+
+export async function createLessonComment(lessonId, input) {
+  const content = typeof input === 'string' ? input : input?.content || '';
+
+  try {
+    const response = await api.post(`/lessons/${lessonId}/comments`, { content });
+    return unwrap(response, { id: Date.now(), content, user: { name: 'You' } });
+  } catch {
+    const current = [...(fallbackCommentsByLesson.get(Number(lessonId)) || [])];
+    const created = {
+      id: Date.now(),
+      content,
+      user: { name: 'You' },
+      createdAt: new Date().toISOString(),
+    };
+    current.unshift(created);
+    storeComments(lessonId, current);
+    return created;
+  }
+}
+
+export async function fetchAcademyTeachersForCourses(courseIds = []) {
+  const normalizedIds = new Set(courseIds.map((value) => Number(value)).filter(Number.isFinite));
+  const teachers = [];
+  const seen = new Set();
+
+  fallbackSubjects.forEach((subject) => {
+    if (normalizedIds.size && !normalizedIds.has(Number(subject.courseId))) {
+      return;
+    }
+
+    const teacher = subject.teacher;
+    if (!teacher) return;
+
+    const key = `${teacher.name}-${teacher.title}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    teachers.push({
+      id: key,
+      name: teacher.name,
+      title: teacher.title,
+      courseId: subject.courseId,
+      subjectId: subject.id,
+    });
+  });
+
+  return teachers.length ? teachers : [{ id: 'fallback-teacher', name: 'Academy Mentor', title: 'Instructor', courseId: null, subjectId: null }];
+}
+
+export async function askStudentTutor({ question, courseId, subjectId, lessonId }) {
+  const course = fallbackCourses.find((item) => Number(item.id) === Number(courseId));
+  const subject = fallbackSubjects.find((item) => Number(item.id) === Number(subjectId));
+  const lesson = lessonId ? findLesson(lessonId) : null;
+
+  const contextTitle = lesson?.title || subject?.name || course?.name || 'the current topic';
+
+  return {
+    answer: `Based on ${contextTitle}, focus on the core steps, review the examples, and practice the related exercise once more.`,
+    explanation: question ? `I used the current course context to answer: ${question}` : '',
+    confidence: lesson ? 0.92 : subject ? 0.86 : 0.75,
+    references: [
+      {
+        lesson_id: lesson?.id || null,
+        title: lesson?.title || contextTitle,
+        score: lesson ? 0.94 : 0.8,
+      },
+    ],
+    scope: {
+      courseId: course?.id || null,
+      subjectId: subject?.id || null,
+      lessonId: lesson?.id || null,
+    },
+    fallback: true,
+  };
+}
+
+export async function fetchStudentProfile() {
+  const stored = readStoredUser();
+  return {
+    ...fallbackProfile,
+    fullName: stored?.fullName || stored?.name || fallbackProfile.fullName,
+    email: stored?.email || fallbackProfile.email,
+    phone: stored?.phone || fallbackProfile.phone,
+    avatarUrl: stored?.avatarUrl || stored?.avatar || fallbackProfile.avatarUrl,
+  };
+}
+
+export async function updateStudentProfile(payload = {}) {
+  const current = await fetchStudentProfile();
+  const nextProfile = {
+    ...current,
+    ...payload,
+  };
+
+  writeStoredUser(nextProfile);
+  return nextProfile;
+}
+
+export function decorateStudentCourses(courses = [], purchases = []) {
+  return decorateCoursesWithPayments(courses, purchases);
+}
+
+export function getFallbackStudentCourseCatalog() {
+  return decorateCoursesWithPayments(fallbackCourses, fallbackPurchases);
+}
+
+export function getFallbackStudentPurchases() {
+  return fallbackPurchases;
+}
+
+export function getFallbackStudentMarks() {
+  return fallbackMarks;
+}
+
+export function getFallbackLessons() {
+  return fallbackLessons;
+}

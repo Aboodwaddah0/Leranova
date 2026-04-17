@@ -16,6 +16,7 @@ import StudentCourseDetailsPage from "./pages/student/StudentCourseDetailsPage";
 import StudentSubjectPage from "./pages/student/StudentSubjectPage";
 import StudentLessonPage from "./pages/student/StudentLessonPage";
 import StudentProfilePage from "./pages/student/StudentProfilePage";
+import StudentPageErrorBoundary from "./components/student/StudentPageErrorBoundary";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
@@ -56,10 +57,10 @@ function App() {
             <Route path="/dashboard/instructor/marks" element={<InstructorMarksPage />} />
           </Route>
           <Route element={<StudentProtectedRoute />}>
-            <Route path="/dashboard/student" element={<StudentDashboardPage />} />
-            <Route path="/dashboard/student/overview" element={<StudentDashboardPage />} />
-            <Route path="/dashboard/student/courses" element={<StudentCoursesPage />} />
-            <Route path="/student/courses" element={<StudentCoursesPage />} />
+            <Route path="/dashboard/student" element={<StudentPageErrorBoundary><StudentDashboardPage /></StudentPageErrorBoundary>} />
+            <Route path="/dashboard/student/overview" element={<StudentPageErrorBoundary><StudentDashboardPage /></StudentPageErrorBoundary>} />
+            <Route path="/dashboard/student/courses" element={<StudentPageErrorBoundary><StudentCoursesPage /></StudentPageErrorBoundary>} />
+            <Route path="/student/courses" element={<StudentPageErrorBoundary><StudentCoursesPage /></StudentPageErrorBoundary>} />
             <Route path="/student/courses/:courseId" element={<StudentCourseDetailsPage />} />
             <Route path="/student/subjects/:subjectId" element={<StudentSubjectPage />} />
             <Route path="/student/lessons/:lessonId" element={<StudentLessonPage />} />

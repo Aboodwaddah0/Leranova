@@ -1,91 +1,75 @@
-import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
+import { Link } from 'react-router-dom';
+import { ArrowRight, BookOpen, BadgeCheck, BadgeAlert } from 'lucide-react';
+import { motion } from 'framer-motion';
 
-const formatMoney = (value) => {
-  const amount = Number(value ?? 0);
-  if (!Number.isFinite(amount)) {
-    return "0";
-  }
-
-  return amount.toFixed(2).replace(/\.00$/, "");
-};
-
-export default function CourseCard({
-  course,
-  isArabic,
-  onOpen,
-  onStudy,
-  selected,
-  ctaLabel,
-  ctaDisabled = false,
-}) {
-  const status = course.status || course.paymentStatus || course.source || "";
+export default function CourseCard({ course, isPaid, progress = 0, continueHref, subscribeHref }) {
+  const cover = course?.cover || 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80';
+  const statusLabel = isPaid ? 'Continue' : 'Subscribe';
+  const statusTone = isPaid ? 'from-indigo-600 to-cyan-500' : 'from-slate-800 to-slate-600';
 
   return (
-    <article
-      className={`group overflow-hidden rounded-3xl border bg-white p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl ${
-        selected ? "border-[#2379c3] ring-2 ring-[#2379c3]/10" : "border-slate-200"
-      }`}
+    <motion.article
+      whileHover={{ y: -6 }}
+      transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+      className="group overflow-hidden rounded-[1.75rem] border border-white/80 bg-white shadow-[0_20px_60px_-30px_rgba(51,65,85,0.35)]"
     >
-      <div className="mb-4 overflow-hidden rounded-2xl bg-slate-100">
-        <img
-          src={course.thumbnail || "https://images.unsplash.com/photo-1484417894907-623942c8ee29?auto=format&fit=crop&w=1200&q=80"}
-          alt={course.name || "Course thumbnail"}
-          className="h-40 w-full object-cover transition duration-300 group-hover:scale-105"
-        />
-      </div>
-
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#2379c3]">
-            {course.gradeLevel ? `${isArabic ? "الصف" : "Grade"} ${course.gradeLevel}` : isArabic ? "مقرر" : "Course"}
-          </p>
-          <h3 className="mt-2 text-xl font-black text-slate-900">{course.name || course.title || course.Name}</h3>
+      <div className="relative aspect-[16/10] overflow-hidden">
+        <img src={cover} alt={course?.name || 'Course cover'} className="h-full w-full object-cover transition duration-500 group-hover:scale-110" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-slate-950/10 to-transparent" />
+        <div className="absolute left-4 top-4 flex items-center gap-2">
+          <span className={`rounded-full bg-gradient-to-r ${statusTone} px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white shadow-lg`}>
+            {isPaid ? 'Paid' : 'Pending'}
+          </span>
+          <span className="rounded-full bg-white/85 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-700 backdrop-blur">
+            {course?.category || 'Academy'}
+          </span>
         </div>
-        <Badge variant={status === "SUCCESS" || status === "PAID" || status === true ? "inverse" : "subtle"}>
-          {status === "SUCCESS" || status === "PAID" || status === true
-            ? isArabic
-              ? "مدفوع"
-              : "Paid"
-            : status === "PENDING"
-              ? isArabic
-                ? "معلق"
-                : "Pending"
-              : isArabic
-                ? "نشط"
-                : "Active"}
-        </Badge>
-      </div>
-
-      <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">
-        {course.description || course.Description || (isArabic ? "لا يوجد وصف لهذا المسار بعد." : "No description is available for this track yet.")}
-      </p>
-
-      <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-600">
-        <div className="rounded-2xl bg-slate-50 px-3 py-2">
-          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
-            {isArabic ? "السعر" : "Price"}
-          </div>
-          <div className="mt-1 font-semibold text-slate-900">
-            {formatMoney(course.price || 0)}
+        <div className="absolute bottom-4 left-4 right-4 rounded-2xl bg-white/90 p-4 backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-indigo-600">Course</p>
+              <h3 className="mt-1 text-lg font-black text-slate-900 line-clamp-1">{course?.name || 'Untitled course'}</h3>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-cyan-500 text-white shadow-lg">
+              <BookOpen size={18} />
+            </div>
           </div>
         </div>
-        <div className="rounded-2xl bg-slate-50 px-3 py-2">
-          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
-            {isArabic ? "المواد" : "Subjects"}
-          </div>
-          <div className="mt-1 font-semibold text-slate-900">{course.subjectCount ?? 0}</div>
-        </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button type="button" size="sm" variant="secondary" onClick={onOpen}>
-          {isArabic ? "عرض التفاصيل" : "View details"}
-        </Button>
-        <Button type="button" size="sm" variant="outline" onClick={onStudy} disabled={ctaDisabled}>
-          {ctaLabel || (isArabic ? "مساحة الدراسة" : "Study space")}
-        </Button>
+      <div className="space-y-4 p-5">
+        <p className="text-sm leading-6 text-slate-600">{course?.description || 'A curated academy course with modern guidance and clean progress tracking.'}</p>
+
+        <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
+          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
+            {isPaid ? <BadgeCheck size={13} className="text-emerald-600" /> : <BadgeAlert size={13} className="text-amber-500" />}
+            {isPaid ? 'Unlocked' : 'Payment pending'}
+          </span>
+          <span>{Math.round(progress)}% complete</span>
+        </div>
+
+        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+          <div className="h-full rounded-full bg-gradient-to-r from-indigo-600 via-cyan-500 to-emerald-400" style={{ width: `${Math.min(100, Math.max(0, progress))}%` }} />
+        </div>
+
+        <div className="flex gap-3">
+          <Link
+            to={continueHref || '#'}
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+          >
+            {statusLabel}
+            <ArrowRight size={15} />
+          </Link>
+          {!isPaid ? (
+            <Link
+              to={subscribeHref || '#'}
+              className="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              Subscribe
+            </Link>
+          ) : null}
+        </div>
       </div>
-    </article>
+    </motion.article>
   );
 }
