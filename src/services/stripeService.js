@@ -6,7 +6,10 @@ const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 export const ensureStripeConfigured = () => {
   if (!stripeSecretKey) {
-    throw new AppError('Stripe is not configured. Missing STRIPE_SECRET_KEY', 500);
+    throw new AppError(
+      'Payment setup is incomplete on the server (missing STRIPE_SECRET_KEY). Register without selecting a paid plan, or configure Stripe in backend .env.',
+      400,
+    );
   }
 };
 
@@ -76,4 +79,60 @@ export const constructStripeEvent = (rawBody, signature) => {
 
   const stripe = getStripeClient();
   return stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+};
+
+/**
+ * إنشاء جلسة دفع Stripe لكورس معين
+ * @param {object} data - البيانات المطلوبة
+ * @param {number} data.userId - معرف الطالب الأكاديمي
+ * @param {number} data.courseId - معرف الكورس
+ * @param {string} data.courseName - اسم الكورس
+ * @param {number} data.amount - المبلغ المراد دفعه
+ * @param {string} data.userEmail - البريد الإلكتروني للطالب
+ * @returns {Promise<object>} جلسة Stripe
+ */
+export const createCourseCheckoutSession = async ({
+  userId,
+  courseId,
+  courseName,
+  amount,
+  userEmail,
+  organizationId,
+}) => {
+  const stripe = getStripeClient();
+
+  const successUrl =
+    process.env.STRIPE_CHECKOUT_SUCCESS_URL ||
+    'http://localhost:5173/payment/success?session_id={CHECKOUT_SESSION_ID}';
+  const cancelUrl =
+    process.env.STRIPE_CHECKOUT_CANCEL_URL ||
+    'http://localhost:5173/payment/cancel';
+
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    customer_email: userEmail,
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: 'usd',
+          unit_amount: amountToCents(amount),
+          product_data: {
+            name: courseName,
+            description: `Course enrollment payment`,
+          },
+        },
+      },
+    ],
+    metadata: {
+      userId: String(userId),
+      courseId: String(courseId),
+      organizationId: String(organizationId),
+      type: 'COURSE_PAYMENT',
+    },
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+  });
+
+  return session;
 };

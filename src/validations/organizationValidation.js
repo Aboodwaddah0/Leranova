@@ -36,6 +36,18 @@ export const updateOrganizationSchema = Joi.object({
 	status: Joi.string().valid(...organizationStatusValues),
 }).min(1);
 
+export const updateOwnOrganizationSchema = Joi.object({
+	Name: Joi.string().max(255),
+	subdomain: Joi.string().trim().lowercase().max(63).pattern(subdomainPattern),
+	Email: Joi.string().email().max(255),
+	password: Joi.string().min(6),
+	Phone: Joi.string().max(50).allow('', null),
+	Founded: Joi.date().iso().allow(null),
+	Address: Joi.string().max(255).allow('', null),
+	PhoneNumber: Joi.string().max(50).allow('', null),
+	Description: Joi.string().allow('', null),
+}).min(1);
+
 export const getOrganizationsQuerySchema = Joi.object({
 	skip: Joi.number().integer().min(0).default(0),
 	limit: Joi.number().integer().min(1).max(100).default(10),

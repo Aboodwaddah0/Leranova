@@ -1,12 +1,103 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 
+const featureSelect = {
+  id: true,
+  featureKey: true,
+  name: true,
+  description: true,
+  hasLimit: true,
+  defaultLimit: true,
+};
+
+const normalizeFeatureKey = (value) => String(value ?? '').trim().toUpperCase();
+
+const buildPlanFeatureList = async (plan) => {
+  const featureMap = new Map();
+
+  for (const planFeature of plan?.planFeatures ?? []) {
+    const featureKey = normalizeFeatureKey(planFeature?.feature?.featureKey);
+
+    if (!featureKey) {
+      continue;
+    }
+
+    featureMap.set(featureKey, {
+      featureKey,
+      name: planFeature.feature?.name ?? featureKey,
+      description: planFeature.feature?.description ?? null,
+      hasLimit: Boolean(planFeature.feature?.hasLimit),
+      limit: planFeature.featureLimit ?? planFeature.feature?.defaultLimit ?? null,
+      enabled: true,
+      source: 'plan_feature',
+    });
+  }
+
+  const legacyFeatureKeys = Array.isArray(plan?.features)
+    ? plan.features
+        .map((item) => {
+          if (typeof item === 'string') {
+            return normalizeFeatureKey(item);
+          }
+
+          if (item && typeof item === 'object') {
+            return normalizeFeatureKey(item.featureKey ?? item.key ?? item.name);
+          }
+
+          return '';
+        })
+        .filter(Boolean)
+    : [];
+
+  if (legacyFeatureKeys.length > 0) {
+    const legacyFeatures = await prisma.feature.findMany({
+      where: {
+        featureKey: {
+          in: legacyFeatureKeys,
+        },
+      },
+      select: featureSelect,
+    });
+
+    const legacyFeatureMap = new Map(
+      legacyFeatures.map((feature) => [normalizeFeatureKey(feature.featureKey), feature])
+    );
+
+    for (const featureKey of legacyFeatureKeys) {
+      if (featureMap.has(featureKey)) {
+        continue;
+      }
+
+      const feature = legacyFeatureMap.get(featureKey);
+
+      featureMap.set(featureKey, {
+        featureKey,
+        name: feature?.name ?? featureKey,
+        description: feature?.description ?? null,
+        hasLimit: Boolean(feature?.hasLimit),
+        limit: feature?.defaultLimit ?? null,
+        enabled: true,
+        source: 'legacy_features_json',
+      });
+    }
+  }
+
+  return Array.from(featureMap.values());
+};
+
 /**
  * Get all active plans
  */
 export const getAllPlans = async () => {
   const plans = await prisma.plan.findMany({
-    orderBy: { price: 'asc' }
+    orderBy: { price: 'asc' },
+    include: {
+      planFeatures: {
+        include: {
+          feature: true,
+        },
+      },
+    },
   });
   return plans;
 };
@@ -16,7 +107,14 @@ export const getAllPlans = async () => {
  */
 export const getPlanById = async (planId) => {
   const plan = await prisma.plan.findUnique({
-    where: { id: planId }
+    where: { id: planId },
+    include: {
+      planFeatures: {
+        include: {
+          feature: true,
+        },
+      },
+    },
   });
 
   if (!plan) {
@@ -36,7 +134,15 @@ export const getOrganizationSubscription = async (organizationId) => {
       status: 'ACTIVE'
     },
     include: {
-      plan: true
+      plan: {
+        include: {
+          planFeatures: {
+            include: {
+              feature: true,
+            },
+          },
+        },
+      }
     }
   });
 
@@ -84,7 +190,15 @@ export const createSubscription = async (organizationId, planId, autoRenew = tru
       plan: { connect: { id: planId } }
     },
     include: {
-      plan: true
+      plan: {
+        include: {
+          planFeatures: {
+            include: {
+              feature: true,
+            },
+          },
+        },
+      }
     }
   });
 
@@ -212,6 +326,7 @@ export const getSubscriptionLimits = async (organizationId) => {
     planPrice: subscription.plan.price,
     durationDays: subscription.plan.durationDays,
     status: subscription.status,
-    expiresAt: subscription.endDate
+    expiresAt: subscription.endDate,
+    features: await buildPlanFeatureList(subscription.plan)
   };
 };

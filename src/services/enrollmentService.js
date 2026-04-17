@@ -318,3 +318,94 @@ export const deleteEnrollment = async (orgId, orgRole, userId, courseId) => {
   return previousEnrollment;
 };
 
+/**
+ * تهيئة الالتحاق مع التعامل مع الدفع للكورسات المدفوعة
+ * للطلاب الأكاديميين فقط
+ * @param {number} orgId - معرف المنظمة
+ * @param {number} userId - معرف الطالب الأكاديمي
+ * @param {number} courseId - معرف الكورس
+ * @returns {Promise<object>} النتيجة {enrolled: boolean, checkoutUrl?: string, message: string}
+ */
+export const initiateEnrollmentWithPayment = async (orgId, userId, courseId) => {
+  const course = await ensureCourseBelongsToOrg(orgId, courseId);
+
+  // تحقق من وجود الطالب الأكاديمي
+  const academyUser = await prisma.academy_user.findFirst({
+    where: {
+      user_academy_id: userId,
+      OrgId: orgId,
+    },
+    include: {
+      user: { select: { id: true, email: true, name: true } },
+    },
+  });
+
+  if (!academyUser) {
+    throw new AppError('Academy user not found', 404);
+  }
+
+  // تحقق من عدم وجود التحاق مسبق
+  const existingEnrollment = await prisma.enrollment.findUnique({
+    where: {
+      user_Academy_id_Course_id: {
+        user_Academy_id: userId,
+        Course_id: courseId,
+      },
+    },
+  });
+
+  if (existingEnrollment) {
+    return {
+      enrolled: true,
+      message: 'User is already enrolled in this course',
+    };
+  }
+
+  // إذا كان الكورس مجاني، التحق مباشرة
+  if (!course.isPaid || !course.price || course.price === 0) {
+    const enrollment = await prisma.enrollment.create({
+      data: {
+        user_Academy_id: userId,
+        Course_id: courseId,
+      },
+      include: enrollmentInclude,
+    });
+
+    return {
+      enrolled: true,
+      message: 'Enrolled successfully (free course)',
+      enrollment: mapAcademyEnrollment(enrollment),
+    };
+  }
+
+  // إذا كان الكورس مدفوع، نحتاج لعملية دفع
+  // ننشئ سجل دفع معلق
+  const payment = await prisma.student_course_payment.upsert({
+    where: {
+      uq_student_course_payment: {
+        user_Academy_id: userId,
+        Course_id: courseId,
+      },
+    },
+    update: {
+      status: 'PENDING',
+      amount: course.price,
+    },
+    create: {
+      user_Academy_id: userId,
+      Course_id: courseId,
+      amount: course.price,
+      paymentMethod: 'STRIPE',
+      status: 'PENDING',
+    },
+  });
+
+  return {
+    enrolled: false,
+    requiresPayment: true,
+    paymentId: payment.id,
+    amount: course.price,
+    message: 'Course requires payment. Redirecting to checkout...',
+  };
+};
+

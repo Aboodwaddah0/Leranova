@@ -8,6 +8,11 @@ const planSelect = {
   durationDays: true,
   description: true,
   features: true,
+  planFeatures: {
+    include: {
+      feature: true,
+    },
+  },
   createdAt: true,
   updatedAt: true,
 };

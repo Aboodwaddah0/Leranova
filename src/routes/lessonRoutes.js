@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
-import { isOrganization } from '../middlewares/isOrganization.js';
+import { isTeacherOrOrganization } from '../middlewares/isTeacherOrOrganization.js';
 import {
 	createLessonController,
 	getLessonsController,
@@ -12,7 +12,7 @@ import {
 
 const router = Router({ mergeParams: true });
 
-router.use(authMiddleware, isOrganization);
+router.use(authMiddleware, isTeacherOrOrganization);
 
 const lessonUpload = multer({
 	storage: multer.memoryStorage(),

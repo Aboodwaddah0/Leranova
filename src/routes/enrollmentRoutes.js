@@ -6,6 +6,7 @@ import {
   getEnrollmentsByUserController,
   deleteEnrollmentController,
 } from '../controllers/enrollmentController.js';
+import { initiatePayment } from '../controllers/coursePaymentController.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { isOrganization } from '../middlewares/isOrganization.js';
 
@@ -14,6 +15,7 @@ const router = Router();
 router.use(authMiddleware);
 
 router.post('/', isOrganization, createEnrollmentController);
+router.post('/initiate-payment', initiatePayment);
 router.get('/', isOrganization, getAllEnrollmentsController);
 router.get('/course/:courseId', isOrganization, getEnrollmentsByCourseController);
 router.get('/user/:userId', isOrganization, getEnrollmentsByUserController);

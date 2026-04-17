@@ -2,7 +2,7 @@ import Joi from 'joi';
 
 export const createSubjectSchema = Joi.object({
   Course_id: Joi.number().integer().positive().required(),
-  Teacher_id: Joi.number().integer().positive().required(),
+  Teacher_id: Joi.number().integer().positive(),
   courseId: Joi.number().integer().positive(),
   teacherId: Joi.number().integer().positive(),
   name: Joi.string().max(255).required(),

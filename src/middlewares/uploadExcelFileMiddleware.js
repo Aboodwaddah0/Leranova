@@ -12,7 +12,13 @@ const createUploader = ({ allowedMimeTypes, maxFileSizeInBytes, storage }) => {
       fileSize: maxFileSizeInBytes,
     },
     fileFilter: (req, file, callback) => {
-      if (!allowedMimeTypes.has(file.mimetype)) {
+      const fileName = String(file?.originalname || '').toLowerCase();
+      const hasExcelExtension = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+      const hasAllowedMime = allowedMimeTypes.has(file.mimetype);
+
+      // Some clients send generic MIME types (e.g., application/octet-stream)
+      // for valid Excel files, so we accept known Excel extensions as fallback.
+      if (!hasAllowedMime && !hasExcelExtension) {
         callback(new Error("Only Excel files (.xls, .xlsx) are allowed"));
         return;
       }
