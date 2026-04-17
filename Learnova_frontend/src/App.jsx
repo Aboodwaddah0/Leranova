@@ -3,12 +3,19 @@ import ProtectedRoute from "./routes/ProtectedRoute";
 import AdminProtectedRoute from "./routes/AdminProtectedRoute";
 import OrganizationProtectedRoute from "./routes/OrganizationProtectedRoute";
 import InstructorProtectedRoute from "./routes/InstructorProtectedRoute";
+import StudentProtectedRoute from "./routes/StudentProtectedRoute";
 import DashboardPlaceholderPage from "./pages/DashboardPlaceholderPage";
 import InstructorDashboardPage from "./pages/InstructorDashboardPage";
 import InstructorSubjectsPage from "./pages/instructor/InstructorSubjectsPage";
 import InstructorLessonsPage from "./pages/instructor/InstructorLessonsPage";
 import InstructorStudentsPage from "./pages/instructor/InstructorStudentsPage";
 import InstructorMarksPage from "./pages/instructor/InstructorMarksPage";
+import StudentDashboardPage from "./pages/student/StudentDashboardPage";
+import StudentCoursesPage from "./pages/student/StudentCoursesPage";
+import StudentCourseDetailsPage from "./pages/student/StudentCourseDetailsPage";
+import StudentSubjectPage from "./pages/student/StudentSubjectPage";
+import StudentLessonPage from "./pages/student/StudentLessonPage";
+import StudentProfilePage from "./pages/student/StudentProfilePage";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
@@ -47,6 +54,16 @@ function App() {
             <Route path="/dashboard/instructor/lessons" element={<InstructorLessonsPage />} />
             <Route path="/dashboard/instructor/students" element={<InstructorStudentsPage />} />
             <Route path="/dashboard/instructor/marks" element={<InstructorMarksPage />} />
+          </Route>
+          <Route element={<StudentProtectedRoute />}>
+            <Route path="/dashboard/student" element={<StudentDashboardPage />} />
+            <Route path="/dashboard/student/overview" element={<StudentDashboardPage />} />
+            <Route path="/dashboard/student/courses" element={<StudentCoursesPage />} />
+            <Route path="/student/courses" element={<StudentCoursesPage />} />
+            <Route path="/student/courses/:courseId" element={<StudentCourseDetailsPage />} />
+            <Route path="/student/subjects/:subjectId" element={<StudentSubjectPage />} />
+            <Route path="/student/lessons/:lessonId" element={<StudentLessonPage />} />
+            <Route path="/student/profile" element={<StudentProfilePage />} />
           </Route>
           <Route path="/dashboard/:role" element={<DashboardPlaceholderPage />} />
         </Route>
