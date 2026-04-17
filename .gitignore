@@ -9,3 +9,4 @@ build/
 coverage/
 .cache/
 config/firebase.json
+test-info.md
