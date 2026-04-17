@@ -47,17 +47,42 @@ export const createCommentController = async (req, res, next) => {
 		const lessonId = parseLessonId(req);
 		const { error, value } = createCommentSchema.validate(req.body);
 
+		console.log('[COMMENTS][CONTROLLER] Incoming create request', {
+			method: req.method,
+			path: req.originalUrl,
+			lesson_id: lessonId,
+			user_id: req.user?.id || null,
+			content_preview: String(req.body?.content || '').slice(0, 80),
+		});
+
 		if (error) {
+			console.error('[COMMENTS][CONTROLLER] Validation failed', {
+				lesson_id: lessonId,
+				user_id: req.user?.id || null,
+				error: error.details[0].message,
+			});
 			return next(new AppError(error.details[0].message, 400));
 		}
 
 		const comment = await createComment(req.user.id, lessonId, value.content);
+
+		console.log('[COMMENTS][CONTROLLER] Create succeeded', {
+			lesson_id: lessonId,
+			user_id: req.user?.id || null,
+			comment_id: comment.id,
+		});
 
 		return res.status(201).json({
 			message: 'Comment created successfully',
 			data: comment,
 		});
 	} catch (error) {
+		console.error('[COMMENTS][CONTROLLER] Create failed', {
+			lesson_id: Number(req.params.lessonId),
+			user_id: req.user?.id || null,
+			message: error.message,
+			statusCode: error.statusCode || 500,
+		});
 		return next(error);
 	}
 };

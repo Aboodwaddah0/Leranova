@@ -183,12 +183,30 @@ export default function StudentLessonsPage() {
     }
 
     try {
-      await createLessonComment(lessonId, commentText.trim());
+      const payload = {
+        lesson_id: Number(lessonId),
+        user_id: user?.id || user?.userId || null,
+        content: commentText.trim(),
+      };
+
+      console.log('[LESSONS PAGE] Comment submit started', payload);
+
+      const created = await createLessonComment(lessonId, payload.content);
       setCommentText("");
       const commentsData = await fetchLessonComments(lessonId);
       setComments(commentsData);
+      console.log('[LESSONS PAGE] Comment submit succeeded', {
+        lesson_id: Number(lessonId),
+        created_comment_id: created?.id || null,
+        refreshed_comments_count: Array.isArray(commentsData) ? commentsData.length : 0,
+      });
       notifySuccess(isArabic ? "تم نشر التعليق." : "Comment posted successfully.");
     } catch (err) {
+      console.error('[LESSONS PAGE] Comment submit failed', {
+        lesson_id: Number(lessonId),
+        status: err?.response?.status,
+        message: err?.response?.data?.message || err?.message,
+      });
       setError(safeError(err));
     }
   };

@@ -89,9 +89,31 @@ export default function StudentLessonPage() {
 
   const onPostComment = async () => {
     if (!commentText.trim()) return;
-    const created = await createLessonComment(numericLessonId, commentText.trim());
-    setCommentText('');
-    setComments((current) => [created, ...current]);
+    const payload = {
+      lesson_id: numericLessonId,
+      user_id: lesson?.currentUser?.id || null,
+      content: commentText.trim(),
+    };
+
+    console.log('[LESSON PAGE] Comment submit started', payload);
+
+    try {
+      const created = await createLessonComment(numericLessonId, payload.content);
+      setCommentText('');
+      setComments((current) => [created, ...current]);
+      console.log('[LESSON PAGE] Comment submit succeeded', {
+        lesson_id: numericLessonId,
+        created_comment_id: created?.id || null,
+      });
+    } catch (submitError) {
+      console.error('[LESSON PAGE] Comment submit failed', {
+        lesson_id: numericLessonId,
+        contentLength: payload.content.length,
+        status: submitError?.response?.status,
+        message: submitError?.response?.data?.message || submitError?.message,
+      });
+      setError(submitError?.response?.data?.message || submitError?.message || 'Failed to post comment.');
+    }
   };
 
   return (

@@ -77,6 +77,12 @@ export const ensureCommentExists = async (commentId) => {
  * @returns {Object} The created comment (serialized)
  */
 export const createComment = async (userId, lessonId, content) => {
+	console.log('[COMMENTS][SERVICE] Create start', {
+		lesson_id: lessonId,
+		user_id: userId,
+		content_length: String(content || '').length,
+	});
+
 	// Verify lesson exists
 	await ensureLessonExists(lessonId);
 
@@ -106,6 +112,13 @@ export const createComment = async (userId, lessonId, content) => {
 				},
 			},
 		},
+	});
+
+	console.log('[COMMENTS][SERVICE] DB insert success', {
+		comment_id: comment.id,
+		lesson_id: comment.lesson_id,
+		user_id: comment.User_id,
+		created_at: comment.time,
 	});
 
 	return serializeComment(comment);

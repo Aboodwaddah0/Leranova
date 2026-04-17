@@ -430,35 +430,100 @@ export async function fetchLessonDetails(lessonId) {
 
 export async function fetchLessonComments(lessonId) {
   try {
+    console.log('[COMMENTS] Fetch request', {
+      endpoint: `/lessons/${lessonId}/comments`,
+      method: 'GET',
+      baseUrl: api.defaults.baseURL,
+      hasAuthHeader: Boolean(window?.localStorage?.getItem(STORAGE_KEYS.TOKEN)),
+      lesson_id: Number(lessonId),
+    });
     const response = await api.get(`/lessons/${lessonId}/comments`);
     const data = unwrap(response, []);
     if (Array.isArray(data)) {
+      console.log('[COMMENTS] Fetch response', {
+        status: response?.status,
+        count: data.length,
+      });
       return data;
     }
-  } catch {
-    // Use fallback data below.
+    console.error('[COMMENTS] Fetch invalid response shape', { data });
+    throw new Error('Invalid comments response shape.');
+  } catch (error) {
+    console.error('[COMMENTS] Fetch failed', {
+      status: error?.response?.status,
+      endpoint: `/lessons/${lessonId}/comments`,
+      method: 'GET',
+      message: error?.response?.data?.message || error?.message,
+      error: error?.response?.data?.error || null,
+      details: error?.response?.data?.details || null,
+    });
+    throw error;
   }
-
-  return fallbackCommentsByLesson.get(Number(lessonId)) || [];
 }
 
 export async function createLessonComment(lessonId, input) {
   const content = typeof input === 'string' ? input : input?.content || '';
+  const user = readStoredUser();
+  const userId = Number(user?.id || user?.userId || user?.User_id || 0) || null;
+  const lessonIdNumber = Number(lessonId);
+
+  if (!Number.isFinite(lessonIdNumber) || lessonIdNumber <= 0) {
+    throw new Error('Invalid lesson id for comment submission.');
+  }
+
+  if (!content.trim()) {
+    throw new Error('Comment content is required.');
+  }
+
+  const requestBody = { content: content.trim() };
 
   try {
-    const response = await api.post(`/lessons/${lessonId}/comments`, { content });
-    return unwrap(response, { id: Date.now(), content, user: { name: 'You' } });
-  } catch {
-    const current = [...(fallbackCommentsByLesson.get(Number(lessonId)) || [])];
-    const created = {
-      id: Date.now(),
-      content,
-      user: { name: 'You' },
-      createdAt: new Date().toISOString(),
-    };
-    current.unshift(created);
-    storeComments(lessonId, current);
+    console.log('[COMMENTS] Submit request', {
+      endpoint: `/lessons/${lessonIdNumber}/comments`,
+      method: 'POST',
+      baseUrl: api.defaults.baseURL,
+      headers: {
+        hasContentType: Boolean(api.defaults?.headers?.['Content-Type'] || api.defaults?.headers?.common?.['Content-Type']),
+        hasAuthHeader: Boolean(window?.localStorage?.getItem(STORAGE_KEYS.TOKEN)),
+      },
+      payload: {
+        lesson_id: lessonIdNumber,
+        user_id: userId,
+        content: requestBody.content,
+      },
+      requestBody,
+    });
+
+    const response = await api.post(`/lessons/${lessonIdNumber}/comments`, requestBody);
+    const created = unwrap(response, null);
+
+    console.log('[COMMENTS] Submit response', {
+      status: response?.status,
+      createdCommentId: created?.id || null,
+      createdLessonId: created?.lessonId || null,
+      createdUserId: created?.userId || null,
+    });
+
+    if (!created?.id) {
+      throw new Error('Comment was not created on server. Missing comment id in response.');
+    }
+
     return created;
+  } catch (error) {
+    console.error('[COMMENTS] Submit failed', {
+      status: error?.response?.status,
+      endpoint: `/lessons/${lessonIdNumber}/comments`,
+      method: 'POST',
+      payload: {
+        lesson_id: lessonIdNumber,
+        user_id: userId,
+        content: requestBody.content,
+      },
+      message: error?.response?.data?.message || error?.message,
+      error: error?.response?.data?.error || null,
+      details: error?.response?.data?.details || null,
+    });
+    throw error;
   }
 }
 
