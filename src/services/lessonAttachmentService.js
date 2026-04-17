@@ -7,6 +7,39 @@ import {
 } from './cloudinary.service.js';
 import { triggerLessonRagIngestion } from './rag.service.js';
 
+const toRole = (value) => String(value || '').trim().toUpperCase();
+
+const resolveAttachmentScope = async (actor) => {
+  const role = toRole(actor?.role);
+
+  if (role === 'TEACHER') {
+    const teacher = await prisma.teacher.findUnique({
+      where: { Teacher_id: actor.id },
+      select: { Teacher_id: true, OrgId: true },
+    });
+
+    if (!teacher) {
+      throw new AppError('Teacher profile not found', 404);
+    }
+
+    return {
+      role,
+      orgId: teacher.OrgId,
+      teacherId: teacher.Teacher_id,
+    };
+  }
+
+  if (role === 'ACADEMY' || role === 'SCHOOL') {
+    return {
+      role,
+      orgId: actor.id,
+      teacherId: null,
+    };
+  }
+
+  throw new AppError('Access denied. Teacher or organization account required.', 403);
+};
+
 const toAttachmentType = (mimeType) => {
   const normalized = String(mimeType || '').toLowerCase();
   if (!normalized) {
@@ -83,13 +116,14 @@ const mapFileTypeToIngestionType = (fileType) => {
   return null;
 };
 
-const ensureLessonBelongsToOrganization = async (orgId, lessonId) => {
+const ensureLessonBelongsToOrganization = async (scope, lessonId) => {
   const lesson = await prisma.lesson.findFirst({
     where: {
       id: lessonId,
       subject: {
+        ...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
         course: {
-          Org_id: orgId,
+          Org_id: scope.orgId,
         },
       },
     },
@@ -116,12 +150,14 @@ const ensureLessonBelongsToOrganization = async (orgId, lessonId) => {
   };
 };
 
-export const createLessonAttachment = async ({ orgId, lessonId, file }) => {
+export const createLessonAttachment = async ({ actor, lessonId, file }) => {
   if (!file?.buffer) {
     throw new AppError('file is required', 400);
   }
 
-  const lessonContext = await ensureLessonBelongsToOrganization(orgId, lessonId);
+  const scope = await resolveAttachmentScope(actor);
+
+  const lessonContext = await ensureLessonBelongsToOrganization(scope, lessonId);
 
   const mimeType = String(file.mimetype || '').toLowerCase() || null;
   const fileType = toAttachmentType(mimeType);
@@ -160,7 +196,7 @@ export const createLessonAttachment = async ({ orgId, lessonId, file }) => {
     triggerLessonRagIngestion({
       fileUrl: uploaded.fileUrl,
       fileType: ingestionFileType,
-      organizationId: orgId,
+      organizationId: scope.orgId,
       courseId: lessonContext.courseId,
       subjectId: lessonContext.subjectId,
       lessonId,
@@ -201,8 +237,9 @@ export const createLessonAttachment = async ({ orgId, lessonId, file }) => {
   };
 };
 
-export const listLessonAttachments = async ({ orgId, lessonId }) => {
-  await ensureLessonBelongsToOrganization(orgId, lessonId);
+export const listLessonAttachments = async ({ actor, lessonId }) => {
+  const scope = await resolveAttachmentScope(actor);
+  await ensureLessonBelongsToOrganization(scope, lessonId);
 
   const attachments = await prisma.lesson_attachment.findMany({
     where: { lessonId },
@@ -212,15 +249,18 @@ export const listLessonAttachments = async ({ orgId, lessonId }) => {
   return attachments.map(serializeAttachment);
 };
 
-export const deleteLessonAttachment = async ({ orgId, lessonId, attachmentId }) => {
+export const deleteLessonAttachment = async ({ actor, lessonId, attachmentId }) => {
+  const scope = await resolveAttachmentScope(actor);
+
   const attachment = await prisma.lesson_attachment.findFirst({
     where: {
       id: attachmentId,
       lessonId,
       lesson: {
         subject: {
+          ...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
           course: {
-            Org_id: orgId,
+            Org_id: scope.orgId,
           },
         },
       },

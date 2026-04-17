@@ -1,6 +1,39 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 
+const toRole = (value) => String(value || '').trim().toUpperCase();
+
+const resolveAccessScope = async (actor) => {
+  const role = toRole(actor?.role);
+
+  if (role === 'TEACHER') {
+    const teacher = await prisma.teacher.findUnique({
+      where: { Teacher_id: actor.id },
+      select: { Teacher_id: true, OrgId: true },
+    });
+
+    if (!teacher) {
+      throw new AppError('Teacher profile not found', 404);
+    }
+
+    return {
+      role,
+      orgId: teacher.OrgId,
+      teacherId: teacher.Teacher_id,
+    };
+  }
+
+  if (role === 'ACADEMY' || role === 'SCHOOL') {
+    return {
+      role,
+      orgId: actor.id,
+      teacherId: null,
+    };
+  }
+
+  throw new AppError('Access denied. Teacher or organization account required.', 403);
+};
+
 const ensureCourseBelongsToOrg = async (orgId, courseId) => {
   const course = await prisma.course.findFirst({
     where: {
@@ -34,14 +67,22 @@ const ensureTeacherBelongsToOrg = async (orgId, teacherId) => {
   return teacher;
 };
 
-export const createSubject = async (orgId, courseId, data) => {
-  await ensureCourseBelongsToOrg(orgId, courseId);
-  await ensureTeacherBelongsToOrg(orgId, data.Teacher_id);
+export const createSubject = async (actor, courseId, data) => {
+  const scope = await resolveAccessScope(actor);
+  await ensureCourseBelongsToOrg(scope.orgId, courseId);
+
+  const teacherId = scope.role === 'TEACHER' ? scope.teacherId : data.Teacher_id;
+
+  if (!teacherId) {
+    throw new AppError('Teacher_id is required for organization subject creation', 400);
+  }
+
+  await ensureTeacherBelongsToOrg(scope.orgId, teacherId);
 
   const subject = await prisma.subject.create({
     data: {
       Course_id: courseId,
-      Teacher_id: data.Teacher_id,
+      Teacher_id: teacherId,
       name: data.name,
       Description: data.Description ?? null,
     },
@@ -50,14 +91,16 @@ export const createSubject = async (orgId, courseId, data) => {
   return subject;
 };
 
-export const getSubjects = async (orgId, courseId) => {
-  await ensureCourseBelongsToOrg(orgId, courseId);
+export const getSubjects = async (actor, courseId) => {
+  const scope = await resolveAccessScope(actor);
+  await ensureCourseBelongsToOrg(scope.orgId, courseId);
 
   const subjects = await prisma.subject.findMany({
     where: {
       Course_id: courseId,
+      ...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
       course: {
-        Org_id: orgId,
+        Org_id: scope.orgId,
       },
     },
     orderBy: {
@@ -68,15 +111,17 @@ export const getSubjects = async (orgId, courseId) => {
   return subjects;
 };
 
-export const getSubjectById = async (orgId, courseId, subjectId) => {
-  await ensureCourseBelongsToOrg(orgId, courseId);
+export const getSubjectById = async (actor, courseId, subjectId) => {
+  const scope = await resolveAccessScope(actor);
+  await ensureCourseBelongsToOrg(scope.orgId, courseId);
 
   const subject = await prisma.subject.findFirst({
     where: {
       id: subjectId,
       Course_id: courseId,
+      ...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
       course: {
-        Org_id: orgId,
+        Org_id: scope.orgId,
       },
     },
   });
@@ -88,11 +133,20 @@ export const getSubjectById = async (orgId, courseId, subjectId) => {
   return subject;
 };
 
-export const updateSubject = async (orgId, courseId, subjectId, data) => {
-  const existing = await getSubjectById(orgId, courseId, subjectId);
+export const updateSubject = async (actor, courseId, subjectId, data) => {
+  const scope = await resolveAccessScope(actor);
+  const existing = await getSubjectById(actor, courseId, subjectId);
 
-  if (data.Teacher_id && data.Teacher_id !== existing.Teacher_id) {
-    await ensureTeacherBelongsToOrg(orgId, data.Teacher_id);
+  const requestedTeacherId = data.Teacher_id;
+
+  if (scope.role === 'TEACHER') {
+    if (requestedTeacherId && Number(requestedTeacherId) !== Number(scope.teacherId)) {
+      throw new AppError('Teachers can only assign subjects to themselves', 403);
+    }
+  }
+
+  if (requestedTeacherId && requestedTeacherId !== existing.Teacher_id) {
+    await ensureTeacherBelongsToOrg(scope.orgId, requestedTeacherId);
   }
 
   const updated = await prisma.subject.update({
@@ -101,7 +155,9 @@ export const updateSubject = async (orgId, courseId, subjectId, data) => {
     },
     data: {
       Course_id: existing.Course_id,
-      Teacher_id: data.Teacher_id ?? undefined,
+      Teacher_id: scope.role === 'TEACHER'
+        ? scope.teacherId
+        : (requestedTeacherId ?? undefined),
       name: data.name ?? undefined,
       Description: data.Description ?? undefined,
     },
@@ -110,8 +166,8 @@ export const updateSubject = async (orgId, courseId, subjectId, data) => {
   return updated;
 };
 
-export const deleteSubject = async (orgId, courseId, subjectId) => {
-  await getSubjectById(orgId, courseId, subjectId);
+export const deleteSubject = async (actor, courseId, subjectId) => {
+  await getSubjectById(actor, courseId, subjectId);
 
   await prisma.subject.delete({
     where: {

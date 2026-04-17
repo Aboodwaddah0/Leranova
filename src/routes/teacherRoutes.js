@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
+import { isTeacher } from '../middlewares/isTeacher.js';
 import { isOrganization } from '../middlewares/isOrganization.js';
 import {
   createTeacherController,
@@ -9,11 +10,24 @@ import {
   deleteTeacherController,
   getTeacherSubjectsController,
   getTeacherLessonsController,
+  getMyTeacherProfileController,
+  getMyCoursesController,
+  getMySubjectsController,
+  getMyLessonsController,
+  getMyStudentsController,
 } from '../controllers/teacherController.js';
 
 const router = Router();
 
-router.use(authMiddleware, isOrganization);
+router.use(authMiddleware);
+
+router.get('/me', isTeacher, getMyTeacherProfileController);
+router.get('/me/courses', isTeacher, getMyCoursesController);
+router.get('/me/subjects', isTeacher, getMySubjectsController);
+router.get('/me/lessons', isTeacher, getMyLessonsController);
+router.get('/me/students', isTeacher, getMyStudentsController);
+
+router.use(isOrganization);
 
 router.post('/', createTeacherController);
 router.get('/', getTeachersController);

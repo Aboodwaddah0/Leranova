@@ -1,6 +1,7 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { hashPassword } from '../utils/hashPassword.js';
+import { decryptPassword, encryptPassword } from '../utils/passwordCrypto.js';
 
 const teacherSelect = {
   Teacher_id: true,
@@ -14,9 +15,23 @@ const teacherSelect = {
       id: true,
       name: true,
       email: true,
+      passwordEncrypted: true,
       gender: true,
       age: true,
       address: true,
+    },
+  },
+};
+
+const teacherSelfSelect = {
+  ...teacherSelect,
+  organization: {
+    select: {
+      id: true,
+      Name: true,
+      Role: true,
+      subdomain: true,
+      status: true,
     },
   },
 };
@@ -29,8 +44,43 @@ const serializeTeacher = (teacher) => ({
   specialization: teacher.specialization,
   bio: teacher.bio,
   createdAt: teacher.createdAt,
-  user: teacher.user,
+  user: {
+    ...teacher.user,
+    password: (() => {
+      try {
+        return decryptPassword(teacher?.user?.passwordEncrypted) || '-';
+      } catch (_error) {
+        return '-';
+      }
+    })(),
+  },
 });
+
+const serializeTeacherSelfProfile = (teacher) => ({
+  ...serializeTeacher(teacher),
+  organization: teacher.organization
+    ? {
+        id: teacher.organization.id,
+        name: teacher.organization.Name,
+        role: teacher.organization.Role,
+        subdomain: teacher.organization.subdomain,
+        status: teacher.organization.status,
+      }
+    : null,
+});
+
+const ensureTeacherExists = async (teacherId) => {
+  const teacher = await prisma.teacher.findUnique({
+    where: { Teacher_id: teacherId },
+    select: teacherSelfSelect,
+  });
+
+  if (!teacher) {
+    throw new AppError('Teacher profile not found', 404);
+  }
+
+  return teacher;
+};
 
 const ensureTeacherBelongsToOrg = async (orgId, teacherId) => {
   const teacher = await prisma.teacher.findFirst({
@@ -59,6 +109,7 @@ export const createTeacher = async (orgId, data) => {
   }
 
   const passwordHashed = await hashPassword(data.password);
+  const passwordEncrypted = encryptPassword(data.password);
 
   let teacher;
 
@@ -69,6 +120,7 @@ export const createTeacher = async (orgId, data) => {
           name: data.name,
           email: data.email,
           passwordHashed,
+          passwordEncrypted,
           role: 'TEACHER',
           age: data.age ?? null,
           gender: data.gender ?? null,
@@ -124,14 +176,21 @@ export const getTeacherById = async (orgId, teacherId) => {
 export const updateTeacher = async (orgId, teacherId, data) => {
   await ensureTeacherBelongsToOrg(orgId, teacherId);
 
+  const userData = {
+    age: data.age ?? undefined,
+    gender: data.gender ?? undefined,
+    address: data.address ?? undefined,
+  };
+
+  if (data.password !== undefined) {
+    userData.passwordHashed = await hashPassword(data.password);
+    userData.passwordEncrypted = encryptPassword(data.password);
+  }
+
   const teacher = await prisma.$transaction(async (tx) => {
     await tx.user.update({
       where: { id: teacherId },
-      data: {
-        age: data.age ?? undefined,
-        gender: data.gender ?? undefined,
-        address: data.address ?? undefined,
-      },
+      data: userData,
     });
 
     return tx.teacher.update({
@@ -179,5 +238,259 @@ export const getTeacherLessons = async (orgId, teacherId) => {
       subject: { select: { id: true, name: true } },
     },
     orderBy: { id: 'asc' },
+  });
+};
+
+export const getMyTeacherProfile = async (teacherId) => {
+  const teacher = await ensureTeacherExists(teacherId);
+  return serializeTeacherSelfProfile(teacher);
+};
+
+export const getMyTeacherCourses = async (teacherId) => {
+  const teacher = await ensureTeacherExists(teacherId);
+
+  return prisma.course.findMany({
+    where: {
+      Org_id: teacher.OrgId,
+    },
+    select: {
+      id: true,
+      Name: true,
+      GradeLevel: true,
+      Description: true,
+      Start: true,
+      End: true,
+      isPaid: true,
+      price: true,
+    },
+    orderBy: {
+      id: 'asc',
+    },
+  });
+};
+
+export const getMyTeacherSubjects = async (teacherId) => {
+  await ensureTeacherExists(teacherId);
+
+  return prisma.subject.findMany({
+    where: { Teacher_id: teacherId },
+    include: {
+      course: {
+        select: {
+          id: true,
+          Name: true,
+          GradeLevel: true,
+          Description: true,
+          Org_id: true,
+        },
+      },
+    },
+    orderBy: { id: 'asc' },
+  });
+};
+
+export const getMyTeacherLessons = async (teacherId, filters = {}) => {
+  await ensureTeacherExists(teacherId);
+
+  return prisma.lesson.findMany({
+    where: {
+      ...(filters.Subject_id ? { Subject_id: filters.Subject_id } : {}),
+      subject: {
+        Teacher_id: teacherId,
+      },
+    },
+    include: {
+      subject: {
+        select: {
+          id: true,
+          name: true,
+          Course_id: true,
+          course: {
+            select: {
+              id: true,
+              Name: true,
+              GradeLevel: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: { id: 'asc' },
+  });
+};
+
+export const getMyTeacherStudents = async (teacherId, filters = {}) => {
+  const teacher = await ensureTeacherExists(teacherId);
+
+  const teacherSubjects = await prisma.subject.findMany({
+    where: {
+      Teacher_id: teacherId,
+      ...(filters.Subject_id ? { id: filters.Subject_id } : {}),
+      ...(filters.Course_id ? { Course_id: filters.Course_id } : {}),
+    },
+    select: {
+      id: true,
+      name: true,
+      Course_id: true,
+      course: {
+        select: {
+          id: true,
+          Name: true,
+        },
+      },
+    },
+  });
+
+  if (teacherSubjects.length === 0) {
+    return [];
+  }
+
+  const courseIds = [...new Set(teacherSubjects.map((subject) => subject.Course_id))];
+  const subjectsByCourse = teacherSubjects.reduce((acc, subject) => {
+    const bucket = acc.get(subject.Course_id) || [];
+    bucket.push({ id: subject.id, name: subject.name });
+    acc.set(subject.Course_id, bucket);
+    return acc;
+  }, new Map());
+
+  const courseNameById = teacherSubjects.reduce((acc, subject) => {
+    if (!acc.has(subject.Course_id)) {
+      acc.set(subject.Course_id, subject.course?.Name || null);
+    }
+    return acc;
+  }, new Map());
+
+  const enrolledUsers = await prisma.enrollment.findMany({
+    where: {
+      Course_id: { in: courseIds },
+      academy_user: {
+        OrgId: teacher.OrgId,
+        user: {
+          role: 'STUDENT',
+        },
+      },
+    },
+    select: {
+      Course_id: true,
+      academy_user: {
+        select: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              age: true,
+              gender: true,
+              address: true,
+              student: {
+                select: {
+                  Student_id: true,
+                  GradeLevel: true,
+                  AcademicStatus: true,
+                  DOB: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const courseAssignedStudents = await prisma.student.findMany({
+    where: {
+      OrgId: teacher.OrgId,
+      Course_id: { in: courseIds },
+    },
+    select: {
+      Course_id: true,
+      Student_id: true,
+      GradeLevel: true,
+      AcademicStatus: true,
+      DOB: true,
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          age: true,
+          gender: true,
+          address: true,
+        },
+      },
+    },
+  });
+
+  const studentsById = new Map();
+
+  const addStudentEntry = ({ courseId, user, student }) => {
+    if (!user || !student) {
+      return;
+    }
+
+    const current = studentsById.get(student.Student_id) || {
+      id: student.Student_id,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        age: user.age,
+        gender: user.gender,
+        address: user.address,
+      },
+      student: {
+        gradeLevel: student.GradeLevel,
+        academicStatus: student.AcademicStatus,
+        dob: student.DOB,
+      },
+      courses: [],
+    };
+
+    const isCourseAlreadyAdded = current.courses.some((course) => course.id === courseId);
+    if (!isCourseAlreadyAdded) {
+      current.courses.push({
+        id: courseId,
+        name: courseNameById.get(courseId) || null,
+        subjects: subjectsByCourse.get(courseId) || [],
+      });
+    }
+
+    studentsById.set(student.Student_id, current);
+  };
+
+  for (const enrollment of enrolledUsers) {
+    const user = enrollment.academy_user?.user;
+    const student = user?.student;
+    addStudentEntry({
+      courseId: enrollment.Course_id,
+      user,
+      student,
+    });
+  }
+
+  for (const studentRow of courseAssignedStudents) {
+    addStudentEntry({
+      courseId: studentRow.Course_id,
+      user: studentRow.user,
+      student: {
+        Student_id: studentRow.Student_id,
+        GradeLevel: studentRow.GradeLevel,
+        AcademicStatus: studentRow.AcademicStatus,
+        DOB: studentRow.DOB,
+      },
+    });
+  }
+
+  const students = Array.from(studentsById.values());
+
+  if (!filters.search) {
+    return students;
+  }
+
+  const needle = String(filters.search).trim().toLowerCase();
+  return students.filter((entry) => {
+    const name = String(entry.user?.name || '').toLowerCase();
+    const email = String(entry.user?.email || '').toLowerCase();
+    return name.includes(needle) || email.includes(needle);
   });
 };

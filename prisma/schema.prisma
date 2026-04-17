@@ -8,13 +8,14 @@ datasource db {
 }
 
 model academy_user {
-  user_academy_id Int          @id
-  OrgId           Int
-  organization    organization @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_academy_user_org")
-  user            user         @relation(fields: [user_academy_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_academy_user_user")
-  enrollment      enrollment[]
-  createdAt       DateTime     @default(now()) @db.Timestamp(0)
-  updatedAt       DateTime     @default(now()) @updatedAt @db.Timestamp(0)
+  user_academy_id         Int                        @id
+  OrgId                   Int
+  organization            organization               @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_academy_user_org")
+  user                    user                       @relation(fields: [user_academy_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_academy_user_user")
+  enrollment              enrollment[]
+  student_course_payment  student_course_payment[]
+  createdAt               DateTime                   @default(now()) @db.Timestamp(0)
+  updatedAt               DateTime                   @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([OrgId], map: "fk_academy_user_org")
 }
@@ -67,23 +68,27 @@ model comment {
 }
 
 model course {
-  id           Int          @id @default(autoincrement())
-  Org_id       Int
-  Name         String       @db.VarChar(255)
-  GradeLevel   Int?
-  Description  String?      @db.Text
-  Thumbnail    String?      @db.VarChar(500)
-  Start        DateTime?    @db.Date
-  End          DateTime?    @db.Date
-  organization organization @relation(fields: [Org_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_course_org")
-  student      student[]
-  subject      subject[]
-  enrollment   enrollment[]
-  createdAt    DateTime     @default(now()) @db.Timestamp(0)
-  updatedAt    DateTime     @default(now()) @updatedAt @db.Timestamp(0)
+  id                      Int                        @id @default(autoincrement())
+  Org_id                  Int
+  Name                    String                     @db.VarChar(255)
+  GradeLevel              Int?
+  Description             String?                    @db.Text
+  Thumbnail               String?                    @db.VarChar(500)
+  Start                   DateTime?                  @db.Date
+  End                     DateTime?                  @db.Date
+  price                   Decimal                    @default(0) @db.Decimal(10, 2)
+  isPaid                  Boolean                    @default(false)
+  organization            organization               @relation(fields: [Org_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_course_org")
+  student                 student[]
+  subject                 subject[]
+  enrollment              enrollment[]
+  student_course_payment  student_course_payment[]
+  createdAt               DateTime                   @default(now()) @db.Timestamp(0)
+  updatedAt               DateTime                   @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([Org_id], map: "idx_course_org_id")
   @@index([GradeLevel], map: "idx_course_grade_level")
+  @@index([isPaid], map: "idx_course_is_paid")
 }
 
 model enrollment {
@@ -96,6 +101,26 @@ model enrollment {
 
   @@id([user_Academy_id, Course_id])
   @@index([Course_id], map: "fk_enrollment_course")
+}
+
+model student_course_payment {
+  id                    Int          @id @default(autoincrement())
+  user_Academy_id       Int
+  Course_id             Int
+  amount                Decimal      @db.Decimal(10, 2)
+  paymentMethod         String       @default("STRIPE") @db.VarChar(50)
+  status                String       @default("PENDING") @db.VarChar(50)
+  stripePaymentIntentId String?      @db.VarChar(500)
+  paidAt                DateTime?    @db.Timestamp(0)
+  academy_user          academy_user @relation(fields: [user_Academy_id], references: [user_academy_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_course_payment_academy_user")
+  course                course       @relation(fields: [Course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_course_payment_course")
+  createdAt             DateTime     @default(now()) @db.Timestamp(0)
+  updatedAt             DateTime     @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@unique([user_Academy_id, Course_id], map: "uq_student_course_payment")
+  @@index([user_Academy_id], map: "idx_student_course_payment_user")
+  @@index([Course_id], map: "idx_student_course_payment_course")
+  @@index([status], map: "idx_student_course_payment_status")
 }
 
 model lesson {
@@ -452,6 +477,7 @@ model user {
   gender                 user_Gender?
   email                  String              @unique(map: "Email") @db.VarChar(255)
   passwordHashed         String              @db.VarChar(255)
+  passwordEncrypted      String?             @db.VarChar(1024)
   passwordResetToken     String?             @db.VarChar(255)
   passwordResetExpiresAt DateTime?           @db.Timestamp(0)
   passwordChangedAt      DateTime?           @db.Timestamp(0)

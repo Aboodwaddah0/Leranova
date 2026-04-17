@@ -21,6 +21,7 @@ import adminAnalyticsRoutes from './routes/adminAnalyticsRoutes.js';
 
 import userRoutes from './routes/userRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
+import paymentRoutes from './routes/paymentRoutes.js';
 import { handleStripeWebhook } from './controllers/stripeWebhookController.js';
 
 import { errorMiddleware } from './middlewares/errorMiddleware.js';
@@ -43,13 +44,11 @@ app.get('/health', (_req, res) => {
 	res.status(200).json({ status: 'healthy' });
 });
 
-
+app.use('/api/courses/:courseId/subjects', subjectRoutes);
 
 app.use('/api/courses', courseRoutes);
 
 app.use('/api/enrollments', enrollmentRoutes);
-
-app.use('/api/courses/:courseId/subjects', subjectRoutes);
 
 app.use('/api/subjects/:subjectId/lessons', lessonRoutes);
 app.use('/api/lessons/:lessonId/attachments', lessonAttachmentRoutes);
@@ -77,11 +76,8 @@ app.use("/api/users", userRoutes);
 // subscription routes
 app.use('/api/subscriptions', subscriptionRoutes);
 
-
-
-
-
-
+// payment routes
+app.use('/api/payment', paymentRoutes);
 
 app.use(errorMiddleware);
 

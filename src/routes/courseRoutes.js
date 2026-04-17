@@ -6,15 +6,12 @@ import {
   updateCourseController,
   deleteCourseController,
 } from '../controllers/courseController.js';
-import subjectRoutes from './subjectRoutes.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { isOrganization } from '../middlewares/isOrganization.js';
 
 const router = Router();
 
 router.use(authMiddleware, isOrganization);
-
-router.use('/:courseId/subjects', subjectRoutes);
 
 router.post('/', createCourseController);
 router.get('/', getCoursesController);

@@ -1,6 +1,7 @@
 import prisma from "../utils/prisma.js";
 import { generateUserCredentials } from "../utils/generateUsersAccount.js";
 import { hashPassword } from "../utils/hashPassword.js";
+import { decryptPassword, encryptPassword } from "../utils/passwordCrypto.js";
 import AppError from "../utils/appError.js";
 import { ensureCourseForGradeLevel } from "./courseService.js";
 import { computeGradeLevelFromDob, parseDobInput } from "./gradePlacementService.js";
@@ -82,17 +83,27 @@ const buildAcademyUserNested= (data)=>{
   return {};
 };
 
+const CSV_DELIMITER = ';';
+
+const toCsvValue = (value) => {
+  const normalized = value === undefined || value === null ? "" : String(value);
+  const escaped = normalized.replace(/"/g, '""');
+  return `"${escaped}"`;
+};
+
 const createParentForNationalId = async (nationalId, domain) => {
   const safeNationalId = String(nationalId || "").trim();
   const parentName = `Parent ${safeNationalId}`;
   const { email, password } = await generateUserCredentials(parentName, domain);
   const passwordHashed = await hashPassword(password);
+  const passwordEncrypted = encryptPassword(password);
 
   const createdParentUser = await prisma.user.create({
     data: {
       name: parentName,
       email,
       passwordHashed,
+      passwordEncrypted,
       role: "PARENT",
       parent: {
         create: {
@@ -252,12 +263,14 @@ export const generateUsers = async (data, domain) => {
       };
 
       const passwordHashed = await hashPassword(user.finalPassword);
+      const passwordEncrypted = encryptPassword(user.finalPassword);
 
       const createdUser = await prisma.user.create({
         data: {
           name: userPayload.name,
           email: user.finalEmail,
           passwordHashed,
+          passwordEncrypted,
           role: userPayload.role,
           age: userPayload.age,
           gender: userPayload.gender,
@@ -329,12 +342,14 @@ const payload = {
 };
 
 const hashedPassword= await hashPassword(data.password);
+const passwordEncrypted = encryptPassword(data.password);
 const user=await prisma.user.create({
     data:{
   name:payload.name,
    age:payload.age,
   email:payload.email,
   passwordHashed: hashedPassword,
+  passwordEncrypted,
   gender:payload.gender,
   role:payload.role,
   address:payload.address,
@@ -350,6 +365,7 @@ return user;
 export const addUserWithGeneratedCredentials = async (data, domain) => {
   const { email, password } = await generateUserCredentials(data.name, domain);
   const passwordHashed = await hashPassword(password);
+  const passwordEncrypted = encryptPassword(password);
   const placement = await prepareSchoolPlacement(data);
   const payload = {
     ...data,
@@ -364,6 +380,7 @@ export const addUserWithGeneratedCredentials = async (data, domain) => {
       name: payload.name,
       email,
       passwordHashed,
+      passwordEncrypted,
       role: payload.role,
       age: payload.age,
       gender: payload.gender,
@@ -446,6 +463,7 @@ export const getAllUsers = async (orgId, orgRole) => {
       age: true,
       gender: true,
       address: true,
+      passwordEncrypted: true,
       student: {
         select: {
           Parent_id: true,
@@ -453,7 +471,28 @@ export const getAllUsers = async (orgId, orgRole) => {
       },
     },
   });
-  return users;
+
+  return users.map((user) => {
+    let decryptedPassword = null;
+
+    try {
+      decryptedPassword = decryptPassword(user.passwordEncrypted);
+    } catch (_error) {
+      decryptedPassword = null;
+    }
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      age: user.age,
+      gender: user.gender,
+      address: user.address,
+      password: decryptedPassword || '-',
+      student: user.student,
+    };
+  });
 };
 
 export const updateUser = async (id, data, orgId, orgRole) => {
@@ -479,6 +518,7 @@ export const updateUser = async (id, data, orgId, orgRole) => {
   if (data.address !== undefined) updateData.address = data.address;
   if (data.password !== undefined) {
     updateData.passwordHashed = await hashPassword(data.password);
+    updateData.passwordEncrypted = encryptPassword(data.password);
   }
 
   const updated = await prisma.user.update({
@@ -505,6 +545,22 @@ export const deleteUser = async (id, orgId, orgRole) => {
     throw new Error('user not found');
   }
   await prisma.user.delete({ where: { id } });
+};
+
+export const exportOrganizationUsersCredentials = async (orgId, orgRole) => {
+  const users = await getAllUsers(orgId, orgRole);
+  const header = ['name', 'email', 'role', 'password'];
+
+  const rows = users.map((user) => [
+    user.name || '',
+    user.email || '',
+    user.role || '',
+    user.password || '-',
+  ]);
+
+  return [header, ...rows]
+    .map((row) => row.map(toCsvValue).join(CSV_DELIMITER))
+    .join('\r\n');
 };
 
 
