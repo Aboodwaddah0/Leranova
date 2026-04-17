@@ -20,6 +20,15 @@ const markInclude = {
 			name: true,
 			Course_id: true,
 			Teacher_id: true,
+			course: {
+				select: {
+					id: true,
+					Name: true,
+					GradeLevel: true,
+					isPaid: true,
+					price: true,
+				},
+			},
 		},
 	},
 };

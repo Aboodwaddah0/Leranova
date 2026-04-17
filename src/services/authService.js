@@ -227,7 +227,33 @@ export const loginUser = async ({ email, password }) => {
     throw new AppError('Email and password are required', 400);
   }
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({
+    where: { email },
+    include: {
+      student: {
+        include: {
+          organization: {
+            select: {
+              id: true,
+              Name: true,
+              Role: true,
+            },
+          },
+        },
+      },
+      academy_user: {
+        include: {
+          organization: {
+            select: {
+              id: true,
+              Name: true,
+              Role: true,
+            },
+          },
+        },
+      },
+    },
+  });
   if (!user) {
     throw new AppError('Invalid email or password', 401);
   }
@@ -254,6 +280,22 @@ export const loginUser = async ({ email, password }) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      organizationType: user.student?.organization?.Role || user.academy_user?.organization?.Role || null,
+      organization: user.student?.organization || user.academy_user?.organization || null,
+      student: user.student
+        ? {
+            studentId: user.student.Student_id,
+            orgId: user.student.OrgId,
+            courseId: user.student.Course_id,
+            gradeLevel: user.student.GradeLevel,
+            academicStatus: user.student.AcademicStatus,
+          }
+        : null,
+      academyUser: user.academy_user
+        ? {
+            orgId: user.academy_user.OrgId,
+          }
+        : null,
     },
     token,
   };

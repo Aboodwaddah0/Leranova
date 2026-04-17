@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import studentTranslations from "../i18n/student";
 
 const STORAGE_KEY = "learnova_lang";
 
@@ -99,6 +100,7 @@ export const authTranslations = {
       unknownRole: "Unknown",
       logout: "Logout",
     },
+    student: studentTranslations.en,
     organization: {
       badge: "Organization workspace",
       title: "Organization Dashboard",
@@ -460,6 +462,7 @@ export const authTranslations = {
       unknownRole: "غير معروف",
       logout: "تسجيل الخروج",
     },
+    student: studentTranslations.ar,
     organization: {
       badge: "مساحة المؤسسة",
       title: "لوحة المؤسسة",
