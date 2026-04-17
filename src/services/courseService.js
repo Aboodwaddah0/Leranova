@@ -2,7 +2,32 @@ import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { getGradeCourseName } from './gradePlacementService.js';
 
+const getOrganizationRole = async (orgId) => {
+  const organization = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { Role: true },
+  });
+
+  if (!organization) {
+    throw new AppError('Organization not found', 404);
+  }
+
+  return String(organization.Role || '').trim().toUpperCase();
+};
+
 export const createCourse = async (orgId, data) => {
+  const organizationRole = await getOrganizationRole(orgId);
+  const isPaid = Boolean(data.isPaid);
+  const price = isPaid ? Number(data.price ?? 0) : 0;
+
+  if (organizationRole === 'SCHOOL' && (isPaid || price > 0)) {
+    throw new AppError('School courses must be free', 400);
+  }
+
+  if (isPaid && price <= 0) {
+    throw new AppError('Paid courses must have a price greater than 0', 400);
+  }
+
   const course = await prisma.course.create({
     data: {
       Org_id: orgId,
@@ -11,6 +36,8 @@ export const createCourse = async (orgId, data) => {
       Thumbnail: data.Thumbnail ?? null,
       Start: data.Start ? new Date(data.Start) : null,
       End: data.End ? new Date(data.End) : null,
+      price,
+      isPaid,
     },
   });
 
@@ -46,7 +73,24 @@ export const getCourseById = async (orgId, courseId) => {
 };
 
 export const updateCourse = async (orgId, courseId, data) => {
+  const organizationRole = await getOrganizationRole(orgId);
   await getCourseById(orgId, courseId);
+
+  const hasPrice = Object.prototype.hasOwnProperty.call(data, 'price');
+  const hasIsPaid = Object.prototype.hasOwnProperty.call(data, 'isPaid');
+  const isPaid = hasIsPaid ? Boolean(data.isPaid) : undefined;
+  const price = hasPrice ? Number(data.price ?? 0) : undefined;
+
+  if (
+    organizationRole === 'SCHOOL' &&
+    ((hasIsPaid && isPaid === true) || (hasPrice && Number(price) > 0))
+  ) {
+    throw new AppError('School courses must be free', 400);
+  }
+
+  if (isPaid === true && Number(price ?? 0) <= 0) {
+    throw new AppError('Paid courses must have a price greater than 0', 400);
+  }
 
   const updated = await prisma.course.update({
     where: {
@@ -58,6 +102,8 @@ export const updateCourse = async (orgId, courseId, data) => {
       Thumbnail: data.Thumbnail ?? undefined,
       Start: data.Start ? new Date(data.Start) : undefined,
       End: data.End ? new Date(data.End) : undefined,
+      isPaid,
+      price: isPaid === false ? 0 : price,
     },
   });
 
@@ -116,6 +162,8 @@ export const ensureCourseForGradeLevel = async (orgId, gradeLevel, tx = prisma) 
       Name: courseName,
       GradeLevel: gradeLevel,
       Description: `Auto-created grade course for level ${gradeLevel}`,
+      price: 0,
+      isPaid: false,
     },
   });
 };

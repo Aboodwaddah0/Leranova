@@ -165,3 +165,118 @@ export const deleteOrganization = async (organizationId) => {
   return { id: organizationId };
 };
 
+export const getOrganizationRevenue = async (organizationId) => {
+  const courses = await prisma.course.findMany({
+    where: { Org_id: organizationId },
+    select: {
+      id: true,
+      Name: true,
+      price: true,
+      isPaid: true,
+    },
+  });
+
+  const courseIds = courses.map((course) => course.id);
+
+  if (courseIds.length === 0) {
+    return {
+      totalRevenue: 0,
+      totalPayments: 0,
+      paidCoursesCount: 0,
+      freeCoursesCount: 0,
+      recentPayments: [],
+      byCourse: [],
+    };
+  }
+
+  const [aggregate, recentPayments, groupedPayments] = await Promise.all([
+    prisma.student_course_payment.aggregate({
+      where: {
+        status: 'SUCCESS',
+        Course_id: { in: courseIds },
+      },
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+    prisma.student_course_payment.findMany({
+      where: {
+        status: 'SUCCESS',
+        Course_id: { in: courseIds },
+      },
+      include: {
+        course: {
+          select: {
+            id: true,
+            Name: true,
+          },
+        },
+        academy_user: {
+          select: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        paidAt: 'desc',
+      },
+      take: 10,
+    }),
+    prisma.student_course_payment.groupBy({
+      by: ['Course_id'],
+      where: {
+        status: 'SUCCESS',
+        Course_id: { in: courseIds },
+      },
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const courseMap = new Map(
+    courses.map((course) => [
+      course.id,
+      {
+        courseId: course.id,
+        courseName: course.Name,
+        isPaid: course.isPaid,
+        price: course.price,
+        revenue: 0,
+        payments: 0,
+      },
+    ]),
+  );
+
+  for (const row of groupedPayments) {
+    const entry = courseMap.get(row.Course_id);
+    if (!entry) {
+      continue;
+    }
+
+    entry.revenue = Number(row._sum.amount || 0);
+    entry.payments = row._count?._all || 0;
+  }
+
+  return {
+    totalRevenue: Number(aggregate._sum.amount || 0),
+    totalPayments: aggregate._count?._all || 0,
+    paidCoursesCount: courses.filter((course) => course.isPaid).length,
+    freeCoursesCount: courses.filter((course) => !course.isPaid || Number(course.price || 0) === 0).length,
+    recentPayments: recentPayments.map((payment) => ({
+      id: payment.id,
+      amount: Number(payment.amount),
+      status: payment.status,
+      paymentMethod: payment.paymentMethod,
+      paidAt: payment.paidAt,
+      course: payment.course,
+      student: payment.academy_user?.user || null,
+    })),
+    byCourse: Array.from(courseMap.values()).sort((a, b) => b.revenue - a.revenue),
+  };
+};
+

@@ -4,6 +4,7 @@ import {
 	getAllOrganizationsController,
 	getOrganizationByIdController,
 	getOwnOrganizationController,
+	getOwnOrganizationRevenueController,
 	updateOrganizationController,
 	updateOwnOrganizationController,
 	deleteOrganizationController,
@@ -16,6 +17,7 @@ const router = Router();
 
 router.get('/me', authMiddleware, isOrganization, getOwnOrganizationController);
 router.patch('/me', authMiddleware, isOrganization, updateOwnOrganizationController);
+router.get('/me/revenue', authMiddleware, isOrganization, getOwnOrganizationRevenueController);
 
 router.use(authMiddleware, isAdmin);
 

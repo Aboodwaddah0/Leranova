@@ -58,14 +58,14 @@ export const createLessonController = async (req, res, next) => {
 			return next(new AppError(error.details[0].message, 400));
 		}
 
-		const lesson = await createLesson(req.user.id, subjectId, value);
+		const lesson = await createLesson(req.user, subjectId, value);
 		let videoAttachment = null;
 		let ingestion = null;
 		let warning = null;
 
 		if (video) {
 			const uploadResult = await createLessonAttachment({
-				orgId: req.user.id,
+				actor: req.user,
 				lessonId: lesson.id,
 				file: video,
 			});
@@ -93,7 +93,7 @@ export const createLessonController = async (req, res, next) => {
 export const getLessonsController = async (req, res, next) => {
 	try {
 		const subjectId = parseSubjectId(req);
-		const lessons = await getLessons(req.user.id, subjectId);
+		const lessons = await getLessons(req.user, subjectId);
 
 		return res.status(200).json({
 			message: 'Lessons fetched successfully',
@@ -109,7 +109,7 @@ export const getLessonByIdController = async (req, res, next) => {
 	try {
 		const subjectId = parseSubjectId(req);
 		const lessonId = parseLessonId(req);
-		const lesson = await getLessonById(req.user.id, subjectId, lessonId);
+		const lesson = await getLessonById(req.user, subjectId, lessonId);
 
 		return res.status(200).json({
 			message: 'Lesson fetched successfully',
@@ -146,15 +146,15 @@ export const updateLessonController = async (req, res, next) => {
 		}
 
 		const lesson = hasTextPayload
-			? await updateLesson(req.user.id, subjectId, lessonId, value)
-			: await getLessonById(req.user.id, subjectId, lessonId);
+			? await updateLesson(req.user, subjectId, lessonId, value)
+			: await getLessonById(req.user, subjectId, lessonId);
 		let videoAttachment = null;
 		let ingestion = null;
 		let warning = null;
 
 		if (video) {
 			const uploadResult = await createLessonAttachment({
-				orgId: req.user.id,
+				actor: req.user,
 				lessonId,
 				file: video,
 			});
@@ -184,7 +184,7 @@ export const deleteLessonController = async (req, res, next) => {
 		const subjectId = parseSubjectId(req);
 		const lessonId = parseLessonId(req);
 
-		const deleted = await deleteLesson(req.user.id, subjectId, lessonId);
+		const deleted = await deleteLesson(req.user, subjectId, lessonId);
 
 		return res.status(200).json({
 			message: 'Lesson deleted successfully',

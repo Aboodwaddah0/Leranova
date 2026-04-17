@@ -2,6 +2,7 @@ import {
 	createOrganization,
 	getAllOrganizations,
 	getOrganizationById,
+	getOrganizationRevenue,
 	updateOrganization,
 	deleteOrganization,
 } from '../services/organizationService.js';
@@ -127,6 +128,25 @@ export const getOwnOrganizationController = async (req, res, next) => {
 		return res.status(200).json({
 			message: 'Organization profile fetched successfully',
 			data: organization,
+		});
+	} catch (err) {
+		next(err);
+	}
+};
+
+export const getOwnOrganizationRevenueController = async (req, res, next) => {
+	try {
+		const organizationId = Number(req.user?.id);
+
+		if (Number.isNaN(organizationId)) {
+			return next(new AppError('Invalid organization id', 400));
+		}
+
+		const revenue = await getOrganizationRevenue(organizationId);
+
+		return res.status(200).json({
+			message: 'Organization revenue fetched successfully',
+			data: revenue,
 		});
 	} catch (err) {
 		next(err);

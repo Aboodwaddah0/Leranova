@@ -7,11 +7,11 @@ import {
   deleteSubjectController,
 } from '../controllers/subjectController.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
-import { isOrganization } from '../middlewares/isOrganization.js';
+import { isTeacherOrOrganization } from '../middlewares/isTeacherOrOrganization.js';
 
 const router = Router({ mergeParams: true });
 
-router.use(authMiddleware, isOrganization);
+router.use(authMiddleware, isTeacherOrOrganization);
 
 router.post('/', createSubjectController);
 router.get('/', getSubjectsController);
