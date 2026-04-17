@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
-import { isOrganization } from '../middlewares/isOrganization.js';
+import { isTeacherOrOrganization } from '../middlewares/isTeacherOrOrganization.js';
 import {
   uploadLessonAttachmentController,
   listLessonAttachmentsController,
@@ -17,7 +17,7 @@ const attachmentUpload = multer({
   },
 }).single('file');
 
-router.use(authMiddleware, isOrganization);
+router.use(authMiddleware, isTeacherOrOrganization);
 
 router.post('/', attachmentUpload, uploadLessonAttachmentController);
 router.get('/', listLessonAttachmentsController);

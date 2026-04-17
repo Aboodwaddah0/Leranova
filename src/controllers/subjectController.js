@@ -47,8 +47,7 @@ export const createSubjectController = async (req, res, next) => {
       return next(new AppError(error.details[0].message, 400));
     }
 
-    const orgId = req.user.id;
-  const subject = await createSubject(orgId, courseId, value);
+    const subject = await createSubject(req.user, courseId, value);
 
     return res.status(201).json({
       message: 'Subject created successfully',
@@ -61,10 +60,9 @@ export const createSubjectController = async (req, res, next) => {
 
 export const getSubjectsController = async (req, res, next) => {
   try {
-    const orgId = req.user.id;
     const courseId = getCourseIdFromParams(req);
 
-    const subjects = await getSubjects(orgId, courseId);
+    const subjects = await getSubjects(req.user, courseId);
 
     return res.status(200).json({
       message: 'Subjects fetched successfully',
@@ -77,7 +75,6 @@ export const getSubjectsController = async (req, res, next) => {
 
 export const getSubjectByIdController = async (req, res, next) => {
   try {
-    const orgId = req.user.id;
     const courseId = getCourseIdFromParams(req);
     const subjectId = Number(req.params.subjectId);
 
@@ -85,7 +82,7 @@ export const getSubjectByIdController = async (req, res, next) => {
       return next(new AppError('Invalid subject id', 400));
     }
 
-    const subject = await getSubjectById(orgId, courseId, subjectId);
+    const subject = await getSubjectById(req.user, courseId, subjectId);
 
     return res.status(200).json({
       message: 'Subject fetched successfully',
@@ -112,8 +109,7 @@ export const updateSubjectController = async (req, res, next) => {
       return next(new AppError(error.details[0].message, 400));
     }
 
-    const orgId = req.user.id;
-  const subject = await updateSubject(orgId, courseId, subjectId, value);
+    const subject = await updateSubject(req.user, courseId, subjectId, value);
 
     return res.status(200).json({
       message: 'Subject updated successfully',
@@ -133,8 +129,7 @@ export const deleteSubjectController = async (req, res, next) => {
       return next(new AppError('Invalid subject id', 400));
     }
 
-    const orgId = req.user.id;
-  const result = await deleteSubject(orgId, courseId, subjectId);
+    const result = await deleteSubject(req.user, courseId, subjectId);
 
     return res.status(200).json({
       message: 'Subject deleted successfully',

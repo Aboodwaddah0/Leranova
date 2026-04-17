@@ -32,7 +32,7 @@ export const uploadLessonAttachmentController = async (req, res, next) => {
   try {
     const lessonId = parseLessonId(req);
     const { attachment, ingestion, warning } = await createLessonAttachment({
-      orgId: req.user.id,
+      actor: req.user,
       lessonId,
       file: req.file,
     });
@@ -52,7 +52,7 @@ export const listLessonAttachmentsController = async (req, res, next) => {
   try {
     const lessonId = parseLessonId(req);
     const attachments = await listLessonAttachments({
-      orgId: req.user.id,
+      actor: req.user,
       lessonId,
     });
 
@@ -72,7 +72,7 @@ export const deleteLessonAttachmentController = async (req, res, next) => {
     const attachmentId = parseAttachmentId(req);
 
     const deleted = await deleteLessonAttachment({
-      orgId: req.user.id,
+      actor: req.user,
       lessonId,
       attachmentId,
     });

@@ -16,7 +16,18 @@ export const updateTeacherSchema = Joi.object({
   work: Joi.string().max(255).allow('', null),
   specialization: Joi.string().max(255).allow('', null),
   bio: Joi.string().allow('', null),
+  password: Joi.string().min(8),
   age: Joi.number().integer().min(0).allow(null),
   gender: Joi.string().valid('FEMALE', 'MALE').allow(null),
   address: Joi.string().max(255).allow('', null),
 }).min(1);
+
+export const teacherLessonsQuerySchema = Joi.object({
+  Subject_id: Joi.number().integer().positive(),
+});
+
+export const teacherStudentsQuerySchema = Joi.object({
+  Course_id: Joi.number().integer().positive(),
+  Subject_id: Joi.number().integer().positive(),
+  search: Joi.string().max(255).allow(''),
+});

@@ -1,5 +1,6 @@
 import express from 'express';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
+import { checkFeature } from '../middlewares/checkFeature.js';
 import {
   sendMessage,
   sendMessageAutoChat,
@@ -19,48 +20,55 @@ import {
 const router = express.Router();
 
 /**
- * Chat endpoints
+ * =========================
+ * 🔥 COURSE CHAT (NO FEATURE FLAG)
+ * =========================
  */
 
-// Chatbot routes
-// Course chat routes
-// POST /api/chats/course/messages - Send message to course shared chat
+// Send message to course chat
 router.post('/course/messages', authMiddleware, sendCourseMessage);
 
-// GET /api/chats/course/:course_id/messages - Get course shared chat messages
+// Get course messages
 router.get('/course/:course_id/messages', authMiddleware, getCourseMessages);
 
-// GET /api/chats/course/:course_id - Get course shared chat details
+// Get course chat info
 router.get('/course/:course_id', authMiddleware, getCourseChatInfo);
 
-// DELETE /api/chats/course/message/:id - Soft-delete course chat message
+// Delete message
 router.delete('/course/message/:id', authMiddleware, deleteCourseMessage);
 
-// DELETE /api/chats/course/:course_id/clear - Clear course chat messages
+// Clear course chat
 router.delete('/course/:course_id/clear', authMiddleware, clearCourseChat);
 
-// POST /api/chats/course/seen - Mark a course message as seen
+// Seen
 router.post('/course/seen', authMiddleware, markCourseMessageSeen);
 
-// POST /api/chats/course/typing - Update course typing status
+// Typing
 router.post('/course/typing', authMiddleware, courseTyping);
 
-// POST /api/chats/messages - Send message with auto chatbot chat find/create
-router.post('/messages', authMiddleware, sendMessageAutoChat);
 
-// GET /api/chats/:chatId - Get chatbot chat details
-router.get('/:chatId', authMiddleware, getChatDetails);
+/**
+ * =========================
+ * 🤖 CHATBOT / PRIVATE CHAT (WITH FEATURE FLAG)
+ * =========================
+ */
 
-// GET /api/chats/:chatId/messages - Get paginated chatbot chat messages
-router.get('/:chatId/messages', authMiddleware, getMessages);
+// Auto chat
+router.post('/messages', authMiddleware, checkFeature('GROUP_CHAT'), sendMessageAutoChat);
 
-// POST /api/chats/:chatId/messages - Send message to existing chatbot chat
-router.post('/:chatId/messages', authMiddleware, sendMessage);
+// Chat details
+router.get('/:chatId', authMiddleware, checkFeature('GROUP_CHAT'), getChatDetails);
 
-// DELETE /api/chats/:chatId/messages/:messageId - Soft-delete chatbot message
-router.delete('/:chatId/messages/:messageId', authMiddleware, softDeleteMessage);
+// Messages list
+router.get('/:chatId/messages', authMiddleware, checkFeature('GROUP_CHAT'), getMessages);
 
-// DELETE /api/chats/:chatId/clear - Clear chatbot chat messages
-router.delete('/:chatId/clear', authMiddleware, clearChat);
+// Send message
+router.post('/:chatId/messages', authMiddleware, checkFeature('GROUP_CHAT'), sendMessage);
+
+// Delete message
+router.delete('/:chatId/messages/:messageId', authMiddleware, checkFeature('GROUP_CHAT'), softDeleteMessage);
+
+// Clear chat
+router.delete('/:chatId/clear', authMiddleware, checkFeature('GROUP_CHAT'), clearChat);
 
 export default router;

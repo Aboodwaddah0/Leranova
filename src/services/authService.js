@@ -20,6 +20,8 @@ const normalizeNationalId = (nationalId) => String(nationalId || '').trim().repl
 export const registerOrganization = async (data) => {
   const normalizedRole = String(data.Role || '').trim().toUpperCase();
   const normalizedSubdomain = normalizeSubdomain(data.subdomain);
+  const normalizedPlanId = Number(data.planId);
+  const hasSelectedPlan = Number.isInteger(normalizedPlanId) && normalizedPlanId > 0;
 
   const existingOrganization = await prisma.organization.findUnique({
     where: { Email: data.Email },
@@ -38,22 +40,26 @@ export const registerOrganization = async (data) => {
     throw new AppError('Organization subdomain already exists', 400);
   }
 
-  const selectedPlan = await prisma.plan.findUnique({
-    where: { id: Number(data.planId) },
-    select: {
-      id: true,
-      name: true,
-      price: true,
-      durationDays: true,
-      description: true,
-    },
-  });
+  let selectedPlan = null;
 
-  if (!selectedPlan) {
-    throw new AppError('Selected plan not found', 404);
+  if (hasSelectedPlan) {
+    selectedPlan = await prisma.plan.findUnique({
+      where: { id: normalizedPlanId },
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        durationDays: true,
+        description: true,
+      },
+    });
+
+    if (!selectedPlan) {
+      throw new AppError('Selected plan not found', 404);
+    }
+
+    ensureStripeConfigured();
   }
-
-  ensureStripeConfigured();
 
   const hashedPassword = await hashPassword(data.password);
 
@@ -86,6 +92,15 @@ export const registerOrganization = async (data) => {
         status: true,
       },
     });
+
+    if (!selectedPlan) {
+      return {
+        organization,
+        plan: null,
+        subscription: null,
+        payment: null,
+      };
+    }
 
     const startDate = new Date();
     const endDate = new Date(startDate);
@@ -138,6 +153,13 @@ export const registerOrganization = async (data) => {
       payment,
     };
   });
+
+  if (!selectedPlan) {
+    return {
+      ...result,
+      checkout: null,
+    };
+  }
 
   const checkoutSession = await createRegistrationCheckoutSession({
     organization: result.organization,
@@ -210,8 +232,8 @@ export const loginUser = async ({ email, password }) => {
     throw new AppError('Invalid email or password', 401);
   }
 
-  if (user.role !== 'TEACHER' && user.role !== 'STUDENT') {
-    throw new AppError('This login flow is only for teacher and student', 403);
+  if (user.role !== 'TEACHER' && user.role !== 'STUDENT' && user.role !== 'ADMIN') {
+    throw new AppError('This login flow is only for teacher, student, and admin', 403);
   }
 
   const isPasswordValid = await comparePassword(password, user.passwordHashed);

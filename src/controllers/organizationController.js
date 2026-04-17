@@ -2,12 +2,14 @@ import {
 	createOrganization,
 	getAllOrganizations,
 	getOrganizationById,
+	getOrganizationRevenue,
 	updateOrganization,
 	deleteOrganization,
 } from '../services/organizationService.js';
 import {
 	createOrganizationSchema,
 	updateOrganizationSchema,
+	updateOwnOrganizationSchema,
 	getOrganizationsQuerySchema,
 } from '../validations/organizationValidation.js';
 import AppError from '../utils/appError.js';
@@ -107,6 +109,69 @@ export const deleteOrganizationController = async (req, res, next) => {
 		return res.status(200).json({
 			message: 'Organization deleted successfully',
 			data: result,
+		});
+	} catch (err) {
+		next(err);
+	}
+};
+
+export const getOwnOrganizationController = async (req, res, next) => {
+	try {
+		const organizationId = Number(req.user?.id);
+
+		if (Number.isNaN(organizationId)) {
+			return next(new AppError('Invalid organization id', 400));
+		}
+
+		const organization = await getOrganizationById(organizationId);
+
+		return res.status(200).json({
+			message: 'Organization profile fetched successfully',
+			data: organization,
+		});
+	} catch (err) {
+		next(err);
+	}
+};
+
+export const getOwnOrganizationRevenueController = async (req, res, next) => {
+	try {
+		const organizationId = Number(req.user?.id);
+
+		if (Number.isNaN(organizationId)) {
+			return next(new AppError('Invalid organization id', 400));
+		}
+
+		const revenue = await getOrganizationRevenue(organizationId);
+
+		return res.status(200).json({
+			message: 'Organization revenue fetched successfully',
+			data: revenue,
+		});
+	} catch (err) {
+		next(err);
+	}
+};
+
+export const updateOwnOrganizationController = async (req, res, next) => {
+	try {
+		const organizationId = Number(req.user?.id);
+
+		if (Number.isNaN(organizationId)) {
+			return next(new AppError('Invalid organization id', 400));
+		}
+
+		const { error, value } = updateOwnOrganizationSchema.validate(req.body);
+
+		if (error) {
+			return next(new AppError(error.details[0].message, 400));
+		}
+
+		const organization = await updateOrganization(organizationId, value);
+
+		return res.status(200).json({
+			message: 'Organization profile updated successfully',
+			data: organization,
 		});
 	} catch (err) {
 		next(err);
