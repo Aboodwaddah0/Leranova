@@ -1,34 +1,73 @@
-import { useEffect, useState } from 'react';
-import { Eye, EyeOff, Loader2, Save, UserRound } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import StudentLayout from '../../components/student/StudentLayout';
-import { fetchStudentProfile, updateStudentProfile } from '../../services/studentService';
+import {
+  changeStudentPassword,
+  fetchStudentCourseCatalog,
+  fetchStudentProfile,
+  updateStudentProfile,
+} from '../../services/studentService';
+import ProfileHeader from '../../components/student/profile/ProfileHeader';
+import ProfileCards, {
+  LogoutSection,
+  OrganizationInfoCard,
+  QuickStats,
+} from '../../components/student/profile/ProfileCards';
+import EditProfileModal from '../../components/student/profile/EditProfileModal';
+import ChangePasswordModal from '../../components/student/profile/ChangePasswordModal';
+import { logout } from '../../redux/slices/authSlice';
 
 export default function StudentProfilePage() {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const user = useSelector((state) => state.auth.user);
+
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [courseCount, setCourseCount] = useState(0);
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [form, setForm] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
-    password: '',
-  });
+
+  const studentMode = useMemo(() => {
+    const raw = String(user?.organizationType || user?.organization?.Role || '').toUpperCase();
+    return raw === 'SCHOOL' ? 'SCHOOL' : 'ACADEMY';
+  }, [user]);
+
+  const organizationName =
+    user?.organization?.Name ||
+    user?.organization?.name ||
+    profile?.organization?.Name ||
+    profile?.organization?.name ||
+    'Learnova';
+
+  const organizationType =
+    user?.organizationType ||
+    user?.organization?.Role ||
+    profile?.organization?.Role ||
+    profile?.organizationType ||
+    studentMode;
 
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
       try {
-        const profile = await fetchStudentProfile();
+        setLoading(true);
+        const [profileData, courseData] = await Promise.all([
+          fetchStudentProfile(),
+          fetchStudentCourseCatalog(),
+        ]);
+
         if (cancelled) return;
-        setForm({
-          fullName: profile?.fullName || '',
-          email: profile?.email || '',
-          phone: profile?.phone || '',
-          password: '',
-        });
+
+        setProfile(profileData || null);
+        setCourseCount(Array.isArray(courseData) ? courseData.length : 0);
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError?.message || 'Failed to load profile.');
@@ -47,29 +86,56 @@ export default function StudentProfilePage() {
     };
   }, []);
 
-  const onChange = (field) => (event) => {
-    setForm((current) => ({ ...current, [field]: event.target.value }));
-  };
+  const onSaveProfile = async (patch) => {
+    if (!patch || !Object.keys(patch).length) {
+      setShowEditProfile(false);
+      return;
+    }
 
-  const onSubmit = async (event) => {
-    event.preventDefault();
-    setSaving(true);
+    setSavingProfile(true);
     setMessage('');
+    setError('');
 
     try {
-      await updateStudentProfile({
-        fullName: form.fullName,
-        phone: form.phone,
-        ...(form.password.trim() ? { password: form.password.trim() } : {}),
-      });
-      setForm((current) => ({ ...current, password: '' }));
+      const updated = await updateStudentProfile(patch);
+      setProfile(updated);
       setMessage('Profile updated successfully.');
-      setError('');
-    } catch {
-      setMessage('Could not update the profile right now.');
+      setShowEditProfile(false);
+    } catch (saveError) {
+      setError(saveError?.response?.data?.message || saveError?.message || 'Could not update the profile right now.');
     } finally {
-      setSaving(false);
+      setSavingProfile(false);
     }
+  };
+
+  const onSavePassword = async ({ newPassword, confirmPassword }) => {
+    if (newPassword !== confirmPassword) {
+      setError('New password and confirmation do not match.');
+      return false;
+    }
+
+    setSavingPassword(true);
+    setMessage('');
+    setError('');
+
+    try {
+      await changeStudentPassword({
+        newPassword,
+      });
+
+      setMessage('Password updated successfully.');
+      return true;
+    } catch (saveError) {
+      setError(saveError?.response?.data?.message || saveError?.message || 'Could not update password right now.');
+      return false;
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const onLogout = () => {
+    dispatch(logout());
+    navigate('/');
   };
 
   return (
@@ -79,60 +145,56 @@ export default function StudentProfilePage() {
           <Loader2 className="mr-2 animate-spin" size={18} /> Loading profile...
         </div>
       ) : (
-        <>
-          {error ? <div className="mb-5 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{error}</div> : null}
-        <form onSubmit={onSubmit} className="rounded-[1.75rem] border border-white/70 bg-white/85 p-5 shadow-xl shadow-indigo-500/5 backdrop-blur-xl md:p-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-cyan-500 text-white">
-              <UserRound size={20} />
+        <div className="space-y-5">
+          {error ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{error}</div> : null}
+          {message ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</div> : null}
+
+          <ProfileHeader profile={profile} studentMode={studentMode} />
+
+          <QuickStats
+            enrolledCoursesCount={courseCount}
+            membershipStatus="Active"
+            accountStatus="Verified"
+          />
+
+          <div className="grid gap-4 xl:grid-cols-[1fr_0.85fr]">
+            <ProfileCards
+              onEditProfile={() => setShowEditProfile(true)}
+              onChangePassword={() => setShowChangePassword(true)}
+            />
+
+            <div className="space-y-4">
+              <OrganizationInfoCard
+                organizationName={organizationName}
+                organizationType={String(organizationType || '').toUpperCase()}
+              />
+
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
+                <h3 className="text-sm font-extrabold uppercase tracking-[0.18em] text-slate-600">About this profile</h3>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  Your profile is synced from your Learnova account and is used across course dashboards, comments, and learning history.
+                </p>
+              </section>
             </div>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.25em] text-indigo-600">Student account</p>
-              <h1 className="text-2xl font-black text-slate-900">Edit profile</h1>
-            </div>
           </div>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <label className="space-y-2 md:col-span-1">
-              <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Full name</span>
-              <input value={form.fullName} onChange={onChange('fullName')} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-indigo-400" />
-            </label>
+          <LogoutSection onLogout={onLogout} />
 
-            <label className="space-y-2 md:col-span-1">
-              <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Email</span>
-              <input value={form.email} disabled className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500" />
-            </label>
+          <EditProfileModal
+            open={showEditProfile}
+            profile={profile}
+            onClose={() => setShowEditProfile(false)}
+            onSave={onSaveProfile}
+            saving={savingProfile}
+          />
 
-            <label className="space-y-2 md:col-span-2">
-              <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Phone</span>
-              <input value={form.phone} onChange={onChange('phone')} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-indigo-400" />
-            </label>
-
-            <label className="space-y-2 md:col-span-2">
-              <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">New password</span>
-              <div className="flex items-center rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={form.password}
-                  onChange={onChange('password')}
-                  placeholder="Leave blank if you do not want to change it"
-                  className="w-full bg-transparent text-sm outline-none"
-                />
-                <button type="button" onClick={() => setShowPassword((current) => !current)} className="text-slate-500 transition hover:text-slate-800">
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </label>
-          </div>
-
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50">
-              <Save size={16} /> {saving ? 'Saving...' : 'Save changes'}
-            </button>
-            {message ? <p className="text-sm text-slate-600">{message}</p> : null}
-          </div>
-        </form>
-        </>
+          <ChangePasswordModal
+            open={showChangePassword}
+            onClose={() => setShowChangePassword(false)}
+            onSave={onSavePassword}
+            saving={savingPassword}
+          />
+        </div>
       )}
     </StudentLayout>
   );

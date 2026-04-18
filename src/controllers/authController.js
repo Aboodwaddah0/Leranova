@@ -5,6 +5,7 @@ import {
   loginParent,
   forgotPassword,
   resetPassword,
+  changePassword,
 } from '../services/authService.js';
 import {
   registerOrganizationSchema,
@@ -12,6 +13,7 @@ import {
   loginParentSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  changePasswordSchema,
 } from '../validations/authValidation.js';
 import AppError from '../utils/appError.js';
 
@@ -119,6 +121,28 @@ export const resetPasswordController = async (req, res, next) => {
 
     return res.status(200).json({
       message: 'Password reset successfully',
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const changePasswordController = async (req, res, next) => {
+  try {
+    const { error, value } = changePasswordSchema.validate(req.body);
+
+    if (error) {
+      return next(new AppError(error.details[0].message, 400));
+    }
+
+    const result = await changePassword({
+      userId: req.user?.id,
+      newPassword: value.newPassword,
+    });
+
+    return res.status(200).json({
+      message: result.message,
+      data: result.user,
     });
   } catch (error) {
     return next(error);
