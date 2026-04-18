@@ -5,9 +5,9 @@ export const isTeacherOrOrganization = (req, res, next) => {
     });
   }
 
-  if (!['TEACHER', 'ACADEMY', 'SCHOOL'].includes(req.user.role)) {
+  if (!['TEACHER', 'ACADEMY', 'SCHOOL', 'STUDENT'].includes(req.user.role)) {
     return res.status(403).json({
-      message: 'Access denied. Teacher or organization account required.',
+      message: 'Access denied. Teacher, student, or organization account required.',
     });
   }
 

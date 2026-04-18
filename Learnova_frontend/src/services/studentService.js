@@ -356,7 +356,7 @@ export async function fetchStudentCourseCatalog() {
         progress: 0,
         status: String(purchase?.status || '').toUpperCase() === 'PAID' ? 'ACTIVE' : 'PENDING',
         priceStatus: String(purchase?.status || 'PENDING').toUpperCase(),
-        cover: purchase?.course?.cover || purchase?.course?.thumbnail || '',
+        cover: purchase?.course?.cover || purchase?.course?.thumbnail || purchase?.course?.Thumbnail || '',
       })),
     ];
 

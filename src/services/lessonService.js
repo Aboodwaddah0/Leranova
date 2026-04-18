@@ -32,7 +32,24 @@ const resolveLessonScope = async (actor) => {
 		};
 	}
 
-	throw new AppError('Access denied. Teacher or organization account required.', 403);
+	if (role === 'STUDENT') {
+		const student = await prisma.academy_user.findFirst({
+			where: { user_academy_id: actor.id },
+			select: { OrgId: true },
+		});
+
+		if (!student) {
+			throw new AppError('Student profile not found', 404);
+		}
+
+		return {
+			role,
+			orgId: student.OrgId,
+			teacherId: null, // Students can view all lessons
+		};
+	}
+
+	throw new AppError('Access denied. Teacher, student, or organization account required.', 403);
 };
 
 const serializeLesson = (lesson) => ({

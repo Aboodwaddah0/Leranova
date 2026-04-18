@@ -70,6 +70,11 @@ const academyCourseBlueprint = [
     name: "Software Testing",
     modules: ["Test Strategy", "Unit Tests", "Integration Tests", "Regression Runs"],
   },
+  {
+    name: "Programming Core Track",
+    modules: ["C++", "Python", "Java", "Data Structures"],
+    teacherEmail: "academy_teacher@learnova.com",
+  },
 ];
 
 const schoolSubjectBlueprints = {
@@ -91,6 +96,12 @@ const courseArtworkPool = [
   "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1400&q=80",
   "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1400&q=80",
   "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1543269865-cbf427effbad?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1496317899792-9d7dbcd928a1?auto=format&fit=crop&w=1400&q=80",
 ];
 
 const lessonArtworkPool = [
@@ -315,6 +326,33 @@ const ensureAcademyMembership = async ({ userId, orgId, courseIds }) => {
       create: {
         user_Academy_id: userId,
         Course_id: courseId,
+      },
+    });
+  }
+};
+
+const ensureAcademyCoursePayments = async ({ userId, courseIds, amount = 79 }) => {
+  for (const courseId of courseIds) {
+    await prisma.student_course_payment.upsert({
+      where: {
+        user_Academy_id_Course_id: {
+          user_Academy_id: userId,
+          Course_id: courseId,
+        },
+      },
+      update: {
+        amount,
+        paymentMethod: "SEED",
+        status: "PAID",
+        paidAt: NOW,
+      },
+      create: {
+        user_Academy_id: userId,
+        Course_id: courseId,
+        amount,
+        paymentMethod: "SEED",
+        status: "PAID",
+        paidAt: NOW,
       },
     });
   }
@@ -651,7 +689,18 @@ const ensureSchoolData = async ({ schoolOrg, systemBotUser, schoolTeachers }) =>
   return courseByName;
 };
 
-const ensureAcademyData = async ({ academyOrg, systemBotUser, academyTeachers }) => {
+const removeLegacyAcademyGradeCourses = async ({ academyOrgId }) => {
+  await prisma.course.deleteMany({
+    where: {
+      Org_id: academyOrgId,
+      Name: {
+        in: ["Grade 10", "Grade 10 Advanced Lab"],
+      },
+    },
+  });
+};
+
+const ensureAcademyData = async ({ academyOrg, systemBotUser, academyTeachers, academyTeacherByEmail }) => {
   const courseByName = new Map();
 
   for (let courseIndex = 0; courseIndex < academyCourseBlueprint.length; courseIndex += 1) {
@@ -675,7 +724,8 @@ const ensureAcademyData = async ({ academyOrg, systemBotUser, academyTeachers })
 
     for (let index = 0; index < blueprint.modules.length; index += 1) {
       const moduleName = blueprint.modules[index];
-      const teacher = academyTeachers[index % academyTeachers.length];
+      const designatedTeacher = blueprint.teacherEmail ? academyTeacherByEmail.get(blueprint.teacherEmail) : null;
+      const teacher = designatedTeacher || academyTeachers[index % academyTeachers.length];
 
       const subject = await ensureSubject({
         courseId: course.id,
@@ -763,6 +813,7 @@ const seed = async () => {
   }
 
   const academyTeachers = [];
+  const academyTeacherByEmail = new Map();
   for (const account of academyTeacherAccounts) {
     const user = await ensureUser({
       email: account.email,
@@ -772,7 +823,10 @@ const seed = async () => {
 
     await ensureTeacherProfile(user.id, academyOrg.id, account.work, account.specialization);
     academyTeachers.push(user);
+    academyTeacherByEmail.set(account.email, user);
   }
+
+  await removeLegacyAcademyGradeCourses({ academyOrgId: academyOrg.id });
 
   const schoolCourseMap = await ensureSchoolData({
     schoolOrg,
@@ -784,6 +838,7 @@ const seed = async () => {
     academyOrg,
     systemBotUser,
     academyTeachers,
+    academyTeacherByEmail,
   });
 
   const parentUser = await ensureUser({
@@ -850,13 +905,30 @@ const seed = async () => {
     role: "STUDENT",
   });
 
+  const academyStudentPrimaryCourseNames = [
+    "Programming Foundations",
+    "Web Development",
+    "Mobile Development",
+    "UI/UX Basics",
+    "Data Analysis",
+    "AI & Prompt Engineering",
+    "Backend API Engineering",
+    "Programming Core Track",
+  ];
+
+  const academyStudentPrimaryCourseIds = academyStudentPrimaryCourseNames
+    .map((name) => academyCourseMap.get(name)?.id)
+    .filter((id) => Number.isFinite(id));
+
   await ensureAcademyMembership({
     userId: academyStudentUser.id,
     orgId: academyOrg.id,
-    courseIds: [
-      academyCourseMap.get("Programming Foundations").id,
-      academyCourseMap.get("Web Development").id,
-    ],
+    courseIds: academyStudentPrimaryCourseIds,
+  });
+
+  await ensureAcademyCoursePayments({
+    userId: academyStudentUser.id,
+    courseIds: academyStudentPrimaryCourseIds,
   });
 
   const academyStudentUser2 = await ensureUser({
@@ -868,6 +940,14 @@ const seed = async () => {
   await ensureAcademyMembership({
     userId: academyStudentUser2.id,
     orgId: academyOrg.id,
+    courseIds: [
+      academyCourseMap.get("Mobile Development").id,
+      academyCourseMap.get("Data Analysis").id,
+    ],
+  });
+
+  await ensureAcademyCoursePayments({
+    userId: academyStudentUser2.id,
     courseIds: [
       academyCourseMap.get("Mobile Development").id,
       academyCourseMap.get("Data Analysis").id,

@@ -33,7 +33,7 @@ const enrollmentInclude = {
       user: { select: { id: true, name: true, email: true } },
     },
   },
-  course: { select: { id: true, Name: true, Description: true } },
+  course: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
 };
 
 const mapAcademyEnrollment = (record) => ({
@@ -136,7 +136,7 @@ export const createEnrollment = async (orgId, orgRole, data) => {
     data: { Course_id: course.id },
     include: {
       user: { select: { id: true, name: true, email: true } },
-      course: { select: { id: true, Name: true, Description: true } },
+      course: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
     },
   });
 
@@ -165,7 +165,7 @@ export const getAllEnrollments = async (orgId, orgRole) => {
     },
     include: {
       user: { select: { id: true, name: true, email: true } },
-      course: { select: { id: true, Name: true, Description: true } },
+      course: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
     },
   });
 
@@ -195,7 +195,7 @@ export const getEnrollmentsByCourse = async (orgId, orgRole, courseId) => {
     },
     include: {
       user: { select: { id: true, name: true, email: true } },
-      course: { select: { id: true, Name: true, Description: true } },
+      course: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
     },
   });
 
@@ -232,7 +232,7 @@ export const getEnrollmentsByUser = async (orgId, orgRole, userId) => {
     },
     include: {
       user: { select: { id: true, name: true, email: true } },
-      course: { select: { id: true, Name: true, Description: true } },
+      course: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
     },
   });
 
@@ -296,7 +296,7 @@ export const deleteEnrollment = async (orgId, orgRole, userId, courseId) => {
     },
     include: {
       user: { select: { id: true, name: true, email: true } },
-      course: { select: { id: true, Name: true, Description: true } },
+      course: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
     },
   });
 
