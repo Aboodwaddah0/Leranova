@@ -142,7 +142,7 @@ export default function StudentCoursesPage() {
               course={course}
               isPaid={String(course.priceStatus || '').toUpperCase() === 'PAID' || paidCourseIds.has(Number(course.id))}
               progress={course.progress}
-              continueHref={`/student/courses/${course.id}`}
+              continueHref={`/courses/${course.id}`}
               subscribeHref={`/payment-success?courseId=${course.id}`}
             />
           ))}

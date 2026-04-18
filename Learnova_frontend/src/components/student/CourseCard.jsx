@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight, BookOpen, BadgeCheck, BadgeAlert } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 export default function CourseCard({ course, isPaid, progress = 0, continueHref, subscribeHref }) {
   const cover = course?.cover || 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80';
@@ -8,11 +7,7 @@ export default function CourseCard({ course, isPaid, progress = 0, continueHref,
   const statusTone = isPaid ? 'from-indigo-600 to-cyan-500' : 'from-slate-800 to-slate-600';
 
   return (
-    <motion.article
-      whileHover={{ y: -6 }}
-      transition={{ type: 'spring', stiffness: 260, damping: 18 }}
-      className="group overflow-hidden rounded-[1.75rem] border border-white/80 bg-white shadow-[0_20px_60px_-30px_rgba(51,65,85,0.35)]"
-    >
+    <article className="group overflow-hidden rounded-[1.75rem] border border-white/80 bg-white shadow-[0_20px_60px_-30px_rgba(51,65,85,0.35)]">
       <div className="relative aspect-[16/10] overflow-hidden">
         <img src={cover} alt={course?.name || 'Course cover'} className="h-full w-full object-cover transition duration-500 group-hover:scale-110" />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-slate-950/10 to-transparent" />
@@ -70,6 +65,6 @@ export default function CourseCard({ course, isPaid, progress = 0, continueHref,
           ) : null}
         </div>
       </div>
-    </motion.article>
+    </article>
   );
 }

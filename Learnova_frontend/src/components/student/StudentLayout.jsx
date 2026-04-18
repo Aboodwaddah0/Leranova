@@ -1,15 +1,13 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { Bell, Search, Settings, Home, BookOpen, Users, PlayCircle, BarChart3, UserCircle2 } from 'lucide-react';
+import { Bell, Search, Settings, Home, BookOpen, UserCircle2 } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 
 const navItems = [
-  { to: '/dashboard/student', label: 'Dashboard', icon: Home },
-  { to: '/dashboard/student/courses', label: 'My Courses', icon: BookOpen },
-  { to: '/student/subjects/201', label: 'Subjects', icon: Users },
-  { to: '/student/lessons/301', label: 'Lessons', icon: PlayCircle },
-  { to: '/student/profile', label: 'Profile', icon: UserCircle2 },
+  { to: '/dashboard/student', label: 'Dashboard', icon: Home, match: (pathname) => pathname === '/dashboard/student' || pathname === '/dashboard/student/overview' },
+  { to: '/courses', label: 'My Courses', icon: BookOpen, match: (pathname) => pathname === '/courses' || pathname.startsWith('/courses/') },
+  { to: '/student/profile', label: 'Profile', icon: UserCircle2, match: (pathname) => pathname === '/student/profile' },
 ];
 
 const getInitial = (name = 'L') => String(name).trim().charAt(0).toUpperCase() || 'L';
@@ -17,10 +15,10 @@ const getInitial = (name = 'L') => String(name).trim().charAt(0).toUpperCase() |
 export default function StudentLayout({ title, subtitle, children, actions, aside, contentClassName = '' }) {
   const location = useLocation();
   const user = useSelector((state) => state.auth?.user);
-  const isDashboardHome = location.pathname === '/dashboard/student';
 
   const displayName = useMemo(() => user?.fullName || user?.name || user?.email || 'Academy Student', [user]);
   const avatar = user?.avatarUrl || user?.avatar || '';
+  const activeNavItem = navItems.find((item) => item.match(location.pathname)) || null;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,_#e1e0ff_0%,_#f7f9fb_42%,_#c9e6ff_100%)] text-slate-900">
@@ -31,9 +29,9 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
               Learnova
             </Link>
             <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-slate-500">
-              <NavLink to="/dashboard/student" className={({ isActive }) => (isActive ? 'text-indigo-600' : 'hover:text-slate-800')}>Dashboard</NavLink>
-              <NavLink to="/dashboard/student/courses" className={({ isActive }) => (isActive ? 'text-indigo-600' : 'hover:text-slate-800')}>My Courses</NavLink>
-              <NavLink to="/student/profile" className={({ isActive }) => (isActive ? 'text-indigo-600' : 'hover:text-slate-800')}>Profile</NavLink>
+              <NavLink end to="/dashboard/student" className={({ isActive }) => (isActive ? 'text-indigo-600' : 'hover:text-slate-800')}>Dashboard</NavLink>
+              <NavLink to="/courses" className={({ isActive }) => (isActive ? 'text-indigo-600' : 'hover:text-slate-800')}>My Courses</NavLink>
+              <NavLink end to="/student/profile" className={({ isActive }) => (isActive ? 'text-indigo-600' : 'hover:text-slate-800')}>Profile</NavLink>
             </nav>
           </div>
 
@@ -58,7 +56,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
         </div>
       </header>
 
-      <aside className={`fixed left-0 top-0 hidden h-full w-64 flex-col rounded-r-[2rem] border-r px-4 pb-6 pt-20 backdrop-blur-2xl lg:flex ${isDashboardHome ? 'border-slate-200 bg-white shadow-lg shadow-slate-900/5' : 'border-white/70 bg-white/75 shadow-2xl shadow-indigo-500/5'}`}>
+      <aside className="fixed left-0 top-0 hidden h-full w-64 flex-col rounded-r-[2rem] border-r border-white/70 bg-white/75 px-4 pb-6 pt-20 shadow-2xl shadow-indigo-500/5 backdrop-blur-2xl lg:flex">
         <div className="mb-6 rounded-3xl bg-gradient-to-br from-indigo-600 to-cyan-500 p-4 text-white shadow-lg">
           <p className="text-xs uppercase tracking-[0.25em] text-blue-100">Premium Learning</p>
           <h2 className="mt-2 text-xl font-black">{title || 'Student space'}</h2>
@@ -68,18 +66,12 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
         <nav className="flex flex-1 flex-col gap-2">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const active = location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
+            const active = activeNavItem?.to === item.to;
             return (
               <NavLink
                 key={item.to}
                 to={item.to}
-                className={({ isActive }) => {
-                  if (isDashboardHome) {
-                    return `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${isActive || active ? 'border border-slate-200 bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`;
-                  }
-
-                  return `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${isActive || active ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`;
-                }}
+                className={() => `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${active ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
               >
                 <Icon size={18} />
                 <span>{item.label}</span>
@@ -127,12 +119,12 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
         <div className="mx-auto flex max-w-xl items-center justify-around gap-2">
           {navItems.slice(0, 4).map((item) => {
             const Icon = item.icon;
-            const active = location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
+            const active = activeNavItem?.to === item.to;
             return (
               <NavLink
                 key={item.to}
                 to={item.to}
-                className={({ isActive }) => `flex flex-col items-center gap-1 rounded-2xl px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] transition ${isActive || active ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400'}`}
+                className={() => `flex flex-col items-center gap-1 rounded-2xl px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] transition ${active ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400'}`}
               >
                 <Icon size={18} />
                 {item.label}

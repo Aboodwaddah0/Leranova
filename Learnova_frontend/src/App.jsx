@@ -1,4 +1,4 @@
-﻿import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+﻿import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import AdminProtectedRoute from "./routes/AdminProtectedRoute";
 import OrganizationProtectedRoute from "./routes/OrganizationProtectedRoute";
@@ -31,6 +31,16 @@ import AdminPlansPage from "./pages/admin/AdminPlansPage";
 import { GooeyToaster } from "goey-toast";
 import { LEARNOVA_TOASTER_PROPS } from "./lib/notify";
 
+function LegacyStudentCourseRedirect() {
+  const { courseId } = useParams();
+  return <Navigate to={`/courses/${courseId}`} replace />;
+}
+
+function LegacyStudentLessonRedirect() {
+  const { lessonId } = useParams();
+  return <Navigate to={`/lessons/${lessonId}`} replace />;
+}
+
 function App() {
   return (
     <BrowserRouter>
@@ -60,10 +70,15 @@ function App() {
             <Route path="/dashboard/student" element={<StudentPageErrorBoundary><StudentDashboardPage /></StudentPageErrorBoundary>} />
             <Route path="/dashboard/student/overview" element={<StudentPageErrorBoundary><StudentDashboardPage /></StudentPageErrorBoundary>} />
             <Route path="/dashboard/student/courses" element={<StudentPageErrorBoundary><StudentCoursesPage /></StudentPageErrorBoundary>} />
-            <Route path="/student/courses" element={<StudentPageErrorBoundary><StudentCoursesPage /></StudentPageErrorBoundary>} />
-            <Route path="/student/courses/:courseId" element={<StudentCourseDetailsPage />} />
-            <Route path="/student/subjects/:subjectId" element={<StudentSubjectPage />} />
-            <Route path="/student/lessons/:lessonId" element={<StudentLessonPage />} />
+              <Route path="/courses" element={<StudentPageErrorBoundary><StudentCoursesPage /></StudentPageErrorBoundary>} />
+              <Route path="/dashboard/student/courses" element={<Navigate to="/courses" replace />} />
+              <Route path="/student/courses" element={<Navigate to="/courses" replace />} />
+              <Route path="/courses/:courseId" element={<StudentCourseDetailsPage />} />
+              <Route path="/student/courses/:courseId" element={<LegacyStudentCourseRedirect />} />
+              <Route path="/courses/:courseId/subjects/:subjectId" element={<StudentSubjectPage />} />
+              <Route path="/student/subjects/:subjectId" element={<Navigate to="/courses" replace />} />
+              <Route path="/lessons/:lessonId" element={<StudentLessonPage />} />
+              <Route path="/student/lessons/:lessonId" element={<LegacyStudentLessonRedirect />} />
             <Route path="/student/profile" element={<StudentProfilePage />} />
           </Route>
           <Route path="/dashboard/:role" element={<DashboardPlaceholderPage />} />
