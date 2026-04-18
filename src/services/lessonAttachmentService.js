@@ -37,7 +37,24 @@ const resolveAttachmentScope = async (actor) => {
     };
   }
 
-  throw new AppError('Access denied. Teacher or organization account required.', 403);
+  if (role === 'STUDENT') {
+    const academyUser = await prisma.academy_user.findUnique({
+      where: { user_academy_id: actor.id },
+      select: { OrgId: true },
+    });
+
+    if (!academyUser) {
+      throw new AppError('Student profile not found', 404);
+    }
+
+    return {
+      role,
+      orgId: academyUser.OrgId,
+      teacherId: null,
+    };
+  }
+
+  throw new AppError('Access denied. Teacher, student, or organization account required.', 403);
 };
 
 const toAttachmentType = (mimeType) => {
