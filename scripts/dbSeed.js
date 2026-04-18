@@ -24,43 +24,112 @@ const schoolGradeCourses = [
 const academyCourseBlueprint = [
   {
     name: "Programming Foundations",
-    modules: ["Introduction to Programming", "Problem Solving", "Algorithms Basics"],
+    modules: ["Introduction to Programming", "Problem Solving", "Algorithms Basics", "Debugging Skills"],
   },
   {
     name: "Web Development",
-    modules: ["HTML & CSS", "JavaScript Basics", "React Basics"],
+    modules: ["HTML & CSS", "JavaScript Basics", "React Basics", "Responsive Layouts"],
   },
   {
     name: "Mobile Development",
-    modules: ["Flutter Basics", "State Management", "Firebase Intro"],
+    modules: ["Flutter Basics", "State Management", "Firebase Intro", "App Store Readiness"],
   },
   {
     name: "UI/UX Basics",
-    modules: ["Design Principles", "Wireframing", "UX Research"],
+    modules: ["Design Principles", "Wireframing", "UX Research", "Prototype Testing"],
   },
   {
     name: "English Conversation",
-    modules: ["Daily Speaking", "Business English", "Presentation Skills"],
+    modules: ["Daily Speaking", "Business English", "Presentation Skills", "Interview Practice"],
   },
   {
     name: "Data Analysis",
-    modules: ["Excel Basics", "SQL Basics", "Power BI Intro"],
+    modules: ["Excel Basics", "SQL Basics", "Power BI Intro", "Dashboard Storytelling"],
+  },
+  {
+    name: "AI & Prompt Engineering",
+    modules: ["AI Foundations", "Prompt Patterns", "Model Evaluation", "Workflow Automation"],
+  },
+  {
+    name: "Backend API Engineering",
+    modules: ["REST Design", "Auth Flows", "Validation", "Error Handling"],
+  },
+  {
+    name: "DevOps Essentials",
+    modules: ["Linux Basics", "Docker Fundamentals", "CI/CD Pipelines", "Deployment Monitoring"],
+  },
+  {
+    name: "Cybersecurity Essentials",
+    modules: ["Threat Models", "Secure Coding", "Access Control", "Incident Response"],
+  },
+  {
+    name: "Product Management",
+    modules: ["User Discovery", "Roadmapping", "Metrics", "Stakeholder Communication"],
+  },
+  {
+    name: "Software Testing",
+    modules: ["Test Strategy", "Unit Tests", "Integration Tests", "Regression Runs"],
   },
 ];
 
-const pickSchoolSubjectsByGrade = (gradeLevel) => {
-  const core = ["Arabic", "English", "Mathematics", "Science", "Islamic Studies", "Computer"];
-
-  if (gradeLevel >= 7) {
-    core.push("History", "Geography", "Civics");
-  }
-
-  if (gradeLevel >= 9) {
-    core.push("Physics", "Chemistry", "Biology");
-  }
-
-  return core;
+const schoolSubjectBlueprints = {
+  lower: ["Arabic", "English", "Mathematics", "Science", "Islamic Studies", "Computer"],
+  middle: ["Arabic", "English", "Mathematics", "Science", "Islamic Studies", "Computer", "History", "Geography", "Art"],
+  upper: ["Arabic", "English", "Mathematics", "Physics", "Chemistry", "Biology", "History", "Geography", "Civics", "Computer", "Art"],
 };
+
+const courseArtworkPool = [
+  "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1513258496099-48168024aec0?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1537432376769-00f5c2f4c8d0?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1400&q=80",
+];
+
+const lessonArtworkPool = [
+  "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80",
+  "https://images.unsplash.com/photo-1513258496099-48168024aec0?auto=format&fit=crop&w=1200&q=80",
+  "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80",
+  "https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80",
+  "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=80",
+  "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1200&q=80",
+];
+
+const lessonCommentTemplates = [
+  "This lesson is clear and practical.",
+  "The visuals make the concept easier to follow.",
+  "Good pacing and strong examples.",
+  "This is exactly the kind of lesson I wanted.",
+];
+
+const pickSchoolSubjectsByGrade = (gradeLevel) => {
+  if (gradeLevel <= 4) {
+    return schoolSubjectBlueprints.lower;
+  }
+
+  if (gradeLevel <= 8) {
+    return schoolSubjectBlueprints.middle;
+  }
+
+  return schoolSubjectBlueprints.upper;
+};
+
+const pickCoverImage = (index) => courseArtworkPool[index % courseArtworkPool.length];
+const pickLessonImage = (index) => lessonArtworkPool[index % lessonArtworkPool.length];
+
+const buildLessonBlueprints = (subjectName) => [
+  { suffix: "Overview", description: `Overview of ${subjectName} and the core learning goals.` },
+  { suffix: "Core Concepts", description: `Foundational ideas and examples for ${subjectName}.` },
+  { suffix: "Guided Practice", description: `Step-by-step practice to apply ${subjectName}.` },
+  { suffix: "Mini Project", description: `A small project to reinforce ${subjectName}.` },
+];
 
 const accountSummary = {
   userAccounts: [],
@@ -336,7 +405,7 @@ const ensureActiveSubscription = async ({ orgId, planId }) => {
   return subscription;
 };
 
-const ensureCourse = async ({ orgId, name, gradeLevel = null, description, isPaid, price }) => {
+const ensureCourse = async ({ orgId, name, gradeLevel = null, description, isPaid, price, thumbnail = null }) => {
   const existing = await prisma.course.findFirst({
     where: { Org_id: orgId, Name: name },
     orderBy: { id: "asc" },
@@ -347,6 +416,7 @@ const ensureCourse = async ({ orgId, name, gradeLevel = null, description, isPai
     Name: name,
     GradeLevel: gradeLevel,
     Description: description,
+    Thumbnail: thumbnail,
     isPaid,
     price,
   };
@@ -359,6 +429,98 @@ const ensureCourse = async ({ orgId, name, gradeLevel = null, description, isPai
   }
 
   return prisma.course.create({ data: payload });
+};
+
+const ensureLessonAttachment = async ({ lessonId, originalName, fileType, fileUrl, index }) => {
+  const existing = await prisma.lesson_attachment.findFirst({
+    where: {
+      lessonId,
+      originalName,
+      fileType,
+    },
+  });
+
+  if (existing) {
+    return existing;
+  }
+
+  return prisma.lesson_attachment.create({
+    data: {
+      lessonId,
+      fileUrl,
+      filePublicId: `seed/${lessonId}/${index}/${fileType.toLowerCase()}`,
+      fileResourceType: fileType === "IMAGE" ? "image" : "application",
+      mimeType: fileType === "IMAGE" ? "image/jpeg" : "application/pdf",
+      originalName,
+      fileType,
+      sizeBytes: BigInt(fileType === "IMAGE" ? 240000 : 640000),
+    },
+  });
+};
+
+const ensureLessonComment = async ({ lessonId, userId, content }) => {
+  const existing = await prisma.comment.findFirst({
+    where: {
+      lesson_id: lessonId,
+      User_id: userId,
+      content,
+    },
+  });
+
+  if (existing) {
+    return existing;
+  }
+
+  return prisma.comment.create({
+    data: {
+      lesson_id: lessonId,
+      User_id: userId,
+      content,
+    },
+  });
+};
+
+const seedLessonPack = async ({ courseName, subjectName, subjectId, teacherId, botUserId, courseIndex, subjectIndex }) => {
+  const blueprints = buildLessonBlueprints(subjectName);
+
+  for (let index = 0; index < blueprints.length; index += 1) {
+    const lessonBlueprint = blueprints[index];
+    const lessonName = `${lessonBlueprint.suffix} - ${subjectName}`;
+    const lesson = await ensureLesson({
+      subjectId,
+      name: lessonName,
+      description: lessonBlueprint.description,
+    });
+
+    const baseIndex = courseIndex + subjectIndex + index;
+    await ensureLessonAttachment({
+      lessonId: lesson.id,
+      originalName: `${lessonName}.jpg`,
+      fileType: "IMAGE",
+      fileUrl: pickLessonImage(baseIndex),
+      index: baseIndex,
+    });
+
+    await ensureLessonAttachment({
+      lessonId: lesson.id,
+      originalName: `${lessonName}.pdf`,
+      fileType: "PDF",
+      fileUrl: `https://cdn.learnova.local/${courseName.replace(/\s+/g, "-").toLowerCase()}/${subjectName.replace(/\s+/g, "-").toLowerCase()}/${lessonName.replace(/\s+/g, "-").toLowerCase()}.pdf`,
+      index: baseIndex + 1000,
+    });
+
+    await ensureLessonComment({
+      lessonId: lesson.id,
+      userId: teacherId,
+      content: `${lessonName}: ${lessonCommentTemplates[index % lessonCommentTemplates.length]}`,
+    });
+
+    await ensureLessonComment({
+      lessonId: lesson.id,
+      userId: botUserId,
+      content: `${lessonName}: Keep going, this is a useful checkpoint for ${subjectName}.`,
+    });
+  }
 };
 
 const ensureCourseChat = async ({ courseId, organizationId, createdByUserId, title }) => {
@@ -449,6 +611,7 @@ const ensureSchoolData = async ({ schoolOrg, systemBotUser, schoolTeachers }) =>
       description: `${gradeCourse.name} curriculum`,
       isPaid: false,
       price: 0,
+      thumbnail: pickCoverImage(gradeCourse.gradeLevel - 1),
     });
 
     await ensureCourseChat({
@@ -471,10 +634,14 @@ const ensureSchoolData = async ({ schoolOrg, systemBotUser, schoolTeachers }) =>
         description: `${subjectName} for ${gradeCourse.name}`,
       });
 
-      await ensureLesson({
+      await seedLessonPack({
+        courseName: gradeCourse.name,
+        subjectName,
         subjectId: subject.id,
-        name: `Introduction to ${subjectName}`,
-        description: `Core introduction lesson for ${subjectName} in ${gradeCourse.name}.`,
+        teacherId: teacher.id,
+        botUserId: systemBotUser.id,
+        courseIndex: gradeCourse.gradeLevel,
+        subjectIndex: index,
       });
     }
 
@@ -487,7 +654,8 @@ const ensureSchoolData = async ({ schoolOrg, systemBotUser, schoolTeachers }) =>
 const ensureAcademyData = async ({ academyOrg, systemBotUser, academyTeachers }) => {
   const courseByName = new Map();
 
-  for (const blueprint of academyCourseBlueprint) {
+  for (let courseIndex = 0; courseIndex < academyCourseBlueprint.length; courseIndex += 1) {
+    const blueprint = academyCourseBlueprint[courseIndex];
     const course = await ensureCourse({
       orgId: academyOrg.id,
       name: blueprint.name,
@@ -495,6 +663,7 @@ const ensureAcademyData = async ({ academyOrg, systemBotUser, academyTeachers })
       description: `${blueprint.name} track for academy learners`,
       isPaid: true,
       price: 79,
+      thumbnail: pickCoverImage(courseIndex + 3),
     });
 
     await ensureCourseChat({
@@ -515,10 +684,14 @@ const ensureAcademyData = async ({ academyOrg, systemBotUser, academyTeachers })
         description: `${moduleName} module inside ${blueprint.name}`,
       });
 
-      await ensureLesson({
+      await seedLessonPack({
+        courseName: blueprint.name,
+        subjectName: moduleName,
         subjectId: subject.id,
-        name: `${moduleName} - Session 1`,
-        description: `Hands-on starter lesson for ${moduleName}.`,
+        teacherId: teacher.id,
+        botUserId: systemBotUser.id,
+        courseIndex,
+        subjectIndex: index,
       });
     }
 

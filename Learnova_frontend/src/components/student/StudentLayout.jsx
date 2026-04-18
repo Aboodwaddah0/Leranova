@@ -17,6 +17,7 @@ const getInitial = (name = 'L') => String(name).trim().charAt(0).toUpperCase() |
 export default function StudentLayout({ title, subtitle, children, actions, aside, contentClassName = '' }) {
   const location = useLocation();
   const user = useSelector((state) => state.auth?.user);
+  const isDashboardHome = location.pathname === '/dashboard/student';
 
   const displayName = useMemo(() => user?.fullName || user?.name || user?.email || 'Academy Student', [user]);
   const avatar = user?.avatarUrl || user?.avatar || '';
@@ -57,7 +58,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
         </div>
       </header>
 
-      <aside className="fixed left-0 top-0 hidden h-full w-64 flex-col rounded-r-[2rem] border-r border-white/70 bg-white/75 px-4 pb-6 pt-20 shadow-2xl shadow-indigo-500/5 backdrop-blur-2xl lg:flex">
+      <aside className={`fixed left-0 top-0 hidden h-full w-64 flex-col rounded-r-[2rem] border-r px-4 pb-6 pt-20 backdrop-blur-2xl lg:flex ${isDashboardHome ? 'border-slate-200 bg-white shadow-lg shadow-slate-900/5' : 'border-white/70 bg-white/75 shadow-2xl shadow-indigo-500/5'}`}>
         <div className="mb-6 rounded-3xl bg-gradient-to-br from-indigo-600 to-cyan-500 p-4 text-white shadow-lg">
           <p className="text-xs uppercase tracking-[0.25em] text-blue-100">Premium Learning</p>
           <h2 className="mt-2 text-xl font-black">{title || 'Student space'}</h2>
@@ -72,7 +73,13 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
               <NavLink
                 key={item.to}
                 to={item.to}
-                className={({ isActive }) => `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${isActive || active ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                className={({ isActive }) => {
+                  if (isDashboardHome) {
+                    return `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${isActive || active ? 'border border-slate-200 bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`;
+                  }
+
+                  return `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${isActive || active ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`;
+                }}
               >
                 <Icon size={18} />
                 <span>{item.label}</span>
