@@ -38,7 +38,16 @@ const resolveOrganizationIdFromUser = async (tokenUser) => {
       select: { OrgId: true },
     });
 
-    return student?.OrgId ?? null;
+    if (student?.OrgId) {
+      return student.OrgId;
+    }
+
+    const academyStudent = await prisma.academy_user.findUnique({
+      where: { user_academy_id: userId },
+      select: { OrgId: true },
+    });
+
+    return academyStudent?.OrgId ?? null;
   }
 
   const academyUser = await prisma.academy_user.findUnique({

@@ -293,6 +293,49 @@ const storeComments = (lessonId, comments) => {
   fallbackCommentsByLesson.set(Number(lessonId), comments);
 };
 
+const toNormalizedAttachment = (attachment = {}) => ({
+  id: attachment.id,
+  name: attachment.originalName || attachment.name || `Attachment ${attachment.id}`,
+  url: attachment.url || attachment.fileUrl || '#',
+  fileType: attachment.fileType || attachment.type || 'other',
+  mimeType: attachment.mimeType || null,
+  createdAt: attachment.createdAt || null,
+});
+
+const resolveLessonContextFromApi = async (lessonId) => {
+  const numericLessonId = Number(lessonId);
+  if (!Number.isFinite(numericLessonId) || numericLessonId <= 0) {
+    return null;
+  }
+
+  const courses = await fetchStudentCourseCatalog();
+  for (const course of courses || []) {
+    const subjects = await fetchCourseSubjects(course.id);
+    for (const subject of subjects || []) {
+      const lessons = await fetchSubjectLessons(subject.id);
+      const matchedLesson = (lessons || []).find((item) => Number(item?.id) === numericLessonId);
+
+      if (matchedLesson) {
+        return {
+          lesson: matchedLesson,
+          subject: {
+            ...subject,
+            id: Number(subject.id),
+            name: subject.name || subject.Name || 'Subject',
+          },
+          course: {
+            ...course,
+            id: Number(course.id),
+            name: course.name || course.Name || 'Course',
+          },
+        };
+      }
+    }
+  }
+
+  return null;
+};
+
 export async function fetchMyStudentMarks() {
   try {
     const response = await api.get('/marks/me');
@@ -398,10 +441,27 @@ export async function fetchSubjectLessons(subjectId) {
 
 export async function fetchLessonDetails(lessonId) {
   try {
-    const response = await api.get(`/lessons/${lessonId}`);
-    const data = unwrap(response, null);
-    if (data) {
-      return data;
+    const lessonContext = await resolveLessonContextFromApi(lessonId);
+    if (lessonContext) {
+      const attachmentsResponse = await api.get(`/lessons/${lessonId}/assets`);
+      const attachmentsRaw = ensureArray(unwrap(attachmentsResponse, []));
+      const attachments = attachmentsRaw.map(toNormalizedAttachment);
+      const videoAttachment = attachments.find((item) => String(item.fileType || '').toUpperCase() === 'VIDEO');
+
+      return {
+        ...lessonContext.lesson,
+        id: Number(lessonContext.lesson.id),
+        title: lessonContext.lesson.title || lessonContext.lesson.name || 'Lesson',
+        name: lessonContext.lesson.title || lessonContext.lesson.name || 'Lesson',
+        description: lessonContext.lesson.description || lessonContext.lesson.content || '',
+        content: lessonContext.lesson.description || lessonContext.lesson.content || '',
+        subject: lessonContext.subject,
+        course: lessonContext.course,
+        subjectId: Number(lessonContext.subject.id),
+        courseId: Number(lessonContext.course.id),
+        videoUrl: videoAttachment?.url || lessonContext.lesson.videoUrl || '',
+        attachments,
+      };
     }
   } catch {
     // Use fallback data below.
@@ -556,10 +616,26 @@ export async function fetchAcademyTeachersForCourses(courseIds = []) {
 }
 
 export async function askStudentTutor({ question, courseId, subjectId, lessonId }) {
+  try {
+    const payload = {
+      question,
+      course_id: Number(courseId),
+      ...(subjectId ? { subject_id: Number(subjectId) } : {}),
+      ...(lessonId ? { lesson_id: Number(lessonId) } : {}),
+    };
+
+    const response = await api.post('/chatbot/ask', payload);
+    const data = unwrap(response, null);
+    if (data) {
+      return data;
+    }
+  } catch {
+    // Use fallback response below.
+  }
+
   const course = fallbackCourses.find((item) => Number(item.id) === Number(courseId));
   const subject = fallbackSubjects.find((item) => Number(item.id) === Number(subjectId));
   const lesson = lessonId ? findLesson(lessonId) : null;
-
   const contextTitle = lesson?.title || subject?.name || course?.name || 'the current topic';
 
   return {

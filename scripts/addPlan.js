@@ -84,21 +84,21 @@ const seedDefaultPlans = async () => {
       price: 49,
       days: 30,
       description: 'Starter monthly plan',
-      features: ['Students', 'Courses', 'Basic Reports'],
+      features: ['GROUP_CHAT', 'NOTIFICATIONS'],
     },
     {
       name: 'Growth',
       price: 129,
       days: 30,
       description: 'Growth monthly plan',
-      features: ['Unlimited Students', 'AI Assistant', 'Advanced Reports'],
+      features: ['AI_CHAT', 'GROUP_CHAT', 'NOTIFICATIONS', 'ANALYTICS'],
     },
     {
       name: 'Enterprise',
       price: 999,
       days: 365,
       description: 'Enterprise annual plan',
-      features: ['Multi Campus', 'Priority Support', 'Custom Integrations'],
+      features: ['AI_CHAT', 'GROUP_CHAT', 'NOTIFICATIONS', 'ANALYTICS', 'REPORTS', 'MAX_USERS'],
     },
   ];
 
