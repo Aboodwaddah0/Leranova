@@ -1,8 +1,9 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { Bell, Search, Settings, Home, BookOpen, UserCircle2 } from 'lucide-react';
-import { useSelector } from 'react-redux';
+import { Bell, Search, Home, BookOpen, UserCircle2, LogOut } from 'lucide-react';
+import { useDispatch, useSelector } from 'react-redux';
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { logout } from '../../redux/slices/authSlice';
 
 const navItems = [
   { to: '/dashboard/student', label: 'Dashboard', icon: Home, match: (pathname) => pathname === '/dashboard/student' || pathname === '/dashboard/student/overview' },
@@ -14,6 +15,7 @@ const getInitial = (name = 'L') => String(name).trim().charAt(0).toUpperCase() |
 
 export default function StudentLayout({ title, subtitle, children, actions, aside, contentClassName = '' }) {
   const location = useLocation();
+  const dispatch = useDispatch();
   const user = useSelector((state) => state.auth?.user);
 
   const displayName = useMemo(() => user?.fullName || user?.name || user?.email || 'Academy Student', [user]);
@@ -81,10 +83,14 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
         </nav>
 
         <div className="mt-4 border-t border-slate-200 pt-4">
-          <Link to="/student/profile" className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
-            <Settings size={18} />
-            Settings
-          </Link>
+          <button
+            type="button"
+            onClick={() => dispatch(logout())}
+            className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            <LogOut size={18} />
+            Logout
+          </button>
         </div>
       </aside>
 

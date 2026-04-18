@@ -239,6 +239,8 @@ export const getStudentCoursePayments = async (userId) => {
           select: {
             id: true,
             Name: true,
+            Description: true,
+            Thumbnail: true,
             price: true,
             isPaid: true
           }
