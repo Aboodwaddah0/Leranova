@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import InstructorLayout from "../../components/instructor/InstructorLayout";
+import EducationLoading from "../../components/ui/EducationLoading";
 import { fetchInstructorStudents } from "../../services/instructorService";
 import { useLanguage } from "../../utils/i18n";
 import { notifyError } from "../../lib/notify";
@@ -53,7 +54,14 @@ export default function InstructorStudentsPage() {
       title={isArabic ? "الطلاب" : "Students"}
       subtitle={isArabic ? "عرض الطلاب المرتبطين بموادك" : "View students associated with your subjects."}
     >
-      {loading && <p className="text-sm font-semibold text-slate-500">{isArabic ? "جاري التحميل..." : "Loading..."}</p>}
+      {loading ? (
+        <EducationLoading
+          isArabic={isArabic}
+          title={isArabic ? "جاري تحميل قائمة الطلاب" : "Loading students"}
+          subtitle={isArabic ? "نرتب بيانات الطلاب الخاصة بموادك" : "Preparing students linked to your subjects"}
+          fullscreen
+        />
+      ) : null}
 
       <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm">
         <table className="min-w-full text-left text-sm">

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import StudentLayout from '../../components/student/StudentLayout';
+import EducationLoading from '../../components/ui/EducationLoading';
 import {
   changeStudentPassword,
   fetchStudentCourseCatalog,
@@ -18,8 +18,10 @@ import ProfileCards, {
 import EditProfileModal from '../../components/student/profile/EditProfileModal';
 import ChangePasswordModal from '../../components/student/profile/ChangePasswordModal';
 import { logout } from '../../redux/slices/authSlice';
+import { useLanguage } from '../../utils/i18n';
 
 export default function StudentProfilePage() {
+  const { isArabic } = useLanguage();
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const user = useSelector((state) => state.auth.user);
@@ -44,7 +46,7 @@ export default function StudentProfilePage() {
     user?.organization?.name ||
     profile?.organization?.Name ||
     profile?.organization?.name ||
-    'Learnova';
+    (isArabic ? 'ليرنوفا' : 'Learnova');
 
   const organizationType =
     user?.organizationType ||
@@ -70,7 +72,7 @@ export default function StudentProfilePage() {
         setCourseCount(Array.isArray(courseData) ? courseData.length : 0);
       } catch (loadError) {
         if (!cancelled) {
-          setError(loadError?.message || 'Failed to load profile.');
+          setError(loadError?.message || (isArabic ? 'فشل تحميل الملف الشخصي.' : 'Failed to load profile.'));
         }
       } finally {
         if (!cancelled) {
@@ -99,10 +101,10 @@ export default function StudentProfilePage() {
     try {
       const updated = await updateStudentProfile(patch);
       setProfile(updated);
-      setMessage('Profile updated successfully.');
+      setMessage(isArabic ? 'تم تحديث الملف الشخصي بنجاح.' : 'Profile updated successfully.');
       setShowEditProfile(false);
     } catch (saveError) {
-      setError(saveError?.response?.data?.message || saveError?.message || 'Could not update the profile right now.');
+      setError(saveError?.response?.data?.message || saveError?.message || (isArabic ? 'تعذر تحديث الملف الشخصي الآن.' : 'Could not update the profile right now.'));
     } finally {
       setSavingProfile(false);
     }
@@ -110,7 +112,7 @@ export default function StudentProfilePage() {
 
   const onSavePassword = async ({ newPassword, confirmPassword }) => {
     if (newPassword !== confirmPassword) {
-      setError('New password and confirmation do not match.');
+      setError(isArabic ? 'كلمة المرور الجديدة وتأكيدها غير متطابقين.' : 'New password and confirmation do not match.');
       return false;
     }
 
@@ -123,10 +125,10 @@ export default function StudentProfilePage() {
         newPassword,
       });
 
-      setMessage('Password updated successfully.');
+      setMessage(isArabic ? 'تم تحديث كلمة المرور بنجاح.' : 'Password updated successfully.');
       return true;
     } catch (saveError) {
-      setError(saveError?.response?.data?.message || saveError?.message || 'Could not update password right now.');
+      setError(saveError?.response?.data?.message || saveError?.message || (isArabic ? 'تعذر تحديث كلمة المرور الآن.' : 'Could not update password right now.'));
       return false;
     } finally {
       setSavingPassword(false);
@@ -139,11 +141,14 @@ export default function StudentProfilePage() {
   };
 
   return (
-    <StudentLayout title="Profile" subtitle="Manage your student account">
+    <StudentLayout title={isArabic ? 'الملف الشخصي' : 'Profile'} subtitle={isArabic ? 'إدارة حساب الطالب' : 'Manage your student account'}>
       {loading ? (
-        <div className="flex h-64 items-center justify-center rounded-[1.75rem] border border-slate-200 bg-white text-slate-500">
-          <Loader2 className="mr-2 animate-spin" size={18} /> Loading profile...
-        </div>
+        <EducationLoading
+          isArabic={isArabic}
+          title={isArabic ? 'جاري تحميل الملف الشخصي' : 'Loading profile'}
+          subtitle={isArabic ? 'نجهز بيانات حسابك التعليمية' : 'Preparing your educational account details'}
+          fullscreen
+        />
       ) : (
         <div className="space-y-5">
           {error ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{error}</div> : null}
@@ -153,8 +158,8 @@ export default function StudentProfilePage() {
 
           <QuickStats
             enrolledCoursesCount={courseCount}
-            membershipStatus="Active"
-            accountStatus="Verified"
+            membershipStatus={isArabic ? 'نشط' : 'Active'}
+            accountStatus={isArabic ? 'موثق' : 'Verified'}
           />
 
           <div className="grid gap-4 xl:grid-cols-[1fr_0.85fr]">
@@ -170,9 +175,11 @@ export default function StudentProfilePage() {
               />
 
               <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
-                <h3 className="text-sm font-extrabold uppercase tracking-[0.18em] text-slate-600">About this profile</h3>
+                <h3 className="text-sm font-extrabold uppercase tracking-[0.18em] text-slate-600">{isArabic ? 'حول هذا الملف' : 'About this profile'}</h3>
                 <p className="mt-3 text-sm leading-7 text-slate-600">
-                  Your profile is synced from your Learnova account and is used across course dashboards, comments, and learning history.
+                  {isArabic
+                    ? 'يتم مزامنة هذا الملف من حسابك في Learnova ويُستخدم عبر لوحات الكورسات والتعليقات وسجل التعلم.'
+                    : 'Your profile is synced from your Learnova account and is used across course dashboards, comments, and learning history.'}
                 </p>
               </section>
             </div>

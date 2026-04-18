@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Bell, ChevronDown, Search, UserCircle2 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { logout, setAuthSession } from "../redux/slices/authSlice";
 import {
@@ -11,7 +12,6 @@ import {
   deleteOrganizationCourse,
   deleteOrganizationTeacher,
   deleteOrganizationUser,
-  downloadOrganizationCredentialsCsv,
   fetchCourseSubjects,
   fetchOrganizationCourses,
   fetchOrganizationRevenue,
@@ -20,6 +20,7 @@ import {
   fetchMyOrganizationProfile,
   fetchSchoolSettings,
   importUsersFromExcel,
+  linkParentToStudents,
   runAnnualPromotion,
   updateMyOrganizationProfile,
   updateCourseSubject,
@@ -28,6 +29,7 @@ import {
   updateOrganizationUser,
   updateSchoolSettings,
 } from "../services/organizationService";
+import authPhoto from "../assets/authPhoto.jpg";
 import QuantumMeshBackground from "../components/ui/QuantumMeshBackground";
 import { useLanguage } from "../utils/i18n";
 import { notifyError, notifySuccess } from "../lib/notify";
@@ -40,6 +42,8 @@ const TABS = {
   PARENTS: "parents",
   SCHOOL: "school",
 };
+
+const DEFAULT_COURSE_THUMBNAIL = authPhoto;
 
 const safeError = (error) => {
   const apiErrors = error?.response?.data?.errors;
@@ -67,6 +71,11 @@ const formatSkippedRows = (skippedRows, max = 3) => {
 
 const normalizeText = (value) => String(value || "").trim().toLowerCase();
 
+const getCourseThumbnailUrl = (thumbnail) => {
+  const value = String(thumbnail || "").trim();
+  return value || DEFAULT_COURSE_THUMBNAIL;
+};
+
 const includesQuery = (fields, query) => {
   const q = normalizeText(query);
   if (!q) {
@@ -91,6 +100,20 @@ const triggerBlobDownload = (blob, fileName) => {
   URL.revokeObjectURL(url);
 };
 
+const toCsvCell = (value) => {
+  const normalized = value === undefined || value === null ? "" : String(value);
+  return `"${normalized.replace(/"/g, '""')}"`;
+};
+
+const downloadCsvFromRows = (fileName, headers, rows) => {
+  const csv = [headers, ...rows]
+    .map((row) => row.map(toCsvCell).join(","))
+    .join("\r\n");
+
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv; charset=utf-8" });
+  triggerBlobDownload(blob, fileName);
+};
+
 const copyCredentialsToClipboard = async (email, password) => {
   const value = `${email || "-"} / ${password || "-"}`;
   if (!navigator?.clipboard?.writeText) {
@@ -102,6 +125,62 @@ const copyCredentialsToClipboard = async (email, password) => {
   } catch (_error) {
     // Ignore clipboard failures and keep UI flow successful.
   }
+};
+
+const loadImageFromFile = (file) =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Unable to read the selected image'));
+    };
+
+    image.src = objectUrl;
+  });
+
+const prepareCourseThumbnailFile = async (file) => {
+  if (!file || !String(file.type || '').startsWith('image/')) {
+    return file || null;
+  }
+
+  const image = await loadImageFromFile(file);
+  const targetSize = 1200;
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+  const squareSize = Math.min(sourceWidth, sourceHeight);
+  const sourceX = Math.max(0, Math.floor((sourceWidth - squareSize) / 2));
+  const sourceY = Math.max(0, Math.floor((sourceHeight - squareSize) / 2));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = targetSize;
+  canvas.height = targetSize;
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return file;
+  }
+
+  context.drawImage(image, sourceX, sourceY, squareSize, squareSize, 0, 0, targetSize, targetSize);
+
+  const blob = await new Promise((resolve) => {
+    canvas.toBlob((result) => resolve(result), 'image/jpeg', 0.84);
+  });
+
+  if (!blob) {
+    return file;
+  }
+
+  return new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), {
+    type: 'image/jpeg',
+    lastModified: Date.now(),
+  });
 };
 
 export default function OrganizationWorkspacePage() {
@@ -159,6 +238,8 @@ export default function OrganizationWorkspacePage() {
     price: "",
     isPaid: false,
   });
+  const [courseThumbnailFile, setCourseThumbnailFile] = useState(null);
+  const [courseThumbnailPreview, setCourseThumbnailPreview] = useState("");
 
   const [subjectForm, setSubjectForm] = useState({
     id: null,
@@ -176,6 +257,7 @@ export default function OrganizationWorkspacePage() {
     gender: "MALE",
     address: "",
     dob: "",
+    parentNationalId: "",
   });
   const [studentAutoCredentials, setStudentAutoCredentials] = useState(false);
 
@@ -187,12 +269,18 @@ export default function OrganizationWorkspacePage() {
     address: "",
   });
   const [parentAutoCredentials, setParentAutoCredentials] = useState(false);
+  const [isLinkDrawerOpen, setIsLinkDrawerOpen] = useState(false);
+  const [linkTargetParent, setLinkTargetParent] = useState(null);
+  const [linkSearchTerm, setLinkSearchTerm] = useState("");
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
 
   const [teacherSearch, setTeacherSearch] = useState("");
   const [courseSearch, setCourseSearch] = useState("");
   const [subjectSearch, setSubjectSearch] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
   const [parentSearch, setParentSearch] = useState("");
+  const [topBarSearch, setTopBarSearch] = useState("");
+  const [showTopUserMenu, setShowTopUserMenu] = useState(false);
   const [parentLinkFilter, setParentLinkFilter] = useState("ALL");
   const [studentGenderFilter, setStudentGenderFilter] = useState("ALL");
 
@@ -235,7 +323,10 @@ export default function OrganizationWorkspacePage() {
       }
 
       const list = map.get(parentId) || [];
-      list.push(student?.name || "-");
+      list.push({
+        id: Number(student?.id),
+        name: student?.name || "-",
+      });
       map.set(parentId, list);
     }
     return map;
@@ -318,6 +409,21 @@ export default function OrganizationWorkspacePage() {
       return matchesSearch && matchesLink;
     });
   }, [parentUsers, parentSearch, parentLinkFilter, linkedParentIds]);
+
+  const linkCandidateStudents = useMemo(() => {
+    return studentUsers.filter((student) => {
+      const parentId = Number(student?.student?.Parent_id);
+      return !Number.isInteger(parentId) || parentId <= 0;
+    });
+  }, [studentUsers]);
+
+  const filteredLinkCandidateStudents = useMemo(() => {
+    return linkCandidateStudents.filter((student) => includesQuery([
+      student?.name,
+      student?.email,
+      String(student?.id || ""),
+    ], linkSearchTerm));
+  }, [linkCandidateStudents, linkSearchTerm]);
 
   const overviewStats = useMemo(() => {
     const totalStudents = studentUsers.length;
@@ -462,6 +568,95 @@ export default function OrganizationWorkspacePage() {
     }
   }, [success]);
 
+  useEffect(() => {
+    if (!isLinkDrawerOpen) {
+      return undefined;
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setIsLinkDrawerOpen(false);
+        setLinkTargetParent(null);
+        setLinkSearchTerm("");
+        setSelectedStudentIds([]);
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [isLinkDrawerOpen]);
+
+  const getActiveSearchValue = () => {
+    if (activeTab === TABS.TEACHERS) {
+      return teacherSearch;
+    }
+    if (activeTab === TABS.COURSES) {
+      return courseSearch;
+    }
+    if (activeTab === "subjects") {
+      return subjectSearch;
+    }
+    if (activeTab === TABS.STUDENTS) {
+      return studentSearch;
+    }
+    if (activeTab === TABS.PARENTS) {
+      return parentSearch;
+    }
+    return "";
+  };
+
+  useEffect(() => {
+    setTopBarSearch(getActiveSearchValue());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  const updateActiveSearchValue = (value) => {
+    if (activeTab === TABS.TEACHERS) {
+      setTeacherSearch(value);
+      return;
+    }
+
+    if (activeTab === TABS.COURSES) {
+      setCourseSearch(value);
+      return;
+    }
+
+    if (activeTab === "subjects") {
+      setSubjectSearch(value);
+      return;
+    }
+
+    if (activeTab === TABS.STUDENTS) {
+      setStudentSearch(value);
+      return;
+    }
+
+    if (activeTab === TABS.PARENTS) {
+      setParentSearch(value);
+    }
+  };
+
+  const isTopSearchDisabled = activeTab === TABS.OVERVIEW || activeTab === TABS.SCHOOL;
+
+  const topSearchPlaceholder = (() => {
+    if (activeTab === TABS.TEACHERS) {
+      return isArabic ? "ابحث عن مدرس" : "Search teachers";
+    }
+    if (activeTab === TABS.COURSES) {
+      return isArabic ? "ابحث عن كورس" : "Search courses";
+    }
+    if (activeTab === "subjects") {
+      return isArabic ? "ابحث عن مادة" : "Search subjects";
+    }
+    if (activeTab === TABS.STUDENTS) {
+      return isArabic ? "ابحث عن طالب" : "Search students";
+    }
+    if (activeTab === TABS.PARENTS) {
+      return isArabic ? "ابحث عن ولي أمر" : "Search parents";
+    }
+    return isArabic ? "اختر تبويب لتفعيل البحث" : "Select a tab to enable search";
+  })();
+
   const setField = (setter) => (event) => {
     const { name, value, type, checked } = event.target;
     setter((prev) => ({
@@ -493,6 +688,54 @@ export default function OrganizationWorkspacePage() {
       price: "",
       isPaid: false,
     });
+    setCourseThumbnailFile(null);
+    setCourseThumbnailPreview("");
+  };
+
+  useEffect(() => {
+    return () => {
+      if (courseThumbnailPreview && courseThumbnailPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(courseThumbnailPreview);
+      }
+    };
+  }, [courseThumbnailPreview]);
+
+  const handleCourseThumbnailChange = (event) => {
+    const file = event.target.files?.[0] || null;
+
+    if (!file) {
+      setCourseThumbnailFile(null);
+      setCourseThumbnailPreview("");
+      setCourseForm((prev) => ({
+        ...prev,
+        Thumbnail: "",
+      }));
+      return;
+    }
+
+    setCourseForm((prev) => ({
+      ...prev,
+      Thumbnail: "",
+    }));
+
+    prepareCourseThumbnailFile(file)
+      .then((preparedFile) => {
+        setCourseThumbnailFile(preparedFile);
+        setCourseThumbnailPreview(URL.createObjectURL(preparedFile));
+      })
+      .catch(() => {
+        setCourseThumbnailFile(null);
+        setCourseThumbnailPreview("");
+      });
+  };
+
+  const clearCourseThumbnail = () => {
+    setCourseThumbnailFile(null);
+    setCourseThumbnailPreview("");
+    setCourseForm((prev) => ({
+      ...prev,
+      Thumbnail: "",
+    }));
   };
 
   const handleCoursePaidToggle = (event) => {
@@ -523,6 +766,7 @@ export default function OrganizationWorkspacePage() {
       gender: "MALE",
       address: "",
       dob: "",
+      parentNationalId: "",
     });
     setStudentAutoCredentials(false);
   };
@@ -641,20 +885,51 @@ export default function OrganizationWorkspacePage() {
     }, t.organization.messages.profileSaved);
   };
 
+  const openCourseEditor = (course) => {
+    setCourseForm({
+      id: course.id,
+      Name: course.Name,
+      Description: course.Description || "",
+      Thumbnail: course.Thumbnail || "",
+      Start: course.Start ? String(course.Start).slice(0, 10) : "",
+      End: course.End ? String(course.End).slice(0, 10) : "",
+      price: isAcademy && course.price != null ? String(course.price) : "",
+      isPaid: isAcademy ? Boolean(course.isPaid) : false,
+    });
+    setCourseThumbnailFile(null);
+    setCourseThumbnailPreview(course.Thumbnail || "");
+  };
+
   const saveCourse = async (event) => {
     event.preventDefault();
 
     const canUsePaidCourses = isAcademy;
 
-    const payload = {
-      Name: courseForm.Name,
-      Description: courseForm.Description || undefined,
-      Thumbnail: courseForm.Thumbnail || undefined,
-      Start: courseForm.Start || undefined,
-      End: courseForm.End || undefined,
-      isPaid: canUsePaidCourses && Boolean(courseForm.isPaid),
-      price: canUsePaidCourses && courseForm.isPaid ? Number(courseForm.price || 0) : 0,
-    };
+    const payload = new FormData();
+    payload.append("Name", courseForm.Name);
+
+    if (courseForm.Description) {
+      payload.append("Description", courseForm.Description);
+    }
+
+    if (courseForm.Start) {
+      payload.append("Start", courseForm.Start);
+    }
+
+    if (courseForm.End) {
+      payload.append("End", courseForm.End);
+    }
+
+    if (canUsePaidCourses) {
+      payload.append("isPaid", String(Boolean(courseForm.isPaid)));
+      payload.append("price", String(courseForm.isPaid ? Number(courseForm.price || 0) : 0));
+    }
+
+    if (courseThumbnailFile) {
+      payload.append("thumbnail", courseThumbnailFile);
+    }
+
+    payload.append("Thumbnail", courseForm.Thumbnail || "");
 
     await handleAction(async () => {
       if (courseForm.id) {
@@ -711,6 +986,27 @@ export default function OrganizationWorkspacePage() {
       gender: studentForm.gender || undefined,
       address: studentForm.address || undefined,
       dob: studentForm.dob || undefined,
+      parentNationalId: studentForm.parentNationalId || undefined,
+    };
+
+    const buildParentLinkMessage = (parentLinkStatus) => {
+      if (!studentForm.parentNationalId) {
+        return "";
+      }
+
+      if (parentLinkStatus === "existing") {
+        return isArabic
+          ? " | تم الربط مع حساب ولي أمر موجود مسبقًا"
+          : " | Linked to existing parent account";
+      }
+
+      if (parentLinkStatus === "created") {
+        return isArabic
+          ? " | تم إنشاء حساب ولي أمر جديد تلقائيًا وربطه"
+          : " | New parent account was auto-created and linked";
+      }
+
+      return "";
     };
 
     await handleAction(async () => {
@@ -725,6 +1021,7 @@ export default function OrganizationWorkspacePage() {
             gender: studentForm.gender || undefined,
             address: studentForm.address || undefined,
             dob: studentForm.dob || undefined,
+            parentNationalId: studentForm.parentNationalId || undefined,
           });
 
           const nextUsersGenerated = await fetchOrganizationUsers();
@@ -733,18 +1030,20 @@ export default function OrganizationWorkspacePage() {
 
           const generatedEmail = generated?.credentials?.email || "-";
           const generatedPassword = generated?.credentials?.password || "-";
+          const parentLinkMessage = buildParentLinkMessage(generated?.parentLinkStatus);
           await copyCredentialsToClipboard(generatedEmail, generatedPassword);
-          return `${isArabic ? "تم إنشاء الحساب تلقائيًا" : "Account created with generated credentials"}: ${generatedEmail} / ${generatedPassword}`;
+          return `${isArabic ? "تم إنشاء الحساب تلقائيًا" : "Account created with generated credentials"}: ${generatedEmail} / ${generatedPassword}${parentLinkMessage}`;
         }
 
-        await createOrganizationUser(payload);
+        const created = await createOrganizationUser(payload);
 
         const nextUsersManual = await fetchOrganizationUsers();
         setUsers(nextUsersManual);
         resetStudentForm();
 
+        const parentLinkMessage = buildParentLinkMessage(created?.parentLinkStatus);
         await copyCredentialsToClipboard(payload.email, payload.password);
-        return `${isArabic ? "تم إنشاء الحساب" : "Account created"}: ${payload.email || "-"} / ${payload.password || "-"}`;
+        return `${isArabic ? "تم إنشاء الحساب" : "Account created"}: ${payload.email || "-"} / ${payload.password || "-"}${parentLinkMessage}`;
       }
 
       const nextUsers = await fetchOrganizationUsers();
@@ -799,13 +1098,126 @@ export default function OrganizationWorkspacePage() {
     }, t.organization.messages.parentSaved);
   };
 
-  const downloadCredentials = async () => {
+  const openLinkDrawer = (parent) => {
+    setLinkTargetParent(parent);
+    setIsLinkDrawerOpen(true);
+    setLinkSearchTerm("");
+    setSelectedStudentIds([]);
+  };
+
+  const closeLinkDrawer = () => {
+    setIsLinkDrawerOpen(false);
+    setLinkTargetParent(null);
+    setLinkSearchTerm("");
+    setSelectedStudentIds([]);
+  };
+
+  const toggleStudentSelection = (studentId) => {
+    setSelectedStudentIds((prev) => {
+      if (prev.includes(studentId)) {
+        return prev.filter((id) => id !== studentId);
+      }
+      return [...prev, studentId];
+    });
+  };
+
+  const submitParentChildrenLink = async () => {
+    if (!linkTargetParent?.id) {
+      return;
+    }
+
+    if (selectedStudentIds.length === 0) {
+      setError(t.organization.parents.linkValidation);
+      return;
+    }
+
     await handleAction(async () => {
-      const blob = await downloadOrganizationCredentialsCsv();
-      const dateLabel = new Date().toISOString().slice(0, 10);
-      triggerBlobDownload(blob, `organization-users-credentials-${dateLabel}.csv`);
-      return isArabic ? "تم تنزيل ملف بيانات الدخول" : "Credentials CSV downloaded";
-    }, isArabic ? "تم تنزيل ملف بيانات الدخول" : "Credentials CSV downloaded");
+      const result = await linkParentToStudents(linkTargetParent.id, { studentIds: selectedStudentIds });
+      const nextUsers = await fetchOrganizationUsers();
+      setUsers(nextUsers);
+      closeLinkDrawer();
+      return isArabic
+        ? `تم ربط ${result?.linkedCount || selectedStudentIds.length} طالب مع ولي الأمر`
+        : `Linked ${result?.linkedCount || selectedStudentIds.length} students to parent`;
+    }, t.organization.parents.linkSuccess);
+  };
+
+  const downloadTeachersList = () => {
+    const dateLabel = new Date().toISOString().slice(0, 10);
+    const rows = filteredTeachers.map((teacher) => [
+      teacher?.id || "",
+      teacher?.user?.name || "",
+      teacher?.user?.email || "",
+      teacher?.user?.password || "",
+      teacher?.specialization || "",
+      teacher?.bio || "",
+    ]);
+
+    downloadCsvFromRows(`teachers-list-${dateLabel}.csv`, ["id", "name", "email", "password", "specialization", "bio"], rows);
+    setSuccess(isArabic ? "تم تنزيل قائمة المعلمين" : "Teachers list downloaded");
+  };
+
+  const downloadCoursesList = () => {
+    const dateLabel = new Date().toISOString().slice(0, 10);
+    const rows = filteredCourses.map((course) => [
+      course?.id || "",
+      course?.Name || "",
+      course?.Description || "",
+      course?.Start ? String(course.Start).slice(0, 10) : "",
+      course?.End ? String(course.End).slice(0, 10) : "",
+      Boolean(course?.isPaid) ? "PAID" : "FREE",
+      Number(course?.price || 0).toFixed(2),
+    ]);
+
+    downloadCsvFromRows(`courses-list-${dateLabel}.csv`, ["id", "name", "description", "startDate", "endDate", "type", "price"], rows);
+    setSuccess(isArabic ? "تم تنزيل قائمة الكورسات" : "Courses list downloaded");
+  };
+
+  const downloadSubjectsList = () => {
+    const dateLabel = new Date().toISOString().slice(0, 10);
+    const rows = filteredSubjects.map((subject) => [
+      subject?.id || "",
+      subject?.name || "",
+      subject?.Description || "",
+      subject?.teacher?.user?.name || "",
+      selectedCourseId || "",
+    ]);
+
+    downloadCsvFromRows(`subjects-list-${dateLabel}.csv`, ["id", "name", "description", "teacher", "courseId"], rows);
+    setSuccess(isArabic ? "تم تنزيل قائمة المواد" : "Subjects list downloaded");
+  };
+
+  const downloadStudentsList = () => {
+    const dateLabel = new Date().toISOString().slice(0, 10);
+    const rows = filteredStudents.map((student) => [
+      student?.id || "",
+      student?.name || "",
+      student?.email || "",
+      student?.password || "",
+      parentNameById.get(Number(student?.student?.Parent_id)) || "",
+      student?.age ?? "",
+      student?.gender || "",
+      student?.address || "",
+    ]);
+
+    downloadCsvFromRows(`students-list-${dateLabel}.csv`, ["id", "name", "email", "password", "parent", "age", "gender", "address"], rows);
+    setSuccess(isArabic ? "تم تنزيل قائمة الطلاب" : "Students list downloaded");
+  };
+
+  const downloadParentsList = () => {
+    const dateLabel = new Date().toISOString().slice(0, 10);
+    const rows = filteredParents.map((parent) => [
+      parent?.id || "",
+      parent?.name || "",
+      parent?.email || "",
+      parent?.password || "",
+      linkedParentIds.has(Number(parent?.id)) ? "YES" : "NO",
+      (childrenByParentId.get(Number(parent?.id)) || []).map((child) => `${child.name} (ID: ${child.id})`).join(" | "),
+      parent?.address || "",
+    ]);
+
+    downloadCsvFromRows(`parents-list-${dateLabel}.csv`, ["id", "name", "email", "password", "linked", "children", "address"], rows);
+    setSuccess(isArabic ? "تم تنزيل قائمة أولياء الأمور" : "Parents list downloaded");
   };
 
   const uploadStudentExcel = async (event) => {
@@ -902,6 +1314,7 @@ export default function OrganizationWorkspacePage() {
       { id: TABS.OVERVIEW, label: t.organization.tabs.overview },
       { id: TABS.TEACHERS, label: t.organization.tabs.teachers },
       { id: TABS.COURSES, label: t.organization.tabs.courses },
+      { id: "subjects", label: t.organization.tabs.subjects },
       { id: TABS.STUDENTS, label: t.organization.tabs.students },
     ];
 
@@ -921,23 +1334,96 @@ export default function OrganizationWorkspacePage() {
     t.organization.title;
 
   return (
-    <main className={`admin-management-theme relative min-h-screen overflow-hidden bg-[#eff6fd] px-4 py-8 ${isArabic ? "lang-ar" : "lang-en"}`}>
+    <main className={`admin-management-theme dashboard-page relative min-h-screen overflow-hidden px-4 py-8 ${isArabic ? "lang-ar" : "lang-en"}`}>
       <QuantumMeshBackground />
 
-      <button
-        type="button"
-        onClick={toggleLang}
-        className="absolute right-6 top-6 z-20 rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-[#1f69ab]"
-      >
-        {lang === "en" ? t.common.switchToArabic : t.common.switchToEnglish}
-      </button>
+      <header className="dashboard-topbar relative z-20 mx-auto mb-6 w-full max-w-[1800px] rounded-[28px] px-5 py-4 backdrop-blur-xl">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="dashboard-brand-icon flex h-12 w-12 items-center justify-center rounded-2xl">
+              <UserCircle2 size={24} />
+            </div>
+            <div>
+              <p className="dashboard-kicker text-xs font-black uppercase tracking-[0.22em]">Learnova</p>
+              <h1 className="dashboard-title mt-1 text-2xl font-black">{organizationTitle}</h1>
+              <p className="dashboard-subtitle mt-1 text-sm">{t.organization.subtitle}</p>
+            </div>
+          </div>
 
-      <div className="relative z-10 mx-auto grid min-h-[92vh] w-full max-w-7xl gap-6 lg:grid-cols-[260px_1fr]">
-        <aside className="flex h-full flex-col justify-between rounded-[28px] border border-slate-200 bg-gradient-to-b from-[#2379c3] to-[#1f69ab] p-6 text-white shadow-[0_18px_56px_-26px_rgba(31,105,171,0.45)]">
+          <div className="flex flex-1 flex-wrap items-center justify-end gap-3 lg:max-w-4xl">
+            <label className="dashboard-input-shell flex min-w-[240px] flex-1 items-center gap-3 rounded-2xl border px-4 py-3 text-sm">
+              <Search size={16} />
+              <input
+                type="search"
+                value={topBarSearch}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setTopBarSearch(value);
+                  updateActiveSearchValue(value);
+                }}
+                disabled={isTopSearchDisabled}
+                placeholder={topSearchPlaceholder}
+                className="w-full bg-transparent outline-none"
+              />
+            </label>
+
+            <button
+              type="button"
+              className="dashboard-icon-btn relative rounded-2xl border p-3 transition hover:text-slate-900"
+              aria-label={isArabic ? "الإشعارات" : "Notifications"}
+            >
+              <Bell size={18} />
+              <span className="dashboard-notification-dot absolute right-2 top-2 h-2.5 w-2.5 rounded-full" />
+            </button>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowTopUserMenu((prev) => !prev)}
+                className="dashboard-user-chip flex items-center gap-3 rounded-2xl border px-4 py-2.5"
+              >
+                <div className="dashboard-user-avatar flex h-10 w-10 items-center justify-center rounded-full">
+                  <UserCircle2 size={20} />
+                </div>
+                <div className="min-w-0 text-left">
+                  <p className="dashboard-title truncate text-sm font-semibold">{organizationTitle}</p>
+                  <p className="dashboard-muted truncate text-xs">{String(organizationType || t.organization.badge)}</p>
+                </div>
+                <ChevronDown size={16} className="dashboard-muted" />
+              </button>
+
+              {showTopUserMenu ? (
+                <div className="dashboard-menu absolute right-0 z-30 mt-2 w-56 rounded-2xl border p-2 shadow-xl">
+                  <button type="button" className="dashboard-menu-item w-full rounded-xl px-3 py-2 text-left text-sm font-medium">
+                    {isArabic ? "الملف الشخصي" : "Profile"}
+                  </button>
+                  <button type="button" className="dashboard-menu-item w-full rounded-xl px-3 py-2 text-left text-sm font-medium">
+                    {isArabic ? "الإعدادات" : "Settings"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => dispatch(logout())}
+                    className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-rose-700 hover:bg-rose-50"
+                  >
+                    {isArabic ? "تسجيل الخروج" : "Logout"}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            <button type="button" onClick={toggleLang} className="dashboard-lang-btn rounded-2xl border px-4 py-2 text-sm font-semibold">
+              {lang === "en" ? t.common.switchToArabic : t.common.switchToEnglish}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="relative z-10 grid min-h-[92vh] w-full gap-6 lg:grid-cols-[260px_1fr]">
+        <aside className="dashboard-sidebar flex h-full flex-col justify-between rounded-[28px] border p-6">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-100">Learnova</p>
-            <h1 className="mt-2 text-2xl font-black text-white">{organizationTitle}</h1>
-            <p className="mt-2 text-sm text-blue-50/90">{t.organization.badge}</p>
+            <p className="text-xs font-black uppercase tracking-[0.22em]">Learnova</p>
+            <h1 className="mt-2 text-2xl font-black">{organizationTitle}</h1>
+            <p className="mt-2 text-sm text-[#EAE0CF]/90">{t.organization.badge}</p>
 
             <nav className="mt-8 space-y-2">
               {tabs.map((tab) => (
@@ -947,8 +1433,8 @@ export default function OrganizationWorkspacePage() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${
                     activeTab === tab.id
-                      ? "bg-white text-[#1a5d96]"
-                      : "text-blue-50/85 hover:bg-white/20 hover:text-white"
+                      ? "dashboard-sidebar-item-active"
+                      : "dashboard-sidebar-item"
                   }`}
                 >
                   {tab.label}
@@ -960,24 +1446,17 @@ export default function OrganizationWorkspacePage() {
           <button
             type="button"
             onClick={() => dispatch(logout())}
-            className="mt-8 rounded-2xl border border-white/30 bg-white/15 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/25"
+            className="mt-8 rounded-2xl border border-[#EAE0CF]/50 bg-white/10 px-4 py-3 text-sm font-semibold text-[#EAE0CF] transition hover:bg-white/20"
           >
             {t.dashboard.logout}
           </button>
         </aside>
 
-        <section className="space-y-5 rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_18px_56px_-26px_rgba(16,20,26,0.35)] md:p-8">
-          <header className="rounded-3xl bg-gradient-to-r from-[#2379c3] to-[#1f69ab] p-6 text-white shadow-xl">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-100">{t.organization.badge}</p>
+        <section className="dashboard-panel space-y-5 rounded-[28px] border p-6 md:p-8">
+          <header className="dashboard-hero rounded-3xl p-6 shadow-xl">
+            <p className="dashboard-hero-kicker text-xs font-bold uppercase tracking-[0.2em]">{t.organization.badge}</p>
             <h2 className="mt-2 text-3xl font-black">{organizationTitle}</h2>
-            <p className="mt-2 text-sm text-blue-100">{t.organization.subtitle}</p>
-            <button
-              type="button"
-              onClick={downloadCredentials}
-              className="mt-4 rounded-xl border border-white/30 bg-white/15 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/25"
-            >
-              {isArabic ? "تنزيل بيانات الدخول (CSV)" : "Download Credentials (CSV)"}
-            </button>
+            <p className="mt-2 text-sm">{t.organization.subtitle}</p>
           </header>
 
           {loading && <p className="text-sm text-slate-500">{t.common.loading}</p>}
@@ -1115,6 +1594,13 @@ export default function OrganizationWorkspacePage() {
                 >
                   {isArabic ? "مسح" : "Clear"}
                 </button>
+                <button
+                  type="button"
+                  onClick={downloadTeachersList}
+                  className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-100"
+                >
+                  {isArabic ? "تنزيل CSV" : "Download CSV"}
+                </button>
               </div>
               <div className="mt-4 overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
@@ -1177,14 +1663,43 @@ export default function OrganizationWorkspacePage() {
         )}
 
         {!loading && activeTab === TABS.COURSES && (
-          <section className="space-y-4">
-            <div className="grid gap-4 lg:grid-cols-3">
-              <form onSubmit={saveCourse} className="rounded-3xl border border-slate-200 bg-white p-5">
+          <section className="rounded-[32px] border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-[0_18px_56px_-26px_rgba(16,20,26,0.22)]">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-sky-700">{isArabic ? "قسم الكورسات" : "Courses section"}</p>
+                <h2 className="mt-2 text-2xl font-black text-slate-900">{t.organization.courses.listTitle}</h2>
+                <p className="mt-2 text-sm text-slate-600">{isArabic ? "هنا تضيف الكورسات وتعدّلها وتدير تفاصيلها بشكل مستقل" : "Add, edit, and manage courses in their own section"}</p>
+              </div>
+              <span className="rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-sm font-bold text-sky-700">
+                {courses.length} {isArabic ? "كورس" : "courses"}
+              </span>
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-3">
+              <form onSubmit={saveCourse} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
                 <h2 className="text-lg font-bold text-slate-900">{t.organization.courses.formTitle}</h2>
                 <div className="mt-4 space-y-3">
                   <input name="Name" value={courseForm.Name} onChange={setField(setCourseForm)} placeholder={t.organization.courses.name} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
                   <textarea name="Description" value={courseForm.Description} onChange={setField(setCourseForm)} placeholder={t.organization.courses.description} className="min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2" />
-                  <input name="Thumbnail" value={courseForm.Thumbnail} onChange={setField(setCourseForm)} placeholder={t.organization.courses.thumbnail} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
+                  <div className="space-y-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{t.organization.courses.thumbnail}</p>
+                        <p className="mt-1 text-xs text-slate-500">{isArabic ? 'ارفع صورة من جهازك وسيتم حفظها تلقائيًا.' : 'Upload an image from your device and it will be saved automatically.'}</p>
+                      </div>
+                      {courseThumbnailPreview ? (
+                        <button type="button" onClick={clearCourseThumbnail} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                          {isArabic ? 'مسح الصورة' : 'Clear image'}
+                        </button>
+                      ) : null}
+                    </div>
+                    <input type="file" accept="image/*" onChange={handleCourseThumbnailChange} className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-full file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-slate-800" />
+                    {courseThumbnailPreview ? (
+                      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                        <img src={courseThumbnailPreview} alt={isArabic ? 'معاينة صورة الكورس' : 'Course image preview'} className="h-40 w-full object-cover" />
+                      </div>
+                    ) : null}
+                  </div>
                   {isAcademy ? (
                     <>
                       <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
@@ -1221,7 +1736,7 @@ export default function OrganizationWorkspacePage() {
                 </div>
               </form>
 
-              <article className="rounded-3xl border border-slate-200 bg-white p-5 lg:col-span-2">
+              <article className="rounded-[28px] border border-slate-200 bg-white p-5 lg:col-span-2 shadow-sm">
                 <h2 className="text-lg font-bold text-slate-900">{t.organization.courses.listTitle}</h2>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <input
@@ -1237,11 +1752,19 @@ export default function OrganizationWorkspacePage() {
                   >
                     {isArabic ? "مسح" : "Clear"}
                   </button>
+                  <button
+                    type="button"
+                    onClick={downloadCoursesList}
+                    className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-100"
+                  >
+                    {isArabic ? "تنزيل CSV" : "Download CSV"}
+                  </button>
                 </div>
                 <div className="mt-4 overflow-x-auto">
                   <table className="min-w-full text-left text-sm">
                     <thead className="text-xs uppercase tracking-wider text-slate-500">
                       <tr>
+                        <th className="py-2 pr-3">{isArabic ? 'الصورة' : 'Image'}</th>
                         <th className="py-2 pr-3">{t.organization.courses.name}</th>
                         <th className="py-2 pr-3">{t.organization.courses.description}</th>
                         <th className="py-2 pr-3">{isArabic ? "السعر" : "Price"}</th>
@@ -1252,10 +1775,20 @@ export default function OrganizationWorkspacePage() {
                     <tbody>
                       {filteredCourses.length === 0 ? (
                         <tr>
-                          <td colSpan="5" className="py-4 text-slate-500">{t.organization.common.empty}</td>
+                          <td colSpan="6" className="py-4 text-slate-500">{t.organization.common.empty}</td>
                         </tr>
                       ) : filteredCourses.map((course) => (
                         <tr key={course.id} className="border-t border-slate-100">
+                          <td className="py-2 pr-3">
+                            <img
+                              src={getCourseThumbnailUrl(course.Thumbnail)}
+                              alt={course.Name || (isArabic ? 'صورة الكورس' : 'Course image')}
+                              onError={(event) => {
+                                event.currentTarget.src = DEFAULT_COURSE_THUMBNAIL;
+                              }}
+                              className="h-12 w-12 rounded-xl border border-slate-200 object-cover"
+                            />
+                          </td>
                           <td className="py-2 pr-3">
                             <button
                               type="button"
@@ -1278,16 +1811,7 @@ export default function OrganizationWorkspacePage() {
                             <div className="flex gap-2">
                               <button
                                 type="button"
-                                onClick={() => setCourseForm({
-                                  id: course.id,
-                                  Name: course.Name,
-                                  Description: course.Description || "",
-                                  Thumbnail: course.Thumbnail || "",
-                                  Start: course.Start ? String(course.Start).slice(0, 10) : "",
-                                  End: course.End ? String(course.End).slice(0, 10) : "",
-                                  price: isAcademy && course.price != null ? String(course.price) : "",
-                                  isPaid: isAcademy ? Boolean(course.isPaid) : false,
-                                })}
+                                onClick={() => openCourseEditor(course)}
                                 className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700"
                               >
                                 {t.organization.common.edit}
@@ -1320,12 +1844,33 @@ export default function OrganizationWorkspacePage() {
                 </div>
               </article>
             </div>
+          </section>
+        )}
 
-            <div className="grid gap-4 lg:grid-cols-3">
-              <form onSubmit={saveSubject} className="rounded-3xl border border-slate-200 bg-white p-5">
+        {!loading && activeTab === "subjects" && (
+          <section className="rounded-[32px] border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-[0_18px_56px_-26px_rgba(16,20,26,0.22)]">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-sky-700">{isArabic ? "قسم المواد" : "Subjects section"}</p>
+                <h2 className="mt-2 text-2xl font-black text-slate-900">{t.organization.subjects.listTitle}</h2>
+                <p className="mt-2 text-sm text-slate-600">{isArabic ? "كل المواد هنا في قسم مستقل داخل الصفحة نفسها" : "All subjects are isolated in their own section on the same page"}</p>
+              </div>
+              <span className="rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-sm font-bold text-sky-700">
+                {currentSubjects.length} {isArabic ? "مادة" : "subjects"}
+              </span>
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-3">
+              <form onSubmit={saveSubject} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
                 <h2 className="text-lg font-bold text-slate-900">{t.organization.subjects.formTitle}</h2>
                 <p className="mt-1 text-xs text-slate-500">{t.organization.subjects.courseHint}</p>
                 <div className="mt-4 space-y-3">
+                  <select value={selectedCourseId || ""} onChange={(event) => setSelectedCourseId(Number(event.target.value) || null)} className="h-11 w-full rounded-xl border border-slate-200 px-3">
+                    <option value="">{isArabic ? "اختر كورس" : "Select a course"}</option>
+                    {courses.map((course) => (
+                      <option key={course.id} value={course.id}>{course.Name}</option>
+                    ))}
+                  </select>
                   <input name="name" value={subjectForm.name} onChange={setField(setSubjectForm)} placeholder={t.organization.subjects.name} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
                   <textarea name="Description" value={subjectForm.Description} onChange={setField(setSubjectForm)} placeholder={t.organization.subjects.description} className="min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2" />
                   <select name="Teacher_id" value={subjectForm.Teacher_id} onChange={setField(setSubjectForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3">
@@ -1341,7 +1886,7 @@ export default function OrganizationWorkspacePage() {
                 </div>
               </form>
 
-              <article className="rounded-3xl border border-slate-200 bg-white p-5 lg:col-span-2">
+              <article className="rounded-[28px] border border-slate-200 bg-white p-5 lg:col-span-2 shadow-sm">
                 <h2 className="text-lg font-bold text-slate-900">{t.organization.subjects.listTitle}</h2>
                 <p className="mt-1 text-xs text-slate-500">{selectedCourseId ? `${t.organization.subjects.selectedCourse}: ${courses.find((course) => course.id === selectedCourseId)?.Name || "-"}` : t.organization.subjects.selectCourseFirst}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1357,6 +1902,13 @@ export default function OrganizationWorkspacePage() {
                     className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700"
                   >
                     {isArabic ? "مسح" : "Clear"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={downloadSubjectsList}
+                    className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-100"
+                  >
+                    {isArabic ? "تنزيل CSV" : "Download CSV"}
                   </button>
                 </div>
                 <div className="mt-4 overflow-x-auto">
@@ -1437,6 +1989,7 @@ export default function OrganizationWorkspacePage() {
                 <input name="password" type="password" value={studentForm.password} onChange={setField(setStudentForm)} placeholder={studentForm.id ? t.organization.common.optionalPassword : t.organization.students.password} className="h-11 w-full rounded-xl border border-slate-200 px-3" required={!studentForm.id && !studentAutoCredentials} disabled={!studentForm.id && studentAutoCredentials} />
                 <input name="age" type="number" value={studentForm.age} onChange={setField(setStudentForm)} placeholder={t.organization.students.age} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
                 <input name="dob" type="date" value={studentForm.dob} onChange={setField(setStudentForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
+                <input name="parentNationalId" value={studentForm.parentNationalId} onChange={setField(setStudentForm)} placeholder={t.organization.students.parentNationalId} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
                 <select name="gender" value={studentForm.gender} onChange={setField(setStudentForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3">
                   <option value="MALE">{t.organization.students.male}</option>
                   <option value="FEMALE">{t.organization.students.female}</option>
@@ -1486,6 +2039,13 @@ export default function OrganizationWorkspacePage() {
                 >
                   {isArabic ? "مسح" : "Clear"}
                 </button>
+                <button
+                  type="button"
+                  onClick={downloadStudentsList}
+                  className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-100"
+                >
+                  {isArabic ? "تنزيل CSV" : "Download CSV"}
+                </button>
               </div>
               <div className="mt-4 overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
@@ -1524,6 +2084,7 @@ export default function OrganizationWorkspacePage() {
                                 gender: student.gender || "MALE",
                                 address: student.address || "",
                                 dob: student.dob ? String(student.dob).slice(0, 10) : "",
+                                parentNationalId: "",
                               })}
                               className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700"
                             >
@@ -1606,6 +2167,13 @@ export default function OrganizationWorkspacePage() {
                 >
                   {isArabic ? "مسح" : "Clear"}
                 </button>
+                <button
+                  type="button"
+                  onClick={downloadParentsList}
+                  className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-100"
+                >
+                  {isArabic ? "تنزيل CSV" : "Download CSV"}
+                </button>
               </div>
               <div className="mt-4 overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
@@ -1631,7 +2199,7 @@ export default function OrganizationWorkspacePage() {
                         <td className="py-2 pr-3">{parent.email || "-"}</td>
                         <td className="py-2 pr-3">{parent.password || "-"}</td>
                         <td className="py-2 pr-3">{linkedParentIds.has(Number(parent.id)) ? t.organization.parents.linkedYes : t.organization.parents.linkedNo}</td>
-                        <td className="py-2 pr-3">{(childrenByParentId.get(Number(parent.id)) || []).join("، ") || "-"}</td>
+                        <td className="py-2 pr-3">{(childrenByParentId.get(Number(parent.id)) || []).map((child) => `${child.name} (ID: ${child.id})`).join("، ") || "-"}</td>
                         <td className="py-2 pr-3">{parent.address || "-"}</td>
                         <td className="py-2 pr-3">
                           <div className="flex gap-2">
@@ -1662,6 +2230,15 @@ export default function OrganizationWorkspacePage() {
                             >
                               {t.organization.common.delete}
                             </button>
+                            {!linkedParentIds.has(Number(parent.id)) ? (
+                              <button
+                                type="button"
+                                onClick={() => openLinkDrawer(parent)}
+                                className="rounded-lg border border-emerald-200 px-2 py-1 text-xs font-semibold text-emerald-700"
+                              >
+                                {t.organization.parents.linkChildrenAction}
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                       </tr>
@@ -1672,6 +2249,95 @@ export default function OrganizationWorkspacePage() {
             </article>
           </section>
         )}
+
+        {isLinkDrawerOpen && linkTargetParent ? (
+          <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/40" onClick={closeLinkDrawer}>
+            <aside className="h-full w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{t.organization.parents.linkDrawerTitle}</p>
+                  <h3 className="mt-2 text-xl font-black text-slate-900">{linkTargetParent.name || "-"}</h3>
+                  <p className="mt-1 text-sm text-slate-600">{linkTargetParent.email || "-"}</p>
+                </div>
+                <button type="button" onClick={closeLinkDrawer} className="rounded-lg border border-slate-200 px-3 py-1 text-sm font-semibold text-slate-700">
+                  {t.organization.parents.linkCancel}
+                </button>
+              </div>
+
+              <p className="mt-4 text-sm text-slate-600">{t.organization.parents.linkDrawerHint}</p>
+
+              <div className="mt-4 space-y-3">
+                <input
+                  value={linkSearchTerm}
+                  onChange={(event) => setLinkSearchTerm(event.target.value)}
+                  placeholder={t.organization.parents.linkSearchPlaceholder}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                />
+
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                  <span className="font-semibold text-slate-700">{t.organization.parents.linkSelectedCount}: {selectedStudentIds.length}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStudentIds([])}
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700"
+                  >
+                    {t.organization.parents.linkClearSelection}
+                  </button>
+                </div>
+
+                <div className="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+                  {linkCandidateStudents.length === 0 ? (
+                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-600">
+                      {t.organization.parents.linkNoCandidates}
+                    </p>
+                  ) : filteredLinkCandidateStudents.length === 0 ? (
+                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-600">
+                      {t.organization.parents.linkNoResults}
+                    </p>
+                  ) : filteredLinkCandidateStudents.map((student) => {
+                    const studentId = Number(student.id);
+                    const isSelected = selectedStudentIds.includes(studentId);
+
+                    return (
+                      <label key={studentId} className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-900">{student.name || "-"}</p>
+                          <p className="truncate text-xs text-slate-500">{student.email || "-"}</p>
+                        </div>
+                        <div className="ml-3 flex items-center gap-3">
+                          <span className="rounded-full border border-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-700">ID: {studentId}</span>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleStudentSelection(studentId)}
+                          />
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeLinkDrawer}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+                >
+                  {t.organization.parents.linkCancel}
+                </button>
+                <button
+                  type="button"
+                  onClick={submitParentChildrenLink}
+                  disabled={actionLoading}
+                  className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {t.organization.parents.linkSubmit}
+                </button>
+              </div>
+            </aside>
+          </div>
+        ) : null}
 
         {!loading && isSchool && activeTab === TABS.SCHOOL && (
           <section className="grid gap-4 md:grid-cols-2">

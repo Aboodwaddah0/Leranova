@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Save, UserRound, X } from 'lucide-react';
+import { useLanguage } from '../../../utils/i18n';
 
 const labelClass = 'text-xs font-bold uppercase tracking-[0.16em] text-slate-500';
 const inputClass = 'mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-indigo-400';
 
 export default function EditProfileModal({ open, profile, onClose, onSave, saving }) {
+  const { isArabic } = useLanguage();
   const [form, setForm] = useState({
     fullName: '',
     email: '',
@@ -57,8 +59,8 @@ export default function EditProfileModal({ open, profile, onClose, onSave, savin
               <UserRound size={18} />
             </div>
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-600">Personal Information</p>
-              <h3 className="text-xl font-black text-slate-900">Edit profile details</h3>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-600">{isArabic ? 'المعلومات الشخصية' : 'Personal Information'}</p>
+              <h3 className="text-xl font-black text-slate-900">{isArabic ? 'تعديل بيانات الملف الشخصي' : 'Edit profile details'}</h3>
             </div>
           </div>
 
@@ -69,29 +71,29 @@ export default function EditProfileModal({ open, profile, onClose, onSave, savin
 
         <form onSubmit={submit} className="mt-5 space-y-4">
           <label className="block">
-            <span className={labelClass}>Name</span>
+            <span className={labelClass}>{isArabic ? 'الاسم' : 'Name'}</span>
             <input value={form.fullName} onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))} className={inputClass} />
           </label>
 
           <label className="block">
-            <span className={labelClass}>Email</span>
+            <span className={labelClass}>{isArabic ? 'البريد الإلكتروني' : 'Email'}</span>
             <input value={form.email} className={`${inputClass} bg-slate-50 text-slate-500`} type="email" disabled readOnly />
           </label>
 
           <label className="block">
-            <span className={labelClass}>Phone</span>
+            <span className={labelClass}>{isArabic ? 'رقم الهاتف' : 'Phone'}</span>
             <input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} className={inputClass} />
           </label>
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-            <p className="text-xs text-slate-500">Only changed fields will be sent.</p>
+            <p className="text-xs text-slate-500">{isArabic ? 'سيتم إرسال الحقول التي تم تعديلها فقط.' : 'Only changed fields will be sent.'}</p>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={onClose}
                 className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
               >
-                Cancel
+                {isArabic ? 'إلغاء' : 'Cancel'}
               </button>
               <button
                 type="submit"
@@ -99,7 +101,7 @@ export default function EditProfileModal({ open, profile, onClose, onSave, savin
                 className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={15} />}
-                {saving ? 'Saving...' : 'Save'}
+                {saving ? (isArabic ? 'جاري الحفظ...' : 'Saving...') : (isArabic ? 'حفظ' : 'Save')}
               </button>
             </div>
           </div>

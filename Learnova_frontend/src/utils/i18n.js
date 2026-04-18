@@ -1,11 +1,127 @@
 import { useEffect, useMemo, useState } from "react";
-import studentTranslations from "../i18n/student";
 
 const STORAGE_KEY = "learnova_lang";
 
 export const LANGUAGES = {
   EN: "en",
   AR: "ar",
+};
+
+const studentTranslations = {
+  en: {
+    badge: "Student",
+    title: "Student Dashboard",
+    profile: {
+      title: "Profile",
+    },
+    common: {
+      loading: "Loading...",
+      noData: "No data",
+      status: "Status",
+      latest: "Latest",
+    },
+    mode: {
+      school: "School",
+      academy: "Academy",
+    },
+    courses: {
+      title: "My Courses",
+      subtitle: "Explore and continue your learning journey.",
+      noCourses: "No courses found.",
+    },
+    subjects: {
+      title: "Subjects",
+      subtitle: "Browse your subjects and latest marks.",
+      noSubjects: "No subjects available.",
+    },
+    lessons: {
+      title: "Lessons",
+      subtitle: "Study with context-aware tools and AI support.",
+      noContext: "No context selected",
+      lessonHint: "Select a course and subject to start learning.",
+      chooseLesson: "Lesson",
+    },
+    ai: {
+      title: "AI Tutor",
+      subtitle: "Ask Learnova",
+      placeholder: "Type your question...",
+      notAvailable: "The tutor is unavailable without a course.",
+      sending: "Thinking...",
+      send: "Send",
+      noAnswer: "Ask a question to get a response.",
+      answer: "Answer",
+      confidence: "Confidence",
+    },
+    comments: {
+      title: "Comments",
+      subtitle: "Discuss this lesson",
+      placeholder: "Write your comment...",
+      submit: "Post comment",
+      empty: "No comments yet.",
+    },
+    marks: {
+      title: "Marks",
+      subtitle: "Track your recent performance.",
+      noMarks: "No marks found.",
+    },
+  },
+  ar: {
+    badge: "الطالب",
+    title: "لوحة الطالب",
+    profile: {
+      title: "الملف الشخصي",
+    },
+    common: {
+      loading: "جاري التحميل...",
+      noData: "لا توجد بيانات",
+      status: "الحالة",
+      latest: "الأحدث",
+    },
+    mode: {
+      school: "مدرسة",
+      academy: "أكاديمية",
+    },
+    courses: {
+      title: "كورساتي",
+      subtitle: "استكشف الكورسات وتابع رحلة التعلم.",
+      noCourses: "لا توجد كورسات.",
+    },
+    subjects: {
+      title: "المواد",
+      subtitle: "استعرض المواد وآخر الدرجات.",
+      noSubjects: "لا توجد مواد متاحة.",
+    },
+    lessons: {
+      title: "الدروس",
+      subtitle: "تعلّم بأدوات دراسية ودعم ذكي مرتبط بالسياق.",
+      noContext: "لم يتم اختيار سياق",
+      lessonHint: "اختر كورسًا ومادة لبدء التعلم.",
+      chooseLesson: "الدرس",
+    },
+    ai: {
+      title: "المساعد الذكي",
+      subtitle: "اسأل Learnova",
+      placeholder: "اكتب سؤالك...",
+      notAvailable: "المساعد غير متاح بدون كورس.",
+      sending: "جاري التفكير...",
+      send: "إرسال",
+      noAnswer: "اسأل سؤالًا للحصول على إجابة.",
+      answer: "الإجابة",
+      confidence: "الثقة",
+    },
+    comments: {
+      title: "التعليقات",
+      subtitle: "ناقش هذا الدرس",
+      placeholder: "اكتب تعليقك...",
+      submit: "نشر التعليق",
+      empty: "لا توجد تعليقات بعد.",
+    },
+    marks: {
+      title: "الدرجات",
+      subtitle: "تابع أداءك الأخير.",
+      noMarks: "لا توجد درجات.",
+    },
+  },
 };
 
 export const authTranslations = {
@@ -108,7 +224,8 @@ export const authTranslations = {
       tabs: {
         overview: "Overview",
         teachers: "Teachers",
-        courses: "Courses & Subjects",
+        courses: "Courses",
+        subjects: "Subjects",
         students: "Students",
         parents: "Parents",
         schoolSettings: "School Settings",
@@ -180,7 +297,7 @@ export const authTranslations = {
         listTitle: "Courses",
         name: "Course Name",
         description: "Description",
-        thumbnail: "Thumbnail URL",
+        thumbnail: "Course image",
         startDate: "Start date",
         endDate: "End date",
         dates: "Start -> End",
@@ -202,6 +319,7 @@ export const authTranslations = {
         name: "Name",
         email: "Email",
         parent: "Parent",
+        parentNationalId: "Parent National ID",
         password: "Password",
         age: "Age",
         address: "Address",
@@ -229,6 +347,18 @@ export const authTranslations = {
         childrenLinked: "Linked",
         linkedYes: "Yes",
         linkedNo: "No",
+        linkChildrenAction: "Link Children",
+        linkDrawerTitle: "Link Students To Parent",
+        linkDrawerHint: "Choose unlinked students and confirm to connect them with this parent.",
+        linkSearchPlaceholder: "Search students by name, email, or ID",
+        linkSelectedCount: "Selected",
+        linkClearSelection: "Clear selection",
+        linkNoCandidates: "No unlinked students available right now.",
+        linkNoResults: "No students match your search.",
+        linkCancel: "Cancel",
+        linkSubmit: "Link now",
+        linkValidation: "Please select at least one student",
+        linkSuccess: "Parent linked to students successfully",
       },
       school: {
         title: "School Configuration",
@@ -470,7 +600,8 @@ export const authTranslations = {
       tabs: {
         overview: "نظرة عامة",
         teachers: "المعلمون",
-        courses: "الكورسات والمواد",
+        courses: "الكورسات",
+        subjects: "المواد",
         students: "الطلاب",
         parents: "أولياء الأمور",
         schoolSettings: "إعدادات المدرسة",
@@ -542,7 +673,7 @@ export const authTranslations = {
         listTitle: "الكورسات",
         name: "اسم الكورس",
         description: "الوصف",
-        thumbnail: "رابط صورة الكورس",
+        thumbnail: "صورة الكورس",
         startDate: "تاريخ البداية",
         endDate: "تاريخ النهاية",
         dates: "البداية -> النهاية",
@@ -564,6 +695,7 @@ export const authTranslations = {
         name: "الاسم",
         email: "البريد الإلكتروني",
         parent: "ولي الأمر",
+        parentNationalId: "رقم هوية ولي الأمر",
         password: "كلمة المرور",
         age: "العمر",
         address: "العنوان",
@@ -591,6 +723,18 @@ export const authTranslations = {
         childrenLinked: "مرتبط",
         linkedYes: "نعم",
         linkedNo: "لا",
+        linkChildrenAction: "ربط أبناء",
+        linkDrawerTitle: "ربط الطلاب مع ولي الأمر",
+        linkDrawerHint: "اختر الطلاب غير المرتبطين ثم أكّد عملية الربط مع ولي الأمر هذا.",
+        linkSearchPlaceholder: "ابحث عن الطلاب بالاسم أو البريد أو الـ ID",
+        linkSelectedCount: "المحدد",
+        linkClearSelection: "مسح التحديد",
+        linkNoCandidates: "لا يوجد طلاب غير مرتبطين حاليًا.",
+        linkNoResults: "لا يوجد طلاب مطابقون للبحث.",
+        linkCancel: "إلغاء",
+        linkSubmit: "ربط الآن",
+        linkValidation: "الرجاء اختيار طالب واحد على الأقل",
+        linkSuccess: "تم ربط ولي الأمر بالطلاب بنجاح",
       },
       school: {
         title: "إعدادات المدرسة",

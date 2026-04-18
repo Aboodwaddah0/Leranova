@@ -13,6 +13,21 @@ const isSchoolStudent = (data) => {
   return role === 'STUDENT' && orgRole === 'SCHOOL';
 };
 
+const normalizeNationalId = (value) => String(value || '').trim().replace(/[\s-]/g, '');
+
+const buildDomainFromSubdomain = (subdomain) => {
+  const sanitized = String(subdomain || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '');
+
+  if (!sanitized) {
+    return null;
+  }
+
+  return `${sanitized}.com`;
+};
+
 const prepareSchoolPlacement = async (data, tx = prisma) => {
   if (!isSchoolStudent(data)) {
     return {
@@ -131,6 +146,62 @@ const createParentForNationalId = async (nationalId, domain) => {
     email,
     password,
   };
+};
+
+const resolveParentIdByNationalId = async (parentNationalId) => {
+  const normalized = normalizeNationalId(parentNationalId);
+  if (!normalized) {
+    return null;
+  }
+
+  const parent = await prisma.parent.findUnique({
+    where: { nationalId: normalized },
+    select: { Parent_id: true },
+  });
+
+  return parent?.Parent_id ? Number(parent.Parent_id) : null;
+};
+
+const resolveOrCreateParentId = async ({ parentNationalId, orgId, domain }) => {
+  const normalized = normalizeNationalId(parentNationalId);
+  if (!normalized) {
+    return null;
+  }
+
+  const existingParentId = await resolveParentIdByNationalId(normalized);
+  if (existingParentId) {
+    return {
+      parentId: existingParentId,
+      parentLinkStatus: 'existing',
+    };
+  }
+
+  let resolvedDomain = domain;
+  if (!resolvedDomain) {
+    const subdomain = await getOrganizationSubdomain(orgId);
+    resolvedDomain = buildDomainFromSubdomain(subdomain);
+  }
+
+  if (!resolvedDomain) {
+    throw new AppError('Unable to create parent account from national ID: organization subdomain is missing', 400);
+  }
+
+  try {
+    const createdParent = await createParentForNationalId(normalized, resolvedDomain);
+    return {
+      parentId: Number(createdParent.parentId),
+      parentLinkStatus: 'created',
+    };
+  } catch (_error) {
+    const fallbackParentId = await resolveParentIdByNationalId(normalized);
+    if (fallbackParentId) {
+      return {
+        parentId: fallbackParentId,
+        parentLinkStatus: 'existing',
+      };
+    }
+    throw new AppError(`Parent with nationalId ${normalized} was not found and could not be auto-created`, 400);
+  }
 };
 
 export const generateUsers = async (data, domain) => {
@@ -332,9 +403,19 @@ if (isUserExist)  {
     throw new Error('user email already exists')
 }
 
+const resolvedParentInfo = data.role === 'STUDENT' && data.parentNationalId
+  ? await resolveOrCreateParentId({
+    parentNationalId: data.parentNationalId,
+    orgId: data.orgId,
+  })
+  : null;
+
+const resolvedParentId = resolvedParentInfo?.parentId ?? (data.parentId ?? null);
+
 const placement = await prepareSchoolPlacement(data);
 const payload = {
   ...data,
+  parentId: resolvedParentId,
   dob: placement.dob,
   gradeLevel: placement.gradeLevel,
   courseId: placement.courseId ?? data.courseId ?? null,
@@ -358,7 +439,10 @@ const user=await prisma.user.create({
     }
 });
 
-return user;
+return {
+  ...user,
+  parentLinkStatus: resolvedParentInfo?.parentLinkStatus ?? null,
+};
 
 }
 
@@ -366,9 +450,20 @@ export const addUserWithGeneratedCredentials = async (data, domain) => {
   const { email, password } = await generateUserCredentials(data.name, domain);
   const passwordHashed = await hashPassword(password);
   const passwordEncrypted = encryptPassword(password);
+  const resolvedParentInfo = data.role === 'STUDENT' && data.parentNationalId
+    ? await resolveOrCreateParentId({
+      parentNationalId: data.parentNationalId,
+      orgId: data.orgId,
+      domain,
+    })
+    : null;
+
+  const resolvedParentId = resolvedParentInfo?.parentId ?? (data.parentId ?? null);
+
   const placement = await prepareSchoolPlacement(data);
   const payload = {
     ...data,
+    parentId: resolvedParentId,
     dob: placement.dob,
     gradeLevel: placement.gradeLevel,
     courseId: placement.courseId ?? data.courseId ?? null,
@@ -405,6 +500,7 @@ export const addUserWithGeneratedCredentials = async (data, domain) => {
       email,
       password,
     },
+    parentLinkStatus: resolvedParentInfo?.parentLinkStatus ?? null,
   };
 };
 
@@ -561,6 +657,81 @@ export const exportOrganizationUsersCredentials = async (orgId, orgRole) => {
   return [header, ...rows]
     .map((row) => row.map(toCsvValue).join(CSV_DELIMITER))
     .join('\r\n');
+};
+
+export const linkParentToStudents = async ({ orgId, orgRole, parentId, studentIds }) => {
+  const normalizedOrgRole = String(orgRole || '').trim().toUpperCase();
+  if (normalizedOrgRole !== 'SCHOOL') {
+    throw new AppError('Parent-student linking is only available for SCHOOL organizations', 403);
+  }
+
+  const orgSubdomain = await getOrganizationSubdomain(orgId);
+  const parentUser = await findOrganizationUserById(parentId, orgId, orgRole, orgSubdomain);
+  if (!parentUser) {
+    throw new AppError('Parent user not found in this organization', 404);
+  }
+
+  const parent = await prisma.parent.findUnique({
+    where: { Parent_id: parentId },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+        },
+      },
+    },
+  });
+
+  if (!parent?.user || String(parent.user.role || '').toUpperCase() !== 'PARENT') {
+    throw new AppError('Provided user is not a parent account', 400);
+  }
+
+  const students = await prisma.student.findMany({
+    where: {
+      Student_id: { in: studentIds },
+      OrgId: orgId,
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  if (students.length !== studentIds.length) {
+    const foundIds = new Set(students.map((student) => student.Student_id));
+    const missingIds = studentIds.filter((studentId) => !foundIds.has(studentId));
+    throw new AppError(`Some students were not found in this organization: ${missingIds.join(', ')}`, 404);
+  }
+
+  await prisma.$transaction(
+    students.map((student) => prisma.student.update({
+      where: { Student_id: student.Student_id },
+      data: { Parent_id: parentId },
+    })),
+  );
+
+  return {
+    parent: {
+      id: parent.user.id,
+      name: parent.user.name,
+      email: parent.user.email,
+    },
+    linkedStudents: students.map((student) => ({
+      id: student.user?.id || student.Student_id,
+      name: student.user?.name || null,
+      email: student.user?.email || null,
+      parentId,
+    })),
+    linkedCount: students.length,
+  };
 };
 
 

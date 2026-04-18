@@ -19,9 +19,10 @@ class StudentPageErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
+      const isArabic = typeof document !== 'undefined' && document?.documentElement?.dir === 'rtl';
       return (
         <div className="m-6 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-800">
-          Student page crashed: {this.state.errorMessage}
+          {isArabic ? `حدث خطأ في صفحة الطالب: ${this.state.errorMessage}` : `Student page crashed: ${this.state.errorMessage}`}
         </div>
       );
     }

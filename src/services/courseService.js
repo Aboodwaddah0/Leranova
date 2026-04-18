@@ -18,9 +18,15 @@ const getOrganizationRole = async (orgId) => {
 
 
 export const createCourse = async (orgId, data) => {
+  const payload = data && typeof data === 'object' ? data : {};
+
+  if (!String(payload.Name || '').trim()) {
+    throw new AppError('Name is required', 400);
+  }
+
   const organizationRole = await getOrganizationRole(orgId);
-  const isPaid = Boolean(data.isPaid);
-  const price = isPaid ? Number(data.price ?? 0) : 0;
+  const isPaid = Boolean(payload.isPaid);
+  const price = isPaid ? Number(payload.price ?? 0) : 0;
 
   if (organizationRole === 'SCHOOL' && (isPaid || price > 0)) {
     throw new AppError('School courses must be free', 400);
@@ -34,11 +40,11 @@ export const createCourse = async (orgId, data) => {
     const createdCourse = await tx.course.create({
       data: {
         Org_id: orgId,
-        Name: data.Name,
-        Description: data.Description ?? null,
-        Thumbnail: data.Thumbnail ?? null,
-        Start: data.Start ? new Date(data.Start) : null,
-        End: data.End ? new Date(data.End) : null,
+        Name: payload.Name,
+        Description: payload.Description ?? null,
+        Thumbnail: payload.Thumbnail ?? null,
+        Start: payload.Start ? new Date(payload.Start) : null,
+        End: payload.End ? new Date(payload.End) : null,
         price,
         isPaid,
       },

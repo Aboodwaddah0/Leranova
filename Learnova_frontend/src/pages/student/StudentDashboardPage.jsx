@@ -13,9 +13,9 @@ import { useLanguage } from '../../utils/i18n';
 
 const getCourseId = (course) => Number(course?.id || course?.courseId || course?.Course_id || 0);
 
-const getCourseName = (course) => course?.name || course?.Name || 'Untitled course';
+const getCourseName = (course, isArabic) => course?.name || course?.Name || (isArabic ? 'كورس بدون عنوان' : 'Untitled course');
 
-const normalizeCourses = (courses = []) => {
+const normalizeCourses = (courses = [], isArabic = false) => {
   const unique = new Map();
 
   courses.forEach((course) => {
@@ -25,9 +25,9 @@ const normalizeCourses = (courses = []) => {
     if (!unique.has(id)) {
       unique.set(id, {
         id,
-        name: getCourseName(course),
+        name: getCourseName(course, isArabic),
         description: course?.description || course?.Description || '',
-        category: course?.category || 'Academy',
+        category: course?.category || (isArabic ? 'أكاديمية' : 'Academy'),
         progress: Number(course?.progress || 0),
         cover: course?.cover || course?.thumbnail || '',
         priceStatus: String(course?.priceStatus || '').toUpperCase() || null,
@@ -38,9 +38,9 @@ const normalizeCourses = (courses = []) => {
     const current = unique.get(id);
     unique.set(id, {
       ...current,
-      name: current.name || getCourseName(course),
+      name: current.name || getCourseName(course, isArabic),
       description: current.description || course?.description || course?.Description || '',
-      category: current.category || course?.category || 'Academy',
+      category: current.category || course?.category || (isArabic ? 'أكاديمية' : 'Academy'),
       progress: Math.max(current.progress || 0, Number(course?.progress || 0)),
       cover: current.cover || course?.cover || course?.thumbnail || '',
       priceStatus: current.priceStatus || String(course?.priceStatus || '').toUpperCase() || null,
@@ -147,11 +147,11 @@ export default function StudentDashboardPage() {
 
         if (cancelled) return;
 
-        const safeCourses = normalizeCourses(Array.isArray(courseData) ? courseData : []);
+        const safeCourses = normalizeCourses(Array.isArray(courseData) ? courseData : [], isArabic);
         const safeMarks = Array.isArray(marksData) ? marksData : [];
         const safePurchases = Array.isArray(purchaseData) ? purchaseData : [];
         const rawCatalog = catalogResponse?.data?.data || catalogResponse?.data || [];
-        const safeCatalog = normalizeCourses(Array.isArray(rawCatalog) ? rawCatalog : []);
+        const safeCatalog = normalizeCourses(Array.isArray(rawCatalog) ? rawCatalog : [], isArabic);
 
         setEnrolledCourses(safeCourses);
         setCatalogCourses(safeCatalog);
@@ -160,7 +160,7 @@ export default function StudentDashboardPage() {
         setProfile(profileData || null);
       } catch (loadError) {
         if (!cancelled) {
-          setError(loadError?.message || 'Failed to load dashboard.');
+          setError(loadError?.message || (isArabic ? 'فشل تحميل لوحة الطالب.' : 'Failed to load dashboard.'));
         }
       } finally {
         if (!cancelled) {
@@ -177,11 +177,11 @@ export default function StudentDashboardPage() {
   }, []);
 
   if (!t?.student) {
-    return <div className="m-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">Loading translations...</div>;
+    return <div className="m-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{isArabic ? 'جاري تحميل الترجمة...' : 'Loading translations...'}</div>;
   }
 
   if (!Array.isArray(enrolledCourses)) {
-    return <div className="m-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">No data</div>;
+    return <div className="m-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{t.student.common.noData}</div>;
   }
 
   const enrolledCourseIds = new Set(enrolledCourses.map((course) => Number(course.id)).filter(Number.isFinite));
@@ -277,7 +277,7 @@ export default function StudentDashboardPage() {
       <div className="space-y-8">
         {loading ? (
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-700">
-            Loading latest academy data...
+            {isArabic ? 'جاري تحميل أحدث بيانات الأكاديمية...' : 'Loading latest academy data...'}
           </div>
         ) : null}
 
@@ -293,7 +293,7 @@ export default function StudentDashboardPage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-indigo-100">{isArabic ? 'لوحة الطالب' : 'Student dashboard'} ✨</p>
                 <h2 className="mt-2 text-3xl font-black text-white">
-                  {isArabic ? 'مرحبًا' : 'Welcome'} 👋 {profile?.fullName || profile?.name || 'Student'}
+                  {isArabic ? 'مرحبًا' : 'Welcome'} 👋 {profile?.fullName || profile?.name || (isArabic ? 'طالب' : 'Student')}
                 </h2>
                 <p className="mt-2 text-sm leading-7 text-indigo-50">
                   {isArabic
@@ -420,7 +420,7 @@ export default function StudentDashboardPage() {
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">📚 My Courses</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{isArabic ? '📚 كورساتي' : '📚 My Courses'}</p>
               <h2 className="mt-2 text-xl font-black text-slate-900">{isArabic ? 'كل الكورسات المسجلة غير المبدوءة' : 'Enrolled but not started'}</h2>
               <p className="mt-1 text-sm text-slate-600">
                 {isArabic
@@ -452,7 +452,7 @@ export default function StudentDashboardPage() {
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">✨ Recommended Courses</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{isArabic ? '✨ كورسات مقترحة' : '✨ Recommended Courses'}</p>
               <h2 className="mt-2 text-xl font-black text-slate-900">{isArabic ? 'مقترح لك (غير مسجل)' : 'Not enrolled yet'}</h2>
               <p className="mt-1 text-sm text-slate-600">
                 {isArabic
@@ -486,6 +486,7 @@ export default function StudentDashboardPage() {
 }
 
 function DashboardCourseCard({ course, actionLabel, actionHref, showProgress = false }) {
+  const { isArabic } = useLanguage();
   const progress = Math.min(100, Math.max(0, Number(course?.progress || 0)));
   const isContinue = showProgress;
 
@@ -493,17 +494,17 @@ function DashboardCourseCard({ course, actionLabel, actionHref, showProgress = f
     <article className="flex h-full flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-md">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-          {isContinue ? '🔥 In Progress' : '🧩'} {course?.category || 'Academy'}
+          {isContinue ? (isArabic ? '🔥 قيد التقدم' : '🔥 In Progress') : '🧩'} {course?.category || (isArabic ? 'أكاديمية' : 'Academy')}
         </p>
-        <h3 className="mt-2 line-clamp-2 text-lg font-bold text-slate-900">{course?.name || 'Untitled course'}</h3>
-        <p className="mt-2 line-clamp-3 text-sm text-slate-600">{course?.description || 'Course details are available on the course page.'}</p>
+        <h3 className="mt-2 line-clamp-2 text-lg font-bold text-slate-900">{course?.name || (isArabic ? 'كورس بدون عنوان' : 'Untitled course')}</h3>
+        <p className="mt-2 line-clamp-3 text-sm text-slate-600">{course?.description || (isArabic ? 'تفاصيل الكورس متاحة في صفحة الكورس.' : 'Course details are available on the course page.')}</p>
       </div>
 
       <div className="mt-4 space-y-3">
         {showProgress ? (
           <>
             <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
-              <span>Progress 📌</span>
+              <span>{isArabic ? 'التقدم 📌' : 'Progress 📌'}</span>
               <span>{Math.round(progress)}%</span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-slate-100">

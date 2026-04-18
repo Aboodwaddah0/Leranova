@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Eye, EyeOff, KeyRound, Loader2, X } from 'lucide-react';
+import { useLanguage } from '../../../utils/i18n';
 
 const inputBase = 'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 pr-11 text-sm text-slate-800 outline-none transition focus:border-indigo-400';
 
@@ -28,6 +29,7 @@ function PasswordField({ label, value, onChange, visible, onToggle, placeholder 
 }
 
 export default function ChangePasswordModal({ open, onClose, onSave, saving }) {
+  const { isArabic } = useLanguage();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNext, setShowNext] = useState(false);
@@ -56,12 +58,12 @@ export default function ChangePasswordModal({ open, onClose, onSave, saving }) {
     event.preventDefault();
 
     if (newPassword !== confirmPassword) {
-      setLocalError('New password and confirmation do not match.');
+      setLocalError(isArabic ? 'كلمة المرور الجديدة وتأكيدها غير متطابقين.' : 'New password and confirmation do not match.');
       return;
     }
 
     if (newPassword.trim().length < 8) {
-      setLocalError('New password must be at least 8 characters.');
+      setLocalError(isArabic ? 'كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل.' : 'New password must be at least 8 characters.');
       return;
     }
 
@@ -86,8 +88,8 @@ export default function ChangePasswordModal({ open, onClose, onSave, saving }) {
               <KeyRound size={18} />
             </div>
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-600">Security</p>
-              <h3 className="text-xl font-black text-slate-900">Change password</h3>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-600">{isArabic ? 'الأمان' : 'Security'}</p>
+              <h3 className="text-xl font-black text-slate-900">{isArabic ? 'تغيير كلمة المرور' : 'Change password'}</h3>
             </div>
           </div>
 
@@ -98,21 +100,21 @@ export default function ChangePasswordModal({ open, onClose, onSave, saving }) {
 
         <form onSubmit={submit} className="mt-5 space-y-4">
           <PasswordField
-            label="New password"
+            label={isArabic ? 'كلمة المرور الجديدة' : 'New password'}
             value={newPassword}
             onChange={setNewPassword}
             visible={showNext}
             onToggle={() => setShowNext((value) => !value)}
-            placeholder="At least 8 characters"
+            placeholder={isArabic ? '8 أحرف على الأقل' : 'At least 8 characters'}
           />
 
           <PasswordField
-            label="Confirm new password"
+            label={isArabic ? 'تأكيد كلمة المرور الجديدة' : 'Confirm new password'}
             value={confirmPassword}
             onChange={setConfirmPassword}
             visible={showConfirm}
             onToggle={() => setShowConfirm((value) => !value)}
-            placeholder="Re-enter new password"
+            placeholder={isArabic ? 'أعد إدخال كلمة المرور الجديدة' : 'Re-enter new password'}
           />
 
           {localError ? <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{localError}</p> : null}
@@ -123,7 +125,7 @@ export default function ChangePasswordModal({ open, onClose, onSave, saving }) {
               onClick={close}
               className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
             >
-              Cancel
+              {isArabic ? 'إلغاء' : 'Cancel'}
             </button>
             <button
               type="submit"
@@ -131,7 +133,7 @@ export default function ChangePasswordModal({ open, onClose, onSave, saving }) {
               className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {saving ? <Loader2 size={16} className="animate-spin" /> : null}
-              {saving ? 'Updating...' : 'Update password'}
+              {saving ? (isArabic ? 'جاري التحديث...' : 'Updating...') : (isArabic ? 'تحديث كلمة المرور' : 'Update password')}
             </button>
           </div>
         </form>
