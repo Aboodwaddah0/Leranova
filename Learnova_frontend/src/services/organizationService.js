@@ -1,5 +1,7 @@
 import api from "../utils/api";
 
+const isFormData = (payload) => typeof FormData !== "undefined" && payload instanceof FormData;
+
 export const fetchMyOrganizationProfile = async () => {
   try {
     const { data } = await api.get("/organizations/me");
@@ -53,12 +55,15 @@ export const fetchOrganizationCourses = async () => {
 
 export const createOrganizationCourse = async (payload) => {
   try {
-    const { data } = await api.post("/courses", payload);
+    const requestConfig = isFormData(payload)
+      ? { headers: { "Content-Type": "multipart/form-data" } }
+      : undefined;
+    const { data } = await api.post("/courses", payload, requestConfig);
     return data?.data || null;
   } catch (error) {
     const message = String(error?.response?.data?.message || error?.message || "").toLowerCase();
 
-    if (message.includes('"ispaid" is not allowed') || message.includes('"price" is not allowed')) {
+    if (!isFormData(payload) && (message.includes('"ispaid" is not allowed') || message.includes('"price" is not allowed'))) {
       const fallbackPayload = { ...payload };
       delete fallbackPayload.isPaid;
       delete fallbackPayload.price;
@@ -73,12 +78,15 @@ export const createOrganizationCourse = async (payload) => {
 
 export const updateOrganizationCourse = async (courseId, payload) => {
   try {
-    const { data } = await api.patch(`/courses/${courseId}`, payload);
+    const requestConfig = isFormData(payload)
+      ? { headers: { "Content-Type": "multipart/form-data" } }
+      : undefined;
+    const { data } = await api.patch(`/courses/${courseId}`, payload, requestConfig);
     return data?.data || null;
   } catch (error) {
     const message = String(error?.response?.data?.message || error?.message || "").toLowerCase();
 
-    if (message.includes('"ispaid" is not allowed') || message.includes('"price" is not allowed')) {
+    if (!isFormData(payload) && (message.includes('"ispaid" is not allowed') || message.includes('"price" is not allowed'))) {
       const fallbackPayload = { ...payload };
       delete fallbackPayload.isPaid;
       delete fallbackPayload.price;
@@ -143,6 +151,11 @@ export const updateOrganizationUser = async (userId, payload) => {
 
 export const deleteOrganizationUser = async (userId) => {
   const { data } = await api.delete(`/users/${userId}`);
+  return data?.data || null;
+};
+
+export const linkParentToStudents = async (parentId, payload) => {
+  const { data } = await api.patch(`/users/parents/${parentId}/link-students`, payload);
   return data?.data || null;
 };
 

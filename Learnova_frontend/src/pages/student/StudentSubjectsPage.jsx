@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import StudentLayout from "../../components/student/StudentLayout";
 import { Badge } from "../../components/ui/badge";
+import EducationLoading from "../../components/ui/EducationLoading";
 import { fetchMyStudentMarks } from "../../services/studentService";
 import { ORG_TYPES } from "../../utils/constants";
 import { useLanguage } from "../../utils/i18n";
 import { notifyError } from "../../lib/notify";
 
-const safeError = (error) => error?.response?.data?.message || error?.message || "Request failed";
+const safeError = (error, isArabic) => error?.response?.data?.message || error?.message || (isArabic ? 'فشل الطلب.' : 'Request failed');
 
 const getStudentMode = (user) => {
   if (String(user?.organizationType || user?.organization?.Role || "").toUpperCase() === ORG_TYPES.SCHOOL) {
@@ -70,7 +71,7 @@ export default function StudentSubjectsPage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(safeError(err));
+          setError(safeError(err, isArabic));
         }
       } finally {
         if (!cancelled) {
@@ -96,7 +97,14 @@ export default function StudentSubjectsPage() {
 
   return (
     <StudentLayout mode={mode} title={t.student.subjects.title} subtitle={t.student.subjects.subtitle}>
-      {loading && <p className="text-sm font-semibold text-slate-500">{t.student.common.loading}</p>}
+      {loading ? (
+        <EducationLoading
+          isArabic={isArabic}
+          title={isArabic ? "جاري تحميل المواد" : "Loading subjects"}
+          subtitle={isArabic ? "نرتب موادك وآخر درجاتك" : "Preparing your subjects and latest marks"}
+          fullscreen
+        />
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {subjects.length ? (

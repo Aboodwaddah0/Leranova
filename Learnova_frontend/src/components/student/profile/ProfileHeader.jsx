@@ -1,4 +1,5 @@
 import { School, Sparkles } from 'lucide-react';
+import { useLanguage } from '../../../utils/i18n';
 
 const initialsOf = (name = '') => {
   const parts = String(name).trim().split(/\s+/).filter(Boolean);
@@ -7,10 +8,13 @@ const initialsOf = (name = '') => {
 };
 
 export default function ProfileHeader({ profile, studentMode }) {
-  const displayName = profile?.fullName || profile?.name || 'Student';
+  const { isArabic } = useLanguage();
+  const displayName = profile?.fullName || profile?.name || (isArabic ? 'طالب' : 'Student');
   const email = profile?.email || 'student@learnova.com';
   const avatarUrl = profile?.avatarUrl || profile?.avatar || '';
-  const badgeLabel = studentMode === 'SCHOOL' ? 'School Student' : 'Academy Student';
+  const badgeLabel = studentMode === 'SCHOOL'
+    ? (isArabic ? 'طالب مدرسة' : 'School Student')
+    : (isArabic ? 'طالب أكاديمية' : 'Academy Student');
 
   return (
     <section className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo-600 via-violet-600 to-pink-500 p-6 text-white shadow-xl shadow-indigo-500/25 md:p-7">
@@ -28,7 +32,7 @@ export default function ProfileHeader({ profile, studentMode }) {
           </div>
 
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-indigo-100">Student profile</p>
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-indigo-100">{isArabic ? 'ملف الطالب' : 'Student profile'}</p>
             <h1 className="mt-1 text-2xl font-black leading-tight md:text-3xl">{displayName}</h1>
             <p className="mt-1 text-sm text-indigo-100/95">{email}</p>
           </div>
@@ -42,7 +46,7 @@ export default function ProfileHeader({ profile, studentMode }) {
 
       <div className="relative mt-6 flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-indigo-50">
         <School size={16} />
-        <span>Keep your profile details up to date for a smoother course experience.</span>
+        <span>{isArabic ? 'حدّث بيانات ملفك باستمرار لتجربة دراسة أكثر سلاسة.' : 'Keep your profile details up to date for a smoother course experience.'}</span>
       </div>
     </section>
   );

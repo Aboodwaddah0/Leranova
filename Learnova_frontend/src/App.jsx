@@ -3,6 +3,7 @@ import ProtectedRoute from "./routes/ProtectedRoute";
 import AdminProtectedRoute from "./routes/AdminProtectedRoute";
 import OrganizationProtectedRoute from "./routes/OrganizationProtectedRoute";
 import InstructorProtectedRoute from "./routes/InstructorProtectedRoute";
+import InstructorSchoolOnlyRoute from "./routes/InstructorSchoolOnlyRoute";
 import StudentProtectedRoute from "./routes/StudentProtectedRoute";
 import DashboardPlaceholderPage from "./pages/DashboardPlaceholderPage";
 import InstructorDashboardPage from "./pages/InstructorDashboardPage";
@@ -64,7 +65,9 @@ function App() {
             <Route path="/dashboard/instructor/subjects" element={<InstructorSubjectsPage />} />
             <Route path="/dashboard/instructor/lessons" element={<InstructorLessonsPage />} />
             <Route path="/dashboard/instructor/students" element={<InstructorStudentsPage />} />
-            <Route path="/dashboard/instructor/marks" element={<InstructorMarksPage />} />
+            <Route element={<InstructorSchoolOnlyRoute />}>
+              <Route path="/dashboard/instructor/marks" element={<InstructorMarksPage />} />
+            </Route>
           </Route>
           <Route element={<StudentProtectedRoute />}>
             <Route path="/dashboard/student" element={<StudentPageErrorBoundary><StudentDashboardPage /></StudentPageErrorBoundary>} />

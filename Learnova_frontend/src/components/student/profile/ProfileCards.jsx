@@ -1,4 +1,5 @@
 import { ChevronRight, KeyRound, LogOut, School, UserCircle2 } from 'lucide-react';
+import { useLanguage } from '../../../utils/i18n';
 
 const baseCardClass =
   'group w-full rounded-3xl border border-slate-200/70 bg-white p-4 text-left shadow-sm shadow-slate-200/70 transition duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-100/60 active:scale-[0.99]';
@@ -23,22 +24,24 @@ function ActionCard({ icon: Icon, title, description, onClick }) {
 }
 
 export default function ProfileCards({ onEditProfile, onChangePassword }) {
+  const { isArabic } = useLanguage();
+
   return (
     <section className="space-y-4">
-      <h2 className="text-sm font-extrabold uppercase tracking-[0.22em] text-slate-500">Actions</h2>
+      <h2 className="text-sm font-extrabold uppercase tracking-[0.22em] text-slate-500">{isArabic ? 'الإجراءات' : 'Actions'}</h2>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <ActionCard
           icon={UserCircle2}
-          title="Personal Information"
-          description="Edit your name, email, and phone with field-level updates."
+          title={isArabic ? 'البيانات الشخصية' : 'Personal Information'}
+          description={isArabic ? 'عدّل الاسم والبريد ورقم الهاتف بتحديثات دقيقة لكل حقل.' : 'Edit your name, email, and phone with field-level updates.'}
           onClick={onEditProfile}
         />
 
         <ActionCard
           icon={KeyRound}
-          title="Change Password"
-          description="Update your password securely with visibility toggles."
+          title={isArabic ? 'تغيير كلمة المرور' : 'Change Password'}
+          description={isArabic ? 'حدّث كلمة المرور بأمان مع التحكم في إظهارها.' : 'Update your password securely with visibility toggles.'}
           onClick={onChangePassword}
         />
       </div>
@@ -47,22 +50,24 @@ export default function ProfileCards({ onEditProfile, onChangePassword }) {
 }
 
 export function OrganizationInfoCard({ organizationName, organizationType }) {
+  const { isArabic } = useLanguage();
+
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
       <div className="flex items-center gap-2 text-slate-900">
         <School size={17} className="text-indigo-600" />
-        <h2 className="text-sm font-extrabold uppercase tracking-[0.18em] text-slate-600">Organization Info</h2>
+        <h2 className="text-sm font-extrabold uppercase tracking-[0.18em] text-slate-600">{isArabic ? 'بيانات المؤسسة' : 'Organization Info'}</h2>
       </div>
 
       <dl className="mt-4 space-y-3 text-sm text-slate-700">
         <div className="rounded-2xl bg-slate-50 px-4 py-3">
-          <dt className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Name</dt>
-          <dd className="mt-1 font-semibold text-slate-900">{organizationName || 'Not available'}</dd>
+          <dt className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">{isArabic ? 'الاسم' : 'Name'}</dt>
+          <dd className="mt-1 font-semibold text-slate-900">{organizationName || (isArabic ? 'غير متاح' : 'Not available')}</dd>
         </div>
 
         <div className="rounded-2xl bg-slate-50 px-4 py-3">
-          <dt className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Type</dt>
-          <dd className="mt-1 font-semibold text-slate-900">{organizationType || 'Not available'}</dd>
+          <dt className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">{isArabic ? 'النوع' : 'Type'}</dt>
+          <dd className="mt-1 font-semibold text-slate-900">{organizationType || (isArabic ? 'غير متاح' : 'Not available')}</dd>
         </div>
       </dl>
     </section>
@@ -70,10 +75,12 @@ export function OrganizationInfoCard({ organizationName, organizationType }) {
 }
 
 export function QuickStats({ enrolledCoursesCount, membershipStatus, accountStatus }) {
+  const { isArabic } = useLanguage();
+
   const stats = [
-    { label: 'Enrolled Courses', value: String(enrolledCoursesCount ?? 0) },
-    { label: 'Membership Status', value: membershipStatus || 'Active' },
-    { label: 'Account Status', value: accountStatus || 'Verified' },
+    { label: isArabic ? 'الكورسات المسجلة' : 'Enrolled Courses', value: String(enrolledCoursesCount ?? 0) },
+    { label: isArabic ? 'حالة العضوية' : 'Membership Status', value: membershipStatus || (isArabic ? 'نشط' : 'Active') },
+    { label: isArabic ? 'حالة الحساب' : 'Account Status', value: accountStatus || (isArabic ? 'موثق' : 'Verified') },
   ];
 
   return (
@@ -89,6 +96,8 @@ export function QuickStats({ enrolledCoursesCount, membershipStatus, accountStat
 }
 
 export function LogoutSection({ onLogout }) {
+  const { isArabic } = useLanguage();
+
   return (
     <section className="pt-2">
       <button
@@ -97,7 +106,7 @@ export function LogoutSection({ onLogout }) {
         className="flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 transition hover:bg-rose-100"
       >
         <LogOut size={16} />
-        Logout
+        {isArabic ? 'تسجيل الخروج' : 'Logout'}
       </button>
     </section>
   );

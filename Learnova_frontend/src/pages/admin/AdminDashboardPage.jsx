@@ -76,7 +76,7 @@ export default function AdminDashboardPage() {
         {lang === "en" ? t.common.switchToArabic : t.common.switchToEnglish}
       </button>
 
-      <div className="relative z-10 mx-auto grid min-h-[92vh] w-full max-w-7xl gap-6 lg:grid-cols-[260px_1fr]">
+      <div className="relative z-10 grid min-h-[92vh] w-full gap-6 lg:grid-cols-[260px_1fr]">
         <AdminSidebar />
 
         <section className="space-y-6 rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_18px_56px_-26px_rgba(16,20,26,0.35)] md:p-8">

@@ -7,6 +7,20 @@ import {
 } from '../services/courseService.js';
 import { createCourseSchema, updateCourseSchema } from '../validations/courseValidation.js';
 import AppError from '../utils/appError.js';
+import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
+
+const resolveThumbnailUrl = async (file) => {
+  if (!file) {
+    return null;
+  }
+
+  const uploaded = await uploadBufferToCloudinary(file.buffer, {
+    folder: 'learnova/courses/thumbnails',
+    resource_type: 'image',
+  });
+
+  return uploaded?.url || null;
+};
 
 // Sample manual test (Course):
 // - Authorization: Bearer <org-jwt>
@@ -21,14 +35,21 @@ import AppError from '../utils/appError.js';
 
 export const createCourseController = async (req, res, next) => {
   try {
-    const { error, value } = createCourseSchema.validate(req.body);
+    const requestBody = req.body && typeof req.body === 'object' ? req.body : {};
+    const { error, value } = createCourseSchema.validate(requestBody);
 
     if (error) {
       return next(new AppError(error.details[0].message, 400));
     }
 
+    const payload = value || {};
+
+    if (req.file) {
+      payload.Thumbnail = await resolveThumbnailUrl(req.file);
+    }
+
     const orgId = req.user.id;
-    const course = await createCourse(orgId, value);
+    const course = await createCourse(orgId, payload);
 
     return res.status(201).json({
       message: 'Course created successfully',
@@ -81,14 +102,21 @@ export const updateCourseController = async (req, res, next) => {
       return next(new AppError('Invalid course id', 400));
     }
 
-    const { error, value } = updateCourseSchema.validate(req.body);
+    const requestBody = req.body && typeof req.body === 'object' ? req.body : {};
+    const { error, value } = updateCourseSchema.validate(requestBody);
 
     if (error) {
       return next(new AppError(error.details[0].message, 400));
     }
 
+    const payload = value || {};
+
+    if (req.file) {
+      payload.Thumbnail = await resolveThumbnailUrl(req.file);
+    }
+
     const orgId = req.user.id;
-    const course = await updateCourse(orgId, courseId, value);
+    const course = await updateCourse(orgId, courseId, payload);
 
     return res.status(200).json({
       message: 'Course updated successfully',

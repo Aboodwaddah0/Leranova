@@ -33,7 +33,7 @@ export default function StudentCoursesPage() {
       } catch (loadError) {
         if (!cancelled) {
           console.error('Courses error:', loadError);
-          setError(loadError?.message || 'Failed to load courses.');
+          setError(loadError?.message || (isArabic ? 'فشل تحميل الكورسات.' : 'Failed to load courses.'));
         }
       } finally {
         if (!cancelled) {
@@ -51,17 +51,17 @@ export default function StudentCoursesPage() {
 
   if (!t?.student) {
     console.error('Courses error: missing translation object');
-    return <div className="m-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">Loading translations...</div>;
+    return <div className="m-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{isArabic ? 'جاري تحميل الترجمة...' : 'Loading translations...'}</div>;
   }
 
   if (!Array.isArray(courses)) {
     console.error('Courses error: courses is not an array', courses);
-    return <div className="m-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">No data</div>;
+    return <div className="m-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{t.student.common.noData}</div>;
   }
 
   if (!Array.isArray(purchases)) {
     console.error('Courses error: purchases is not an array', purchases);
-    return <div className="m-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">No data</div>;
+    return <div className="m-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{t.student.common.noData}</div>;
   }
 
   const paidCourseIds = useMemo(
@@ -101,14 +101,14 @@ export default function StudentCoursesPage() {
 
       {loading ? (
         <div className="mb-5 rounded-[1.5rem] border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-700">
-          Loading latest academy catalog...
+          {isArabic ? 'جاري تحميل أحدث كتالوج الأكاديمية...' : 'Loading latest academy catalog...'}
         </div>
       ) : null}
 
       <section className="rounded-[2rem] border border-white/70 bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500 p-6 text-white shadow-xl shadow-indigo-500/15">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-100">Academy catalog</p>
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-100">{isArabic ? 'كتالوج الأكاديمية' : 'Academy catalog'}</p>
             <h1 className="mt-2 text-2xl font-black">{isArabic ? 'استعرض كورسات الأكاديمية' : 'Explore the academy catalog'}</h1>
             <p className="mt-2 max-w-2xl text-sm text-blue-50/90">
               {isArabic
@@ -117,7 +117,7 @@ export default function StudentCoursesPage() {
             </p>
           </div>
           <div className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm backdrop-blur">
-            <Sparkles className="mr-2 inline-block" size={16} /> {courses.length} courses
+            <Sparkles className="mr-2 inline-block" size={16} /> {courses.length} {isArabic ? 'كورس' : 'courses'}
           </div>
         </div>
       </section>

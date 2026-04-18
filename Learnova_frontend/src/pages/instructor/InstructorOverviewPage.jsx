@@ -8,6 +8,7 @@ import {
   fetchInstructorStudents,
   fetchInstructorSubjects,
 } from "../../services/instructorService";
+import EducationLoading from "../../components/ui/EducationLoading";
 import { useLanguage } from "../../utils/i18n";
 import { notifyError } from "../../lib/notify";
 
@@ -92,7 +93,6 @@ export default function InstructorOverviewPage() {
   const labels = {
     title: isArabic ? "نظرة عامة" : "Overview",
     subtitle: isArabic ? "إحصائيات ومعلومات سريعة عن الحساب والمحتوى المرتبط بالمعلم" : "Quick statistics and account insights for the instructor workspace.",
-    loading: isArabic ? "جاري التحميل..." : "Loading...",
     accountInfo: isArabic ? "معلومات الحساب" : "Account information",
     latestData: isArabic ? "آخر البيانات" : "Latest data",
     name: isArabic ? "الاسم" : "Name",
@@ -111,7 +111,14 @@ export default function InstructorOverviewPage() {
       subtitle={labels.subtitle}
       actions={null}
     >
-      {loading && <p className="text-sm font-semibold text-slate-500">{labels.loading}</p>}
+      {loading ? (
+        <EducationLoading
+          isArabic={isArabic}
+          title={isArabic ? "جاري تحميل لوحة المعلم" : "Loading instructor dashboard"}
+          subtitle={isArabic ? "نجهز الإحصائيات والبيانات التعليمية" : "Preparing educational stats and workspace data"}
+          fullscreen
+        />
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {[

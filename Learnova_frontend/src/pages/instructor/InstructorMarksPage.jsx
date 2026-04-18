@@ -8,6 +8,7 @@ import {
   fetchInstructorSubjects,
   updateInstructorMark,
 } from "../../services/instructorService";
+import EducationLoading from "../../components/ui/EducationLoading";
 import { useLanguage } from "../../utils/i18n";
 import { notifyError } from "../../lib/notify";
 
@@ -182,7 +183,14 @@ export default function InstructorMarksPage() {
       title={isArabic ? "العلامات" : "Marks"}
       subtitle={isArabic ? "استعراض العلامات المسجلة للطلاب" : "View and manage students' marks."}
     >
-      {loading && <p className="text-sm font-semibold text-slate-500">{isArabic ? "جاري التحميل..." : "Loading..."}</p>}
+      {loading ? (
+        <EducationLoading
+          isArabic={isArabic}
+          title={isArabic ? "جاري تحميل العلامات" : "Loading marks"}
+          subtitle={isArabic ? "نسترجع بيانات الطلاب والمواد والنتائج" : "Fetching students, subjects, and grading data"}
+          fullscreen
+        />
+      ) : null}
 
       <form onSubmit={onSubmit} className="mb-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="text-lg font-black text-slate-900">{isArabic ? "إضافة أو تعديل علامة" : "Add or edit mark"}</h3>

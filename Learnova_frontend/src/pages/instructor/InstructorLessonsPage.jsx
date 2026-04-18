@@ -8,6 +8,7 @@ import {
   fetchInstructorLessons,
   deleteInstructorLesson,
 } from "../../services/instructorService";
+import EducationLoading from "../../components/ui/EducationLoading";
 import { useLanguage } from "../../utils/i18n";
 import { notifyError } from "../../lib/notify";
 
@@ -180,7 +181,14 @@ export default function InstructorLessonsPage() {
       title={isArabic ? "الدروس" : "Lessons"}
       subtitle={isArabic ? "استعراض الدروس والمرفقات وتعليقات الطلاب" : "Review lessons, attachments, and student comments."}
     >
-      {loading && <p className="text-sm font-semibold text-slate-500">{isArabic ? "جاري التحميل..." : "Loading..."}</p>}
+      {loading ? (
+        <EducationLoading
+          isArabic={isArabic}
+          title={isArabic ? "جاري تحميل الدروس" : "Loading lessons"}
+          subtitle={isArabic ? "نرتب الدروس والمرفقات والتعليقات" : "Preparing lessons, attachments, and comments"}
+          fullscreen
+        />
+      ) : null}
 
       <form onSubmit={onCreateLesson} className="mb-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="text-lg font-black text-slate-900">{isArabic ? "إضافة درس" : "Add lesson"}</h3>
@@ -277,7 +285,15 @@ export default function InstructorLessonsPage() {
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-[#2379c3]">{attachments.length}</span>
               </div>
               <div className="mt-4 space-y-3">
-                {detailsLoading && <p className="text-sm text-slate-500">{isArabic ? "جاري التحميل..." : "Loading..."}</p>}
+                {detailsLoading ? (
+                  <EducationLoading
+                    isArabic={isArabic}
+                    title={isArabic ? "جاري تحميل التفاصيل" : "Loading details"}
+                    subtitle={isArabic ? "نسترجع المرفقات وتعليقات الدرس" : "Fetching lesson attachments and comments"}
+                    compact
+                    className="mb-3"
+                  />
+                ) : null}
                 {!detailsLoading && attachments.length === 0 ? (
                   <p className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">{isArabic ? "لا توجد مرفقات." : "No attachments found."}</p>
                 ) : attachments.map((attachment) => (

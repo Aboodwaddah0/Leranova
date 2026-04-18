@@ -4,21 +4,38 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { logout } from '../../redux/slices/authSlice';
-
-const navItems = [
-  { to: '/dashboard/student', label: 'Dashboard', icon: Home, match: (pathname) => pathname === '/dashboard/student' || pathname === '/dashboard/student/overview' },
-  { to: '/courses', label: 'My Courses', icon: BookOpen, match: (pathname) => pathname === '/courses' || pathname.startsWith('/courses/') },
-  { to: '/student/profile', label: 'Profile', icon: UserCircle2, match: (pathname) => pathname === '/student/profile' },
-];
+import { useLanguage } from '../../utils/i18n';
 
 const getInitial = (name = 'L') => String(name).trim().charAt(0).toUpperCase() || 'L';
 
 export default function StudentLayout({ title, subtitle, children, actions, aside, contentClassName = '' }) {
+  const { t, isArabic, lang, toggleLang } = useLanguage();
   const location = useLocation();
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth?.user);
 
-  const displayName = useMemo(() => user?.fullName || user?.name || user?.email || 'Academy Student', [user]);
+  const navItems = useMemo(() => ([
+    {
+      to: '/dashboard/student',
+      label: t?.student?.title || (isArabic ? 'لوحة الطالب' : 'Student Dashboard'),
+      icon: Home,
+      match: (pathname) => pathname === '/dashboard/student' || pathname === '/dashboard/student/overview',
+    },
+    {
+      to: '/courses',
+      label: t?.student?.courses?.title || (isArabic ? 'كورساتي' : 'My Courses'),
+      icon: BookOpen,
+      match: (pathname) => pathname === '/courses' || pathname.startsWith('/courses/'),
+    },
+    {
+      to: '/student/profile',
+      label: t?.student?.profile?.title || (isArabic ? 'الملف الشخصي' : 'Profile'),
+      icon: UserCircle2,
+      match: (pathname) => pathname === '/student/profile',
+    },
+  ]), [isArabic, t]);
+
+  const displayName = useMemo(() => user?.fullName || user?.name || user?.email || (isArabic ? 'طالب أكاديمية' : 'Academy Student'), [isArabic, user]);
   const avatar = user?.avatarUrl || user?.avatar || '';
   const activeNavItem = navItems.find((item) => item.match(location.pathname)) || null;
 
@@ -31,16 +48,25 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
               Learnova
             </Link>
             <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-slate-500">
-              <NavLink end to="/dashboard/student" className={({ isActive }) => (isActive ? 'text-indigo-600' : 'hover:text-slate-800')}>Dashboard</NavLink>
-              <NavLink to="/courses" className={({ isActive }) => (isActive ? 'text-indigo-600' : 'hover:text-slate-800')}>My Courses</NavLink>
-              <NavLink end to="/student/profile" className={({ isActive }) => (isActive ? 'text-indigo-600' : 'hover:text-slate-800')}>Profile</NavLink>
+              {navItems.map((item) => (
+                <NavLink key={item.to} end={item.to === '/dashboard/student' || item.to === '/student/profile'} to={item.to} className={({ isActive }) => (isActive ? 'text-indigo-600' : 'hover:text-slate-800')}>
+                  {item.label}
+                </NavLink>
+              ))}
             </nav>
           </div>
 
           <div className="flex items-center gap-3">
             <button className="hidden sm:flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm text-slate-500 transition hover:bg-slate-200">
               <Search size={16} />
-              Search
+              {isArabic ? 'بحث' : 'Search'}
+            </button>
+            <button
+              type="button"
+              onClick={toggleLang}
+              className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              {lang === 'en' ? t.common.switchToArabic : t.common.switchToEnglish}
             </button>
             <button className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800">
               <Bell size={18} />
@@ -50,7 +76,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
                 {avatar ? <img src={avatar} alt={displayName} className="h-full w-full object-cover" /> : getInitial(displayName)}
               </div>
               <div className="hidden sm:block">
-                <p className="text-xs font-semibold text-slate-500">Academy Student</p>
+                <p className="text-xs font-semibold text-slate-500">{isArabic ? 'طالب أكاديمية' : 'Academy Student'}</p>
                 <p className="text-sm font-bold text-slate-800">{displayName}</p>
               </div>
             </div>
@@ -60,9 +86,9 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
 
       <aside className="fixed left-0 top-0 hidden h-full w-64 flex-col rounded-r-[2rem] border-r border-white/70 bg-white/75 px-4 pb-6 pt-20 shadow-2xl shadow-indigo-500/5 backdrop-blur-2xl lg:flex">
         <div className="mb-6 rounded-3xl bg-gradient-to-br from-indigo-600 to-cyan-500 p-4 text-white shadow-lg">
-          <p className="text-xs uppercase tracking-[0.25em] text-blue-100">Premium Learning</p>
-          <h2 className="mt-2 text-xl font-black">{title || 'Student space'}</h2>
-          <p className="mt-1 text-sm text-blue-50/90">{subtitle || 'Curated learning workspace'}</p>
+          <p className="text-xs uppercase tracking-[0.25em] text-blue-100">{isArabic ? 'تعلم متقدم' : 'Premium Learning'}</p>
+          <h2 className="mt-2 text-xl font-black">{title || (isArabic ? 'مساحة الطالب' : 'Student space')}</h2>
+          <p className="mt-1 text-sm text-blue-50/90">{subtitle || (isArabic ? 'مساحة تعلم منظمة' : 'Curated learning workspace')}</p>
         </div>
 
         <nav className="flex flex-1 flex-col gap-2">
@@ -89,7 +115,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
             className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
           >
             <LogOut size={18} />
-            Logout
+            {isArabic ? 'تسجيل الخروج' : 'Logout'}
           </button>
         </div>
       </aside>
@@ -137,13 +163,6 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
               </NavLink>
             );
           })}
-          <NavLink
-            to="/student/profile"
-            className={({ isActive }) => `flex flex-col items-center gap-1 rounded-2xl px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] transition ${isActive ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400'}`}
-          >
-            <UserCircle2 size={18} />
-            Profile
-          </NavLink>
         </div>
       </nav>
     </div>

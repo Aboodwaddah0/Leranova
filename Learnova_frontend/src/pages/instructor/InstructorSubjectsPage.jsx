@@ -6,6 +6,7 @@ import {
   fetchInstructorCourses,
   fetchInstructorSubjects,
 } from "../../services/instructorService";
+import EducationLoading from "../../components/ui/EducationLoading";
 import { useLanguage } from "../../utils/i18n";
 import { notifyError } from "../../lib/notify";
 
@@ -116,7 +117,14 @@ export default function InstructorSubjectsPage() {
       title={isArabic ? "المواد" : "Subjects"}
       subtitle={isArabic ? "عرض المواد المرتبطة بحسابك كمعلم" : "View and manage your assigned subjects."}
     >
-      {loading && <p className="text-sm font-semibold text-slate-500">{isArabic ? "جاري التحميل..." : "Loading..."}</p>}
+      {loading ? (
+        <EducationLoading
+          isArabic={isArabic}
+          title={isArabic ? "جاري تحميل المواد" : "Loading subjects"}
+          subtitle={isArabic ? "نسترجع المواد والكورسات المرتبطة" : "Fetching linked subjects and courses"}
+          fullscreen
+        />
+      ) : null}
 
       <form onSubmit={onCreateSubject} className="mb-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="text-lg font-black text-slate-900">{isArabic ? "إضافة مادة" : "Add subject"}</h3>

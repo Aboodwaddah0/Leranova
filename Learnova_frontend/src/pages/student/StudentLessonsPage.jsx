@@ -5,6 +5,7 @@ import StudentLayout from "../../components/student/StudentLayout";
 import LessonSidebar from "../../components/student/LessonSidebar";
 import AIChatBox from "../../components/student/AIChatBox";
 import VideoPlayer from "../../components/student/VideoPlayer";
+import EducationLoading from "../../components/ui/EducationLoading";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import {
@@ -17,7 +18,7 @@ import { ORG_TYPES } from "../../utils/constants";
 import { useLanguage } from "../../utils/i18n";
 import { notifyError, notifySuccess } from "../../lib/notify";
 
-const safeError = (error) => error?.response?.data?.message || error?.message || "Request failed";
+const safeError = (error, isArabic) => error?.response?.data?.message || error?.message || (isArabic ? 'فشل الطلب.' : 'Request failed');
 
 const getStudentMode = (user) => {
   if (String(user?.organizationType || user?.organization?.Role || "").toUpperCase() === ORG_TYPES.SCHOOL) {
@@ -115,7 +116,7 @@ export default function StudentLessonsPage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(safeError(err));
+          setError(safeError(err, isArabic));
         }
       } finally {
         if (!cancelled) {
@@ -153,7 +154,7 @@ export default function StudentLessonsPage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(safeError(err));
+          setError(safeError(err, isArabic));
         }
       }
     };
@@ -207,13 +208,20 @@ export default function StudentLessonsPage() {
         status: err?.response?.status,
         message: err?.response?.data?.message || err?.message,
       });
-      setError(safeError(err));
+      setError(safeError(err, isArabic));
     }
   };
 
   return (
     <StudentLayout mode={mode} title={t.student.lessons.title} subtitle={t.student.lessons.subtitle}>
-      {loading && <p className="text-sm font-semibold text-slate-500">{t.student.common.loading}</p>}
+      {loading ? (
+        <EducationLoading
+          isArabic={isArabic}
+          title={isArabic ? "جاري تحميل الدروس" : "Loading lessons"}
+          subtitle={isArabic ? "نجهز محتوى الدرس والمحادثة التعليمية" : "Preparing lesson content and learning chat"}
+          fullscreen
+        />
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[320px_1fr]">
         <LessonSidebar
