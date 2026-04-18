@@ -123,7 +123,7 @@ export default function StudentLessonPage() {
       <div className="grid gap-8 xl:grid-cols-[1.4fr_0.75fr]">
         <section className="space-y-6">
           <div className="flex items-center justify-between gap-3">
-            <Link to={lesson?.subject?.id ? `/student/subjects/${lesson.subject.id}` : '/dashboard/student/courses'} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+            <Link to={lesson?.subject?.id && lesson?.course?.id ? `/courses/${lesson.course.id}/subjects/${lesson.subject.id}` : '/courses'} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
               <ArrowLeft size={16} /> Back
             </Link>
             <div className="flex items-center gap-3 text-slate-500">
@@ -250,7 +250,7 @@ export default function StudentLessonPage() {
             <p className="text-xs font-bold uppercase tracking-[0.25em] text-indigo-600">Course content</p>
             <div className="mt-4 space-y-3">
               {subjectLessons.length ? subjectLessons.map((item) => (
-                <Link key={item.id} to={`/student/lessons/${item.id}`} className={`flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold transition ${Number(item.id) === numericLessonId ? 'bg-indigo-600 text-white' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
+                <Link key={item.id} to={`/lessons/${item.id}`} className={`flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold transition ${Number(item.id) === numericLessonId ? 'bg-indigo-600 text-white' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
                   <PlayCircle size={15} />
                   <span className="line-clamp-1">{item.title || item.name}</span>
                 </Link>
