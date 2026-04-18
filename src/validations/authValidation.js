@@ -41,3 +41,7 @@ export const resetPasswordSchema = Joi.object({
       'string.pattern.base': 'newPassword must contain uppercase, lowercase, and a number',
     }),
 });
+
+export const changePasswordSchema = Joi.object({
+  newPassword: Joi.string().min(8).required(),
+});

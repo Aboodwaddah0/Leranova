@@ -6,7 +6,9 @@ import {
 	loginParentController,
 	forgotPasswordController,
 	resetPasswordController,
+	changePasswordController,
 } from '../controllers/authController.js';
+import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { loginAdminController } from '../controllers/adminAuthController.js';
 
 const router = Router();
@@ -19,5 +21,6 @@ router.post('/parent/login', loginParentController);
 router.post('/admin/login', loginAdminController);
 router.post('/forgot-password', forgotPasswordController);
 router.post('/reset-password', resetPasswordController);
+router.patch('/change-password', authMiddleware, changePasswordController);
 
 export default router;

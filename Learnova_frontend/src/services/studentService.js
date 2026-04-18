@@ -584,6 +584,28 @@ export async function askStudentTutor({ question, courseId, subjectId, lessonId 
 
 export async function fetchStudentProfile() {
   const stored = readStoredUser();
+
+  try {
+    const response = await api.get('/auth/me');
+    const data = unwrap(response, null);
+
+    if (data && typeof data === 'object') {
+      const normalized = {
+        ...fallbackProfile,
+        ...data,
+        fullName: data?.fullName || data?.name || stored?.fullName || stored?.name || fallbackProfile.fullName,
+        email: data?.email || stored?.email || fallbackProfile.email,
+        phone: data?.phone || stored?.phone || fallbackProfile.phone,
+        avatarUrl: data?.avatarUrl || data?.avatar || stored?.avatarUrl || stored?.avatar || fallbackProfile.avatarUrl,
+      };
+
+      writeStoredUser(normalized);
+      return normalized;
+    }
+  } catch {
+    // Keep local profile fallback for environments without /auth/me.
+  }
+
   return {
     ...fallbackProfile,
     fullName: stored?.fullName || stored?.name || fallbackProfile.fullName,
@@ -594,14 +616,50 @@ export async function fetchStudentProfile() {
 }
 
 export async function updateStudentProfile(payload = {}) {
+  const safePayload = Object.fromEntries(
+    Object.entries(payload || {}).filter(([, value]) => value !== undefined),
+  );
+
+  if (!Object.keys(safePayload).length) {
+    return fetchStudentProfile();
+  }
+
+  try {
+    const response = await api.patch('/auth/me', safePayload);
+    const updated = unwrap(response, null);
+
+    if (updated && typeof updated === 'object') {
+      const nextProfile = {
+        ...(await fetchStudentProfile()),
+        ...updated,
+        ...safePayload,
+        fullName: updated?.fullName || updated?.name || safePayload.fullName,
+      };
+
+      writeStoredUser(nextProfile);
+      return nextProfile;
+    }
+  } catch {
+    // Preserve the old local update behavior when backend PATCH is unavailable.
+  }
+
   const current = await fetchStudentProfile();
   const nextProfile = {
     ...current,
-    ...payload,
+    ...safePayload,
   };
 
   writeStoredUser(nextProfile);
   return nextProfile;
+}
+
+export async function changeStudentPassword({ newPassword }) {
+  const payload = {
+    newPassword,
+  };
+
+  const response = await api.patch('/auth/change-password', payload);
+  return unwrap(response, { success: true });
 }
 
 export function decorateStudentCourses(courses = [], purchases = []) {

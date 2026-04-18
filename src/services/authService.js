@@ -475,3 +475,32 @@ export const resetPassword = async ({ token, newPassword }) => {
 
   throw new AppError('Invalid or expired reset token', 400);
 };
+
+export const changePassword = async ({ userId, newPassword }) => {
+  const normalizedUserId = Number(userId);
+
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) {
+    throw new AppError('Invalid user session', 400);
+  }
+
+  const hashedPassword = await hashPassword(newPassword);
+
+  const user = await prisma.user.update({
+    where: { id: normalizedUserId },
+    data: {
+      passwordHashed: hashedPassword,
+      passwordChangedAt: new Date(),
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+    },
+  });
+
+  return {
+    user,
+    message: 'Password updated successfully',
+  };
+};
