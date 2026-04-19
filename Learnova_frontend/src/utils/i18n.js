@@ -17,6 +17,18 @@ const studentTranslations = {
     chat: {
       title: "Chat",
     },
+    teachers: {
+      title: "Teachers",
+      subtitle: "Meet the instructors behind your courses.",
+      searchPlaceholder: "Search for a teacher...",
+      empty: "No teachers found.",
+      profile: "View profile",
+      back: "Back to teachers",
+      since: "Teaching since",
+      subjects: "Subjects",
+      bio: "Bio",
+      contact: "Contact",
+    },
     common: {
       loading: "Loading...",
       noData: "No data",
@@ -76,6 +88,18 @@ const studentTranslations = {
     },
     chat: {
       title: "المحادثات",
+    },
+    teachers: {
+      title: "المدرسين",
+      subtitle: "تعرف على المعلمين وراء كورساتك.",
+      searchPlaceholder: "ابحث عن معلم...",
+      empty: "لا يوجد مدرسين حالياً",
+      profile: "عرض الملف",
+      back: "العودة للمدرسين",
+      since: "يُدرّس منذ",
+      subjects: "المواد",
+      bio: "نبذة",
+      contact: "التواصل",
     },
     common: {
       loading: "جاري التحميل...",

@@ -1,7 +1,7 @@
 import {
   createTeacher,
   getTeachers,
-  getTeacherById,
+  getTeacherByIdForRequester,
   updateTeacher,
   deleteTeacher,
   getTeacherSubjects,
@@ -15,6 +15,7 @@ import {
 import {
   createTeacherSchema,
   updateTeacherSchema,
+  teacherListQuerySchema,
   teacherLessonsQuerySchema,
   teacherStudentsQuerySchema,
 } from '../validations/teacherValidation.js';
@@ -121,13 +122,29 @@ export const createTeacherController = async (req, res, next) => {
 
 export const getTeachersController = async (req, res, next) => {
   try {
-    const orgId = req.user.id;
-    const teachers = await getTeachers(orgId);
+    const { error, value } = teacherListQuerySchema.validate(req.query);
+
+    if (error) {
+      return next(new AppError(error.details[0].message, 400));
+    }
+
+    const teachers = await getTeachers(req.user, value);
+    const search = String(value.search || '').trim().toLowerCase();
+    const filteredTeachers = search
+      ? teachers.filter((teacher) => {
+          const haystack = [teacher?.name, teacher?.specialization, teacher?.bio, teacher?.work, teacher?.user?.name]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+
+          return haystack.includes(search);
+        })
+      : teachers;
 
     return res.status(200).json({
       message: 'Teachers fetched successfully',
-      total: teachers.length,
-      data: teachers,
+      total: filteredTeachers.length,
+      data: filteredTeachers,
     });
   } catch (err) {
     next(err);
@@ -142,8 +159,7 @@ export const getTeacherByIdController = async (req, res, next) => {
       return next(new AppError('Invalid teacher id', 400));
     }
 
-    const orgId = req.user.id;
-    const teacher = await getTeacherById(orgId, teacherId);
+    const teacher = await getTeacherByIdForRequester(req.user, teacherId);
 
     return res.status(200).json({
       message: 'Teacher fetched successfully',

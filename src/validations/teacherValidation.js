@@ -22,6 +22,10 @@ export const updateTeacherSchema = Joi.object({
   address: Joi.string().max(255).allow('', null),
 }).min(1);
 
+export const teacherListQuerySchema = Joi.object({
+  search: Joi.string().max(255).allow(''),
+});
+
 export const teacherLessonsQuerySchema = Joi.object({
   Subject_id: Joi.number().integer().positive(),
 });

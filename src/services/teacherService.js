@@ -1,7 +1,56 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { hashPassword } from '../utils/hashPassword.js';
-import { decryptPassword, encryptPassword } from '../utils/passwordCrypto.js';
+import { encryptPassword } from '../utils/passwordCrypto.js';
+
+const resolveRequesterOrgId = async (tokenUser) => {
+  const directOrgId = Number(tokenUser?.orgId ?? tokenUser?.organizationId ?? tokenUser?.OrgId ?? tokenUser?.Org_id);
+
+  if (Number.isInteger(directOrgId) && directOrgId > 0) {
+    return directOrgId;
+  }
+
+  const userId = Number(tokenUser?.id);
+
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return null;
+  }
+
+  const role = String(tokenUser?.role ?? '').trim().toUpperCase();
+
+  if (role === 'TEACHER') {
+    const teacher = await prisma.teacher.findUnique({
+      where: { Teacher_id: userId },
+      select: { OrgId: true },
+    });
+
+    return teacher?.OrgId ?? null;
+  }
+
+  if (role === 'STUDENT') {
+    const student = await prisma.student.findUnique({
+      where: { Student_id: userId },
+      select: { OrgId: true },
+    });
+
+    if (student?.OrgId) {
+      return student.OrgId;
+    }
+
+    const academyUser = await prisma.academy_user.findUnique({
+      where: { user_academy_id: userId },
+      select: { OrgId: true },
+    });
+
+    return academyUser?.OrgId ?? null;
+  }
+
+  if (role === 'ACADEMY' || role === 'SCHOOL') {
+    return userId;
+  }
+
+  return null;
+};
 
 const teacherSelect = {
   Teacher_id: true,
@@ -10,12 +59,16 @@ const teacherSelect = {
   specialization: true,
   bio: true,
   createdAt: true,
+  _count: {
+    select: {
+      subject: true,
+    },
+  },
   user: {
     select: {
       id: true,
       name: true,
       email: true,
-      passwordEncrypted: true,
       gender: true,
       age: true,
       address: true,
@@ -40,19 +93,24 @@ const serializeTeacher = (teacher) => ({
   id: teacher.Teacher_id,
   userId: teacher.Teacher_id,
   organizationId: teacher.OrgId,
+  name: teacher?.user?.name || '',
+  email: teacher?.user?.email || '',
   work: teacher.Work,
   specialization: teacher.specialization,
   bio: teacher.bio,
   createdAt: teacher.createdAt,
+  age: teacher?.user?.age ?? null,
+  gender: teacher?.user?.gender ?? null,
+  address: teacher?.user?.address ?? null,
+  avatarUrl: null,
+  subjectCount: Number(teacher?._count?.subject || 0),
   user: {
-    ...teacher.user,
-    password: (() => {
-      try {
-        return decryptPassword(teacher?.user?.passwordEncrypted) || '-';
-      } catch (_error) {
-        return '-';
-      }
-    })(),
+    id: teacher?.user?.id,
+    name: teacher?.user?.name || '',
+    email: teacher?.user?.email || '',
+    gender: teacher?.user?.gender ?? null,
+    age: teacher?.user?.age ?? null,
+    address: teacher?.user?.address ?? null,
   },
 });
 
@@ -158,7 +216,15 @@ export const createTeacher = async (orgId, data) => {
   return serializeTeacher(teacher);
 };
 
-export const getTeachers = async (orgId) => {
+export const getTeachers = async (requester) => {
+  const orgId = Number.isInteger(Number(requester)) && Number(requester) > 0
+    ? Number(requester)
+    : await resolveRequesterOrgId(requester);
+
+  if (!Number.isInteger(orgId) || orgId <= 0) {
+    throw new AppError('Unable to resolve organization for teacher listing', 403);
+  }
+
   const teachers = await prisma.teacher.findMany({
     where: { OrgId: orgId },
     select: teacherSelect,
@@ -171,6 +237,18 @@ export const getTeachers = async (orgId) => {
 export const getTeacherById = async (orgId, teacherId) => {
   const teacher = await ensureTeacherBelongsToOrg(orgId, teacherId);
   return serializeTeacher(teacher);
+};
+
+export const getTeacherByIdForRequester = async (requester, teacherId) => {
+  const orgId = Number.isInteger(Number(requester)) && Number(requester) > 0
+    ? Number(requester)
+    : await resolveRequesterOrgId(requester);
+
+  if (!Number.isInteger(orgId) || orgId <= 0) {
+    throw new AppError('Unable to resolve organization for teacher lookup', 403);
+  }
+
+  return getTeacherById(orgId, teacherId);
 };
 
 export const updateTeacher = async (orgId, teacherId, data) => {
