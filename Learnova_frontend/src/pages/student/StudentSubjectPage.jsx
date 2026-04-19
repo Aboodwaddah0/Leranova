@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Clock3, CreditCard, Lock, PlayCircle } from 'lucide-react';
+import { ArrowLeft, Clock3, CreditCard, FileText, Lock, MessageCircle, PlayCircle, SendHorizontal } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
+import AIAssistantSidebar from '../../components/student/AIAssistantSidebar';
 import {
+  createLessonComment,
   fetchAcademyTrackSubjects,
   fetchCourseSubjects,
+  fetchLessonComments,
   fetchStudentContext,
   fetchStudentCourseCatalog,
   fetchSubjectLessons,
@@ -32,6 +35,9 @@ export default function StudentSubjectPage() {
   const [progressTick, setProgressTick] = useState(0);
   const [selectedLessonId, setSelectedLessonId] = useState('');
   const [autoNextCountdown, setAutoNextCountdown] = useState(null);
+  const [comments, setComments] = useState([]);
+  const [commentText, setCommentText] = useState('');
+  const [commentsLoading, setCommentsLoading] = useState(false);
   const autoNextIntervalRef = useRef(null);
 
   useEffect(() => {
@@ -116,6 +122,10 @@ export default function StudentSubjectPage() {
     return next ? Number(next.id) : null;
   }, [lessonItems, selectedLesson]);
   const selectedLessonVideoUrl = selectedLesson?.videoUrl || selectedLesson?.attachments?.find((attachment) => String(attachment.fileType || attachment.type || '').toUpperCase() === 'VIDEO')?.url || '';
+  const selectedAttachments = useMemo(() => {
+    const list = Array.isArray(selectedLesson?.attachments) ? selectedLesson.attachments : [];
+    return list.filter((attachment) => String(attachment.fileType || attachment.type || '').toUpperCase() !== 'VIDEO');
+  }, [selectedLesson]);
   const lessonProgress = useMemo(() => {
     const total = lessonItems.length;
     if (!total) {
@@ -215,6 +225,55 @@ export default function StudentSubjectPage() {
 
   useEffect(() => () => clearAutoNext(), []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadComments = async () => {
+      if (!selectedLesson?.id) {
+        setComments([]);
+        return;
+      }
+
+      setCommentsLoading(true);
+      try {
+        const commentItems = await fetchLessonComments(selectedLesson.id);
+        if (!cancelled) {
+          setComments(Array.isArray(commentItems) ? commentItems : []);
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError?.message || (isArabic ? 'فشل تحميل التعليقات.' : 'Failed to load comments.'));
+          setComments([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setCommentsLoading(false);
+        }
+      }
+    };
+
+    loadComments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isArabic, selectedLesson?.id]);
+
+  const onPostComment = async () => {
+    const normalized = String(commentText || '').trim();
+    if (!selectedLesson?.id || !normalized) {
+      return;
+    }
+
+    try {
+      const created = await createLessonComment(selectedLesson.id, normalized);
+      setComments((current) => [created, ...current]);
+      setCommentText('');
+    } catch (submitError) {
+      setError(submitError?.message || (isArabic ? 'فشل نشر التعليق.' : 'Failed to post comment.'));
+    }
+  };
+
   const handleBuySubject = async () => {
     try {
       setIsPurchasing(true);
@@ -235,23 +294,33 @@ export default function StudentSubjectPage() {
     <StudentLayout>
       {loading ? <div className="h-64 animate-pulse rounded-[1.75rem] border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/5" /> : null}
       {error ? <div className="mb-5 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{error}</div> : null}
-      <div className="flex items-center justify-between gap-3">
-        <Link to={`/courses/${numericCourseId}`} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-          <ArrowLeft size={16} /> {isArabic ? 'العودة للكورس' : 'Back to course'}
-        </Link>
-      </div>
+      <section className="rounded-[2rem] border border-white/70 bg-white/85 p-5 shadow-xl shadow-indigo-500/5 backdrop-blur-xl">
+        <div className="rounded-[1.5rem] bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500 p-5 text-white">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <Link to={`/courses/${numericCourseId}`} className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20">
+              <ArrowLeft size={16} /> {isArabic ? 'العودة للكورس' : 'Back to course'}
+            </Link>
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-100">{isArabic ? 'تركيز المادة' : 'Subject focus'}</p>
+          </div>
+          <h1 className="mt-4 text-3xl font-black">{subject?.name || (isArabic ? 'دروس المادة' : 'Subject lessons')}</h1>
+          <p className="mt-2 max-w-3xl text-sm text-blue-50/90">{subject?.description || (isArabic ? 'اختر درسًا لفتح مساحة الدراسة الكاملة.' : 'Pick a lesson to open the full study view.')}</p>
+        </div>
 
-      <section className="mt-5 rounded-[2rem] border border-white/70 bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500 p-6 text-white shadow-xl shadow-indigo-500/15">
-        <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-100">{isArabic ? 'تركيز المادة' : 'Subject focus'}</p>
-        <h1 className="mt-2 text-3xl font-black">{subject?.name || (isArabic ? 'دروس المادة' : 'Subject lessons')}</h1>
-        <p className="mt-2 max-w-3xl text-sm text-blue-50/90">{subject?.description || (isArabic ? 'اختر درسًا لفتح مساحة الدراسة الكاملة.' : 'Pick a lesson to open the full study view.')}</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">{isArabic ? 'الكورس' : 'Course'}</p>
+            <p className="mt-2 text-sm font-semibold text-slate-900">{courseName}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">{isArabic ? 'المادة' : 'Subject'}</p>
+            <p className="mt-2 text-sm font-semibold text-slate-900">{subject?.name || (isArabic ? 'مادة غير معروفة' : 'Unknown subject')}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">{isArabic ? 'الإنجاز' : 'Completion'}</p>
+            <p className="mt-2 text-sm font-semibold text-slate-900">{`${lessonProgress.completed}/${lessonProgress.total} (${lessonProgress.percent}%)`}</p>
+          </div>
+        </div>
       </section>
-
-      <div className="mt-5 grid gap-4 sm:grid-cols-3">
-        <InfoChip label={isArabic ? 'الكورس' : 'Course'} value={courseName} />
-        <InfoChip label={isArabic ? 'المادة' : 'Subject'} value={subject?.name || (isArabic ? 'مادة غير معروفة' : 'Unknown subject')} />
-        <InfoChip label={isArabic ? 'الإنجاز' : 'Completion'} value={`${lessonProgress.completed}/${lessonProgress.total} (${lessonProgress.percent}%)`} />
-      </div>
 
       {studentContext?.mode === 'ACADEMY' && isLocked ? (
         <div className="mt-6 rounded-[1.75rem] border border-amber-200 bg-amber-50 p-6 text-amber-900">
@@ -277,7 +346,7 @@ export default function StudentSubjectPage() {
 
       {!(studentContext?.mode === 'ACADEMY' && isLocked) ? (
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <section className="overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/5 backdrop-blur-xl">
+        <section className="space-y-6 overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/85 p-0 shadow-xl shadow-indigo-500/5 backdrop-blur-xl">
           <div className="bg-slate-950">
             {selectedLessonVideoUrl ? (
               <video
@@ -312,6 +381,73 @@ export default function StudentSubjectPage() {
                   : `Next lesson will autoplay in ${autoNextCountdown}s...`}
               </p>
             ) : null}
+          </div>
+
+          <div className="grid gap-4 px-5 pb-5 md:grid-cols-2">
+            <article className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="flex items-center gap-2 font-black text-slate-900">
+                  <FileText size={16} /> {isArabic ? 'المرفقات' : 'Attachments'}
+                </h4>
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-indigo-700">{selectedAttachments.length}</span>
+              </div>
+
+              <div className="mt-3 space-y-3 max-h-56 overflow-auto pr-1">
+                {selectedAttachments.length ? selectedAttachments.map((attachment) => (
+                  <a
+                    key={attachment.id}
+                    href={attachment.url || attachment.fileUrl || '#'}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm transition hover:bg-slate-50"
+                  >
+                    <p className="font-bold text-slate-900">{attachment.name || attachment.originalName || (isArabic ? 'مرفق' : 'Attachment')}</p>
+                    <p className="mt-1 text-xs text-slate-500">{attachment.mimeType || attachment.fileType || attachment.type || (isArabic ? 'ملف' : 'file')}</p>
+                  </a>
+                )) : (
+                  <p className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">{isArabic ? 'لا توجد مرفقات لهذا الدرس.' : 'No attachments for this lesson.'}</p>
+                )}
+              </div>
+            </article>
+
+            <article className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="flex items-center gap-2 font-black text-slate-900">
+                  <MessageCircle size={16} /> {isArabic ? 'التعليقات' : 'Comments'}
+                </h4>
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-indigo-700">{comments.length}</span>
+              </div>
+
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={commentText}
+                  onChange={(event) => setCommentText(event.target.value)}
+                  placeholder={isArabic ? 'اكتب تعليق...' : 'Write a comment...'}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-400"
+                />
+                <button
+                  type="button"
+                  onClick={onPostComment}
+                  className="inline-flex h-10 items-center justify-center rounded-xl bg-slate-900 px-3 text-white transition hover:opacity-90"
+                  aria-label={isArabic ? 'إرسال التعليق' : 'Send comment'}
+                >
+                  <SendHorizontal size={16} />
+                </button>
+              </div>
+
+              <div className="mt-3 space-y-2 max-h-56 overflow-auto pr-1">
+                {commentsLoading ? (
+                  <p className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">{isArabic ? 'جاري تحميل التعليقات...' : 'Loading comments...'}</p>
+                ) : comments.length ? comments.map((comment) => (
+                  <article key={comment.id} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm">
+                    <p className="font-semibold text-slate-900">{comment.user?.name || comment.userName || (isArabic ? 'مستخدم' : 'User')}</p>
+                    <p className="mt-1 text-slate-700">{comment.content}</p>
+                  </article>
+                )) : (
+                  <p className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">{isArabic ? 'لا توجد تعليقات بعد.' : 'No comments yet.'}</p>
+                )}
+              </div>
+            </article>
           </div>
         </section>
 
@@ -370,54 +506,8 @@ export default function StudentSubjectPage() {
         </aside>
       </div>
       ) : null}
+
+      <AIAssistantSidebar isArabic={isArabic} />
     </StudentLayout>
-  );
-}
-
-function groupLessonsBySection(lessons = [], isArabic = false) {
-  const sectionMap = new Map();
-
-  lessons.forEach((lesson, index) => {
-    const rawTitle = String(lesson?.title || lesson?.name || '').trim();
-
-    let sectionTitle = isArabic ? 'المحتوى العام' : 'General';
-    let displayTitle = rawTitle || (isArabic ? `محاضرة ${index + 1}` : `Lecture ${index + 1}`);
-
-    if (rawTitle.includes('::')) {
-      const [sectionPart, lecturePart] = rawTitle.split('::').map((value) => value.trim());
-      if (sectionPart) sectionTitle = sectionPart;
-      if (lecturePart) displayTitle = lecturePart;
-    } else if (rawTitle.includes(' - ')) {
-      const [prefix, rest] = rawTitle.split(' - ').map((value) => value.trim());
-      if (/^section\s*\d+/i.test(prefix) || /^سيكشن\s*\d+/i.test(prefix) || /^القسم\s*\d+/i.test(prefix)) {
-        sectionTitle = prefix;
-        if (rest) displayTitle = rest;
-      }
-    }
-
-    const key = sectionTitle.toLowerCase();
-    if (!sectionMap.has(key)) {
-      sectionMap.set(key, {
-        key,
-        title: sectionTitle,
-        lessons: [],
-      });
-    }
-
-    sectionMap.get(key).lessons.push({
-      ...lesson,
-      displayTitle,
-    });
-  });
-
-  return Array.from(sectionMap.values());
-}
-
-function InfoChip({ label, value }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-semibold text-slate-900">{value}</p>
-    </div>
   );
 }
