@@ -303,6 +303,22 @@ const toNormalizedAttachment = (attachment = {}) => ({
   originalName: attachment.originalName || null,
 });
 
+const toNormalizedLesson = (lesson = {}) => {
+  const attachments = ensureArray(lesson.attachments).map(toNormalizedAttachment);
+  const videoAttachment = attachments.find((item) => String(item.fileType || item.type || '').toUpperCase() === 'VIDEO');
+
+  return {
+    ...lesson,
+    id: Number(lesson.id),
+    subjectId: Number(lesson.subjectId || lesson.Subject_id || lesson.subject_id || 0) || null,
+    title: lesson.title || lesson.name || '',
+    name: lesson.name || lesson.title || '',
+    description: lesson.description || lesson.Description || '',
+    videoUrl: lesson.videoUrl || videoAttachment?.url || '',
+    attachments,
+  };
+};
+
 const resolveLessonContextFromApi = async (lessonId) => {
   const numericLessonId = Number(lessonId);
   if (!Number.isFinite(numericLessonId) || numericLessonId <= 0) {
@@ -532,13 +548,13 @@ export async function fetchSubjectLessons(subjectId) {
     const response = await api.get(`/subjects/${subjectId}/lessons`);
     const data = unwrap(response, []);
     if (Array.isArray(data) && data.length) {
-      return data;
+      return data.map(toNormalizedLesson);
     }
   } catch {
     // Use fallback data below.
   }
 
-  return lessonsForSubject(subjectId);
+  return lessonsForSubject(subjectId).map(toNormalizedLesson);
 }
 
 export async function fetchLessonDetails(lessonId) {

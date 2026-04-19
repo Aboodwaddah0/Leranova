@@ -230,7 +230,6 @@ export default function StudentLessonPage() {
           >
             <div className="flex flex-wrap items-center gap-2 text-xs font-bold tracking-[0.2em] text-blue-100">
               <span className="rounded-full bg-white/10 px-3 py-1 uppercase">{courseTitle}</span>
-              <span className="rounded-full bg-white/10 px-3 py-1 uppercase">{subjectTitle}</span>
             </div>
             <h1 className="mt-3 text-3xl font-black">{lessonTitle}</h1>
             <p className="mt-2 max-w-3xl text-sm text-blue-50/90">{lessonDescription}</p>

@@ -932,7 +932,8 @@ export function useLanguage() {
 
   useEffect(() => {
     document.documentElement.lang = lang;
-    document.documentElement.dir = lang === LANGUAGES.AR ? "rtl" : "ltr";
+    // Keep a stable layout direction to avoid flipping tab and header positions on language switch.
+    document.documentElement.dir = "ltr";
   }, [lang]);
 
   return {
