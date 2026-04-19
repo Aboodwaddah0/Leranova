@@ -21,6 +21,12 @@ export const loginOrganizationSchema = Joi.object({
   password: Joi.string().required(),
 });
 
+export const loginUserSchema = Joi.object({
+  email: Joi.string().email().max(255).required(),
+  password: Joi.string().required(),
+  role: Joi.string().valid('STUDENT', 'TEACHER', 'INSTRUCTOR', 'ADMIN').optional(),
+});
+
 export const loginParentSchema = Joi.object({
   nationalId: Joi.string().trim().min(5).max(50).required(),
   password: Joi.string().required(),

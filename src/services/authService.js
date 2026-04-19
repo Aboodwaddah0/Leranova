@@ -16,6 +16,19 @@ import {
 const PASSWORD_RESET_EXPIRY_MINUTES = 15;
 const normalizeSubdomain = (subdomain) => String(subdomain || '').trim().toLowerCase();
 const normalizeNationalId = (nationalId) => String(nationalId || '').trim().replace(/[\s-]/g, '');
+const normalizeRequestedUserRole = (role) => {
+  const normalizedRole = String(role || '').trim().toUpperCase();
+
+  if (!normalizedRole) {
+    return null;
+  }
+
+  if (normalizedRole === 'INSTRUCTOR') {
+    return 'TEACHER';
+  }
+
+  return normalizedRole;
+};
 
 export const registerOrganization = async (data) => {
   const normalizedRole = String(data.Role || '').trim().toUpperCase();
@@ -222,10 +235,12 @@ export const loginOrganization = async ({ Email, password }) => {
 };
 
 // Teacher/Student login with email and password.
-export const loginUser = async ({ email, password }) => {
+export const loginUser = async ({ email, password, role }) => {
   if (!email || !password) {
     throw new AppError('Email and password are required', 400);
   }
+
+  const requestedRole = normalizeRequestedUserRole(role);
 
   const user = await prisma.user.findUnique({
     where: { email },
@@ -260,6 +275,10 @@ export const loginUser = async ({ email, password }) => {
 
   if (user.role !== 'TEACHER' && user.role !== 'STUDENT' && user.role !== 'ADMIN') {
     throw new AppError('This login flow is only for teacher, student, and admin', 403);
+  }
+
+  if (requestedRole && requestedRole !== user.role) {
+    throw new AppError('Selected role does not match this account', 403);
   }
 
   const isPasswordValid = await comparePassword(password, user.passwordHashed);

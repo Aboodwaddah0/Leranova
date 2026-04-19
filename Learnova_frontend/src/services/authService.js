@@ -23,9 +23,12 @@ export const loginWithRole = async ({ role, email, password, nationalId }) => {
     return data?.data;
   }
 
+  const userRole = role === AUTH_ROLES.INSTRUCTOR ? "TEACHER" : role;
+
   const { data } = await api.post("/auth/user/login", {
     email,
     password,
+    role: userRole,
   });
   return data?.data;
 };
