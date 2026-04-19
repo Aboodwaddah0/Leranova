@@ -14,6 +14,7 @@ model academy_user {
   user                    user                       @relation(fields: [user_academy_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_academy_user_user")
   enrollment              enrollment[]
   student_course_payment  student_course_payment[]
+  subject_subscriptions   student_subject_subscription[]
   createdAt               DateTime                   @default(now()) @db.Timestamp(0)
   updatedAt               DateTime                   @default(now()) @updatedAt @db.Timestamp(0)
 
@@ -77,6 +78,7 @@ model course {
   id                     Int                       @id @default(autoincrement())
   Org_id                 Int
   Name                   String                    @db.VarChar(255)
+  kind                   course_kind               @default(TRACK)
   GradeLevel             Int?
   Description            String?                   @db.Text
   Thumbnail              String?                   @db.VarChar(500)
@@ -99,6 +101,7 @@ model course {
   updatedAt              DateTime                  @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([Org_id], map: "idx_course_org_id")
+  @@index([kind], map: "idx_course_kind")
   @@index([GradeLevel], map: "idx_course_grade_level")
   @@index([isPaid], map: "idx_course_is_paid")
 }
@@ -458,10 +461,14 @@ model subject {
   Course_id   Int
   Teacher_id  Int
   name        String   @db.VarChar(255)
+  isPaid      Boolean  @default(false)
+  price       Decimal  @default(0) @db.Decimal(10, 2)
+  imageUrl    String   @default("") @db.VarChar(500)
   Description String?  @db.Text
   chats       chats[]
   lesson      lesson[]
   marks       marks[]
+  subscriptions student_subject_subscription[]
   course      course   @relation(fields: [Course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_course")
   teacher     teacher  @relation(fields: [Teacher_id], references: [Teacher_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_teacher")
   createdAt   DateTime @default(now()) @db.Timestamp(0)
@@ -469,6 +476,28 @@ model subject {
 
   @@index([Course_id], map: "idx_subject_course_id")
   @@index([Teacher_id], map: "idx_subject_teacher_id")
+  @@index([isPaid], map: "idx_subject_is_paid")
+}
+
+model student_subject_subscription {
+  id                Int          @id @default(autoincrement())
+  user_Academy_id   Int
+  Subject_id        Int
+  amount            Decimal      @default(0) @db.Decimal(10, 2)
+  paymentMethod     String       @default("MANUAL") @db.VarChar(50)
+  paymentStatus     String       @default("PENDING") @db.VarChar(20)
+  stripeSessionId   String?      @db.VarChar(500)
+  status            String       @default("SUCCESS") @db.VarChar(50)
+  paidAt            DateTime?    @db.Timestamp(0)
+  createdAt         DateTime     @default(now()) @db.Timestamp(0)
+  updatedAt         DateTime     @default(now()) @updatedAt @db.Timestamp(0)
+  academy_user      academy_user @relation(fields: [user_Academy_id], references: [user_academy_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_subject_subscription_academy_user")
+  subject           subject      @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_subject_subscription_subject")
+
+  @@unique([user_Academy_id, Subject_id], map: "uq_student_subject_subscription")
+  @@index([user_Academy_id], map: "idx_student_subject_subscription_user")
+  @@index([Subject_id], map: "idx_student_subject_subscription_subject")
+  @@index([status], map: "idx_student_subject_subscription_status")
 }
 
 model teacher {
@@ -564,4 +593,9 @@ enum lesson_attachment_file_type {
   VIDEO
   AUDIO
   OTHER
+}
+
+enum course_kind {
+  CLASS
+  TRACK
 }

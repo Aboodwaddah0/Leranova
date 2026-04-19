@@ -14,6 +14,7 @@ import InstructorMarksPage from "./pages/instructor/InstructorMarksPage";
 import StudentDashboardPage from "./pages/student/StudentDashboardPage";
 import StudentCoursesPage from "./pages/student/StudentCoursesPage";
 import StudentCourseDetailsPage from "./pages/student/StudentCourseDetailsPage";
+import StudentSchoolSubjectsPage from "./pages/student/StudentSchoolSubjectsPage";
 import StudentChatPage from "./pages/student/StudentChatPage";
 import StudentTeachersPage from "./pages/student/StudentTeachersPage";
 import StudentTeacherProfilePage from "./pages/student/StudentTeacherProfilePage";
@@ -80,6 +81,7 @@ function App() {
               <Route path="/dashboard/student/courses" element={<Navigate to="/courses" replace />} />
               <Route path="/student/courses" element={<Navigate to="/courses" replace />} />
               <Route path="/courses/:courseId" element={<StudentCourseDetailsPage />} />
+              <Route path="/student/subjects" element={<StudentPageErrorBoundary><StudentSchoolSubjectsPage /></StudentPageErrorBoundary>} />
               <Route path="/student/courses/:courseId" element={<LegacyStudentCourseRedirect />} />
               <Route path="/courses/:courseId/subjects/:subjectId" element={<StudentSubjectPage />} />
               <Route path="/student/subjects/:subjectId" element={<Navigate to="/courses" replace />} />

@@ -22,11 +22,17 @@ const getChatLabel = (chat, isArabic) => {
     return chat.title;
   }
 
-  if (String(chat?.type || '').toUpperCase() === 'CLASS') {
+  const type = String(chat?.type || '').toUpperCase();
+
+  if (type === 'CLASS') {
     return isArabic ? 'دردشة الصف' : 'Class Chat';
   }
 
-  return isArabic ? 'دردشة الكورس' : 'Course Chat';
+  if (type === 'SUBJECT') {
+    return isArabic ? 'دردشة المادة' : 'Material Chat';
+  }
+
+  return isArabic ? 'دردشة المادة' : 'Material Chat';
 };
 
 const sortChatsByLatestActivity = (list = []) => [...list].sort((a, b) => {
@@ -349,22 +355,13 @@ export default function StudentChatPage() {
       const content = draft.trim();
       setDraft('');
 
+      const message = await sendStudentChatMessage(selectedChatId, content);
+      setMessages((current) => [...current, message]);
+      bumpChatPreview(selectedChatId, message, true);
+
       const socket = socketRef.current;
       if (socket?.connected) {
-        await new Promise((resolve, reject) => {
-          socket.emit('send_message', { chatId: selectedChatId, content }, (result) => {
-            if (result?.ok) {
-              resolve();
-              return;
-            }
-
-            reject(new Error(result?.message || 'Failed to send message'));
-          });
-        });
-      } else {
-        const message = await sendStudentChatMessage(selectedChatId, content);
-        setMessages((current) => [...current, message]);
-        bumpChatPreview(selectedChatId, message, true);
+        socket.emit('message_seen', { chatId: selectedChatId });
       }
     } catch (sendError) {
       setError(sendError?.response?.data?.message || sendError?.message || (isArabic ? 'تعذر إرسال الرسالة.' : 'Failed to send message.'));
@@ -404,7 +401,7 @@ export default function StudentChatPage() {
   return (
     <StudentLayout
       title={isArabic ? 'المحادثات' : 'Chat'}
-      subtitle={isArabic ? 'تواصل الكورس' : 'Course chat'}
+      subtitle={isArabic ? 'تواصل المواد المشتركة' : 'Subscribed materials chat'}
     >
       {error ? (
         <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -456,7 +453,7 @@ export default function StudentChatPage() {
                   <p className={`mt-1 text-[11px] ${active ? 'text-indigo-100' : 'text-slate-500'}`}>
                     {String(chat.type || '').toUpperCase() === 'CLASS'
                       ? (isArabic ? 'دردشة الصف' : 'Class chat')
-                      : (isArabic ? 'دردشة الكورس' : 'Course chat')}
+                      : (isArabic ? 'دردشة المادة' : 'Material chat')}
                   </p>
                   {chat.unreadCount ? (
                     <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${active ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-700'}`}>

@@ -41,6 +41,7 @@ export const createCourse = async (orgId, data) => {
       data: {
         Org_id: orgId,
         Name: payload.Name,
+        kind: organizationRole === 'SCHOOL' ? 'CLASS' : 'TRACK',
         Description: payload.Description ?? null,
         Thumbnail: payload.Thumbnail ?? null,
         Start: payload.Start ? new Date(payload.Start) : null,
@@ -126,6 +127,7 @@ export const updateCourse = async (orgId, courseId, data) => {
     },
     data: {
       Name: data.Name,
+      kind: organizationRole === 'SCHOOL' ? 'CLASS' : 'TRACK',
       Description: data.Description ?? undefined,
       Thumbnail: data.Thumbnail ?? undefined,
       Start: data.Start ? new Date(data.Start) : undefined,
@@ -211,6 +213,7 @@ export const ensureCourseForGradeLevel = async (orgId, gradeLevel, tx = prisma) 
     data: {
       Org_id: orgId,
       Name: courseName,
+      kind: 'CLASS',
       GradeLevel: gradeLevel,
       Description: `Auto-created grade course for level ${gradeLevel}`,
       price: 0,

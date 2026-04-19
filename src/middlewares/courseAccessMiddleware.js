@@ -58,7 +58,10 @@ export const checkCourseAccess = async (req, res, next) => {
     });
 
     if (student) {
-      // طالب مدرسة - وصول مجاني دائماً
+      if (student.Course_id && Number(student.Course_id) !== Number(courseId)) {
+        return next(new AppError('School students can only access their assigned class course', 403));
+      }
+
       req.coursePaymentInfo = {
         isPaid: false,
         studentType: 'SCHOOL',

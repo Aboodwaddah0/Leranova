@@ -12,6 +12,9 @@ const normalizeSubjectPayload = (payload) => ({
   Course_id: payload.Course_id ?? payload.courseId,
   Teacher_id: payload.Teacher_id ?? payload.teacherId,
   name: payload.name,
+  isPaid: payload.isPaid,
+  price: payload.price,
+  imageUrl: payload.imageUrl,
   Description: payload.Description ?? payload.description,
 });
 

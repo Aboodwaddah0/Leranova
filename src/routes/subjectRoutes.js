@@ -11,13 +11,13 @@ import { isTeacherOrOrganization } from '../middlewares/isTeacherOrOrganization.
 
 const router = Router({ mergeParams: true });
 
-router.use(authMiddleware, isTeacherOrOrganization);
+router.use(authMiddleware);
 
-router.post('/', createSubjectController);
 router.get('/', getSubjectsController);
 router.get('/:subjectId', getSubjectByIdController);
-router.patch('/:subjectId', updateSubjectController);
-router.delete('/:subjectId', deleteSubjectController);
+router.post('/', isTeacherOrOrganization, createSubjectController);
+router.patch('/:subjectId', isTeacherOrOrganization, updateSubjectController);
+router.delete('/:subjectId', isTeacherOrOrganization, deleteSubjectController);
 
 export default router;
 

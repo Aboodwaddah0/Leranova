@@ -55,9 +55,10 @@ const serializeCourseMessage = (message) => ({
 
 const serializeStudentChatListItem = (chat) => ({
   id: chat.id,
-  type: chat.type === 'CLASS_GROUP' ? 'CLASS' : 'COURSE',
+  type: chat.type === 'CLASS_GROUP' ? 'CLASS' : (chat.subject_id ? 'SUBJECT' : 'COURSE'),
   courseId: chat.course_id ?? null,
   classId: chat.class_id ?? null,
+  subjectId: chat.subject_id ?? null,
   createdAt: chat.created_at,
   title: chat.title ?? null,
   lastMessage: chat.lastMessage ?? null,
@@ -1065,13 +1066,27 @@ const resolveStudentChatMode = async (userId) => {
           Role: true,
         },
       },
-      enrollment: {
+      subject_subscriptions: {
+        where: {
+          OR: [
+            { paymentStatus: 'PAID' },
+            { status: 'PAID' },
+            { status: 'SUCCESS' },
+          ],
+        },
         select: {
-          Course_id: true,
-          course: {
+          Subject_id: true,
+          subject: {
             select: {
               id: true,
-              Name: true,
+              name: true,
+              Course_id: true,
+              course: {
+                select: {
+                  id: true,
+                  Name: true,
+                },
+              },
             },
           },
         },
@@ -1083,7 +1098,7 @@ const resolveStudentChatMode = async (userId) => {
     return {
       mode: 'ACADEMY',
       orgId: academyProfile.OrgId,
-      enrollments: academyProfile.enrollment || [],
+      subscriptions: academyProfile.subject_subscriptions || [],
     };
   }
 
@@ -1167,6 +1182,51 @@ const ensureClassChatForSchoolStudent = async ({ orgId, classId, createdByUserId
   });
 };
 
+const ensureSubjectChatForAcademyStudent = async ({ orgId, subjectId, createdByUserId, title }) => {
+  const existing = await prisma.chats.findFirst({
+    where: {
+      organization_id: orgId,
+      subject_id: subjectId,
+      type: 'GROUP',
+    },
+    select: {
+      id: true,
+      organization_id: true,
+      course_id: true,
+      class_id: true,
+      subject_id: true,
+      type: true,
+      title: true,
+      created_at: true,
+    },
+    orderBy: { id: 'asc' },
+  });
+
+  if (existing) {
+    return existing;
+  }
+
+  return prisma.chats.create({
+    data: {
+      organization_id: orgId,
+      subject_id: subjectId,
+      created_by: createdByUserId,
+      type: 'GROUP',
+      title: title || null,
+    },
+    select: {
+      id: true,
+      organization_id: true,
+      course_id: true,
+      class_id: true,
+      subject_id: true,
+      type: true,
+      title: true,
+      created_at: true,
+    },
+  });
+};
+
 const verifyStudentAccessToChat = async ({ chatId, userId }) => {
   const chat = await prisma.chats.findUnique({
     where: { id: chatId },
@@ -1175,6 +1235,7 @@ const verifyStudentAccessToChat = async ({ chatId, userId }) => {
       organization_id: true,
       course_id: true,
       class_id: true,
+      subject_id: true,
       type: true,
       title: true,
       created_at: true,
@@ -1186,15 +1247,30 @@ const verifyStudentAccessToChat = async ({ chatId, userId }) => {
   }
 
   if (chat.type === 'COURSE_GROUP') {
-    if (!chat.course_id) {
-      throw new AppError('Course chat is misconfigured', 409);
-    }
+    throw new AppError('Legacy course chats are disabled for students', 410);
+  }
 
-    await resolveCourseEnrollment({
-      courseId: chat.course_id,
-      userId,
-      tokenUser: { role: 'STUDENT' },
+  if (chat.type === 'GROUP' && chat.subject_id) {
+    const subscribed = await prisma.student_subject_subscription.findUnique({
+      where: {
+        user_Academy_id_Subject_id: {
+          user_Academy_id: userId,
+          Subject_id: chat.subject_id,
+        },
+      },
+      select: {
+        paymentStatus: true,
+        status: true,
+      },
     });
+
+    const paid = subscribed
+      ? ['PAID', 'SUCCESS'].includes(String(subscribed.paymentStatus || subscribed.status || '').toUpperCase())
+      : false;
+
+    if (!paid) {
+      throw new AppError('You are not subscribed to this material chat', 403);
+    }
 
     return chat;
   }
@@ -1226,21 +1302,32 @@ export const listChatsForStudent = async ({ userId }) => {
   const context = await resolveStudentChatMode(userId);
 
   if (context.mode === 'ACADEMY') {
-    const enrolledCourses = context.enrollments
-      .map((row) => row.course)
-      .filter((course) => course?.id);
+    const subjectIds = context.subscriptions
+      .map((row) => row.subject?.id)
+      .filter((id) => Number.isFinite(Number(id)));
 
-    const chats = [];
-    for (const course of enrolledCourses) {
-      const chat = await ensureCourseChatForCourse({
-        organizationId: context.orgId,
-        courseId: course.id,
-        title: course.Name || null,
-        createdByUserId: userId,
-      });
-
-      chats.push(chat);
-    }
+    const chats = subjectIds.length
+      ? await prisma.chats.findMany({
+          where: {
+            organization_id: context.orgId,
+            type: 'GROUP',
+            subject_id: {
+              in: subjectIds,
+            },
+          },
+          select: {
+            id: true,
+            organization_id: true,
+            course_id: true,
+            class_id: true,
+            subject_id: true,
+            type: true,
+            title: true,
+            created_at: true,
+          },
+          orderBy: { id: 'asc' },
+        })
+      : [];
 
     const chatIds = chats.map((chat) => chat.id);
 
@@ -1313,12 +1400,27 @@ export const listChatsForStudent = async ({ userId }) => {
     return enriched.map(serializeStudentChatListItem);
   }
 
-  const classChat = await ensureClassChatForSchoolStudent({
-    orgId: context.orgId,
-    classId: context.classId,
-    createdByUserId: userId,
-    title: context.className,
+  const classChat = await prisma.chats.findFirst({
+    where: {
+      organization_id: context.orgId,
+      class_id: context.classId,
+      type: 'CLASS_GROUP',
+    },
+    select: {
+      id: true,
+      organization_id: true,
+      course_id: true,
+      class_id: true,
+      type: true,
+      title: true,
+      created_at: true,
+    },
+    orderBy: { id: 'asc' },
   });
+
+  if (!classChat) {
+    return [];
+  }
 
   const latest = await prisma.messages.findFirst({
     where: {

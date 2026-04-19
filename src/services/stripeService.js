@@ -103,7 +103,7 @@ export const createCourseCheckoutSession = async ({
 
   const successUrl =
     process.env.STRIPE_CHECKOUT_SUCCESS_URL ||
-    'http://localhost:5173/payment/success?session_id={CHECKOUT_SESSION_ID}';
+    'http://localhost:5173/payment-success?session_id={CHECKOUT_SESSION_ID}';
   const cancelUrl =
     process.env.STRIPE_CHECKOUT_CANCEL_URL ||
     'http://localhost:5173/payment/cancel';
@@ -135,4 +135,59 @@ export const createCourseCheckoutSession = async ({
   });
 
   return session;
+};
+
+export const createSubjectCheckoutSession = async ({
+  userId,
+  subjectId,
+  subjectName,
+  subjectImage,
+  amount,
+  userEmail,
+  organizationId,
+  courseId,
+}) => {
+  const stripe = getStripeClient();
+
+  const successUrl =
+    process.env.STRIPE_CHECKOUT_SUCCESS_URL ||
+    'http://localhost:5173/payment-success?session_id={CHECKOUT_SESSION_ID}';
+  const cancelUrl =
+    process.env.STRIPE_CHECKOUT_CANCEL_URL ||
+    'http://localhost:5173/payment/cancel';
+
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    customer_email: userEmail,
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: 'usd',
+          unit_amount: amountToCents(amount),
+          product_data: {
+            name: subjectName,
+            description: 'Academy subject subscription payment',
+            ...(subjectImage ? { images: [subjectImage] } : {}),
+          },
+        },
+      },
+    ],
+    metadata: {
+      userId: String(userId),
+      subjectId: String(subjectId),
+      organizationId: String(organizationId),
+      courseId: String(courseId),
+      type: 'SUBJECT_SUBSCRIPTION',
+    },
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+  });
+
+  return session;
+};
+
+export const retrieveCheckoutSession = async (sessionId) => {
+  const stripe = getStripeClient();
+  return stripe.checkout.sessions.retrieve(sessionId);
 };

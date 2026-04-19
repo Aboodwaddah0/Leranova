@@ -69,7 +69,7 @@ export const initiatePayment = async (req, res, next) => {
         // محدّث سجل الدفع مع Stripe session ID
         const paymentRecord = await prisma.student_course_payment.update({
           where: {
-            uq_student_course_payment: {
+            user_Academy_id_Course_id: {
               user_Academy_id: userId,
               Course_id: courseId,
             },

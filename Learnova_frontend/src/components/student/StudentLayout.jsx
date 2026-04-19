@@ -9,11 +9,13 @@ import AIAssistantSidebar from './AIAssistantSidebar';
 
 const getInitial = (name = 'L') => String(name).trim().charAt(0).toUpperCase() || 'L';
 
-export default function StudentLayout({ title, subtitle, children, actions, aside, contentClassName = '' }) {
+export default function StudentLayout({ title, subtitle, children, actions, aside, contentClassName = '', showAIAssistant = false }) {
   const { t, isArabic, lang, setLang } = useLanguage();
   const location = useLocation();
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth?.user);
+  const organizationType = String(user?.organizationType || user?.organization?.Role || '').trim().toUpperCase();
+  const isSchoolStudent = organizationType === 'SCHOOL';
 
   const navItems = useMemo(() => ([
     {
@@ -23,10 +25,14 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
       match: (pathname) => pathname === '/dashboard/student' || pathname === '/dashboard/student/overview',
     },
     {
-      to: '/courses',
-      label: t?.student?.courses?.title || (isArabic ? 'كورساتي' : 'My Courses'),
+      to: isSchoolStudent ? '/student/subjects' : '/courses',
+      label: isSchoolStudent
+        ? (isArabic ? 'موادّي' : 'My Subjects')
+        : (t?.student?.courses?.title || (isArabic ? 'الكورسات' : 'Courses')),
       icon: BookOpen,
-      match: (pathname) => pathname === '/courses' || pathname.startsWith('/courses/'),
+      match: (pathname) => (isSchoolStudent
+        ? pathname === '/student/subjects' || pathname.startsWith('/courses/')
+        : pathname === '/courses' || pathname.startsWith('/courses/')),
     },
     {
       to: '/student/chat',
@@ -46,7 +52,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
       icon: UserCircle2,
       match: (pathname) => pathname === '/student/profile',
     },
-  ]), [isArabic, t]);
+  ]), [isArabic, isSchoolStudent, t]);
 
   const displayName = useMemo(() => user?.fullName || user?.name || user?.email || (isArabic ? 'طالب أكاديمية' : 'Academy Student'), [isArabic, user]);
   const avatar = user?.avatarUrl || user?.avatar || '';
@@ -188,7 +194,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
         </div>
       </nav>
 
-      <AIAssistantSidebar isArabic={isArabic} />
+      {showAIAssistant ? <AIAssistantSidebar isArabic={isArabic} /> : null}
     </div>
   );
 }

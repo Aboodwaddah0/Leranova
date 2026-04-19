@@ -207,7 +207,7 @@ export default function StudentLessonPage() {
   };
 
   return (
-    <StudentLayout>
+    <StudentLayout showAIAssistant>
       {loading ? <div className="h-[34rem] animate-pulse rounded-[1.75rem] border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/5" /> : null}
       {error ? <div className="mb-5 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{error}</div> : null}
       <div className="grid gap-8 xl:grid-cols-[1.4fr_0.75fr]">

@@ -40,8 +40,8 @@ const studentTranslations = {
       academy: "Academy",
     },
     courses: {
-      title: "My Courses",
-      subtitle: "Explore and continue your learning journey.",
+      title: "Courses",
+      subtitle: "Explore available courses and subscribe to materials.",
       noCourses: "No courses found.",
     },
     subjects: {
@@ -112,8 +112,8 @@ const studentTranslations = {
       academy: "أكاديمية",
     },
     courses: {
-      title: "كورساتي",
-      subtitle: "استكشف الكورسات وتابع رحلة التعلم.",
+      title: "الكورسات",
+      subtitle: "استكشف الكورسات المتاحة واشترك بالمواد.",
       noCourses: "لا توجد كورسات.",
     },
     subjects: {
