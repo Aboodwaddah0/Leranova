@@ -9,6 +9,7 @@ import {
   fetchLessonComments,
   fetchLessonDetails,
   fetchSubjectLessons,
+  updateStudentLessonProgress,
 } from '../../services/studentService';
 import {
   calculateProgressForLessons,
@@ -32,6 +33,8 @@ export default function StudentLessonPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [progressTick, setProgressTick] = useState(0);
+  const [autoNextCountdown, setAutoNextCountdown] = useState(null);
+  const autoNextIntervalRef = useRef(null);
 
   const tabs = useMemo(() => ([
     { id: 'comments', label: isArabic ? 'التعليقات' : 'Comments', icon: MessageCircle },
@@ -129,11 +132,39 @@ export default function StudentLessonPage() {
 
   const onVideoEnded = () => {
     setLessonCompleted(numericLessonId, true);
+    void updateStudentLessonProgress(numericLessonId, true).catch((updateError) => {
+      setError(updateError?.message || (isArabic ? 'فشل تحديث تقدم الدرس.' : 'Failed to update lesson progress.'));
+    });
 
     if (Number.isInteger(nextLessonId) && nextLessonId > 0) {
-      navigate(`/lessons/${nextLessonId}`, { state: { autoPlay: true } });
+      let remaining = 5;
+      setAutoNextCountdown(remaining);
+
+      if (autoNextIntervalRef.current) {
+        window.clearInterval(autoNextIntervalRef.current);
+      }
+
+      autoNextIntervalRef.current = window.setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          window.clearInterval(autoNextIntervalRef.current);
+          autoNextIntervalRef.current = null;
+          setAutoNextCountdown(null);
+          navigate(`/lessons/${nextLessonId}`, { state: { autoPlay: true } });
+          return;
+        }
+
+        setAutoNextCountdown(remaining);
+      }, 1000);
     }
   };
+
+  useEffect(() => () => {
+    if (autoNextIntervalRef.current) {
+      window.clearInterval(autoNextIntervalRef.current);
+      autoNextIntervalRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     const shouldAutoPlay = Boolean(location.state?.autoPlay);
@@ -246,6 +277,13 @@ export default function StudentLessonPage() {
                   className="h-[360px] w-full object-cover"
                   onEnded={onVideoEnded}
                 />
+                {autoNextCountdown ? (
+                  <div className="border-t border-slate-800 bg-slate-900/90 px-4 py-2 text-xs font-semibold text-cyan-200">
+                    {isArabic
+                      ? `المحاضرة التالية ستبدأ خلال ${autoNextCountdown} ثوانٍ...`
+                      : `Next lesson starts in ${autoNextCountdown}s...`}
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="flex h-[360px] items-center justify-center bg-[radial-gradient(circle_at_top,_#1e293b_0%,_#020617_75%)] text-slate-200">
@@ -358,6 +396,9 @@ export default function StudentLessonPage() {
                     onChange={(event) => {
                       event.stopPropagation();
                       setLessonCompleted(item.id, event.target.checked);
+                      void updateStudentLessonProgress(Number(item.id), event.target.checked).catch((updateError) => {
+                        setError(updateError?.message || (isArabic ? 'فشل تحديث تقدم الدرس.' : 'Failed to update lesson progress.'));
+                      });
                     }}
                     className="h-4 w-4 cursor-pointer"
                   />

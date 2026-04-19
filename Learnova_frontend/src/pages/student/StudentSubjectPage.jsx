@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Clock3, CreditCard, Lock, PlayCircle } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
@@ -9,9 +9,10 @@ import {
   fetchStudentCourseCatalog,
   fetchSubjectLessons,
   subscribeAcademyMaterial,
+  updateStudentLessonProgress,
 } from '../../services/studentService';
 import { useLanguage } from '../../utils/i18n';
-import { calculateProgressForLessons, isLessonCompleted, setLessonCompleted, subscribeToProgress } from '../../utils/studentProgress';
+import { isLessonCompleted, setLessonCompleted, subscribeToProgress } from '../../utils/studentProgress';
 
 export default function StudentSubjectPage() {
   const { isArabic } = useLanguage();
@@ -30,6 +31,8 @@ export default function StudentSubjectPage() {
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [progressTick, setProgressTick] = useState(0);
   const [selectedLessonId, setSelectedLessonId] = useState('');
+  const [autoNextCountdown, setAutoNextCountdown] = useState(null);
+  const autoNextIntervalRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,16 +54,16 @@ export default function StudentSubjectPage() {
           const academySubject = (trackData?.subjects || []).find((item) => Number(item.id) === numericSubjectId) || null;
           if (academySubject) {
             matchedSubject = matchedSubject || academySubject;
-            setIsLocked(Boolean(!academySubject.isSubscribed));
+            setIsLocked(Boolean(academySubject.isPaid && !academySubject.isSubscribed));
           } else {
-            setIsLocked(Boolean(matchedSubject && !matchedSubject.isSubscribed));
+            setIsLocked(Boolean(matchedSubject?.isPaid && !matchedSubject?.isSubscribed));
           }
         } else {
           setIsLocked(false);
         }
 
         let lessonData = [];
-        if (!(context?.mode === 'ACADEMY' && matchedSubject && !matchedSubject.isSubscribed)) {
+        if (!(context?.mode === 'ACADEMY' && matchedSubject?.isPaid && !matchedSubject?.isSubscribed)) {
           lessonData = await fetchSubjectLessons(numericSubjectId);
         }
 
@@ -99,15 +102,99 @@ export default function StudentSubjectPage() {
 
     return lessonItems.find((item) => String(item.id) === String(selectedLessonId)) || lessonItems[0] || null;
   }, [lessonItems, selectedLessonId]);
+  const nextLessonId = useMemo(() => {
+    if (!selectedLesson) {
+      return null;
+    }
+
+    const currentIndex = lessonItems.findIndex((item) => Number(item.id) === Number(selectedLesson.id));
+    if (currentIndex < 0) {
+      return null;
+    }
+
+    const next = lessonItems[currentIndex + 1];
+    return next ? Number(next.id) : null;
+  }, [lessonItems, selectedLesson]);
   const selectedLessonVideoUrl = selectedLesson?.videoUrl || selectedLesson?.attachments?.find((attachment) => String(attachment.fileType || attachment.type || '').toUpperCase() === 'VIDEO')?.url || '';
-  const lessonProgress = useMemo(
-    () => calculateProgressForLessons(lessonItems.map((item) => item.id)),
-    [lessonItems, progressTick],
-  );
+  const lessonProgress = useMemo(() => {
+    const total = lessonItems.length;
+    if (!total) {
+      return { total: 0, completed: 0, percent: 0 };
+    }
+
+    const completed = lessonItems.filter((lesson) => Boolean(lesson.isCompleted) || isLessonCompleted(lesson.id)).length;
+    const percent = Math.round((completed / total) * 100);
+
+    return {
+      total,
+      completed,
+      percent,
+    };
+  }, [lessonItems, progressTick]);
+
+  const clearAutoNext = () => {
+    if (autoNextIntervalRef.current) {
+      window.clearInterval(autoNextIntervalRef.current);
+      autoNextIntervalRef.current = null;
+    }
+    setAutoNextCountdown(null);
+  };
+
+  const markLessonCompletion = async (lessonId, completed) => {
+    const numericLessonId = Number(lessonId);
+    if (!Number.isInteger(numericLessonId) || numericLessonId <= 0) {
+      return;
+    }
+
+    setLessonCompleted(numericLessonId, completed);
+    setLessons((current) => current.map((lesson) => (
+      Number(lesson.id) === numericLessonId
+        ? { ...lesson, isCompleted: Boolean(completed) }
+        : lesson
+    )));
+
+    try {
+      await updateStudentLessonProgress(numericLessonId, completed);
+    } catch (updateError) {
+      setError(updateError?.message || (isArabic ? 'فشل تحديث تقدم الدرس.' : 'Failed to update lesson progress.'));
+    }
+  };
+
+  const startAutoNext = (targetLessonId) => {
+    clearAutoNext();
+
+    let remaining = 5;
+    setAutoNextCountdown(remaining);
+
+    autoNextIntervalRef.current = window.setInterval(() => {
+      remaining -= 1;
+
+      if (remaining <= 0) {
+        clearAutoNext();
+        setSelectedLessonId(String(targetLessonId));
+        return;
+      }
+
+      setAutoNextCountdown(remaining);
+    }, 1000);
+  };
+
+  const handleVideoEnded = () => {
+    if (!selectedLesson?.id) {
+      return;
+    }
+
+    void markLessonCompletion(selectedLesson.id, true);
+
+    if (Number.isInteger(nextLessonId) && nextLessonId > 0) {
+      startAutoNext(nextLessonId);
+    }
+  };
 
   useEffect(() => {
     if (!lessonItems.length) {
       setSelectedLessonId('');
+      clearAutoNext();
       return;
     }
 
@@ -116,6 +203,17 @@ export default function StudentSubjectPage() {
       return currentExists ? current : String(lessonItems[0].id);
     });
   }, [lessonItems]);
+
+  useEffect(() => {
+    lessonItems.forEach((lesson) => {
+      const numericLessonId = Number(lesson.id);
+      if (Number.isInteger(numericLessonId) && numericLessonId > 0) {
+        setLessonCompleted(numericLessonId, Boolean(lesson.isCompleted));
+      }
+    });
+  }, [lessonItems]);
+
+  useEffect(() => () => clearAutoNext(), []);
 
   const handleBuySubject = async () => {
     try {
@@ -134,7 +232,7 @@ export default function StudentSubjectPage() {
   useEffect(() => subscribeToProgress(() => setProgressTick((value) => value + 1)), []);
 
   return (
-    <StudentLayout title={courseName} subtitle={isArabic ? 'مكتبة المحاضرات' : 'Lesson library'}>
+    <StudentLayout>
       {loading ? <div className="h-64 animate-pulse rounded-[1.75rem] border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/5" /> : null}
       {error ? <div className="mb-5 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{error}</div> : null}
       <div className="flex items-center justify-between gap-3">
@@ -188,6 +286,7 @@ export default function StudentSubjectPage() {
                 preload="metadata"
                 src={selectedLessonVideoUrl}
                 className="h-[360px] w-full object-cover"
+                onEnded={handleVideoEnded}
               />
             ) : (
               <div className="flex h-[360px] items-center justify-center bg-[radial-gradient(circle_at_top,_#1e293b_0%,_#020617_75%)] text-slate-200">
@@ -206,6 +305,13 @@ export default function StudentSubjectPage() {
             <p className="mt-2 text-sm leading-7 text-slate-600">
               {selectedLesson?.description || (isArabic ? 'سيظهر وصف الدرس هنا بعد الاختيار.' : 'Lesson details will appear here after selection.')}
             </p>
+            {autoNextCountdown ? (
+              <p className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700">
+                {isArabic
+                  ? `سيتم تشغيل المحاضرة التالية تلقائيًا خلال ${autoNextCountdown} ثوانٍ...`
+                  : `Next lesson will autoplay in ${autoNextCountdown}s...`}
+              </p>
+            ) : null}
           </div>
         </section>
 
@@ -225,9 +331,24 @@ export default function StudentSubjectPage() {
                 <button
                   key={lesson.id}
                   type="button"
-                  onClick={() => setSelectedLessonId(String(lesson.id))}
+                  onClick={() => {
+                    clearAutoNext();
+                    setSelectedLessonId(String(lesson.id));
+                  }}
                   className={`group flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition ${active ? 'border-indigo-300 bg-indigo-50 shadow-sm' : 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50'}`}
                 >
+                  <div className="mt-1">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(lesson.isCompleted) || isLessonCompleted(lesson.id)}
+                      onChange={(event) => {
+                        event.stopPropagation();
+                        void markLessonCompletion(lesson.id, event.target.checked);
+                      }}
+                      onClick={(event) => event.stopPropagation()}
+                      className="h-4 w-4 cursor-pointer"
+                    />
+                  </div>
                   <div className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full ${active ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
                     <PlayCircle size={16} />
                   </div>

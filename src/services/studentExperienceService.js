@@ -158,6 +158,7 @@ export const ensureStudentCanAccessSubject = async ({ userId, subjectId }) => {
     select: {
       id: true,
       name: true,
+      isPaid: true,
       Course_id: true,
       course: {
         select: {
@@ -187,7 +188,7 @@ export const ensureStudentCanAccessSubject = async ({ userId, subjectId }) => {
   }
 
   const subscribed = await isAcademySubjectSubscribed(userId, subject.id);
-  if (!subscribed) {
+  if (Boolean(subject.isPaid) && !subscribed) {
     throw new AppError('Subscription required for this material', 402);
   }
 
@@ -431,9 +432,10 @@ export const getAcademyTrackSubjects = async (userId, trackId) => {
     },
     subjects: subjects.map((subject) => {
       const subscription = subject.subscriptions[0] || null;
-      const isSubscribed = Boolean(
+      const hasPaidSubscription = Boolean(
         subscription && ['PAID', 'SUCCESS'].includes(toUpper(subscription.paymentStatus || subscription.status)),
       );
+      const isSubscribed = !Boolean(subject.isPaid) || hasPaidSubscription;
 
       return {
         id: subject.id,

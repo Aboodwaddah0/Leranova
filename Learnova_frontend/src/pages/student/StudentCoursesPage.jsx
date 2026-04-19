@@ -46,7 +46,14 @@ export default function StudentCoursesPage() {
           .map((lesson) => Number(lesson?.id))
           .filter((id) => Number.isInteger(id) && id > 0);
 
-        const progress = calculateProgressForLessons(lessonIds);
+        const backendCompleted = lessonItems.filter((lesson) => Boolean(lesson?.isCompleted)).length;
+        const progress = lessonItems.some((lesson) => Object.prototype.hasOwnProperty.call(lesson || {}, 'isCompleted'))
+          ? {
+              total: lessonIds.length,
+              completed: backendCompleted,
+              percent: lessonIds.length ? Math.round((backendCompleted / lessonIds.length) * 100) : 0,
+            }
+          : calculateProgressForLessons(lessonIds);
 
         const subjectMeta = (trackDetails?.subjects || []).find((item) => Number(item.id) === subjectId) || null;
 

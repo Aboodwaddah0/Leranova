@@ -547,14 +547,40 @@ export async function fetchSubjectLessons(subjectId) {
   try {
     const response = await api.get(`/subjects/${subjectId}/lessons`);
     const data = unwrap(response, []);
+    console.log('[LESSONS][FRONTEND] GET /subjects/:subjectId/lessons', {
+      subjectId: Number(subjectId),
+      status: response?.status,
+      total: Array.isArray(data) ? data.length : 0,
+      progress: response?.data?.progress || null,
+    });
+
     if (Array.isArray(data) && data.length) {
       return data.map(toNormalizedLesson);
     }
-  } catch {
-    // Use fallback data below.
-  }
 
-  return lessonsForSubject(subjectId).map(toNormalizedLesson);
+    return [];
+  } catch (error) {
+    console.error('[LESSONS][FRONTEND] Failed to fetch subject lessons', {
+      subjectId: Number(subjectId),
+      status: error?.response?.status,
+      message: error?.response?.data?.message || error?.message,
+    });
+    // Bubble errors so pages do not silently display stale empty state.
+    throw new Error('Failed to fetch subject lessons.');
+  }
+}
+
+export async function updateStudentLessonProgress(lessonId, isCompleted) {
+  const response = await api.put(`/lessons/progress/${lessonId}`, {
+    isCompleted: Boolean(isCompleted),
+  });
+
+  return unwrap(response, null);
+}
+
+export async function fetchStudentSubjectProgress(subjectId) {
+  const response = await api.get(`/lessons/progress/subject/${subjectId}`);
+  return unwrap(response, null);
 }
 
 export async function fetchLessonDetails(lessonId) {

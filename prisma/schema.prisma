@@ -145,6 +145,7 @@ model lesson {
   Description        String?              @db.Text
   comment            comment[]
   lesson_transcripts lesson_transcripts[]
+  lesson_progress    lesson_progress[]
   subject            subject              @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_subject")
   rag_assets         lesson_rag_asset[]
   attachments        lesson_attachment[]
@@ -194,6 +195,21 @@ model lesson_transcripts {
   lesson     lesson   @relation(fields: [lesson_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_transcripts_lesson")
 
   @@index([lesson_id], map: "idx_lesson_transcripts_lesson_id")
+}
+
+model lesson_progress {
+  id          Int      @id @default(autoincrement())
+  studentId   Int
+  lessonId    Int
+  isCompleted Boolean  @default(false)
+  createdAt   DateTime @default(now()) @db.Timestamp(0)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamp(0)
+  student     user     @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_progress_student")
+  lesson      lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_progress_lesson")
+
+  @@unique([studentId, lessonId], map: "uq_lesson_progress_student_lesson")
+  @@index([studentId], map: "idx_lesson_progress_student")
+  @@index([lessonId], map: "idx_lesson_progress_lesson")
 }
 
 model marks {
@@ -533,6 +549,7 @@ model user {
   comment                comment[]
   messages               messages[]
   notification           notification[]
+  lesson_progress        lesson_progress[]
   parent                 parent?
   student                student?
   teacher                teacher?

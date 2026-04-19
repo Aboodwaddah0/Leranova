@@ -163,8 +163,17 @@ export default function StudentDashboardPage() {
                 .flatMap((items) => (Array.isArray(items) ? items : []))
                 .map((lesson) => Number(lesson?.id))
                 .filter((id) => Number.isInteger(id) && id > 0);
+              const allLessons = lessonsBySubject.flatMap((items) => (Array.isArray(items) ? items : []));
+              const hasBackendCompletion = allLessons.some((lesson) => Object.prototype.hasOwnProperty.call(lesson || {}, 'isCompleted'));
+              const backendCompleted = allLessons.filter((lesson) => Boolean(lesson?.isCompleted)).length;
 
-              const lessonProgress = calculateProgressForLessons(lessonIds);
+              const lessonProgress = hasBackendCompletion
+                ? {
+                    total: lessonIds.length,
+                    completed: backendCompleted,
+                    percent: lessonIds.length ? Math.round((backendCompleted / lessonIds.length) * 100) : 0,
+                  }
+                : calculateProgressForLessons(lessonIds);
 
               return {
                 ...course,
