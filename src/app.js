@@ -8,6 +8,7 @@ import enrollmentRoutes from './routes/enrollmentRoutes.js';
 import subjectRoutes from './routes/subjectRoutes.js';
 import lessonRoutes from './routes/lessonRoutes.js';
 import lessonAttachmentRoutes from './routes/lessonAttachmentRoutes.js';
+import lessonProgressRoutes from './routes/lessonProgressRoutes.js';
 import commentRoutes from './routes/commentRoutes.js';
 import chatbotRoutes from './routes/chatbotRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
@@ -55,6 +56,7 @@ app.use('/api/enrollments', enrollmentRoutes);
 app.use('/api/subjects/:subjectId/lessons', lessonRoutes);
 app.use('/api/lessons/:lessonId/attachments', lessonAttachmentRoutes);
 app.use('/api/lessons/:lessonId/assets', lessonAttachmentRoutes);
+app.use('/api/lessons/progress', lessonProgressRoutes);
 app.use('/api/lessons/:lessonId/comments', commentRoutes);
 
 app.use('/api/organizations', organizationRoutes);

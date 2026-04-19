@@ -94,11 +94,25 @@ export const getLessonsController = async (req, res, next) => {
 	try {
 		const subjectId = parseSubjectId(req);
 		const lessons = await getLessons(req.user, subjectId);
+		const completedLessons = lessons.filter((lesson) => Boolean(lesson.isCompleted)).length;
+		const progressPercent = lessons.length ? Math.round((completedLessons / lessons.length) * 100) : 0;
+
+		console.log('[LESSONS][GET] Subject lessons fetched', {
+			subjectId,
+			userId: req.user?.id || null,
+			role: req.user?.role || null,
+			count: lessons.length,
+		});
 
 		return res.status(200).json({
 			success: true,
 			message: 'Lessons fetched successfully',
 			total: lessons.length,
+			progress: {
+				totalLessons: lessons.length,
+				completedLessons,
+				progressPercent,
+			},
 			data: lessons,
 		});
 	} catch (error) {

@@ -4,6 +4,13 @@ import { deleteUploadedFile } from './cloudinary.service.js';
 import { resolveStudentContext } from './studentExperienceService.js';
 
 const toRole = (value) => String(value || '').trim().toUpperCase();
+const PAID_SUBSCRIPTION_FILTER = {
+	OR: [
+		{ paymentStatus: 'PAID' },
+		{ status: 'PAID' },
+		{ status: 'SUCCESS' },
+	],
+};
 
 const resolveLessonScope = async (actor) => {
 	const role = toRole(actor?.role);
@@ -85,6 +92,7 @@ const serializeLesson = (lesson) => {
 		? lesson.attachments.map(serializeAttachment)
 		: [];
 	const videoAttachment = attachments.find((attachment) => String(attachment.fileType || '').toUpperCase() === 'VIDEO') || null;
+	const progress = Array.isArray(lesson.lesson_progress) ? lesson.lesson_progress[0] : null;
 
 	return {
 		id: lesson.id,
@@ -93,8 +101,39 @@ const serializeLesson = (lesson) => {
 		name: lesson.name,
 		description: lesson.Description,
 		videoUrl: lesson.videoUrl || videoAttachment?.url || '',
+		isCompleted: Boolean(progress?.isCompleted),
 		attachments,
 	};
+};
+
+const buildStudentSubjectAccessFilter = (scope) => {
+	if (scope.role !== 'STUDENT') {
+		return {};
+	}
+
+	if (scope.studentMode === 'SCHOOL') {
+		return {
+			Course_id: scope.classCourseId,
+		};
+	}
+
+	if (scope.studentMode === 'ACADEMY') {
+		return {
+			OR: [
+				{ isPaid: false },
+				{
+					subscriptions: {
+						some: {
+							user_Academy_id: scope.userId,
+							...PAID_SUBSCRIPTION_FILTER,
+						},
+					},
+				},
+			],
+		};
+	}
+
+	return {};
 };
 
 const ensureSubjectBelongsToOrganization = async (scope, subjectId) => {
@@ -102,23 +141,7 @@ const ensureSubjectBelongsToOrganization = async (scope, subjectId) => {
 		where: {
 			id: subjectId,
 			...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
-			...(scope.role === 'STUDENT' && scope.studentMode === 'SCHOOL'
-				? { Course_id: scope.classCourseId }
-				: {}),
-			...(scope.role === 'STUDENT' && scope.studentMode === 'ACADEMY'
-				? {
-					subscriptions: {
-						some: {
-							user_Academy_id: scope.userId,
-							OR: [
-								{ paymentStatus: 'PAID' },
-								{ status: 'PAID' },
-								{ status: 'SUCCESS' },
-							],
-						},
-					},
-				}
-				: {}),
+			...buildStudentSubjectAccessFilter(scope),
 			course: {
 				Org_id: scope.orgId,
 			},
@@ -141,6 +164,7 @@ const ensureLessonBelongsToSubject = async (scope, subjectId, lessonId) => {
 			Subject_id: subjectId,
 			subject: {
 				...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
+				...buildStudentSubjectAccessFilter(scope),
 				course: {
 					Org_id: scope.orgId,
 				},
@@ -182,6 +206,7 @@ export const getLessons = async (actor, subjectId) => {
 			Subject_id: subjectId,
 			subject: {
 				...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
+				...buildStudentSubjectAccessFilter(scope),
 				course: {
 					Org_id: scope.orgId,
 				},
@@ -196,6 +221,19 @@ export const getLessons = async (actor, subjectId) => {
 					id: 'asc',
 				},
 			},
+			...(scope.role === 'STUDENT'
+				? {
+					lesson_progress: {
+						where: {
+							studentId: scope.userId,
+						},
+						select: {
+							isCompleted: true,
+						},
+						take: 1,
+					},
+				}
+				: {}),
 		},
 	});
 
@@ -210,6 +248,7 @@ export const getLessonById = async (actor, subjectId, lessonId) => {
 			Subject_id: subjectId,
 			subject: {
 				...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
+				...buildStudentSubjectAccessFilter(scope),
 				course: {
 					Org_id: scope.orgId,
 				},
@@ -221,6 +260,19 @@ export const getLessonById = async (actor, subjectId, lessonId) => {
 					id: 'asc',
 				},
 			},
+			...(scope.role === 'STUDENT'
+				? {
+					lesson_progress: {
+						where: {
+							studentId: scope.userId,
+						},
+						select: {
+							isCompleted: true,
+						},
+						take: 1,
+					},
+				}
+				: {}),
 		},
 	});
 
