@@ -304,7 +304,7 @@ export default function InstructorLessonsPage() {
                     rel="noreferrer"
                     className="block rounded-2xl border border-slate-200 bg-white px-4 py-3"
                   >
-                    <p className="text-sm font-bold text-slate-900">{attachment.originalName || attachment.fileType || (isArabic ? "مرفق" : "Attachment")}</p>
+                    <p className="text-sm font-bold text-slate-900">{attachment.name || attachment.originalName || attachment.fileType || (isArabic ? "مرفق" : "Attachment")}</p>
                     <p className="mt-1 text-xs text-slate-500">{attachment.mimeType || attachment.type || (isArabic ? "ملف" : "file")}</p>
                   </a>
                 ))}

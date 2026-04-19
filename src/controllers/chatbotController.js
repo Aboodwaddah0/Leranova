@@ -7,6 +7,12 @@ const askSchema = Joi.object({
   course_id: Joi.number().integer().positive().required(),
   subject_id: Joi.number().integer().positive().optional(),
   lesson_id: Joi.number().integer().positive().optional(),
+  history: Joi.array().items(
+    Joi.object({
+      role: Joi.string().valid('user', 'assistant').required(),
+      content: Joi.string().trim().min(1).max(4000).required(),
+    })
+  ).max(20).optional(),
 });
 
 export const askChatbotController = async (req, res, next) => {
@@ -26,6 +32,7 @@ export const askChatbotController = async (req, res, next) => {
       courseId: value.course_id,
       subjectId: value.subject_id,
       lessonId: value.lesson_id,
+      history: value.history || [],
     });
 
     return res.status(200).json({

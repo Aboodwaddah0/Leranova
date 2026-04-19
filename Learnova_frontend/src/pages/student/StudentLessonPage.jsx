@@ -1,33 +1,39 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Bot, FileText, MessageCircle, PlayCircle, ArrowLeft, Settings, Search, Bell } from 'lucide-react';
+import { FileText, MessageCircle, PlayCircle, ArrowLeft, Settings, CircleCheckBig } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
 import { useLanguage } from '../../utils/i18n';
 import {
-  askStudentTutor,
   createLessonComment,
   fetchLessonComments,
   fetchLessonDetails,
   fetchSubjectLessons,
 } from '../../services/studentService';
+import {
+  calculateProgressForLessons,
+  isLessonCompleted,
+  setLessonCompleted,
+  subscribeToProgress,
+} from '../../utils/studentProgress';
 
 export default function StudentLessonPage() {
   const { isArabic } = useLanguage();
   const { lessonId } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const videoRef = useRef(null);
   const numericLessonId = Number(lessonId);
   const [lesson, setLesson] = useState(null);
   const [subjectLessons, setSubjectLessons] = useState([]);
   const [comments, setComments] = useState([]);
-  const [tab, setTab] = useState('assistant');
+  const [tab, setTab] = useState('comments');
   const [commentText, setCommentText] = useState('');
-  const [question, setQuestion] = useState('');
-  const [answer, setAnswer] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [progressTick, setProgressTick] = useState(0);
 
   const tabs = useMemo(() => ([
-    { id: 'assistant', label: isArabic ? 'المساعد الذكي' : 'AI Assistant', icon: Bot },
     { id: 'comments', label: isArabic ? 'التعليقات' : 'Comments', icon: MessageCircle },
     { id: 'attachments', label: isArabic ? 'المرفقات' : 'Attachments', icon: FileText },
     { id: 'notes', label: isArabic ? 'ملاحظات' : 'Notes', icon: Settings },
@@ -72,21 +78,103 @@ export default function StudentLessonPage() {
 
   const courseTitle = lesson?.course?.name || lesson?.course?.Name || (isArabic ? 'الكورس' : 'Course');
   const subjectTitle = lesson?.subject?.name || lesson?.subject?.Name || (isArabic ? 'المادة' : 'Subject');
+  const lessonTitle = lesson?.title || lesson?.name || (isArabic ? 'تفاصيل الدرس' : 'Lesson details');
+
+  const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  const normalizeLessonText = (value, removableText = '') => {
+    const withSpacing = String(value || '')
+      .replace(/([\u0600-\u06FF])([A-Za-z])/g, '$1 $2')
+      .replace(/([A-Za-z])([\u0600-\u06FF])/g, '$1 $2')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!withSpacing) return '';
+
+    if (!removableText) {
+      return withSpacing;
+    }
+
+    const pattern = new RegExp(escapeRegex(removableText), 'gi');
+    return withSpacing.replace(pattern, '').replace(/\s{2,}/g, ' ').trim();
+  };
+
+  const lessonDescription = normalizeLessonText(
+    lesson?.content || lesson?.description || '',
+    courseTitle,
+  ) || (isArabic ? 'شاهد واقرأ واسأل دون مغادرة الصفحة.' : 'Watch, read, and ask questions without leaving the page.');
+
+  useEffect(() => subscribeToProgress(() => setProgressTick((current) => current + 1)), []);
+
+  const courseLessonIds = useMemo(
+    () => subjectLessons.map((item) => Number(item.id)).filter((id) => Number.isInteger(id) && id > 0),
+    [subjectLessons],
+  );
+
+  const courseProgress = useMemo(
+    () => calculateProgressForLessons(courseLessonIds),
+    [courseLessonIds, progressTick],
+  );
+
+  const currentLessonIndex = useMemo(
+    () => subjectLessons.findIndex((item) => Number(item.id) === numericLessonId),
+    [subjectLessons, numericLessonId],
+  );
+
+  const nextLessonId = useMemo(() => {
+    if (currentLessonIndex < 0) return null;
+    const next = subjectLessons[currentLessonIndex + 1];
+    return next ? Number(next.id) : null;
+  }, [subjectLessons, currentLessonIndex]);
+
+  const onVideoEnded = () => {
+    setLessonCompleted(numericLessonId, true);
+
+    if (Number.isInteger(nextLessonId) && nextLessonId > 0) {
+      navigate(`/lessons/${nextLessonId}`, { state: { autoPlay: true } });
+    }
+  };
+
+  useEffect(() => {
+    const shouldAutoPlay = Boolean(location.state?.autoPlay);
+    const videoElement = videoRef.current;
+    if (!shouldAutoPlay || !videoElement || !lesson?.videoUrl) return;
+
+    const tryPlay = async () => {
+      try {
+        await videoElement.play();
+      } catch {
+        // Ignore autoplay blocking by browser policy.
+      }
+    };
+
+    tryPlay();
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state, location.pathname, lesson?.videoUrl, navigate]);
 
   const selectedAttachment = useMemo(() => {
     const list = Array.isArray(lesson?.attachments) ? lesson.attachments : [];
-    return list;
+    // Filter out video attachments since they're displayed separately
+    return list.filter((att) => String(att.fileType || '').toUpperCase() !== 'VIDEO');
   }, [lesson]);
 
-  const onAsk = async () => {
-    if (!question.trim()) return;
-    const response = await askStudentTutor({
-      question,
-      courseId: lesson?.course?.id,
-      subjectId: lesson?.subject?.id,
-      lessonId: numericLessonId,
-    });
-    setAnswer(response?.answer || (isArabic ? 'غير موجود في مواد الدرس.' : 'Not found in lesson materials.'));
+  const resolveFallbackNameFromMime = (mimeType) => {
+    const mimeToExt = {
+      'application/pdf': '.pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+      'application/zip': '.zip',
+      'text/plain': '.txt',
+    };
+
+    return `file${mimeToExt[String(mimeType || '').toLowerCase()] || ''}`;
+  };
+
+  const resolveDownloadName = (attachment) => {
+    if (attachment?.originalName) {
+      return attachment.originalName;
+    }
+
+    return resolveFallbackNameFromMime(attachment?.mimeType);
   };
 
   const onPostComment = async () => {
@@ -119,7 +207,7 @@ export default function StudentLessonPage() {
   };
 
   return (
-    <StudentLayout title={isArabic ? 'عرض الدرس' : 'Lesson view'} subtitle={lesson?.title || lesson?.name || (isArabic ? 'مساحة الدراسة' : 'Study space')}>
+    <StudentLayout>
       {loading ? <div className="h-[34rem] animate-pulse rounded-[1.75rem] border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/5" /> : null}
       {error ? <div className="mb-5 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{error}</div> : null}
       <div className="grid gap-8 xl:grid-cols-[1.4fr_0.75fr]">
@@ -128,10 +216,10 @@ export default function StudentLessonPage() {
             <Link to={lesson?.subject?.id && lesson?.course?.id ? `/courses/${lesson.course.id}/subjects/${lesson.subject.id}` : '/courses'} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
               <ArrowLeft size={16} /> {isArabic ? 'رجوع' : 'Back'}
             </Link>
-            <div className="flex items-center gap-3 text-slate-500">
-              <Search size={18} />
-              <Bell size={18} />
-              <div className="h-10 w-10 rounded-full border-2 border-indigo-100 bg-gradient-to-br from-indigo-500 to-cyan-500" />
+            <div className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
+              {isArabic
+                ? `${courseProgress.completed}/${courseProgress.total} منجز`
+                : `${courseProgress.completed}/${courseProgress.total} completed`}
             </div>
           </div>
 
@@ -140,14 +228,26 @@ export default function StudentLessonPage() {
             animate={{ opacity: 1, y: 0 }}
             className="overflow-hidden rounded-[2rem] border border-white/70 bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500 p-6 text-white shadow-xl shadow-indigo-500/15"
           >
-            <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-100">{courseTitle}</p>
-            <h1 className="mt-2 text-3xl font-black">{lesson?.title || lesson?.name || (isArabic ? 'تفاصيل الدرس' : 'Lesson details')}</h1>
-            <p className="mt-2 max-w-3xl text-sm text-blue-50/90">{lesson?.content || lesson?.description || (isArabic ? 'شاهد واقرأ واسأل دون مغادرة الصفحة.' : 'Watch, read, and ask questions without leaving the page.')}</p>
+            <div className="flex flex-wrap items-center gap-2 text-xs font-bold tracking-[0.2em] text-blue-100">
+              <span className="rounded-full bg-white/10 px-3 py-1 uppercase">{courseTitle}</span>
+              <span className="rounded-full bg-white/10 px-3 py-1 uppercase">{subjectTitle}</span>
+            </div>
+            <h1 className="mt-3 text-3xl font-black">{lessonTitle}</h1>
+            <p className="mt-2 max-w-3xl text-sm text-blue-50/90">{lessonDescription}</p>
           </motion.section>
 
           <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-slate-950 shadow-2xl">
             {lesson?.videoUrl ? (
-              <video controls src={lesson.videoUrl} className="h-[360px] w-full object-cover" />
+              <div>
+                <video
+                  ref={videoRef}
+                  controls
+                  preload="auto"
+                  src={lesson.videoUrl}
+                  className="h-[360px] w-full object-cover"
+                  onEnded={onVideoEnded}
+                />
+              </div>
             ) : (
               <div className="flex h-[360px] items-center justify-center bg-[radial-gradient(circle_at_top,_#1e293b_0%,_#020617_75%)] text-slate-200">
                 <div className="text-center">
@@ -157,6 +257,7 @@ export default function StudentLessonPage() {
                 </div>
               </div>
             )}
+            {null}
           </div>
 
           <div className="rounded-[1.75rem] border border-white/70 bg-white/85 p-4 shadow-xl shadow-indigo-500/5 backdrop-blur-xl">
@@ -177,28 +278,6 @@ export default function StudentLessonPage() {
                 );
               })}
             </div>
-
-            {tab === 'assistant' ? (
-              <div className="mt-4 space-y-4">
-                <div className="rounded-2xl bg-indigo-50 p-4 text-sm text-indigo-900">
-                  {isArabic ? 'اسأل عن هذا الدرس وسيجيب Learnova من السياق الحالي.' : 'Ask about this lesson, and Learnova will answer from the current context.'}
-                </div>
-                <div className="flex gap-3">
-                  <input
-                    value={question}
-                    onChange={(event) => setQuestion(event.target.value)}
-                    placeholder={isArabic ? 'اسأل أي شيء عن هذا الدرس...' : 'Ask anything about this lesson...'}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-indigo-400"
-                  />
-                  <button onClick={onAsk} className="rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700">
-                    {isArabic ? 'إرسال' : 'Send'}
-                  </button>
-                </div>
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                  {answer || (isArabic ? 'ستظهر الإجابة هنا.' : 'Your answer will appear here.')}
-                </div>
-              </div>
-            ) : null}
 
             {tab === 'comments' ? (
               <div className="mt-4 space-y-4">
@@ -229,9 +308,9 @@ export default function StudentLessonPage() {
             {tab === 'attachments' ? (
               <div className="mt-4 space-y-3">
                 {selectedAttachment.length ? selectedAttachment.map((attachment) => (
-                  <a key={attachment.id} href={attachment.url} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50">
-                    <span>{attachment.name}</span>
-                    <FileText size={16} className="text-indigo-600" />
+                  <a key={attachment.id} href={attachment.url || undefined} download={resolveDownloadName(attachment)} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50">
+                    <span className="truncate">{resolveDownloadName(attachment)}</span>
+                    <FileText size={16} className="flex-shrink-0 text-indigo-600" />
                   </a>
                 )) : (
                   <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">{isArabic ? 'لا توجد مرفقات متاحة.' : 'No attachments available.'}</div>
@@ -254,10 +333,38 @@ export default function StudentLessonPage() {
             <p className="text-xs font-bold uppercase tracking-[0.25em] text-indigo-600">{isArabic ? 'محتوى الكورس' : 'Course content'}</p>
             <div className="mt-4 space-y-3">
               {subjectLessons.length ? subjectLessons.map((item) => (
-                <Link key={item.id} to={`/lessons/${item.id}`} className={`flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold transition ${Number(item.id) === numericLessonId ? 'bg-indigo-600 text-white' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
-                  <PlayCircle size={15} />
+                <div
+                  key={item.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    if (Number(item.id) !== numericLessonId) {
+                      navigate(`/lessons/${item.id}`);
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if ((event.key === 'Enter' || event.key === ' ') && Number(item.id) !== numericLessonId) {
+                      event.preventDefault();
+                      navigate(`/lessons/${item.id}`);
+                    }
+                  }}
+                  className={`flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold transition ${Number(item.id) === numericLessonId ? 'bg-indigo-600 text-white' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isLessonCompleted(item.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onChange={(event) => {
+                      event.stopPropagation();
+                      setLessonCompleted(item.id, event.target.checked);
+                    }}
+                    className="h-4 w-4 cursor-pointer"
+                  />
+                  {isLessonCompleted(item.id) ? <CircleCheckBig size={15} /> : <PlayCircle size={15} />}
                   <span className="line-clamp-1">{item.title || item.name}</span>
-                </Link>
+                </div>
               )) : (
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">{isArabic ? 'لا توجد دروس متاحة.' : 'No lessons available.'}</div>
               )}
@@ -265,9 +372,16 @@ export default function StudentLessonPage() {
           </div>
 
           <div className="rounded-[1.75rem] border border-white/70 bg-gradient-to-br from-indigo-600 to-cyan-500 p-5 text-white shadow-xl shadow-indigo-500/15 backdrop-blur-xl">
-            <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-100">{isArabic ? 'ملخص الدرس' : 'Lesson summary'}</p>
-            <h2 className="mt-2 text-xl font-black">{lesson?.title || (isArabic ? 'ملخص الدراسة' : 'Study summary')}</h2>
-            <p className="mt-3 text-sm leading-7 text-blue-50/90">{lesson?.content || lesson?.description || (isArabic ? 'استخدم هذه المساحة لتثبيت الأفكار الأساسية قبل الانتقال.' : 'Use this space to reinforce the key ideas before moving on.')}</p>
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-100">{isArabic ? 'معلومات الدرس' : 'Lesson info'}</p>
+            <div className="mt-3 space-y-2 text-sm text-blue-50/95">
+              <p><span className="font-semibold">{isArabic ? 'العنوان:' : 'Title:'}</span> {lessonTitle}</p>
+              <p><span className="font-semibold">{isArabic ? 'المادة:' : 'Subject:'}</span> {subjectTitle}</p>
+              <p><span className="font-semibold">{isArabic ? 'المرفقات:' : 'Attachments:'}</span> {selectedAttachment.length}</p>
+              <p><span className="font-semibold">{isArabic ? 'التعليقات:' : 'Comments:'}</span> {comments.length}</p>
+            </div>
+            <p className="mt-4 rounded-xl bg-white/10 px-3 py-2 text-sm leading-6 text-blue-50/90">
+              {lessonDescription}
+            </p>
           </div>
         </aside>
       </div>

@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import StudentLayout from "../../components/student/StudentLayout";
 import LessonSidebar from "../../components/student/LessonSidebar";
-import AIChatBox from "../../components/student/AIChatBox";
 import VideoPlayer from "../../components/student/VideoPlayer";
 import EducationLoading from "../../components/ui/EducationLoading";
 import { Badge } from "../../components/ui/badge";
@@ -279,14 +278,6 @@ export default function StudentLessonsPage() {
 
             <VideoPlayer isArabic={isArabic} title={selectedSubject?.name || t.student.lessons.title} />
           </div>
-
-          <AIChatBox
-            isArabic={isArabic}
-            courseId={selectedCourse?.id}
-            subjectId={selectedSubject?.id}
-            lessonId={lessonId || undefined}
-            labels={t.student.ai}
-          />
 
           {lessonId ? (
             <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">

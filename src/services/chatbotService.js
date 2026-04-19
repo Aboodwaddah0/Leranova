@@ -37,7 +37,10 @@ const CHATBOT_SYSTEM_PROMPT = [
   'إذا لم يكن الجواب حرفيًا لكن الأدلة كافية: اسمح باستنتاج آمن دون تجاوز السياق.',
   'إذا كان جزء من السؤال خارج السياق: أجب المدعوم فقط واذكر بوضوح أن الجزء الآخر غير مغطى.',
   'لا تدمج أفكارًا غير مرتبطة ولا تخمّن.',
+  'استخدم سجل المحادثة الحديث فقط لفهم الضمائر والإحالات (مثل: هذا/هي/هناك/أين تقع) ولا تعتبره مصدر معرفة مستقل.',
 ].join(' ');
+
+const MAX_HISTORY_TURNS = 8;
 
 const DIALECT_TOKEN_MAP = new Map([
   ['شو', 'ماذا'],
@@ -738,7 +741,20 @@ const selectStageChunks = async ({
   return keepCohesiveChunks(merged, scope).slice(0, MAX_CONTEXT_CHUNKS);
 };
 
-const askGroq = async ({ question, chunks, questionStyle, scope, modeHint }) => {
+const normalizeHistory = (history = []) => {
+  if (!Array.isArray(history)) return [];
+
+  return history
+    .filter((entry) => entry && (entry.role === 'user' || entry.role === 'assistant'))
+    .map((entry) => ({
+      role: entry.role,
+      content: normalizeArabicText(String(entry.content || '')).slice(0, 1200),
+    }))
+    .filter((entry) => entry.content.length > 0)
+    .slice(-MAX_HISTORY_TURNS);
+};
+
+const askGroq = async ({ question, chunks, questionStyle, scope, modeHint, history = [] }) => {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new AppError('GROQ_API_KEY is not configured', 500);
 
@@ -753,6 +769,11 @@ const askGroq = async ({ question, chunks, questionStyle, scope, modeHint }) => 
     score: chunk.score,
   }));
 
+  const historyMessages = normalizeHistory(history).map((entry) => ({
+    role: entry.role,
+    content: entry.content,
+  }));
+
   const response = await fetch(GROQ_API_URL, {
     method: 'POST',
     headers: {
@@ -765,6 +786,7 @@ const askGroq = async ({ question, chunks, questionStyle, scope, modeHint }) => 
       max_tokens: 500,
       messages: [
         { role: 'system', content: CHATBOT_SYSTEM_PROMPT },
+        ...historyMessages,
         {
           role: 'user',
           content: [
@@ -790,7 +812,7 @@ const askGroq = async ({ question, chunks, questionStyle, scope, modeHint }) => 
   return answer;
 };
 
-export const askChatbot = async ({ tokenUser, question, courseId, subjectId, lessonId }) => {
+export const askChatbot = async ({ tokenUser, question, courseId, subjectId, lessonId, history = [] }) => {
   const normalizedInput = normalizeUserQuestion(question);
   const normalizedQuestion = normalizedInput.normalizedQuestion;
   const retrievalQuestion = normalizedInput.retrievalQuestion;
@@ -923,6 +945,7 @@ export const askChatbot = async ({ tokenUser, question, courseId, subjectId, les
       questionStyle,
       scope: selected.scope,
       modeHint: answerMode,
+      history,
     });
   } catch (error) {
     return makeRefusal({
