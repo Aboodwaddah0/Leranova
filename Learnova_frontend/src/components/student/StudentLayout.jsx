@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { Bell, Search, Home, BookOpen, UserCircle2, LogOut, MessageCircle, Users2 } from 'lucide-react';
+import { Home, BookOpen, UserCircle2, LogOut, MessageCircle, Users2 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
@@ -59,7 +59,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
   const activeNavItem = navItems.find((item) => item.match(location.pathname)) || null;
 
   return (
-    <div className={`min-h-screen bg-[radial-gradient(circle_at_top_right,_#e1e0ff_0%,_#f7f9fb_42%,_#c9e6ff_100%)] text-slate-900 ${isArabic ? 'lang-ar' : 'lang-en'}`}>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,_#e1e0ff_0%,_#f7f9fb_42%,_#c9e6ff_100%)] text-slate-900 lang-en">
       <header className="sticky top-0 z-50 border-b border-white/60 bg-white/75 backdrop-blur-xl shadow-sm">
         <div className="mx-auto flex max-w-[1700px] items-center justify-between gap-4 px-4 py-3 lg:px-6">
           <div className="flex items-center gap-4">
@@ -76,10 +76,6 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
           </div>
 
           <div className="flex items-center gap-3">
-            <button className="hidden sm:flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm text-slate-500 transition hover:bg-slate-200">
-              <Search size={16} />
-              {isArabic ? 'بحث' : 'Search'}
-            </button>
             <div className="flex items-center rounded-full border border-slate-200 bg-white p-1 shadow-sm">
               <button
                 type="button"
@@ -96,9 +92,6 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
                 العربية
               </button>
             </div>
-            <button className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800">
-              <Bell size={18} />
-            </button>
             <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm">
               <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 text-sm font-black text-white">
                 {avatar ? <img src={avatar} alt={displayName} className="h-full w-full object-cover" /> : getInitial(displayName)}

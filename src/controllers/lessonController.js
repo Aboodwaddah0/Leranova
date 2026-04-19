@@ -96,6 +96,7 @@ export const getLessonsController = async (req, res, next) => {
 		const lessons = await getLessons(req.user, subjectId);
 
 		return res.status(200).json({
+			success: true,
 			message: 'Lessons fetched successfully',
 			total: lessons.length,
 			data: lessons,
@@ -112,6 +113,7 @@ export const getLessonByIdController = async (req, res, next) => {
 		const lesson = await getLessonById(req.user, subjectId, lessonId);
 
 		return res.status(200).json({
+			success: true,
 			message: 'Lesson fetched successfully',
 			data: lesson,
 		});

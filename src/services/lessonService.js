@@ -49,12 +49,53 @@ const resolveLessonScope = async (actor) => {
 	throw new AppError('Access denied. Teacher, student, or organization account required.', 403);
 };
 
-const serializeLesson = (lesson) => ({
-	id: lesson.id,
-	subjectId: lesson.Subject_id,
-	title: lesson.name,
-	description: lesson.Description,
+const toJsonSafeSize = (value) => {
+	if (value === null || value === undefined) {
+		return null;
+	}
+
+	if (typeof value === 'bigint') {
+		const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
+		return value <= maxSafe ? Number(value) : value.toString();
+	}
+
+	return value;
+};
+
+const serializeAttachment = (attachment) => ({
+	id: attachment.id,
+	lessonId: attachment.lessonId,
+	fileUrl: attachment.fileUrl,
+	url: attachment.fileUrl,
+	filePublicId: attachment.filePublicId,
+	public_id: attachment.filePublicId,
+	fileResourceType: attachment.fileResourceType,
+	resource_type: attachment.fileResourceType,
+	mimeType: attachment.mimeType,
+	originalName: attachment.originalName,
+	name: attachment.originalName,
+	fileType: attachment.fileType,
+	type: String(attachment.fileType || '').toLowerCase(),
+	sizeBytes: toJsonSafeSize(attachment.sizeBytes),
+	createdAt: attachment.createdAt,
 });
+
+const serializeLesson = (lesson) => {
+	const attachments = Array.isArray(lesson.attachments)
+		? lesson.attachments.map(serializeAttachment)
+		: [];
+	const videoAttachment = attachments.find((attachment) => String(attachment.fileType || '').toUpperCase() === 'VIDEO') || null;
+
+	return {
+		id: lesson.id,
+		subjectId: lesson.Subject_id,
+		title: lesson.name,
+		name: lesson.name,
+		description: lesson.Description,
+		videoUrl: lesson.videoUrl || videoAttachment?.url || '',
+		attachments,
+	};
+};
 
 const ensureSubjectBelongsToOrganization = async (scope, subjectId) => {
 	const subject = await prisma.subject.findFirst({
@@ -149,6 +190,13 @@ export const getLessons = async (actor, subjectId) => {
 		orderBy: {
 			id: 'asc',
 		},
+		include: {
+			attachments: {
+				orderBy: {
+					id: 'asc',
+				},
+			},
+		},
 	});
 
 	return lessons.map(serializeLesson);
@@ -156,7 +204,29 @@ export const getLessons = async (actor, subjectId) => {
 
 export const getLessonById = async (actor, subjectId, lessonId) => {
 	const scope = await resolveLessonScope(actor);
-	const lesson = await ensureLessonBelongsToSubject(scope, subjectId, lessonId);
+	const lesson = await prisma.lesson.findFirst({
+		where: {
+			id: lessonId,
+			Subject_id: subjectId,
+			subject: {
+				...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
+				course: {
+					Org_id: scope.orgId,
+				},
+			},
+		},
+		include: {
+			attachments: {
+				orderBy: {
+					id: 'asc',
+				},
+			},
+		},
+	});
+
+	if (!lesson) {
+		throw new AppError('Lesson not found or does not belong to this subject', 404);
+	}
 	return serializeLesson(lesson);
 };
 

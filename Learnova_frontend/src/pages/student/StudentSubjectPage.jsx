@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, BookCheck, ChevronDown, Clock3, CreditCard, Lock, PlayCircle } from 'lucide-react';
+import { ArrowLeft, Clock3, CreditCard, Lock, PlayCircle } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
 import {
   fetchAcademyTrackSubjects,
@@ -29,8 +29,7 @@ export default function StudentSubjectPage() {
   const [isLocked, setIsLocked] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [progressTick, setProgressTick] = useState(0);
-  const [openSections, setOpenSections] = useState({});
-  const autoOpenedFirstSectionRef = useRef(false);
+  const [selectedLessonId, setSelectedLessonId] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -38,19 +37,24 @@ export default function StudentSubjectPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const [context, courses, subjects] = await Promise.all([
+        const [context, courses, subjects, trackData] = await Promise.all([
           fetchStudentContext(),
           fetchStudentCourseCatalog(),
           fetchCourseSubjects(numericCourseId),
+          fetchAcademyTrackSubjects(numericCourseId).catch(() => null),
         ]);
         setStudentContext(context);
         const matchedCourse = (courses || []).find((item) => Number(item.id) === numericCourseId) || null;
         let matchedSubject = (subjects || []).find((item) => Number(item.id) === numericSubjectId) || null;
 
-        if (!matchedSubject && context?.mode === 'ACADEMY') {
-          const trackData = await fetchAcademyTrackSubjects(numericCourseId);
-          matchedSubject = (trackData?.subjects || []).find((item) => Number(item.id) === numericSubjectId) || null;
-          setIsLocked(Boolean(matchedSubject && !matchedSubject.isSubscribed));
+        if (context?.mode === 'ACADEMY') {
+          const academySubject = (trackData?.subjects || []).find((item) => Number(item.id) === numericSubjectId) || null;
+          if (academySubject) {
+            matchedSubject = matchedSubject || academySubject;
+            setIsLocked(Boolean(!academySubject.isSubscribed));
+          } else {
+            setIsLocked(Boolean(matchedSubject && !matchedSubject.isSubscribed));
+          }
         } else {
           setIsLocked(false);
         }
@@ -86,20 +90,32 @@ export default function StudentSubjectPage() {
     };
   }, [isArabic, numericCourseId, numericSubjectId]);
 
+  const courseName = course?.name || course?.Name || (isArabic ? 'الكورس' : 'Course');
   const lessonItems = useMemo(() => lessons || [], [lessons]);
-  const sections = useMemo(() => groupLessonsBySection(lessonItems, isArabic), [isArabic, lessonItems]);
+  const selectedLesson = useMemo(() => {
+    if (!lessonItems.length) {
+      return null;
+    }
+
+    return lessonItems.find((item) => String(item.id) === String(selectedLessonId)) || lessonItems[0] || null;
+  }, [lessonItems, selectedLessonId]);
+  const selectedLessonVideoUrl = selectedLesson?.videoUrl || selectedLesson?.attachments?.find((attachment) => String(attachment.fileType || attachment.type || '').toUpperCase() === 'VIDEO')?.url || '';
   const lessonProgress = useMemo(
     () => calculateProgressForLessons(lessonItems.map((item) => item.id)),
     [lessonItems, progressTick],
   );
 
   useEffect(() => {
-    if (loading || isLocked || autoOpenedFirstSectionRef.current) return;
-    const firstSection = sections[0];
-    if (!firstSection?.key) return;
-    autoOpenedFirstSectionRef.current = true;
-    setOpenSections({ [firstSection.key]: true });
-  }, [isLocked, loading, sections]);
+    if (!lessonItems.length) {
+      setSelectedLessonId('');
+      return;
+    }
+
+    setSelectedLessonId((current) => {
+      const currentExists = lessonItems.some((item) => String(item.id) === String(current));
+      return currentExists ? current : String(lessonItems[0].id);
+    });
+  }, [lessonItems]);
 
   const handleBuySubject = async () => {
     try {
@@ -118,7 +134,7 @@ export default function StudentSubjectPage() {
   useEffect(() => subscribeToProgress(() => setProgressTick((value) => value + 1)), []);
 
   return (
-    <StudentLayout title={isArabic ? 'المادة' : 'Subject'} subtitle={subject?.name || (isArabic ? 'دروس المادة' : 'Subject lessons')}>
+    <StudentLayout title={courseName} subtitle={isArabic ? 'مكتبة المحاضرات' : 'Lesson library'}>
       {loading ? <div className="h-64 animate-pulse rounded-[1.75rem] border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/5" /> : null}
       {error ? <div className="mb-5 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{error}</div> : null}
       <div className="flex items-center justify-between gap-3">
@@ -134,7 +150,7 @@ export default function StudentSubjectPage() {
       </section>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-3">
-        <InfoChip label={isArabic ? 'الكورس' : 'Course'} value={course?.name || (isArabic ? 'كورس غير معروف' : 'Unknown course')} />
+        <InfoChip label={isArabic ? 'الكورس' : 'Course'} value={courseName} />
         <InfoChip label={isArabic ? 'المادة' : 'Subject'} value={subject?.name || (isArabic ? 'مادة غير معروفة' : 'Unknown subject')} />
         <InfoChip label={isArabic ? 'الإنجاز' : 'Completion'} value={`${lessonProgress.completed}/${lessonProgress.total} (${lessonProgress.percent}%)`} />
       </div>
@@ -162,76 +178,75 @@ export default function StudentSubjectPage() {
       ) : null}
 
       {!(studentContext?.mode === 'ACADEMY' && isLocked) ? (
-      <div className="mt-6 rounded-[1.75rem] border border-white/70 bg-white/85 p-5 shadow-xl shadow-indigo-500/5 backdrop-blur-xl">
-        <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.25em] text-indigo-600">
-          <BookCheck size={16} /> {isArabic ? 'السيكشنات والمحاضرات' : 'Sections and lectures'}
-        </div>
-        <div className="mt-4 space-y-3">
-          {sections.length ? sections.map((section) => {
-            const isOpen = Boolean(openSections[section.key]);
+      <div className="mt-6 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <section className="overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/5 backdrop-blur-xl">
+          <div className="bg-slate-950">
+            {selectedLessonVideoUrl ? (
+              <video
+                key={selectedLesson?.id || 'lesson-video'}
+                controls
+                preload="metadata"
+                src={selectedLessonVideoUrl}
+                className="h-[360px] w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-[360px] items-center justify-center bg-[radial-gradient(circle_at_top,_#1e293b_0%,_#020617_75%)] text-slate-200">
+                <div className="text-center">
+                  <PlayCircle size={54} className="mx-auto text-cyan-300" />
+                  <p className="mt-3 text-xl font-black">{isArabic ? 'معاينة الفيديو' : 'Video preview'}</p>
+                  <p className="mt-2 text-sm text-slate-400">{isArabic ? 'اختر درسًا لتشغيل الفيديو هنا.' : 'Select a lesson to play the video here.'}</p>
+                </div>
+              </div>
+            )}
+          </div>
 
-            return (
-              <article key={section.key} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="p-5">
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-indigo-600">{isArabic ? 'الدرس الحالي' : 'Current lesson'}</p>
+            <h3 className="mt-2 text-2xl font-black text-slate-900">{selectedLesson?.title || selectedLesson?.name || (isArabic ? 'اختر درسًا' : 'Select a lesson')}</h3>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              {selectedLesson?.description || (isArabic ? 'سيظهر وصف الدرس هنا بعد الاختيار.' : 'Lesson details will appear here after selection.')}
+            </p>
+          </div>
+        </section>
+
+        <aside className="rounded-[1.75rem] border border-white/70 bg-white/85 p-5 shadow-xl shadow-indigo-500/5 backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-indigo-600">{isArabic ? 'المحاضرات' : 'Lessons'}</p>
+              <h3 className="mt-2 text-xl font-black text-slate-900">{subject?.name || (isArabic ? 'دروس المادة' : 'Subject lessons')}</h3>
+            </div>
+            <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">{lessonItems.length}</span>
+          </div>
+
+          <div className="mt-4 space-y-3 max-h-[58vh] overflow-auto pr-1">
+            {lessonItems.length ? lessonItems.map((lesson, index) => {
+              const active = String(lesson.id) === String(selectedLesson?.id);
+              return (
                 <button
+                  key={lesson.id}
                   type="button"
-                  onClick={() => {
-                    setOpenSections((prev) => ({ ...prev, [section.key]: !prev[section.key] }));
-                  }}
-                  className="flex w-full items-center justify-between gap-3 px-4 py-4 text-start transition hover:bg-slate-50"
+                  onClick={() => setSelectedLessonId(String(lesson.id))}
+                  className={`group flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition ${active ? 'border-indigo-300 bg-indigo-50 shadow-sm' : 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50'}`}
                 >
-                  <div>
-                    <p className="text-sm font-black text-slate-900">{section.title}</p>
-                    <p className="mt-1 text-xs text-slate-500">{section.lessons.length} {isArabic ? 'محاضرات' : 'lectures'}</p>
+                  <div className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full ${active ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                    <PlayCircle size={16} />
                   </div>
-                  <ChevronDown size={16} className={`text-slate-500 transition ${isOpen ? 'rotate-180' : ''}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className={`truncate text-sm font-bold ${active ? 'text-indigo-700' : 'text-slate-900'}`}>{lesson.title || lesson.name}</p>
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+                      <Clock3 size={13} />
+                      <span>{lesson.duration || (isArabic ? `محاضرة ${index + 1}` : `Lesson ${index + 1}`)}</span>
+                    </div>
+                  </div>
                 </button>
-
-                {isOpen ? (
-                  <div className="space-y-2 border-t border-slate-100 bg-slate-50/40 p-3">
-                    {section.lessons.map((lesson) => (
-                      <div
-                        key={lesson.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => {
-                          navigate(`/lessons/${lesson.id}`);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            navigate(`/lessons/${lesson.id}`);
-                          }
-                        }}
-                        className="group flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:border-indigo-200 hover:shadow-sm"
-                      >
-                        <div className="flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            checked={isLessonCompleted(lesson.id)}
-                            onChange={(event) => {
-                              event.stopPropagation();
-                              setLessonCompleted(lesson.id, event.target.checked);
-                            }}
-                            onClick={(event) => event.stopPropagation()}
-                            className="mt-1 h-4 w-4 cursor-pointer"
-                          />
-                          <div>
-                            <p className="font-bold text-slate-900 group-hover:text-indigo-700">{lesson.displayTitle}</p>
-                            <p className="mt-1 flex items-center gap-1 text-sm text-slate-500"><Clock3 size={14} /> {lesson.duration || (isArabic ? '15 دقيقة' : '15 min')}</p>
-                          </div>
-                        </div>
-
-                        <PlayCircle className="text-indigo-500" size={16} />
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </article>
-            );
-          }) : (
-            <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">{isArabic ? 'لا توجد دروس متاحة بعد.' : 'No lessons are available yet.'}</div>
-          )}
-        </div>
+              );
+            }) : (
+              <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">{isArabic ? 'لا توجد دروس متاحة بعد.' : 'No lessons are available yet.'}</div>
+            )}
+          </div>
+        </aside>
       </div>
       ) : null}
     </StudentLayout>

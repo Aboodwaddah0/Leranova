@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BarChart3, BookOpen, CalendarDays, Flame, PlusCircle, Sparkles, TrendingUp } from 'lucide-react';
+import { ArrowRight, BarChart3, BookOpen, CalendarDays, Flame, Sparkles, TrendingUp } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
 import {
   fetchMyStudentMarks,
@@ -10,7 +10,6 @@ import {
   fetchStudentCourseCatalog,
   fetchStudentProfile,
 } from '../../services/studentService';
-import api from '../../utils/api';
 import { useLanguage } from '../../utils/i18n';
 import { calculateProgressForLessons, subscribeToProgress } from '../../utils/studentProgress';
 
@@ -82,8 +81,6 @@ const buildWeeklyActivity = (marks = []) => {
   return buckets;
 };
 
-const stableFallbackScore = (id) => ((Number(id) * 9301 + 49297) % 233280) / 233280;
-
 const summarizeAverageMark = (marks = []) => {
   if (!marks.length) return 0;
   const total = marks.reduce((sum, mark) => {
@@ -127,7 +124,6 @@ const buildWeeklyChart = (weeklyActivity = []) => {
 export default function StudentDashboardPage() {
   const { t, isArabic } = useLanguage();
   const [enrolledCourses, setEnrolledCourses] = useState([]);
-  const [catalogCourses, setCatalogCourses] = useState([]);
   const [marks, setMarks] = useState([]);
   const [profile, setProfile] = useState(null);
   const [purchases, setPurchases] = useState([]);
@@ -143,12 +139,11 @@ export default function StudentDashboardPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const [courseData, marksData, purchaseData, profileData, catalogResponse] = await Promise.all([
+        const [courseData, marksData, purchaseData, profileData] = await Promise.all([
           fetchStudentCourseCatalog(),
           fetchMyStudentMarks(),
           fetchMyStudentPurchases(),
           fetchStudentProfile(),
-          api.get('/courses').catch(() => null),
         ]);
 
         if (cancelled) return;
@@ -156,9 +151,6 @@ export default function StudentDashboardPage() {
         const safeCourses = normalizeCourses(Array.isArray(courseData) ? courseData : [], isArabic);
         const safeMarks = Array.isArray(marksData) ? marksData : [];
         const safePurchases = Array.isArray(purchaseData) ? purchaseData : [];
-        const rawCatalog = catalogResponse?.data?.data || catalogResponse?.data || [];
-        const safeCatalog = normalizeCourses(Array.isArray(rawCatalog) ? rawCatalog : [], isArabic);
-
         const coursesWithProgress = await Promise.all(
           safeCourses.map(async (course) => {
             try {
@@ -187,7 +179,6 @@ export default function StudentDashboardPage() {
         );
 
         setEnrolledCourses(coursesWithProgress);
-        setCatalogCourses(safeCatalog);
         setMarks(safeMarks);
         setPurchases(safePurchases);
         setProfile(profileData || null);
@@ -216,8 +207,6 @@ export default function StudentDashboardPage() {
   if (!Array.isArray(enrolledCourses)) {
     return <div className="m-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{t.student.common.noData}</div>;
   }
-
-  const enrolledCourseIds = new Set(enrolledCourses.map((course) => Number(course.id)).filter(Number.isFinite));
 
   const activityByCourseId = useMemo(() => {
     const map = new Map();
@@ -258,29 +247,22 @@ export default function StudentDashboardPage() {
     [enrolledCourses, continueIds],
   );
 
-  const recommendedCourses = useMemo(() => {
-    if (!catalogCourses.length) return [];
+  const weeklyActivity = useMemo(() => {
+    const actual = buildWeeklyActivity(marks);
+    const hasActivity = actual.some((item) => item.count > 0);
+    if (hasActivity) {
+      return actual;
+    }
 
-    const preferredCategories = new Map();
-    enrolledCourses.forEach((course) => {
-      const category = String(course?.category || '').trim().toLowerCase();
-      if (!category) return;
-      preferredCategories.set(category, (preferredCategories.get(category) || 0) + 1);
-    });
+    // Demo fallback so the student can preview chart behavior when no graded activity exists yet.
+    const enrolledCount = Math.max(1, Number(enrolledCourses.length || 0));
+    const seedPattern = [1, 2, 1, 3, 2, 1, 2];
 
-    return catalogCourses
-      .filter((course) => !enrolledCourseIds.has(Number(course.id)))
-      .sort((a, b) => {
-        const aWeight = preferredCategories.get(String(a?.category || '').toLowerCase()) || 0;
-        const bWeight = preferredCategories.get(String(b?.category || '').toLowerCase()) || 0;
-
-        if (bWeight !== aWeight) return bWeight - aWeight;
-        return stableFallbackScore(a.id) - stableFallbackScore(b.id);
-      })
-      .slice(0, 6);
-  }, [catalogCourses, enrolledCourseIds, enrolledCourses]);
-
-  const weeklyActivity = useMemo(() => buildWeeklyActivity(marks), [marks]);
+    return actual.map((item, index) => ({
+      ...item,
+      count: Math.max(1, Math.round((seedPattern[index] * enrolledCount) / 2)),
+    }));
+  }, [enrolledCourses.length, marks]);
   const weeklyChart = useMemo(() => buildWeeklyChart(weeklyActivity), [weeklyActivity]);
   const maxWeeklyCount = Math.max(1, ...weeklyActivity.map((item) => item.count));
 
@@ -482,37 +464,6 @@ export default function StudentDashboardPage() {
           )}
         </section>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{isArabic ? '✨ كورسات مقترحة' : '✨ Recommended Courses'}</p>
-              <h2 className="mt-2 text-xl font-black text-slate-900">{isArabic ? 'مقترح لك (غير مسجل)' : 'Not enrolled yet'}</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                {isArabic
-                  ? 'التوصيات تعتمد على تصنيف كورساتك الحالية، مع fallback عشوائي ثابت.'
-                  : 'Recommendations are category-based from your current courses, with a stable random fallback.'}
-              </p>
-            </div>
-            <PlusCircle size={18} className="text-slate-400" />
-          </div>
-
-          {recommendedCourses.length ? (
-            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {recommendedCourses.map((course) => (
-                <DashboardCourseCard key={course.id} course={course} actionLabel={isArabic ? 'سجل الآن' : 'Enroll'} actionHref={`/payment-success?courseId=${course.id}`} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              title={isArabic ? 'لا توجد توصيات متاحة الآن' : 'No recommendations available'}
-              description={
-                isArabic
-                  ? 'إما أن كل الكورسات مسجَّلة بالفعل أو أن كتالوج الكورسات غير متاح لحساب الطالب الحالي.'
-                  : 'Either all courses are already enrolled, or the course catalog is not available for this student account.'
-              }
-            />
-          )}
-        </section>
       </div>
     </StudentLayout>
   );
