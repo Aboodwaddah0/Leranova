@@ -403,8 +403,8 @@ export default function StudentChatPage() {
 
   return (
     <StudentLayout
-      title="المحادثات"
-      subtitle="تواصل مع طلاب الكورس"
+      title={isArabic ? 'المحادثات' : 'Chat'}
+      subtitle={isArabic ? 'تواصل الكورس' : 'Course chat'}
     >
       {error ? (
         <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -412,14 +412,14 @@ export default function StudentChatPage() {
         </div>
       ) : null}
 
-      <div className="grid min-h-[72vh] gap-5 rounded-[1.75rem] border border-white/70 bg-white/80 p-4 shadow-xl shadow-indigo-500/5 backdrop-blur-xl md:grid-cols-[320px_1fr]">
-        <aside className="rounded-3xl border border-slate-200 bg-slate-50/80 p-3">
+      <div className="grid h-[calc(100vh-170px)] min-h-0 gap-5 overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/80 p-4 shadow-xl shadow-indigo-500/5 backdrop-blur-xl md:grid-cols-[340px_1fr]">
+        <aside className="flex min-h-0 flex-col rounded-3xl border border-slate-200 bg-slate-50/80 p-3">
           <div className="mb-3 flex items-center gap-2 px-2 text-sm font-bold text-slate-700">
             <MessageCircle size={16} className="text-indigo-600" />
             <span>{isArabic ? 'قائمة الدردشات' : 'Chat list'}</span>
           </div>
 
-          <div className="space-y-2">
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
             {loading ? (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-3 py-4 text-sm text-slate-500">
                 {isArabic ? 'جاري تحميل الدردشات...' : 'Loading chats...'}
@@ -469,14 +469,14 @@ export default function StudentChatPage() {
           </div>
         </aside>
 
-        <section className="flex min-h-[60vh] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white">
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white">
           <div className="border-b border-slate-200 px-4 py-3">
             <p className="text-sm font-black text-slate-900">
               {selectedChat ? getChatLabel(selectedChat, isArabic) : (isArabic ? 'اختر دردشة' : 'Select a chat')}
             </p>
           </div>
 
-          <div ref={messagesBoxRef} className="flex-1 space-y-3 overflow-auto bg-slate-50/70 px-4 py-4">
+          <div ref={messagesBoxRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 px-4 py-4">
             {!selectedChat ? (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-6 text-sm text-slate-500">
                 {isArabic ? 'اختر دردشة لعرض الرسائل.' : 'Choose a chat to view messages.'}

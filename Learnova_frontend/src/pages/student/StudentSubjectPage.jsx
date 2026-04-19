@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, BookCheck, Clock3, PlayCircle } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
@@ -19,6 +19,7 @@ export default function StudentSubjectPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [progressTick, setProgressTick] = useState(0);
+  const autoOpenedFirstLessonRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +66,16 @@ export default function StudentSubjectPage() {
     () => calculateProgressForLessons(lessonItems.map((item) => item.id)),
     [lessonItems, progressTick],
   );
+
+  useEffect(() => {
+    if (loading || autoOpenedFirstLessonRef.current) return;
+
+    const firstLesson = lessonItems[0];
+    if (!firstLesson?.id) return;
+
+    autoOpenedFirstLessonRef.current = true;
+    navigate(`/lessons/${firstLesson.id}`, { replace: true });
+  }, [lessonItems, loading, navigate]);
 
   useEffect(() => subscribeToProgress(() => setProgressTick((value) => value + 1)), []);
 

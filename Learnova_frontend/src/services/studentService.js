@@ -654,6 +654,51 @@ export async function fetchStudentChats() {
   return Array.isArray(data) ? data : [];
 }
 
+const normalizeTeacherRecord = (teacher = {}) => ({
+  id: Number(teacher?.id || teacher?.Teacher_id || teacher?.userId || 0),
+  userId: Number(teacher?.userId || teacher?.user?.id || teacher?.Teacher_id || teacher?.id || 0),
+  name: teacher?.name || teacher?.user?.name || '',
+  email: teacher?.email || teacher?.user?.email || '',
+  work: teacher?.work || teacher?.Work || '',
+  specialization: teacher?.specialization || '',
+  bio: teacher?.bio || '',
+  createdAt: teacher?.createdAt || null,
+  age: teacher?.age ?? teacher?.user?.age ?? null,
+  gender: teacher?.gender ?? teacher?.user?.gender ?? null,
+  address: teacher?.address ?? teacher?.user?.address ?? null,
+  avatarUrl: teacher?.avatarUrl || teacher?.avatar || null,
+  subjectCount: Number(teacher?.subjectCount || teacher?._count?.subject || 0),
+});
+
+export async function fetchStudentTeachers(search = '') {
+  try {
+    const response = await api.get('/teachers', {
+      params: search ? { search } : undefined,
+    });
+    const data = unwrap(response, []);
+    return Array.isArray(data) ? data.map(normalizeTeacherRecord) : [];
+  } catch (error) {
+    console.error('fetchStudentTeachers error:', error);
+    return [];
+  }
+}
+
+export async function fetchStudentTeacherById(teacherId) {
+  const numericTeacherId = Number(teacherId);
+  if (!Number.isFinite(numericTeacherId) || numericTeacherId <= 0) {
+    return null;
+  }
+
+  try {
+    const response = await api.get(`/teachers/${numericTeacherId}`);
+    const data = unwrap(response, null);
+    return data ? normalizeTeacherRecord(data) : null;
+  } catch (error) {
+    console.error('fetchStudentTeacherById error:', error);
+    return null;
+  }
+}
+
 export async function fetchStudentChatMessages(chatId) {
   const response = await api.get(`/chats/${chatId}/messages`);
   const data = unwrap(response, []);

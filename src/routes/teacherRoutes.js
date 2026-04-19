@@ -27,11 +27,12 @@ router.get('/me/subjects', isTeacher, getMySubjectsController);
 router.get('/me/lessons', isTeacher, getMyLessonsController);
 router.get('/me/students', isTeacher, getMyStudentsController);
 
+router.get('/', getTeachersController);
+router.get('/:id', getTeacherByIdController);
+
 router.use(isOrganization);
 
 router.post('/', createTeacherController);
-router.get('/', getTeachersController);
-router.get('/:id', getTeacherByIdController);
 router.put('/:id', updateTeacherController);
 router.delete('/:id', deleteTeacherController);
 
