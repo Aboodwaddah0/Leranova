@@ -10,6 +10,7 @@ import {
 import {
   registerOrganizationSchema,
   loginOrganizationSchema,
+  loginUserSchema,
   loginParentSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
@@ -61,7 +62,13 @@ export const login = async (req, res, next) => {
 // Teacher/Student login with email and password.
 export const loginUserController = async (req, res, next) => {
   try {
-    const result = await loginUser(req.body);
+    const { error, value } = loginUserSchema.validate(req.body);
+
+    if (error) {
+      return next(new AppError(error.details[0].message, 400));
+    }
+
+    const result = await loginUser(value);
 
     return res.status(200).json({
       message: 'Login successful',
