@@ -337,6 +337,93 @@ const resolveLessonContextFromApi = async (lessonId) => {
   return null;
 };
 
+export async function fetchStudentContext() {
+  try {
+    const response = await api.get('/student/me/context');
+    return unwrap(response, null);
+  } catch (error) {
+    console.error('fetchStudentContext error:', error);
+    return null;
+  }
+}
+
+export async function fetchSchoolMySubjects() {
+  try {
+    const response = await api.get('/student/school/subjects');
+    const data = unwrap(response, null);
+    return data || { class: null, subjects: [] };
+  } catch (error) {
+    console.error('fetchSchoolMySubjects error:', error);
+    return { class: null, subjects: [] };
+  }
+}
+
+export async function fetchAcademyTracks() {
+  try {
+    const response = await api.get('/student/academy/tracks');
+    const data = unwrap(response, []);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('fetchAcademyTracks error:', error);
+    return [];
+  }
+}
+
+export async function fetchAcademyTrackSubjects(trackId) {
+  const numericTrackId = Number(trackId);
+  if (!Number.isFinite(numericTrackId) || numericTrackId <= 0) {
+    return { track: null, subjects: [] };
+  }
+
+  try {
+    const response = await api.get(`/student/academy/tracks/${numericTrackId}/subjects`);
+    const data = unwrap(response, null);
+    return data || { track: null, subjects: [] };
+  } catch (error) {
+    console.error('fetchAcademyTrackSubjects error:', error);
+    return { track: null, subjects: [] };
+  }
+}
+
+export async function fetchAcademySubscriptions() {
+  try {
+    const response = await api.get('/student/academy/subscriptions');
+    const data = unwrap(response, []);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('fetchAcademySubscriptions error:', error);
+    return [];
+  }
+}
+
+export async function subscribeAcademyMaterial(subjectId, paymentMethod = 'STRIPE') {
+  const numericSubjectId = Number(subjectId);
+  if (!Number.isFinite(numericSubjectId) || numericSubjectId <= 0) {
+    throw new Error('Invalid subject id.');
+  }
+
+  const response = await api.post(`/student/academy/subjects/${numericSubjectId}/subscribe`, {
+    paymentMethod,
+  });
+
+  return unwrap(response, null);
+}
+
+export async function verifyAcademyCheckoutSession(sessionId) {
+  const normalized = String(sessionId || '').trim();
+  if (!normalized) {
+    throw new Error('Missing checkout session id.');
+  }
+
+  const response = await api.get('/student/academy/checkout/verify', {
+    params: {
+      session_id: normalized,
+    },
+  });
+
+  return unwrap(response, null);
+}
+
 export async function fetchMyStudentMarks() {
   try {
     const response = await api.get('/marks/me');
@@ -386,26 +473,40 @@ export async function fetchCoursePaymentStatus(courseId) {
 
 export async function fetchStudentCourseCatalog() {
   try {
-    const [marks, purchases] = await Promise.all([fetchMyStudentMarks(), fetchMyStudentPurchases()]);
-    console.log('Courses API (derived input):', { marks, purchases });
-    const safeMarks = ensureArray(marks);
-    const safePurchases = ensureArray(purchases);
-    const courses = [
-      ...collectCoursesFromSubjects(safeMarks.map((mark) => ({ course: mark?.subject?.course, teacher: mark?.subject?.teacher }))),
-      ...safePurchases.map((purchase) => ({
-        id: Number(purchase?.course?.id || purchase?.courseId),
-        name: purchase?.course?.Name || purchase?.course?.name || `#${purchase?.course?.id || purchase?.courseId || ''}`,
-        description: purchase?.course?.Description || purchase?.course?.description || '',
-        category: 'Academy',
-        progress: 0,
-        status: String(purchase?.status || '').toUpperCase() === 'PAID' ? 'ACTIVE' : 'PENDING',
-        priceStatus: String(purchase?.status || 'PENDING').toUpperCase(),
-        cover: purchase?.course?.cover || purchase?.course?.thumbnail || purchase?.course?.Thumbnail || '',
-      })),
-    ];
+    const context = await fetchStudentContext();
 
-    const uniqueCourses = Array.from(new Map(courses.filter((course) => Number.isFinite(Number(course?.id))).map((course) => [Number(course.id), course])).values());
-    return decorateCoursesWithPayments(uniqueCourses, safePurchases);
+    if (context?.mode === 'ACADEMY') {
+      const tracks = await fetchAcademyTracks();
+      return (tracks || []).map((track) => ({
+        id: Number(track.id),
+        name: track.name,
+        description: track.description || '',
+        category: 'Track',
+        progress: track.subjectCount
+          ? Math.round((Number(track.subscribedSubjectCount || 0) / Number(track.subjectCount || 1)) * 100)
+          : 0,
+        status: 'ACTIVE',
+        priceStatus: 'PAID',
+        cover: track.thumbnail || '',
+      }));
+    }
+
+    if (context?.mode === 'SCHOOL') {
+      return [
+        {
+          id: Number(context?.class?.id || context?.classCourseId || 0),
+          name: context?.class?.name || context?.className || 'Class',
+          description: context?.class?.gradeLevel ? `Grade ${context.class.gradeLevel}` : 'Assigned class',
+          category: 'Class',
+          progress: 0,
+          status: 'ACTIVE',
+          priceStatus: 'PAID',
+          cover: '',
+        },
+      ].filter((course) => course.id > 0);
+    }
+
+    return [];
   } catch (error) {
     console.error('fetchStudentCourseCatalog error:', error);
     return [];

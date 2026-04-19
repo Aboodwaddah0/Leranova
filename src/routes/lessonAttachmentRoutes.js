@@ -17,10 +17,10 @@ const attachmentUpload = multer({
   },
 }).single('file');
 
-router.use(authMiddleware, isTeacherOrOrganization);
+router.use(authMiddleware);
 
-router.post('/', attachmentUpload, uploadLessonAttachmentController);
 router.get('/', listLessonAttachmentsController);
-router.delete('/:attachmentId', deleteLessonAttachmentController);
+router.post('/', isTeacherOrOrganization, attachmentUpload, uploadLessonAttachmentController);
+router.delete('/:attachmentId', isTeacherOrOrganization, deleteLessonAttachmentController);
 
 export default router;

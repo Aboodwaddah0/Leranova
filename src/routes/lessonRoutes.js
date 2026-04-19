@@ -12,7 +12,7 @@ import {
 
 const router = Router({ mergeParams: true });
 
-router.use(authMiddleware, isTeacherOrOrganization);
+router.use(authMiddleware);
 
 const lessonUpload = multer({
 	storage: multer.memoryStorage(),
@@ -20,10 +20,10 @@ const lessonUpload = multer({
 		fileSize: 500 * 1024 * 1024,
 	},
 });
-router.post('/', lessonUpload.single('video'), createLessonController);
 router.get('/', getLessonsController);
 router.get('/:lessonId', getLessonByIdController);
-router.patch('/:lessonId', lessonUpload.single('video'), updateLessonController);
-router.delete('/:lessonId', deleteLessonController);
+router.post('/', isTeacherOrOrganization, lessonUpload.single('video'), createLessonController);
+router.patch('/:lessonId', isTeacherOrOrganization, lessonUpload.single('video'), updateLessonController);
+router.delete('/:lessonId', isTeacherOrOrganization, deleteLessonController);
 
 export default router;

@@ -382,7 +382,7 @@ export const initiateEnrollmentWithPayment = async (orgId, userId, courseId) => 
   // ننشئ سجل دفع معلق
   const payment = await prisma.student_course_payment.upsert({
     where: {
-      uq_student_course_payment: {
+      user_Academy_id_Course_id: {
         user_Academy_id: userId,
         Course_id: courseId,
       },

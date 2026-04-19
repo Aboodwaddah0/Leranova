@@ -65,7 +65,7 @@ export const canAccessCourse = async (userId, courseId) => {
     // إذا كان الكورس مدفوع، تحقق من السجل
     const payment = await prisma.student_course_payment.findUnique({
       where: {
-        uq_student_course_payment: {
+        user_Academy_id_Course_id: {
           user_Academy_id: userId,
           Course_id: courseId
         }
@@ -109,7 +109,7 @@ export const getCoursePaymentStatus = async (userId, courseId) => {
   try {
     const payment = await prisma.student_course_payment.findUnique({
       where: {
-        uq_student_course_payment: {
+        user_Academy_id_Course_id: {
           user_Academy_id: userId,
           Course_id: courseId
         }
@@ -151,7 +151,7 @@ export const createPaymentRecord = async (userId, courseId, amount) => {
     if (error.code === 'P2002') {
       const payment = await prisma.student_course_payment.update({
         where: {
-          uq_student_course_payment: {
+          user_Academy_id_Course_id: {
             user_Academy_id: userId,
             Course_id: courseId
           }
@@ -180,7 +180,7 @@ export const markPaymentSuccess = async (userId, courseId, stripePaymentIntentId
   try {
     const payment = await prisma.student_course_payment.update({
       where: {
-        uq_student_course_payment: {
+        user_Academy_id_Course_id: {
           user_Academy_id: userId,
           Course_id: courseId
         }
@@ -210,7 +210,7 @@ export const markPaymentFailed = async (userId, courseId, stripePaymentIntentId)
   try {
     const payment = await prisma.student_course_payment.update({
       where: {
-        uq_student_course_payment: {
+        user_Academy_id_Course_id: {
           user_Academy_id: userId,
           Course_id: courseId
         }
@@ -265,7 +265,7 @@ export const hasStudentPaidForCourse = async (userId, courseId) => {
   try {
     const payment = await prisma.student_course_payment.findUnique({
       where: {
-        uq_student_course_payment: {
+        user_Academy_id_Course_id: {
           user_Academy_id: userId,
           Course_id: courseId
         }

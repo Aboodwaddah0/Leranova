@@ -6,6 +6,7 @@ import {
   buildLessonUploadPublicId,
 } from './cloudinary.service.js';
 import { triggerLessonRagIngestion } from './rag.service.js';
+import { resolveStudentContext } from './studentExperienceService.js';
 
 const toRole = (value) => String(value || '').trim().toUpperCase();
 
@@ -38,19 +39,15 @@ const resolveAttachmentScope = async (actor) => {
   }
 
   if (role === 'STUDENT') {
-    const academyUser = await prisma.academy_user.findUnique({
-      where: { user_academy_id: actor.id },
-      select: { OrgId: true },
-    });
-
-    if (!academyUser) {
-      throw new AppError('Student profile not found', 404);
-    }
+    const context = await resolveStudentContext(actor.id);
 
     return {
       role,
-      orgId: academyUser.OrgId,
+      orgId: context.orgId,
       teacherId: null,
+      userId: actor.id,
+      studentMode: context.mode,
+      classCourseId: context.mode === 'SCHOOL' ? context.classCourseId : null,
     };
   }
 
@@ -142,6 +139,23 @@ const ensureLessonBelongsToOrganization = async (scope, lessonId) => {
       id: lessonId,
       subject: {
         ...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
+        ...(scope.role === 'STUDENT' && scope.studentMode === 'SCHOOL'
+          ? { Course_id: scope.classCourseId }
+          : {}),
+        ...(scope.role === 'STUDENT' && scope.studentMode === 'ACADEMY'
+          ? {
+              subscriptions: {
+                some: {
+                  user_Academy_id: scope.userId,
+                  OR: [
+                    { paymentStatus: 'PAID' },
+                    { status: 'PAID' },
+                    { status: 'SUCCESS' },
+                  ],
+                },
+              },
+            }
+          : {}),
         course: {
           Org_id: scope.orgId,
         },
@@ -176,6 +190,9 @@ export const createLessonAttachment = async ({ actor, lessonId, file }) => {
   }
 
   const scope = await resolveAttachmentScope(actor);
+  if (scope.role === 'STUDENT') {
+    throw new AppError('Students cannot upload lesson attachments', 403);
+  }
 
   const lessonContext = await ensureLessonBelongsToOrganization(scope, lessonId);
 
@@ -271,6 +288,9 @@ export const listLessonAttachments = async ({ actor, lessonId }) => {
 
 export const deleteLessonAttachment = async ({ actor, lessonId, attachmentId }) => {
   const scope = await resolveAttachmentScope(actor);
+  if (scope.role === 'STUDENT') {
+    throw new AppError('Students cannot delete lesson attachments', 403);
+  }
 
   const attachment = await prisma.lesson_attachment.findFirst({
     where: {

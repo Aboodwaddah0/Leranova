@@ -19,6 +19,7 @@ import adminPlanRoutes from './routes/adminPlanRoutes.js';
 import adminFeatureRoutes from './routes/adminFeatureRoutes.js';
 import schoolSettingsRoutes from './routes/schoolSettingsRoutes.js';
 import adminAnalyticsRoutes from './routes/adminAnalyticsRoutes.js';
+import studentExperienceRoutes from './routes/studentExperienceRoutes.js';
 
 import userRoutes from './routes/userRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
@@ -67,6 +68,7 @@ app.use('/api/admin/analytics', adminAnalyticsRoutes);
 app.use('/api/school-settings', schoolSettingsRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/chats', chatRoutes);
+app.use('/api/student', studentExperienceRoutes);
 
 // auth routes
 app.use('/api/auth', authRoutes);

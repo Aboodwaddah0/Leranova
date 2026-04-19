@@ -1,6 +1,7 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { deleteUploadedFile } from './cloudinary.service.js';
+import { resolveStudentContext } from './studentExperienceService.js';
 
 const toRole = (value) => String(value || '').trim().toUpperCase();
 
@@ -33,19 +34,15 @@ const resolveLessonScope = async (actor) => {
 	}
 
 	if (role === 'STUDENT') {
-		const student = await prisma.academy_user.findFirst({
-			where: { user_academy_id: actor.id },
-			select: { OrgId: true },
-		});
-
-		if (!student) {
-			throw new AppError('Student profile not found', 404);
-		}
+		const context = await resolveStudentContext(actor.id);
 
 		return {
 			role,
-			orgId: student.OrgId,
-			teacherId: null, // Students can view all lessons
+			orgId: context.orgId,
+			teacherId: null,
+			userId: actor.id,
+			studentMode: context.mode,
+			classCourseId: context.mode === 'SCHOOL' ? context.classCourseId : null,
 		};
 	}
 
@@ -64,6 +61,23 @@ const ensureSubjectBelongsToOrganization = async (scope, subjectId) => {
 		where: {
 			id: subjectId,
 			...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
+			...(scope.role === 'STUDENT' && scope.studentMode === 'SCHOOL'
+				? { Course_id: scope.classCourseId }
+				: {}),
+			...(scope.role === 'STUDENT' && scope.studentMode === 'ACADEMY'
+				? {
+					subscriptions: {
+						some: {
+							user_Academy_id: scope.userId,
+							OR: [
+								{ paymentStatus: 'PAID' },
+								{ status: 'PAID' },
+								{ status: 'SUCCESS' },
+							],
+						},
+					},
+				}
+				: {}),
 			course: {
 				Org_id: scope.orgId,
 			},
@@ -102,6 +116,9 @@ const ensureLessonBelongsToSubject = async (scope, subjectId, lessonId) => {
 
 export const createLesson = async (actor, subjectId, data) => {
 	const scope = await resolveLessonScope(actor);
+	if (scope.role === 'STUDENT') {
+		throw new AppError('Students cannot create lessons', 403);
+	}
 	await ensureSubjectBelongsToOrganization(scope, subjectId);
 
   const lesson = await prisma.lesson.create({
@@ -145,6 +162,9 @@ export const getLessonById = async (actor, subjectId, lessonId) => {
 
 export const updateLesson = async (actor, subjectId, lessonId, data) => {
 	const scope = await resolveLessonScope(actor);
+	if (scope.role === 'STUDENT') {
+		throw new AppError('Students cannot update lessons', 403);
+	}
 	await ensureLessonBelongsToSubject(scope, subjectId, lessonId);
 
 	const updated = await prisma.lesson.update({
@@ -162,6 +182,9 @@ export const updateLesson = async (actor, subjectId, lessonId, data) => {
 
 export const deleteLesson = async (actor, subjectId, lessonId) => {
 	const scope = await resolveLessonScope(actor);
+	if (scope.role === 'STUDENT') {
+		throw new AppError('Students cannot delete lessons', 403);
+	}
 	await ensureLessonBelongsToSubject(scope, subjectId, lessonId);
 
 	const attachments = await prisma.lesson_attachment.findMany({
