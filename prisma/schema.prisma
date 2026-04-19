@@ -38,6 +38,7 @@ model chats {
   id                Int                 @id @default(autoincrement())
   organization_id   Int
   course_id         Int?                @unique
+  class_id          Int?
   subject_id        Int?
   created_by        Int
   type              chats_type
@@ -53,8 +54,10 @@ model chats {
   @@index([created_by], map: "fk_chats_created_by")
   @@index([organization_id], map: "idx_chats_organization_id")
   @@index([course_id], map: "idx_chats_course_id")
+  @@index([class_id], map: "idx_chats_class_id")
   @@index([subject_id], map: "idx_chats_subject_id")
   @@index([type], map: "idx_chats_type")
+  @@unique([organization_id, class_id], map: "uq_chats_org_class")
 }
 
 model comment {
@@ -228,6 +231,8 @@ model messages {
   message_type        messages_message_type? @default(text)
   content             String                 @db.Text
   sent_at             DateTime               @default(now()) @db.Timestamp(0)
+  is_seen             Boolean                @default(false)
+  seen_at             DateTime?              @db.Timestamp(0)
   edited_at           DateTime?              @db.Timestamp(0)
   is_deleted          Boolean?               @default(false)
   message_attachments message_attachments[]
@@ -529,6 +534,7 @@ enum chats_type {
   GROUP
   PRIVATE
   COURSE_GROUP
+  CLASS_GROUP
 }
 
 enum user_Role {

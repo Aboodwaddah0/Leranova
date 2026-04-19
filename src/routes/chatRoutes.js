@@ -2,6 +2,9 @@ import express from 'express';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { checkFeature } from '../middlewares/checkFeature.js';
 import {
+  listStudentChats,
+  listStudentChatMessages,
+  sendStudentChatMessage,
   sendMessage,
   sendMessageAutoChat,
   sendCourseMessage,
@@ -18,6 +21,18 @@ import {
 } from '../controllers/chatController.js';
 
 const router = express.Router();
+
+const studentOnly = (req, _res, next) => {
+  if (String(req.user?.role || '').toUpperCase() !== 'STUDENT') {
+    return next('route');
+  }
+
+  return next();
+};
+
+router.get('/', authMiddleware, studentOnly, listStudentChats);
+router.get('/:chatId/messages', authMiddleware, studentOnly, listStudentChatMessages);
+router.post('/:chatId/messages', authMiddleware, studentOnly, sendStudentChatMessage);
 
 /**
  * =========================

@@ -1,15 +1,16 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { Bell, Search, Home, BookOpen, UserCircle2, LogOut } from 'lucide-react';
+import { Bell, Search, Home, BookOpen, UserCircle2, LogOut, MessageCircle } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { logout } from '../../redux/slices/authSlice';
 import { useLanguage } from '../../utils/i18n';
+import AIAssistantSidebar from './AIAssistantSidebar';
 
 const getInitial = (name = 'L') => String(name).trim().charAt(0).toUpperCase() || 'L';
 
 export default function StudentLayout({ title, subtitle, children, actions, aside, contentClassName = '' }) {
-  const { t, isArabic, lang, toggleLang } = useLanguage();
+  const { t, isArabic, lang, setLang } = useLanguage();
   const location = useLocation();
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth?.user);
@@ -28,6 +29,12 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
       match: (pathname) => pathname === '/courses' || pathname.startsWith('/courses/'),
     },
     {
+      to: '/student/chat',
+      label: t?.student?.chat?.title || (isArabic ? 'المحادثات' : 'Chat'),
+      icon: MessageCircle,
+      match: (pathname) => pathname === '/student/chat',
+    },
+    {
       to: '/student/profile',
       label: t?.student?.profile?.title || (isArabic ? 'الملف الشخصي' : 'Profile'),
       icon: UserCircle2,
@@ -40,7 +47,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
   const activeNavItem = navItems.find((item) => item.match(location.pathname)) || null;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,_#e1e0ff_0%,_#f7f9fb_42%,_#c9e6ff_100%)] text-slate-900">
+    <div className={`min-h-screen bg-[radial-gradient(circle_at_top_right,_#e1e0ff_0%,_#f7f9fb_42%,_#c9e6ff_100%)] text-slate-900 ${isArabic ? 'lang-ar' : 'lang-en'}`}>
       <header className="sticky top-0 z-50 border-b border-white/60 bg-white/75 backdrop-blur-xl shadow-sm">
         <div className="mx-auto flex max-w-[1700px] items-center justify-between gap-4 px-4 py-3 lg:px-6">
           <div className="flex items-center gap-4">
@@ -61,13 +68,22 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
               <Search size={16} />
               {isArabic ? 'بحث' : 'Search'}
             </button>
-            <button
-              type="button"
-              onClick={toggleLang}
-              className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              {lang === 'en' ? t.common.switchToArabic : t.common.switchToEnglish}
-            </button>
+            <div className="flex items-center rounded-full border border-slate-200 bg-white p-1 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setLang('en')}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${lang === 'en' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                EN
+              </button>
+              <button
+                type="button"
+                onClick={() => setLang('ar')}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${lang === 'ar' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                العربية
+              </button>
+            </div>
             <button className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800">
               <Bell size={18} />
             </button>
@@ -165,6 +181,8 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
           })}
         </div>
       </nav>
+
+      <AIAssistantSidebar isArabic={isArabic} />
     </div>
   );
 }

@@ -53,6 +53,10 @@ body {
   font-family: "Inter", sans-serif;
 }
 
+html[dir="rtl"] body {
+  font-family: "Cairo", sans-serif;
+}
+
 h1,
 h2,
 h3,

@@ -5,11 +5,14 @@ import StudentLayout from '../../components/student/StudentLayout';
 import {
   fetchMyStudentMarks,
   fetchMyStudentPurchases,
+  fetchCourseSubjects,
+  fetchSubjectLessons,
   fetchStudentCourseCatalog,
   fetchStudentProfile,
 } from '../../services/studentService';
 import api from '../../utils/api';
 import { useLanguage } from '../../utils/i18n';
+import { calculateProgressForLessons, subscribeToProgress } from '../../utils/studentProgress';
 
 const getCourseId = (course) => Number(course?.id || course?.courseId || course?.Course_id || 0);
 
@@ -130,6 +133,9 @@ export default function StudentDashboardPage() {
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [progressTick, setProgressTick] = useState(0);
+
+  useEffect(() => subscribeToProgress(() => setProgressTick((value) => value + 1)), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,7 +159,34 @@ export default function StudentDashboardPage() {
         const rawCatalog = catalogResponse?.data?.data || catalogResponse?.data || [];
         const safeCatalog = normalizeCourses(Array.isArray(rawCatalog) ? rawCatalog : [], isArabic);
 
-        setEnrolledCourses(safeCourses);
+        const coursesWithProgress = await Promise.all(
+          safeCourses.map(async (course) => {
+            try {
+              const subjects = await fetchCourseSubjects(course.id);
+              const lessonsBySubject = await Promise.all(
+                (subjects || []).map((subject) => fetchSubjectLessons(subject.id)),
+              );
+
+              const lessonIds = lessonsBySubject
+                .flatMap((items) => (Array.isArray(items) ? items : []))
+                .map((lesson) => Number(lesson?.id))
+                .filter((id) => Number.isInteger(id) && id > 0);
+
+              const lessonProgress = calculateProgressForLessons(lessonIds);
+
+              return {
+                ...course,
+                progress: lessonProgress.percent,
+                completedLessons: lessonProgress.completed,
+                totalLessons: lessonProgress.total,
+              };
+            } catch {
+              return course;
+            }
+          }),
+        );
+
+        setEnrolledCourses(coursesWithProgress);
         setCatalogCourses(safeCatalog);
         setMarks(safeMarks);
         setPurchases(safePurchases);
@@ -174,7 +207,7 @@ export default function StudentDashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isArabic, progressTick]);
 
   if (!t?.student) {
     return <div className="m-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{isArabic ? 'جاري تحميل الترجمة...' : 'Loading translations...'}</div>;

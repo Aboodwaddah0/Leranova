@@ -2,6 +2,9 @@ import Joi from 'joi';
 import AppError from '../utils/appError.js';
 import {
   getChatWithContext,
+  listChatsForStudent,
+  listMessagesForStudentChat,
+  sendStudentChatTextMessage,
   sendMessageWithBotReply,
   sendMessageWithAutoChat,
   sendCourseChatMessage,
@@ -50,6 +53,77 @@ const courseTypingSchema = Joi.object({
   course_id: Joi.number().integer().positive().required(),
   is_typing: Joi.boolean().required(),
 });
+
+const sendStudentMessageSchema = Joi.object({
+  content: Joi.string().trim().min(1).max(5000).required(),
+});
+
+export const listStudentChats = async (req, res, next) => {
+  try {
+    const chats = await listChatsForStudent({
+      userId: req.user.id,
+    });
+
+    return res.status(200).json({
+      message: 'Chats retrieved successfully',
+      data: chats,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const listStudentChatMessages = async (req, res, next) => {
+  try {
+    const chatId = Number(req.params.chatId);
+    if (!chatId || Number.isNaN(chatId)) {
+      return next(new AppError('Invalid chat ID', 400));
+    }
+
+    const messages = await listMessagesForStudentChat({
+      chatId,
+      userId: req.user.id,
+    });
+
+    return res.status(200).json({
+      message: 'Chat messages retrieved successfully',
+      data: messages,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const sendStudentChatMessage = async (req, res, next) => {
+  try {
+    const chatId = Number(req.params.chatId);
+    if (!chatId || Number.isNaN(chatId)) {
+      return next(new AppError('Invalid chat ID', 400));
+    }
+
+    const { error, value } = sendStudentMessageSchema.validate(req.body, {
+      abortEarly: true,
+      stripUnknown: true,
+    });
+
+    if (error) {
+      return next(new AppError(error.details[0].message, 400));
+    }
+
+    const message = await sendStudentChatTextMessage({
+      chatId,
+      userId: req.user.id,
+      content: value.content,
+    });
+
+    return res.status(201).json({
+      message: 'Message sent successfully',
+      data: message,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
 
 /**
  * POST /api/chats/:chatId/messages

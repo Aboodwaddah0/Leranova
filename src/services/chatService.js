@@ -53,6 +53,35 @@ const serializeCourseMessage = (message) => ({
     : null,
 });
 
+const serializeStudentChatListItem = (chat) => ({
+  id: chat.id,
+  type: chat.type === 'CLASS_GROUP' ? 'CLASS' : 'COURSE',
+  courseId: chat.course_id ?? null,
+  classId: chat.class_id ?? null,
+  createdAt: chat.created_at,
+  title: chat.title ?? null,
+  lastMessage: chat.lastMessage ?? null,
+  lastMessageAt: chat.lastMessageAt ?? chat.created_at,
+  unreadCount: Number(chat.unreadCount || 0),
+});
+
+const serializeStudentChatMessage = (message) => ({
+  id: message.id,
+  chatId: message.chat_id,
+  senderId: message.sender_user_id,
+  content: message.content,
+  createdAt: message.sent_at,
+  isSeen: Boolean(message.is_seen),
+  seenAt: message.seen_at ?? null,
+  sender: message.user
+    ? {
+        id: message.user.id,
+        name: message.user.name ?? null,
+        email: message.user.email ?? null,
+      }
+    : null,
+});
+
 const getSystemBotUserId = async () => {
   if (CACHED_SYSTEM_BOT_USER_ID) {
     return CACHED_SYSTEM_BOT_USER_ID;
@@ -1022,5 +1051,435 @@ export const clearChatMessages = async ({ chatId, userId }) => {
   return {
     chatId,
     clearedCount: result.count,
+  };
+};
+
+const resolveStudentChatMode = async (userId) => {
+  const academyProfile = await prisma.academy_user.findUnique({
+    where: { user_academy_id: userId },
+    select: {
+      user_academy_id: true,
+      OrgId: true,
+      organization: {
+        select: {
+          Role: true,
+        },
+      },
+      enrollment: {
+        select: {
+          Course_id: true,
+          course: {
+            select: {
+              id: true,
+              Name: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (academyProfile?.organization?.Role === 'ACADEMY') {
+    return {
+      mode: 'ACADEMY',
+      orgId: academyProfile.OrgId,
+      enrollments: academyProfile.enrollment || [],
+    };
+  }
+
+  const schoolProfile = await prisma.student.findUnique({
+    where: { Student_id: userId },
+    select: {
+      Student_id: true,
+      OrgId: true,
+      Course_id: true,
+      GradeLevel: true,
+      organization: {
+        select: {
+          Role: true,
+        },
+      },
+      course: {
+        select: {
+          id: true,
+          Name: true,
+        },
+      },
+    },
+  });
+
+  if (schoolProfile?.organization?.Role === 'SCHOOL') {
+    return {
+      mode: 'SCHOOL',
+      orgId: schoolProfile.OrgId,
+      classId: schoolProfile.GradeLevel ?? null,
+      courseId: schoolProfile.Course_id ?? null,
+      className: schoolProfile.GradeLevel !== null && schoolProfile.GradeLevel !== undefined
+        ? `Class Chat (Grade ${schoolProfile.GradeLevel})`
+        : 'Class Chat',
+      courseName: schoolProfile.course?.Name || null,
+    };
+  }
+
+  throw new AppError('Student profile not linked to an academy or school organization', 403);
+};
+
+const ensureClassChatForSchoolStudent = async ({ orgId, classId, createdByUserId, title }) => {
+  const existing = await prisma.chats.findFirst({
+    where: {
+      organization_id: orgId,
+      class_id: classId,
+      type: 'CLASS_GROUP',
+    },
+    select: {
+      id: true,
+      organization_id: true,
+      course_id: true,
+      class_id: true,
+      type: true,
+      title: true,
+      created_at: true,
+    },
+    orderBy: { id: 'asc' },
+  });
+
+  if (existing) {
+    return existing;
+  }
+
+  return prisma.chats.create({
+    data: {
+      organization_id: orgId,
+      class_id: classId,
+      created_by: createdByUserId,
+      type: 'CLASS_GROUP',
+      title: title || null,
+    },
+    select: {
+      id: true,
+      organization_id: true,
+      course_id: true,
+      class_id: true,
+      type: true,
+      title: true,
+      created_at: true,
+    },
+  });
+};
+
+const verifyStudentAccessToChat = async ({ chatId, userId }) => {
+  const chat = await prisma.chats.findUnique({
+    where: { id: chatId },
+    select: {
+      id: true,
+      organization_id: true,
+      course_id: true,
+      class_id: true,
+      type: true,
+      title: true,
+      created_at: true,
+    },
+  });
+
+  if (!chat) {
+    throw new AppError('Chat not found', 404);
+  }
+
+  if (chat.type === 'COURSE_GROUP') {
+    if (!chat.course_id) {
+      throw new AppError('Course chat is misconfigured', 409);
+    }
+
+    await resolveCourseEnrollment({
+      courseId: chat.course_id,
+      userId,
+      tokenUser: { role: 'STUDENT' },
+    });
+
+    return chat;
+  }
+
+  if (chat.type === 'CLASS_GROUP') {
+    const schoolStudent = await prisma.student.findFirst({
+      where: {
+        Student_id: userId,
+        OrgId: chat.organization_id,
+        ...(chat.class_id !== null ? { GradeLevel: chat.class_id } : {}),
+      },
+      select: {
+        Student_id: true,
+      },
+    });
+
+    if (!schoolStudent) {
+      throw new AppError('You are not allowed to access this class chat', 403);
+    }
+
+    return chat;
+  }
+
+  await verifyUserChatAccess(chat.id, userId);
+  return chat;
+};
+
+export const listChatsForStudent = async ({ userId }) => {
+  const context = await resolveStudentChatMode(userId);
+
+  if (context.mode === 'ACADEMY') {
+    const enrolledCourses = context.enrollments
+      .map((row) => row.course)
+      .filter((course) => course?.id);
+
+    const chats = [];
+    for (const course of enrolledCourses) {
+      const chat = await ensureCourseChatForCourse({
+        organizationId: context.orgId,
+        courseId: course.id,
+        title: course.Name || null,
+        createdByUserId: userId,
+      });
+
+      chats.push(chat);
+    }
+
+    const chatIds = chats.map((chat) => chat.id);
+
+    const latestMessages = chatIds.length
+      ? await prisma.messages.findMany({
+          where: {
+            chat_id: { in: chatIds },
+            is_deleted: false,
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+          orderBy: {
+            sent_at: 'desc',
+          },
+          distinct: ['chat_id'],
+        })
+      : [];
+
+    const unreadCounts = chatIds.length
+      ? await prisma.messages.groupBy({
+          by: ['chat_id'],
+          where: {
+            chat_id: { in: chatIds },
+            is_deleted: false,
+            is_seen: false,
+            NOT: {
+              sender_user_id: userId,
+            },
+          },
+          _count: {
+            _all: true,
+          },
+        })
+      : [];
+
+    const latestMessageByChat = new Map(latestMessages.map((message) => [message.chat_id, message]));
+    const unreadByChat = new Map(unreadCounts.map((item) => [item.chat_id, item._count._all]));
+
+    const enriched = chats.map((chat) => {
+      const latest = latestMessageByChat.get(chat.id);
+      return {
+        ...chat,
+        lastMessage: latest
+          ? {
+              id: latest.id,
+              content: latest.content,
+              senderId: latest.sender_user_id,
+              createdAt: latest.sent_at,
+              senderName: latest.user?.name || null,
+            }
+          : null,
+        lastMessageAt: latest?.sent_at || chat.created_at,
+        unreadCount: unreadByChat.get(chat.id) || 0,
+      };
+    });
+
+    enriched.sort((a, b) => {
+      const aTime = new Date(a.lastMessageAt || a.created_at || 0).getTime();
+      const bTime = new Date(b.lastMessageAt || b.created_at || 0).getTime();
+      return bTime - aTime;
+    });
+
+    return enriched.map(serializeStudentChatListItem);
+  }
+
+  const classChat = await ensureClassChatForSchoolStudent({
+    orgId: context.orgId,
+    classId: context.classId,
+    createdByUserId: userId,
+    title: context.className,
+  });
+
+  const latest = await prisma.messages.findFirst({
+    where: {
+      chat_id: classChat.id,
+      is_deleted: false,
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+    orderBy: {
+      sent_at: 'desc',
+    },
+  });
+
+  const unreadCount = await prisma.messages.count({
+    where: {
+      chat_id: classChat.id,
+      is_deleted: false,
+      is_seen: false,
+      NOT: {
+        sender_user_id: userId,
+      },
+    },
+  });
+
+  return [
+    serializeStudentChatListItem({
+      ...classChat,
+      lastMessage: latest
+        ? {
+            id: latest.id,
+            content: latest.content,
+            senderId: latest.sender_user_id,
+            createdAt: latest.sent_at,
+            senderName: latest.user?.name || null,
+          }
+        : null,
+      lastMessageAt: latest?.sent_at || classChat.created_at,
+      unreadCount,
+    }),
+  ];
+};
+
+export const listMessagesForStudentChat = async ({ chatId, userId }) => {
+  await verifyStudentAccessToChat({ chatId, userId });
+
+  const seenAt = new Date();
+  await prisma.messages.updateMany({
+    where: {
+      chat_id: chatId,
+      is_deleted: false,
+      is_seen: false,
+      NOT: {
+        sender_user_id: userId,
+      },
+    },
+    data: {
+      is_seen: true,
+      seen_at: seenAt,
+    },
+  });
+
+  const messages = await prisma.messages.findMany({
+    where: {
+      chat_id: chatId,
+      is_deleted: false,
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+    orderBy: {
+      sent_at: 'asc',
+    },
+  });
+
+  return messages.map(serializeStudentChatMessage);
+};
+
+export const sendStudentChatTextMessage = async ({ chatId, userId, content }) => {
+  await verifyStudentAccessToChat({ chatId, userId });
+
+  const cleaned = String(content || '').trim();
+  if (!cleaned) {
+    throw new AppError('Message content cannot be empty', 400);
+  }
+
+  if (cleaned.length > MAX_MESSAGE_LENGTH) {
+    throw new AppError(`Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`, 413);
+  }
+
+  const message = await prisma.messages.create({
+    data: {
+      chat_id: chatId,
+      sender_user_id: userId,
+      message_type: 'text',
+      content: cleaned,
+      sent_at: new Date(),
+      is_seen: false,
+      seen_at: null,
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  return serializeStudentChatMessage(message);
+};
+
+export const markStudentChatMessagesSeen = async ({ chatId, userId }) => {
+  await verifyStudentAccessToChat({ chatId, userId });
+
+  const seenAt = new Date();
+
+  await prisma.messages.updateMany({
+    where: {
+      chat_id: chatId,
+      is_deleted: false,
+      is_seen: false,
+      NOT: {
+        sender_user_id: userId,
+      },
+    },
+    data: {
+      is_seen: true,
+      seen_at: seenAt,
+    },
+  });
+
+  return { chatId, seenAt };
+};
+
+export const resolveStudentChatRoom = async ({ chatId, userId }) => {
+  const chat = await verifyStudentAccessToChat({ chatId, userId });
+
+  if (chat.type === 'CLASS_GROUP') {
+    return {
+      room: `class_${chat.class_id}`,
+      chat,
+    };
+  }
+
+  return {
+    room: `course_${chat.course_id}`,
+    chat,
   };
 };

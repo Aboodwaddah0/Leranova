@@ -14,6 +14,9 @@ const studentTranslations = {
     profile: {
       title: "Profile",
     },
+    chat: {
+      title: "Chat",
+    },
     common: {
       loading: "Loading...",
       noData: "No data",
@@ -69,7 +72,10 @@ const studentTranslations = {
     badge: "الطالب",
     title: "لوحة الطالب",
     profile: {
-      title: "الملف الشخصي",
+      title: "حسابي",
+    },
+    chat: {
+      title: "المحادثات",
     },
     common: {
       loading: "جاري التحميل...",

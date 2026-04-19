@@ -295,11 +295,12 @@ const storeComments = (lessonId, comments) => {
 
 const toNormalizedAttachment = (attachment = {}) => ({
   id: attachment.id,
-  name: attachment.originalName || attachment.name || `Attachment ${attachment.id}`,
-  url: attachment.url || attachment.fileUrl || '#',
+  name: attachment.name || attachment.originalName || null,
+  url: attachment.url || attachment.fileUrl || '',
   fileType: attachment.fileType || attachment.type || 'other',
   mimeType: attachment.mimeType || null,
   createdAt: attachment.createdAt || null,
+  originalName: attachment.originalName || null,
 });
 
 const resolveLessonContextFromApi = async (lessonId) => {
@@ -615,47 +616,53 @@ export async function fetchAcademyTeachersForCourses(courseIds = []) {
   return teachers.length ? teachers : [{ id: 'fallback-teacher', name: 'Academy Mentor', title: 'Instructor', courseId: null, subjectId: null }];
 }
 
-export async function askStudentTutor({ question, courseId, subjectId, lessonId }) {
-  try {
-    const payload = {
-      question,
-      course_id: Number(courseId),
-      ...(subjectId ? { subject_id: Number(subjectId) } : {}),
-      ...(lessonId ? { lesson_id: Number(lessonId) } : {}),
-    };
+export async function askStudentTutor({ question, courseId, subjectId, lessonId, history = [] }) {
+  const normalizedCourseId = Number(courseId);
+  const normalizedSubjectId = Number(subjectId);
+  const normalizedLessonId = Number(lessonId);
+  const isValidId = (value) => Number.isInteger(value) && value > 0;
 
-    const response = await api.post('/chatbot/ask', payload);
-    const data = unwrap(response, null);
-    if (data) {
-      return data;
-    }
-  } catch {
-    // Use fallback response below.
+  const payload = {
+    question,
+    ...(isValidId(normalizedCourseId) ? { course_id: normalizedCourseId } : {}),
+    ...(isValidId(normalizedSubjectId) ? { subject_id: normalizedSubjectId } : {}),
+    ...(isValidId(normalizedLessonId) ? { lesson_id: normalizedLessonId } : {}),
+    ...(Array.isArray(history) && history.length
+      ? {
+        history: history
+          .filter((entry) => entry && (entry.role === 'user' || entry.role === 'assistant'))
+          .map((entry) => ({ role: entry.role, content: String(entry.content || '').trim() }))
+          .filter((entry) => entry.content)
+          .slice(-16),
+      }
+      : {}),
+  };
+
+  const response = await api.post('/chatbot/ask', payload);
+  const data = unwrap(response, null);
+
+  if (!data) {
+    throw new Error('Empty assistant response from server.');
   }
 
-  const course = fallbackCourses.find((item) => Number(item.id) === Number(courseId));
-  const subject = fallbackSubjects.find((item) => Number(item.id) === Number(subjectId));
-  const lesson = lessonId ? findLesson(lessonId) : null;
-  const contextTitle = lesson?.title || subject?.name || course?.name || 'the current topic';
+  return data;
+}
 
-  return {
-    answer: `Based on ${contextTitle}, focus on the core steps, review the examples, and practice the related exercise once more.`,
-    explanation: question ? `I used the current course context to answer: ${question}` : '',
-    confidence: lesson ? 0.92 : subject ? 0.86 : 0.75,
-    references: [
-      {
-        lesson_id: lesson?.id || null,
-        title: lesson?.title || contextTitle,
-        score: lesson ? 0.94 : 0.8,
-      },
-    ],
-    scope: {
-      courseId: course?.id || null,
-      subjectId: subject?.id || null,
-      lessonId: lesson?.id || null,
-    },
-    fallback: true,
-  };
+export async function fetchStudentChats() {
+  const response = await api.get('/chats');
+  const data = unwrap(response, []);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function fetchStudentChatMessages(chatId) {
+  const response = await api.get(`/chats/${chatId}/messages`);
+  const data = unwrap(response, []);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function sendStudentChatMessage(chatId, content) {
+  const response = await api.post(`/chats/${chatId}/messages`, { content });
+  return unwrap(response, null);
 }
 
 export async function fetchStudentProfile() {

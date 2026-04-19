@@ -105,24 +105,27 @@ const toJsonSafeSize = (value) => {
   return value;
 };
 
-const serializeAttachment = (attachment, context = {}) => ({
-  id: attachment.id,
-  lessonId: attachment.lessonId,
-  subjectId: context.subjectId ?? null,
-  courseId: context.courseId ?? null,
-  fileUrl: attachment.fileUrl,
-  filePublicId: attachment.filePublicId,
-  fileResourceType: attachment.fileResourceType,
-  url: attachment.fileUrl,
-  public_id: attachment.filePublicId,
-  resource_type: attachment.fileResourceType,
-  mimeType: attachment.mimeType,
-  originalName: attachment.originalName,
-  fileType: attachment.fileType,
-  type: String(attachment.fileType || '').toLowerCase(),
-  sizeBytes: toJsonSafeSize(attachment.sizeBytes),
-  createdAt: attachment.createdAt,
-});
+const serializeAttachment = (attachment, context = {}) => {
+  return {
+    id: attachment.id,
+    lessonId: attachment.lessonId,
+    subjectId: context.subjectId ?? null,
+    courseId: context.courseId ?? null,
+    fileUrl: attachment.fileUrl,
+    filePublicId: attachment.filePublicId,
+    fileResourceType: attachment.fileResourceType,
+    url: attachment.fileUrl,
+    public_id: attachment.filePublicId,
+    resource_type: attachment.fileResourceType,
+    mimeType: attachment.mimeType,
+    originalName: attachment.originalName,
+    name: attachment.originalName,
+    fileType: attachment.fileType,
+    type: String(attachment.fileType || '').toLowerCase(),
+    sizeBytes: toJsonSafeSize(attachment.sizeBytes),
+    createdAt: attachment.createdAt,
+  };
+};
 
 const mapFileTypeToIngestionType = (fileType) => {
   const normalized = String(fileType || '').toUpperCase();
@@ -188,7 +191,7 @@ export const createLessonAttachment = async ({ actor, lessonId, file }) => {
   });
 
   const uploaded = await uploadAttachment(file.buffer, {
-    resource_type: ingestionFileType === 'video' ? 'video' : 'raw',
+    resource_type: 'auto',
     public_id: cloudinaryPublicId,
     unique_filename: false,
     overwrite: false,
@@ -298,3 +301,5 @@ export const deleteLessonAttachment = async ({ actor, lessonId, attachmentId }) 
 
   return { id: attachmentId };
 };
+
+
