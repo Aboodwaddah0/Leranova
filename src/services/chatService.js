@@ -70,7 +70,22 @@ const serializeStudentChatMessage = (message) => ({
   id: message.id,
   chatId: message.chat_id,
   senderId: message.sender_user_id,
+  text: message.content,
   content: message.content,
+  isDeleted: Boolean(message.is_deleted),
+  editedAt: message.edited_at ?? null,
+  isEdited: Boolean(message.edited_at),
+  replyToMessageId: message.replyToMessageId ?? null,
+  replyTo: message.replyTo
+    ? {
+        id: message.replyTo.id,
+        text: message.replyTo.content,
+        content: message.replyTo.content,
+        senderName: message.replyTo.user?.name || null,
+        senderId: message.replyTo.sender_user_id,
+        isDeleted: Boolean(message.replyTo.is_deleted),
+      }
+    : null,
   createdAt: message.sent_at,
   isSeen: Boolean(message.is_seen),
   seenAt: message.seen_at ?? null,
@@ -110,6 +125,39 @@ const getSystemBotUserId = async () => {
 
   CACHED_SYSTEM_BOT_USER_ID = createdBot.id;
   return CACHED_SYSTEM_BOT_USER_ID;
+};
+
+const resolveReplyToMessageId = async ({ chatId, senderId, replyToMessageId }) => {
+  const normalized = Number(replyToMessageId);
+  if (!Number.isInteger(normalized) || normalized <= 0) {
+    return null;
+  }
+
+  const target = await prisma.messages.findFirst({
+    where: {
+      id: normalized,
+      chat_id: chatId,
+      is_deleted: false,
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  if (!target) {
+    throw new AppError('Reply target message not found', 404);
+  }
+
+  if (Number(target.sender_user_id) === Number(senderId)) {
+    throw new AppError('You cannot reply to your own message', 400);
+  }
+
+  return target.id;
 };
 
 const resolveOrganizationId = async (tokenUser, userId) => {
@@ -454,6 +502,7 @@ export const saveUserMessage = async ({
   senderId,
   content,
   messageType = 'text',
+  replyToMessageId = null,
 }) => {
   if (!content || !String(content).trim()) {
     throw new AppError('Message content cannot be empty', 400);
@@ -469,10 +518,23 @@ export const saveUserMessage = async ({
     throw new AppError('Invalid message type', 400);
   }
 
+  const resolvedReplyToMessageId = await resolveReplyToMessageId({
+    chatId,
+    senderId,
+    replyToMessageId,
+  });
+
+  console.info('[CHAT] saving message', {
+    chatId,
+    senderId,
+    replyToMessageId: resolvedReplyToMessageId,
+  });
+
   const message = await prisma.messages.create({
     data: {
       chat_id: chatId,
       sender_user_id: senderId,
+      replyToMessageId: resolvedReplyToMessageId,
       message_type: messageType,
       content: cleaned,
       sent_at: new Date(),
@@ -485,7 +547,22 @@ export const saveUserMessage = async ({
           name: true,
         },
       },
+      replyTo: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
     },
+  });
+
+  console.info('[CHAT] message saved', {
+    messageId: message.id,
+    replyToMessageId: message.replyToMessageId ?? null,
   });
 
   return message;
@@ -568,6 +645,7 @@ export const sendMessageWithBotReply = async ({
   chatId,
   userId,
   content,
+  replyToMessageId = null,
   tokenUser,
   chatbotContext = null,
   enableChatbot = true,
@@ -578,6 +656,7 @@ export const sendMessageWithBotReply = async ({
     chatId,
     senderId: userId,
     content,
+    replyToMessageId,
   });
 
   let botMessage = null;
@@ -621,6 +700,7 @@ export const sendMessageWithAutoChat = async ({
   userId,
   tokenUser,
   content,
+  replyToMessageId = null,
   courseId,
   subjectId,
   lessonId,
@@ -648,6 +728,7 @@ export const sendMessageWithAutoChat = async ({
     chatId,
     userId,
     content,
+    replyToMessageId,
     tokenUser,
     chatbotContext,
     enableChatbot,
@@ -781,7 +862,6 @@ export const getChatMessages = async ({
   const messages = await prisma.messages.findMany({
     where: {
       chat_id: chatId,
-      is_deleted: false,
     },
     include: {
       user: {
@@ -789,6 +869,16 @@ export const getChatMessages = async ({
           id: true,
           email: true,
           name: true,
+        },
+      },
+      replyTo: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
       },
     },
@@ -807,7 +897,16 @@ export const getChatMessages = async ({
   });
 
   return {
-    messages: messages.reverse(),
+    messages: messages.reverse().map((message) => ({
+      ...message,
+      replyTo: message.replyTo
+        ? {
+            id: message.replyTo.id,
+            content: message.replyTo.content,
+            senderName: message.replyTo.user?.name || null,
+          }
+        : null,
+    })),
     total,
     limit: validatedLimit,
     offset: validatedOffset,
@@ -833,8 +932,7 @@ export const getCourseChatMessages = async ({
 
   const messages = await prisma.messages.findMany({
     where: {
-      chat_id: chat.id,
-      is_deleted: false,
+      chat_id: chatId,
     },
     include: {
       user: {
@@ -842,6 +940,16 @@ export const getCourseChatMessages = async ({
           id: true,
           email: true,
           name: true,
+        },
+      },
+      replyTo: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
       },
       chats: {
@@ -1492,7 +1600,6 @@ export const listMessagesForStudentChat = async ({ chatId, userId }) => {
   const messages = await prisma.messages.findMany({
     where: {
       chat_id: chatId,
-      is_deleted: false,
     },
     include: {
       user: {
@@ -1500,6 +1607,16 @@ export const listMessagesForStudentChat = async ({ chatId, userId }) => {
           id: true,
           name: true,
           email: true,
+        },
+      },
+      replyTo: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
       },
     },
@@ -1511,7 +1628,7 @@ export const listMessagesForStudentChat = async ({ chatId, userId }) => {
   return messages.map(serializeStudentChatMessage);
 };
 
-export const sendStudentChatTextMessage = async ({ chatId, userId, content }) => {
+export const sendStudentChatTextMessage = async ({ chatId, userId, content, replyToMessageId = null }) => {
   await verifyStudentAccessToChat({ chatId, userId });
 
   const cleaned = String(content || '').trim();
@@ -1523,10 +1640,23 @@ export const sendStudentChatTextMessage = async ({ chatId, userId, content }) =>
     throw new AppError(`Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`, 413);
   }
 
+  const resolvedReplyToMessageId = await resolveReplyToMessageId({
+    chatId,
+    senderId: userId,
+    replyToMessageId,
+  });
+
+  console.info('[STUDENT_CHAT] send payload', {
+    chatId,
+    userId,
+    replyToMessageId: resolvedReplyToMessageId,
+  });
+
   const message = await prisma.messages.create({
     data: {
       chat_id: chatId,
       sender_user_id: userId,
+      replyToMessageId: resolvedReplyToMessageId,
       message_type: 'text',
       content: cleaned,
       sent_at: new Date(),
@@ -1541,10 +1671,122 @@ export const sendStudentChatTextMessage = async ({ chatId, userId, content }) =>
           email: true,
         },
       },
+      replyTo: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
     },
   });
 
+  console.info('[STUDENT_CHAT] message saved', {
+    messageId: message.id,
+    replyToMessageId: message.replyToMessageId ?? null,
+  });
+
   return serializeStudentChatMessage(message);
+};
+
+export const deleteStudentMessageById = async ({ messageId, userId }) => {
+  const message = await prisma.messages.findUnique({
+    where: { id: messageId },
+    select: {
+      id: true,
+      chat_id: true,
+      sender_user_id: true,
+      is_deleted: true,
+    },
+  });
+
+  if (!message) {
+    throw new AppError('Message not found', 404);
+  }
+
+  await verifyStudentAccessToChat({ chatId: message.chat_id, userId });
+
+  if (Number(message.sender_user_id) !== Number(userId)) {
+    throw new AppError('You can only delete your own messages', 403);
+  }
+
+  if (message.is_deleted) {
+    return { success: true, alreadyDeleted: true };
+  }
+
+  await prisma.messages.update({
+    where: { id: messageId },
+    data: { is_deleted: true },
+  });
+
+  return { success: true, alreadyDeleted: false };
+};
+
+export const editStudentMessageById = async ({ messageId, userId, content }) => {
+  const cleaned = String(content || '').trim();
+  if (!cleaned) {
+    throw new AppError('Message content cannot be empty', 400);
+  }
+
+  if (cleaned.length > MAX_MESSAGE_LENGTH) {
+    throw new AppError(`Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`, 413);
+  }
+
+  const message = await prisma.messages.findUnique({
+    where: { id: messageId },
+    select: {
+      id: true,
+      chat_id: true,
+      sender_user_id: true,
+      is_deleted: true,
+    },
+  });
+
+  if (!message) {
+    throw new AppError('Message not found', 404);
+  }
+
+  await verifyStudentAccessToChat({ chatId: message.chat_id, userId });
+
+  if (Number(message.sender_user_id) !== Number(userId)) {
+    throw new AppError('You can only edit your own messages', 403);
+  }
+
+  if (message.is_deleted) {
+    throw new AppError('Cannot edit a deleted message', 409);
+  }
+
+  const updated = await prisma.messages.update({
+    where: { id: messageId },
+    data: {
+      content: cleaned,
+      edited_at: new Date(),
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      replyTo: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return serializeStudentChatMessage(updated);
 };
 
 export const markStudentChatMessagesSeen = async ({ chatId, userId }) => {

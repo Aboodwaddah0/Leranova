@@ -38,6 +38,7 @@ export default function StudentSubjectPage() {
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState('');
   const [commentsLoading, setCommentsLoading] = useState(false);
+  const [lessonTab, setLessonTab] = useState('attachments');
   const autoNextIntervalRef = useRef(null);
 
   useEffect(() => {
@@ -383,71 +384,80 @@ export default function StudentSubjectPage() {
             ) : null}
           </div>
 
-          <div className="grid gap-4 px-5 pb-5 md:grid-cols-2">
-            <article className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <h4 className="flex items-center gap-2 font-black text-slate-900">
-                  <FileText size={16} /> {isArabic ? 'المرفقات' : 'Attachments'}
-                </h4>
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-indigo-700">{selectedAttachments.length}</span>
-              </div>
+          <div className="px-5 pb-5">
+            <div className="flex flex-wrap gap-2 border-b border-slate-100 pb-4">
+              <button
+                type="button"
+                onClick={() => setLessonTab('attachments')}
+                className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition ${lessonTab === 'attachments' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+              >
+                <FileText size={15} /> {isArabic ? 'المرفقات' : 'Attachments'}
+                <span className={`rounded-full px-2 py-0.5 text-[11px] ${lessonTab === 'attachments' ? 'bg-white/20 text-white' : 'bg-white text-indigo-700'}`}>{selectedAttachments.length}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLessonTab('comments')}
+                className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition ${lessonTab === 'comments' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+              >
+                <MessageCircle size={15} /> {isArabic ? 'التعليقات' : 'Comments'}
+                <span className={`rounded-full px-2 py-0.5 text-[11px] ${lessonTab === 'comments' ? 'bg-white/20 text-white' : 'bg-white text-indigo-700'}`}>{comments.length}</span>
+              </button>
+            </div>
 
-              <div className="mt-3 space-y-3 max-h-56 overflow-auto pr-1">
-                {selectedAttachments.length ? selectedAttachments.map((attachment) => (
-                  <a
-                    key={attachment.id}
-                    href={attachment.url || attachment.fileUrl || '#'}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm transition hover:bg-slate-50"
+            {lessonTab === 'attachments' ? (
+              <article className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                <div className="space-y-3 max-h-64 overflow-auto pr-1">
+                  {selectedAttachments.length ? selectedAttachments.map((attachment) => (
+                    <a
+                      key={attachment.id}
+                      href={attachment.url || attachment.fileUrl || '#'}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm transition hover:bg-slate-50"
+                    >
+                      <p className="font-bold text-slate-900">{attachment.name || attachment.originalName || (isArabic ? 'مرفق' : 'Attachment')}</p>
+                      <p className="mt-1 text-xs text-slate-500">{attachment.mimeType || attachment.fileType || attachment.type || (isArabic ? 'ملف' : 'file')}</p>
+                    </a>
+                  )) : (
+                    <p className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">{isArabic ? 'لا توجد مرفقات لهذا الدرس.' : 'No attachments for this lesson.'}</p>
+                  )}
+                </div>
+              </article>
+            ) : null}
+
+            {lessonTab === 'comments' ? (
+              <article className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex gap-2">
+                  <input
+                    value={commentText}
+                    onChange={(event) => setCommentText(event.target.value)}
+                    placeholder={isArabic ? 'اكتب تعليق...' : 'Write a comment...'}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={onPostComment}
+                    className="inline-flex h-10 items-center justify-center rounded-xl bg-slate-900 px-3 text-white transition hover:opacity-90"
+                    aria-label={isArabic ? 'إرسال التعليق' : 'Send comment'}
                   >
-                    <p className="font-bold text-slate-900">{attachment.name || attachment.originalName || (isArabic ? 'مرفق' : 'Attachment')}</p>
-                    <p className="mt-1 text-xs text-slate-500">{attachment.mimeType || attachment.fileType || attachment.type || (isArabic ? 'ملف' : 'file')}</p>
-                  </a>
-                )) : (
-                  <p className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">{isArabic ? 'لا توجد مرفقات لهذا الدرس.' : 'No attachments for this lesson.'}</p>
-                )}
-              </div>
-            </article>
+                    <SendHorizontal size={16} />
+                  </button>
+                </div>
 
-            <article className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <h4 className="flex items-center gap-2 font-black text-slate-900">
-                  <MessageCircle size={16} /> {isArabic ? 'التعليقات' : 'Comments'}
-                </h4>
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-indigo-700">{comments.length}</span>
-              </div>
-
-              <div className="mt-3 flex gap-2">
-                <input
-                  value={commentText}
-                  onChange={(event) => setCommentText(event.target.value)}
-                  placeholder={isArabic ? 'اكتب تعليق...' : 'Write a comment...'}
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-400"
-                />
-                <button
-                  type="button"
-                  onClick={onPostComment}
-                  className="inline-flex h-10 items-center justify-center rounded-xl bg-slate-900 px-3 text-white transition hover:opacity-90"
-                  aria-label={isArabic ? 'إرسال التعليق' : 'Send comment'}
-                >
-                  <SendHorizontal size={16} />
-                </button>
-              </div>
-
-              <div className="mt-3 space-y-2 max-h-56 overflow-auto pr-1">
-                {commentsLoading ? (
-                  <p className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">{isArabic ? 'جاري تحميل التعليقات...' : 'Loading comments...'}</p>
-                ) : comments.length ? comments.map((comment) => (
-                  <article key={comment.id} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm">
-                    <p className="font-semibold text-slate-900">{comment.user?.name || comment.userName || (isArabic ? 'مستخدم' : 'User')}</p>
-                    <p className="mt-1 text-slate-700">{comment.content}</p>
-                  </article>
-                )) : (
-                  <p className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">{isArabic ? 'لا توجد تعليقات بعد.' : 'No comments yet.'}</p>
-                )}
-              </div>
-            </article>
+                <div className="mt-3 space-y-2 max-h-64 overflow-auto pr-1">
+                  {commentsLoading ? (
+                    <p className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">{isArabic ? 'جاري تحميل التعليقات...' : 'Loading comments...'}</p>
+                  ) : comments.length ? comments.map((comment) => (
+                    <article key={comment.id} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm">
+                      <p className="font-semibold text-slate-900">{comment.user?.name || comment.userName || (isArabic ? 'مستخدم' : 'User')}</p>
+                      <p className="mt-1 text-slate-700">{comment.content}</p>
+                    </article>
+                  )) : (
+                    <p className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">{isArabic ? 'لا توجد تعليقات بعد.' : 'No comments yet.'}</p>
+                  )}
+                </div>
+              </article>
+            ) : null}
           </div>
         </section>
 
