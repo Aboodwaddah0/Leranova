@@ -90,6 +90,7 @@ export const initChatSocket = (io) => {
       try {
         const chatId = Number(payload.chatId);
         const content = String(payload.content || '');
+        const replyToMessageId = payload.replyToMessageId == null ? null : Number(payload.replyToMessageId);
 
         if (!chatId || Number.isNaN(chatId)) {
           throw new Error('Invalid chat id');
@@ -100,6 +101,7 @@ export const initChatSocket = (io) => {
           chatId,
           userId: user.id,
           content,
+          replyToMessageId,
         });
 
         io.to(room).emit('receive_message', {

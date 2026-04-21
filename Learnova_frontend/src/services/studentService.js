@@ -848,9 +848,38 @@ export async function fetchStudentChatMessages(chatId) {
   return Array.isArray(data) ? data : [];
 }
 
-export async function sendStudentChatMessage(chatId, content) {
-  const response = await api.post(`/chats/${chatId}/messages`, { content });
+export async function sendStudentChatMessage(chatId, content, replyToMessageId = null) {
+  const payload = {
+    content,
+    ...(Number.isInteger(Number(replyToMessageId)) && Number(replyToMessageId) > 0
+      ? { replyToMessageId: Number(replyToMessageId) }
+      : {}),
+  };
+  const response = await api.post(`/chats/${chatId}/messages`, payload);
   return unwrap(response, null);
+}
+
+export async function deleteStudentChatMessage(chatId, messageId) {
+  try {
+    await api.delete(`/chats/messages/${messageId}`);
+  } catch {
+    // Backward-compatible fallback endpoint.
+    await api.delete(`/chats/${chatId}/messages/${messageId}`);
+  }
+  return true;
+}
+
+export async function editStudentChatMessage(messageId, content) {
+  const payload = {
+    content: String(content || '').trim(),
+  };
+  const response = await api.patch(`/chats/messages/${messageId}`, payload);
+  return unwrap(response, null);
+}
+
+export async function clearStudentChat(chatId) {
+  await api.delete(`/chats/${chatId}/clear`);
+  return true;
 }
 
 export async function fetchStudentProfile() {

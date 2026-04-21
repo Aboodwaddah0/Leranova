@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { MessageCircle, SendHorizontal } from 'lucide-react';
+import { CornerUpLeft, EllipsisVertical, MessageCircle, Pencil, SendHorizontal, Trash2, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { io } from 'socket.io-client';
 import StudentLayout from '../../components/student/StudentLayout';
 import { useLanguage } from '../../utils/i18n';
 import {
+  clearStudentChat,
+  deleteStudentChatMessage,
+  editStudentChatMessage,
   fetchStudentChats,
   fetchStudentChatMessages,
   sendStudentChatMessage,
@@ -14,6 +17,7 @@ import { API_BASE_URL, STORAGE_KEYS } from '../../utils/constants';
 
 const POLL_INTERVAL_MS = 5000;
 const SOCKET_URL = API_BASE_URL.replace(/\/api\/?$/, '');
+const SWIPE_REPLY_THRESHOLD = 80;
 
 const toSafeArray = (value) => (Array.isArray(value) ? value : []);
 
@@ -69,8 +73,18 @@ export default function StudentChatPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [typingUsers, setTypingUsers] = useState({});
+  const [replyToMessage, setReplyToMessage] = useState(null);
+  const [deletingMessageId, setDeletingMessageId] = useState(null);
+  const [clearingChat, setClearingChat] = useState(false);
+  const [swipingMessageId, setSwipingMessageId] = useState(null);
+  const [messageMenuId, setMessageMenuId] = useState(null);
+  const [confirmDeleteMessageId, setConfirmDeleteMessageId] = useState(null);
+  const [editingMessageId, setEditingMessageId] = useState(null);
+  const [editingText, setEditingText] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const messagesBoxRef = useRef(null);
+  const draftInputRef = useRef(null);
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const selectedChatIdRef = useRef(null);
@@ -326,6 +340,7 @@ export default function StudentChatPage() {
     const nextChatId = Number(chatId);
     setSelectedChatId(nextChatId);
     setError('');
+    setReplyToMessage(null);
 
     try {
       await loadMessages(nextChatId);
@@ -345,6 +360,184 @@ export default function StudentChatPage() {
     }
   };
 
+  const compactText = (value, maxLength = 60) => {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!text) {
+      return '';
+    }
+
+    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+  };
+
+  const truncateReplyText = (value, maxLength = 50) => {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!text) {
+      return '';
+    }
+
+    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+  };
+
+  const handleReplyToMessage = (message) => {
+    if (!message || Number(message.senderId) === Number(currentUserId)) {
+      return;
+    }
+
+    console.info('[CHAT_UI] selected reply message', {
+      chatId: selectedChatId,
+      messageId: message.id,
+      senderId: message.senderId,
+    });
+    setReplyToMessage(message || null);
+
+    // Messenger-like behavior: jump directly to composer and focus cursor.
+    window.requestAnimationFrame(() => {
+      const input = draftInputRef.current;
+      if (!input) {
+        return;
+      }
+
+      input.focus();
+      const end = String(input.value || '').length;
+      input.setSelectionRange(end, end);
+    });
+  };
+
+  const handleCancelReply = () => {
+    setReplyToMessage(null);
+  };
+
+  const handleDeleteMessage = async (messageId) => {
+    if (!selectedChatId || !messageId || deletingMessageId) {
+      return;
+    }
+
+    try {
+      setDeletingMessageId(Number(messageId));
+      await deleteStudentChatMessage(selectedChatId, messageId);
+
+      const refreshed = toSafeArray(await fetchStudentChatMessages(selectedChatId));
+      setMessages(refreshed);
+
+      const latest = refreshed[refreshed.length - 1] || null;
+      setChats((current) => sortChatsByLatestActivity(current.map((chat) => (
+        Number(chat.id) === Number(selectedChatId)
+          ? {
+              ...chat,
+              lastMessage: latest
+                ? {
+                    id: latest.id,
+                    content: latest.content,
+                    senderId: latest.senderId,
+                    createdAt: latest.createdAt,
+                    senderName: latest.sender?.name || null,
+                  }
+                : null,
+              lastMessageAt: latest?.createdAt || chat.createdAt,
+            }
+          : chat
+      ))));
+    } catch (deleteError) {
+      setError(deleteError?.response?.data?.message || deleteError?.message || (isArabic ? 'تعذر حذف الرسالة.' : 'Failed to delete message.'));
+    } finally {
+      setDeletingMessageId(null);
+    }
+  };
+
+  const handleRequestDeleteMessage = (messageId) => {
+    setConfirmDeleteMessageId(Number(messageId));
+    setMessageMenuId(null);
+  };
+
+  const handleCancelDelete = () => {
+    setConfirmDeleteMessageId(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmDeleteMessageId) {
+      return;
+    }
+
+    await handleDeleteMessage(confirmDeleteMessageId);
+    setConfirmDeleteMessageId(null);
+  };
+
+  const handleStartEditMessage = (message) => {
+    if (!message || message.isDeleted) {
+      return;
+    }
+
+    setEditingMessageId(Number(message.id));
+    setEditingText(String(message.content || ''));
+    setMessageMenuId(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null);
+    setEditingText('');
+  };
+
+  const handleSaveEdit = async (messageId) => {
+    if (!messageId || savingEdit) {
+      return;
+    }
+
+    const nextContent = String(editingText || '').trim();
+    if (!nextContent) {
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+      const updated = await editStudentChatMessage(messageId, nextContent);
+
+      setMessages((current) => current.map((message) => (
+        Number(message.id) === Number(messageId)
+          ? { ...message, ...(updated || {}), content: updated?.content || nextContent }
+          : message
+      )));
+      setEditingMessageId(null);
+      setEditingText('');
+    } catch (editError) {
+      setError(editError?.response?.data?.message || editError?.message || (isArabic ? 'تعذر تعديل الرسالة.' : 'Failed to edit message.'));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleClearChat = async () => {
+    if (!selectedChatId || clearingChat) {
+      return;
+    }
+
+    const confirmed = window.confirm(isArabic ? 'هل أنت متأكد من مسح كل الرسائل في هذه الدردشة؟' : 'Are you sure you want to clear all messages in this chat?');
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setClearingChat(true);
+      await clearStudentChat(selectedChatId);
+      setMessages([]);
+      setReplyToMessage(null);
+
+      setChats((current) => sortChatsByLatestActivity(current.map((chat) => (
+        Number(chat.id) === Number(selectedChatId)
+          ? {
+              ...chat,
+              lastMessage: null,
+              lastMessageAt: chat.createdAt,
+              unreadCount: 0,
+            }
+          : chat
+      ))));
+    } catch (clearError) {
+      setError(clearError?.response?.data?.message || clearError?.message || (isArabic ? 'تعذر مسح الدردشة.' : 'Failed to clear chat.'));
+    } finally {
+      setClearingChat(false);
+    }
+  };
+
   const submitMessage = async () => {
     if (!selectedChatId || !draft.trim() || sending) {
       return;
@@ -353,11 +546,24 @@ export default function StudentChatPage() {
     try {
       setSending(true);
       const content = draft.trim();
+      const replyToMessageId = (
+        replyToMessage?.id
+        && Number(replyToMessage.senderId) !== Number(currentUserId)
+      )
+        ? Number(replyToMessage.id)
+        : null;
       setDraft('');
 
-      const message = await sendStudentChatMessage(selectedChatId, content);
+      console.info('[CHAT_UI] sending payload', {
+        chatId: selectedChatId,
+        contentLength: content.length,
+        replyToMessageId,
+      });
+
+      const message = await sendStudentChatMessage(selectedChatId, content, replyToMessageId);
       setMessages((current) => [...current, message]);
       bumpChatPreview(selectedChatId, message, true);
+      setReplyToMessage(null);
 
       const socket = socketRef.current;
       if (socket?.connected) {
@@ -467,10 +673,21 @@ export default function StudentChatPage() {
         </aside>
 
         <section className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-200 px-4 py-3">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
             <p className="text-sm font-black text-slate-900">
               {selectedChat ? getChatLabel(selectedChat, isArabic) : (isArabic ? 'اختر دردشة' : 'Select a chat')}
             </p>
+            <button
+              type="button"
+              onClick={handleClearChat}
+              disabled={!selectedChatId || clearingChat || messages.length === 0}
+              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Trash2 size={14} />
+              {clearingChat
+                ? (isArabic ? 'جاري المسح...' : 'Clearing...')
+                : (isArabic ? 'مسح الشات' : 'Clear chat')}
+            </button>
           </div>
 
           <div ref={messagesBoxRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 px-4 py-4">
@@ -486,6 +703,8 @@ export default function StudentChatPage() {
               </div>
             ) : messages.map((message) => {
               const mine = Number(message.senderId) === Number(currentUserId);
+              const canReply = !mine && !message.isDeleted;
+              const isEditing = Number(editingMessageId) === Number(message.id);
 
               return (
                 <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
@@ -493,6 +712,17 @@ export default function StudentChatPage() {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.2 }}
+                    drag={mine ? false : 'x'}
+                    dragConstraints={{ left: -100, right: 100 }}
+                    dragElastic={0.18}
+                    dragSnapToOrigin
+                    onDragStart={() => setSwipingMessageId(Number(message.id))}
+                    onDragEnd={(_event, info) => {
+                      setSwipingMessageId(null);
+                      if (canReply && info.offset.x >= SWIPE_REPLY_THRESHOLD) {
+                        handleReplyToMessage(message);
+                      }
+                    }}
                     className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
                       mine
                         ? 'bg-indigo-600 text-white'
@@ -504,11 +734,96 @@ export default function StudentChatPage() {
                         {message.sender?.name || (isArabic ? 'عضو' : 'Member')}
                       </p>
                     ) : null}
-                    <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                    {!message.isDeleted && message.replyTo ? (
+                      <div className="mb-[6px] rounded-[8px] border-l-[3px] border-[#6c5ce7] bg-[#f1f3f5] px-[10px] py-[6px] text-[12px] text-[#555]">
+                        <p className="mb-0.5 inline-flex items-center gap-1 text-[11px] font-bold text-[#4b4b4b]">
+                          <CornerUpLeft size={12} />
+                          {mine
+                            ? `${isArabic ? 'أنت رديت على' : 'You replied to'} ${message.replyTo.senderName || (isArabic ? 'عضو' : 'Member')}`
+                            : `${isArabic ? 'رد على' : 'Replied to'} ${message.replyTo.senderName || (isArabic ? 'عضو' : 'Member')}`}
+                        </p>
+                        <p className="truncate whitespace-nowrap opacity-80">
+                          {message.replyTo.isDeleted
+                            ? (isArabic ? 'تم حذف هذه الرسالة' : 'This message was deleted')
+                            : truncateReplyText(message.replyTo.content, 50)}
+                        </p>
+                      </div>
+                    ) : null}
+                    {message.isDeleted ? (
+                      <p className={`italic ${mine ? 'text-indigo-100' : 'text-slate-500'}`}>
+                        {isArabic ? 'تم حذف هذه الرسالة' : 'This message was deleted'}
+                      </p>
+                    ) : isEditing ? (
+                      <div className="space-y-2">
+                        <input
+                          value={editingText}
+                          onChange={(event) => setEditingText(event.target.value)}
+                          className="w-full rounded-lg border border-white/40 bg-white/95 px-3 py-2 text-sm text-slate-800 outline-none focus:border-white"
+                          autoFocus
+                        />
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={handleCancelEdit}
+                            className="rounded-lg border border-white/40 bg-white/15 px-2 py-1 text-xs font-semibold text-white transition hover:bg-white/25"
+                          >
+                            {isArabic ? 'إلغاء' : 'Cancel'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveEdit(message.id)}
+                            disabled={savingEdit || !String(editingText || '').trim()}
+                            className="rounded-lg bg-white px-2 py-1 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {savingEdit
+                              ? (isArabic ? 'حفظ...' : 'Saving...')
+                              : (isArabic ? 'حفظ' : 'Save')}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                    )}
                     <div className={`mt-2 flex items-center gap-2 text-[11px] ${mine ? 'text-indigo-100' : 'text-slate-500'}`}>
                       <span>{formatMessageTime(message.createdAt)}</span>
+                      {message.isEdited ? <span>{isArabic ? 'معدل' : 'Edited'}</span> : null}
                       {mine ? <span>{message.isSeen ? '✔✔' : '✔'}</span> : null}
+                      {mine && !message.isDeleted && !isEditing ? (
+                        <div className="relative ms-auto">
+                          <button
+                            type="button"
+                            onClick={() => setMessageMenuId((current) => (current === Number(message.id) ? null : Number(message.id)))}
+                            className="inline-flex items-center rounded-md p-1 transition hover:bg-white/20"
+                            aria-label={isArabic ? 'خيارات الرسالة' : 'Message actions'}
+                          >
+                            <EllipsisVertical size={13} />
+                          </button>
+                          {messageMenuId === Number(message.id) ? (
+                            <div className="absolute end-0 top-7 z-10 min-w-[110px] rounded-lg border border-slate-200 bg-white p-1 text-slate-700 shadow-lg">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditMessage(message)}
+                                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-slate-100"
+                              >
+                                <Pencil size={12} /> {isArabic ? 'تعديل' : 'Edit'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRequestDeleteMessage(message.id)}
+                                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-rose-600 hover:bg-rose-50"
+                              >
+                                <Trash2 size={12} /> {isArabic ? 'حذف' : 'Delete'}
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
+                    {swipingMessageId === Number(message.id) ? (
+                      <div className={`mt-2 text-[11px] font-semibold ${mine ? 'text-indigo-100' : 'text-slate-400'}`}>
+                        {isArabic ? 'اسحب يمينًا للرد' : 'Swipe right to reply'}
+                      </div>
+                    ) : null}
                   </motion.article>
                 </div>
               );
@@ -519,8 +834,30 @@ export default function StudentChatPage() {
           </div>
 
           <div className="border-t border-slate-200 bg-white px-4 py-3">
+            {replyToMessage ? (
+              <div className="mb-2 flex items-start justify-between gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
+                <div>
+                  <p className="font-bold">{isArabic ? 'الرد على:' : 'Replying to:'} {replyToMessage.sender?.name || (isArabic ? 'عضو' : 'Member')}</p>
+                  <p className="mt-1">{compactText(replyToMessage.content, 120)}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCancelReply}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-indigo-700 transition hover:bg-indigo-100"
+                  aria-label={isArabic ? 'إلغاء الرد' : 'Cancel reply'}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : null}
+            {selectedChat ? (
+              <p className="mb-2 text-[11px] font-semibold text-slate-400">
+                {isArabic ? 'اسحب رسالة الطرف الآخر يمينًا للرد.' : 'Swipe other user messages right to reply.'}
+              </p>
+            ) : null}
             <div className="flex items-center gap-2">
               <textarea
+                ref={draftInputRef}
                 value={draft}
                 onChange={onDraftChange}
                 onKeyDown={onInputKeyDown}
@@ -541,6 +878,38 @@ export default function StudentChatPage() {
           </div>
         </section>
       </div>
+
+      {confirmDeleteMessageId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
+            <h3 className="text-base font-black text-slate-900">{isArabic ? 'تأكيد الحذف' : 'Confirm delete'}</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              {isArabic
+                ? 'هل أنت متأكد أنك تريد حذف هذه الرسالة؟'
+                : 'Are you sure you want to delete this message?'}
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleCancelDelete}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700"
+              >
+                {isArabic ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={deletingMessageId === Number(confirmDeleteMessageId)}
+                className="rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deletingMessageId === Number(confirmDeleteMessageId)
+                  ? (isArabic ? 'حذف...' : 'Deleting...')
+                  : (isArabic ? 'حذف' : 'Delete')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </StudentLayout>
   );
 }

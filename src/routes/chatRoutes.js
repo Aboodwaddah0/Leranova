@@ -5,6 +5,8 @@ import {
   listStudentChats,
   listStudentChatMessages,
   sendStudentChatMessage,
+  deleteStudentMessage,
+  editStudentMessage,
   sendMessage,
   sendMessageAutoChat,
   sendCourseMessage,
@@ -31,8 +33,12 @@ const studentOnly = (req, _res, next) => {
 };
 
 router.get('/', authMiddleware, studentOnly, listStudentChats);
+router.delete('/messages/:messageId', authMiddleware, studentOnly, deleteStudentMessage);
+router.patch('/messages/:messageId', authMiddleware, studentOnly, editStudentMessage);
 router.get('/:chatId/messages', authMiddleware, studentOnly, listStudentChatMessages);
 router.post('/:chatId/messages', authMiddleware, studentOnly, sendStudentChatMessage);
+router.delete('/:chatId/messages/:messageId', authMiddleware, studentOnly, softDeleteMessage);
+router.delete('/:chatId/clear', authMiddleware, studentOnly, clearChat);
 
 /**
  * =========================

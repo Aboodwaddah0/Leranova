@@ -5,6 +5,8 @@ import {
   listChatsForStudent,
   listMessagesForStudentChat,
   sendStudentChatTextMessage,
+  deleteStudentMessageById,
+  editStudentMessageById,
   sendMessageWithBotReply,
   sendMessageWithAutoChat,
   sendCourseChatMessage,
@@ -28,6 +30,7 @@ const courseMessageSchema = Joi.object({
 const sendMessageSchema = Joi.object({
   content: Joi.string().trim().min(1).max(5000).required(),
   message_type: Joi.string().valid('text', 'image', 'file', 'voice').default('text'),
+  replyToMessageId: Joi.number().integer().positive().optional(),
   course_id: Joi.number().integer().positive().optional(),  // For chatbot context
   subject_id: Joi.number().integer().positive().optional(),
   lesson_id: Joi.number().integer().positive().optional(),
@@ -55,6 +58,11 @@ const courseTypingSchema = Joi.object({
 });
 
 const sendStudentMessageSchema = Joi.object({
+  content: Joi.string().trim().min(1).max(5000).required(),
+  replyToMessageId: Joi.number().integer().positive().optional(),
+});
+
+const editStudentMessageSchema = Joi.object({
   content: Joi.string().trim().min(1).max(5000).required(),
 });
 
@@ -114,10 +122,63 @@ export const sendStudentChatMessage = async (req, res, next) => {
       chatId,
       userId: req.user.id,
       content: value.content,
+      replyToMessageId: value.replyToMessageId ?? null,
     });
 
     return res.status(201).json({
       message: 'Message sent successfully',
+      data: message,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const deleteStudentMessage = async (req, res, next) => {
+  try {
+    const messageId = Number(req.params.messageId);
+    if (!messageId || Number.isNaN(messageId)) {
+      return next(new AppError('Invalid message ID', 400));
+    }
+
+    await deleteStudentMessageById({
+      messageId,
+      userId: req.user.id,
+    });
+
+    return res.status(200).json({
+      message: 'Message deleted successfully',
+      data: null,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const editStudentMessage = async (req, res, next) => {
+  try {
+    const messageId = Number(req.params.messageId);
+    if (!messageId || Number.isNaN(messageId)) {
+      return next(new AppError('Invalid message ID', 400));
+    }
+
+    const { error, value } = editStudentMessageSchema.validate(req.body, {
+      abortEarly: true,
+      stripUnknown: true,
+    });
+
+    if (error) {
+      return next(new AppError(error.details[0].message, 400));
+    }
+
+    const message = await editStudentMessageById({
+      messageId,
+      userId: req.user.id,
+      content: value.content,
+    });
+
+    return res.status(200).json({
+      message: 'Message updated successfully',
       data: message,
     });
   } catch (error) {
@@ -159,6 +220,7 @@ export const sendMessage = async (req, res, next) => {
       chatId: Number(chatId),
       userId,
       content: value.content,
+      replyToMessageId: value.replyToMessageId ?? null,
       tokenUser: req.user,
       chatbotContext,
       enableChatbot: value.enable_chatbot && !!chatbotContext,
@@ -203,6 +265,7 @@ export const sendMessageAutoChat = async (req, res, next) => {
       userId,
       tokenUser: req.user,
       content: value.content,
+      replyToMessageId: value.replyToMessageId ?? null,
       courseId: value.course_id,
       subjectId: value.subject_id || null,
       lessonId: value.lesson_id || null,
