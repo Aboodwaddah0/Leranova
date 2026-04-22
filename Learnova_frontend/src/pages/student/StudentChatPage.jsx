@@ -19,7 +19,13 @@ import { API_BASE_URL, STORAGE_KEYS } from '../../utils/constants';
 const POLL_INTERVAL_MS = 5000;
 const SOCKET_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 const SWIPE_REPLY_THRESHOLD = 80;
-const COMPOSER_EMOJIS = ['😀', '😂', '😍', '😮', '😢', '🔥', '👍', '👏', '💡', '🎉'];
+const COMPOSER_EMOJIS = [
+  '😀', '😁', '😂', '🤣', '😃', '😄', '😅', '😆', '😉', '😊',
+  '🙂', '🙃', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛',
+  '😜', '🤪', '🤩', '😎', '🤓', '🧐', '😮', '😯', '😲', '😢',
+  '😭', '🥺', '😡', '🤯', '😴', '🤝', '👍', '👎', '👏', '🙌',
+  '🔥', '💯', '🎉', '✨', '💡', '❤️', '💙', '💚', '🧡', '💜',
+];
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '😮'];
 
 const toSafeArray = (value) => (Array.isArray(value) ? value : []);
@@ -111,6 +117,13 @@ export default function StudentChatPage() {
     const values = Object.values(chatTyping);
     return values.length ? values[0] : null;
   }, [typingUsers, selectedChatId]);
+
+  const closeTransientPopups = () => {
+    setShowComposerEmojiPicker(false);
+    setShowEditEmojiPicker(false);
+    setMessageMenuId(null);
+    setReactionPickerForMessageId(null);
+  };
 
   const bumpChatPreview = (chatId, message, isOwnMessage) => {
     setChats((current) => {
@@ -360,24 +373,17 @@ export default function StudentChatPage() {
   // Auto-close popups when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
-      // Don't interfere if edit modal is open
       if (editingMessageId) return;
-      
-      // Close popups if clicking outside popup areas
       const target = e.target;
-      if (!target.closest('[role="dialog"]') && 
-          !target.closest('.absolute') &&
-          target.tagName !== 'BUTTON') {
-        setShowComposerEmojiPicker(false);
-        setShowEditEmojiPicker(false);
-        setMessageMenuId(null);
-        setReactionPickerForMessageId(null);
+
+      if (!target.closest('[data-popup-root="true"]')) {
+        closeTransientPopups();
       }
     };
 
     if (!editingMessageId) {
-      document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [editingMessageId]);
 
@@ -406,10 +412,7 @@ export default function StudentChatPage() {
     setReplyToMessage(null);
     setEditingMessageId(null);
     setEditingText('');
-    setShowComposerEmojiPicker(false);
-    setShowEditEmojiPicker(false);
-    setMessageMenuId(null);
-    setReactionPickerForMessageId(null);
+    closeTransientPopups();
 
     try {
       await loadMessages(nextChatId);
@@ -847,12 +850,7 @@ export default function StudentChatPage() {
             </button>
           </div>
 
-          <div ref={messagesBoxRef} className={`min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 transition ${editingMessageId ? 'bg-slate-900/5' : 'bg-slate-50/70'}`} onClick={() => {
-            setShowComposerEmojiPicker(false);
-            setShowEditEmojiPicker(false);
-            setReactionPickerForMessageId(null);
-            setMessageMenuId(null);
-          }}>
+          <div ref={messagesBoxRef} className={`min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 transition ${editingMessageId ? 'bg-slate-900/5' : 'bg-slate-50/70'}`} onClick={closeTransientPopups}>
             {!selectedChat ? (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-6 text-sm text-slate-500">
                 {isArabic ? 'اختر دردشة لعرض الرسائل.' : 'Choose a chat to view messages.'}
@@ -924,13 +922,14 @@ export default function StudentChatPage() {
                       {message.isEdited ? <span>{isArabic ? 'معدل' : 'Edited'}</span> : null}
                       {mine ? <span>{message.isSeen ? '✔✔' : '✔'}</span> : null}
                       {mine && !message.isDeleted && !isEditing ? (
-                        <div className="relative ms-auto">
+                        <div className="relative ms-auto" data-popup-root="true">
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setReactionPickerForMessageId(null);
                               setMessageMenuId((current) => (current === Number(message.id) ? null : Number(message.id)));
+                              setReactionPickerForMessageId(null);
+                              setShowComposerEmojiPicker(false);
                             }}
                             className="inline-flex items-center rounded-md p-1 transition hover:bg-white/20"
                             aria-label={isArabic ? 'خيارات الرسالة' : 'Message actions'}
@@ -958,13 +957,14 @@ export default function StudentChatPage() {
                         </div>
                       ) : null}
                       {!message.isDeleted ? (
-                        <div className="relative">
+                        <div className="relative" data-popup-root="true">
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setMessageMenuId(null);
                               setReactionPickerForMessageId((current) => (current === Number(message.id) ? null : Number(message.id)));
+                              setMessageMenuId(null);
+                              setShowComposerEmojiPicker(false);
                             }}
                             className={`inline-flex items-center rounded-md p-1 transition ${mine ? 'hover:bg-white/20' : 'hover:bg-slate-200'}`}
                             aria-label={isArabic ? 'إضافة تفاعل' : 'Add reaction'}
@@ -972,7 +972,7 @@ export default function StudentChatPage() {
                             <Smile size={13} />
                           </button>
                           {reactionPickerForMessageId === Number(message.id) ? (
-                            <div className={`absolute top-7 z-10 flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white px-2 py-1 shadow-lg ${mine ? 'end-0' : 'start-0'}`} onClick={(e) => e.stopPropagation()}>
+                            <div className={`absolute top-7 z-10 flex w-[220px] max-w-[220px] flex-nowrap items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white px-2 py-1 shadow-lg ${mine ? 'end-0' : 'start-0'}`} onClick={(e) => e.stopPropagation()}>
                               {REACTION_EMOJIS.map((emoji) => (
                                 <button
                                   key={emoji}
@@ -981,7 +981,7 @@ export default function StudentChatPage() {
                                     handleReactToMessage(message, emoji);
                                   }}
                                   disabled={reactingMessageId === Number(message.id)}
-                                  className={`rounded-md px-1 py-0.5 text-base transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 ${message.myReaction === emoji ? 'bg-indigo-100 ring-1 ring-indigo-300' : ''}`}
+                                  className={`shrink-0 rounded-md px-1 py-0.5 text-base transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 ${message.myReaction === emoji ? 'bg-indigo-100 ring-1 ring-indigo-300' : ''}`}
                                 >
                                   {emoji}
                                 </button>
@@ -992,7 +992,7 @@ export default function StudentChatPage() {
                       ) : null}
                     </div>
                     {getMessageReactions(message).length ? (
-                      <div className="mt-2 flex flex-wrap gap-1">
+                      <div className="mt-2 flex max-w-full flex-nowrap items-center gap-1 overflow-x-auto pb-1">
                         {getMessageReactions(message).map((reaction) => {
                           const active = reaction.reactedByMe;
                           return (
@@ -1001,7 +1001,7 @@ export default function StudentChatPage() {
                               type="button"
                               onClick={() => handleReactToMessage(message, reaction.emoji)}
                               disabled={reactingMessageId === Number(message.id)}
-                              className={`inline-flex flex-shrink-0 items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] transition whitespace-nowrap ${active ? 'border-indigo-300 bg-indigo-100 text-indigo-700' : 'border-slate-200 bg-white/70 text-slate-700'}`}
+                              className={`inline-flex shrink-0 items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] transition ${active ? 'border-indigo-300 bg-indigo-100 text-indigo-700' : 'border-slate-200 bg-white/70 text-slate-700'}`}
                             >
                               <span className="text-xs">{reaction.emoji}</span>
                               <span className="font-semibold">{reaction.count}</span>
@@ -1119,7 +1119,7 @@ export default function StudentChatPage() {
               </div>
             ) : null}
             <div className="flex items-center gap-2">
-              <div className="relative">
+              <div className="relative" data-popup-root="true">
                 <button
                   type="button"
                   onClick={(e) => {
@@ -1135,17 +1135,22 @@ export default function StudentChatPage() {
                   <Smile size={18} />
                 </button>
                 {showComposerEmojiPicker ? (
-                  <div className="absolute top-full left-0 mt-2 z-20 flex max-w-xs flex-wrap gap-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl" onClick={(e) => e.stopPropagation()}>
-                    {COMPOSER_EMOJIS.map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => insertComposerEmoji(emoji)}
-                        className="rounded-lg px-2 py-1 text-lg hover:bg-slate-100"
-                      >
-                        {emoji}
-                      </button>
-                    ))}
+                  <div className="absolute bottom-full start-0 z-20 mb-2 w-[320px] max-w-[min(320px,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-3 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                    <div className="mb-2 text-[11px] font-semibold text-slate-500">
+                      {isArabic ? 'لوحة الإيموجي' : 'Emoji keyboard'}
+                    </div>
+                    <div className="grid max-h-52 grid-cols-8 gap-1 overflow-y-auto">
+                      {COMPOSER_EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => insertComposerEmoji(emoji)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-lg transition hover:bg-slate-100"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
               </div>
