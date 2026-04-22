@@ -626,6 +626,27 @@ const seed = async () => {
       name: 'Academy Buyer',
       subscriptions: [],
     },
+    // Add new students for testing payment flow
+    {
+      email: 'test.buyer.one@learnova.com',
+      name: 'Test Buyer One',
+      subscriptions: ['Programming Track::Java'],
+    },
+    {
+      email: 'test.buyer.two@learnova.com',
+      name: 'Test Buyer Two',
+      subscriptions: ['Design Track::Figma Mastery'],
+    },
+    {
+      email: 'test.buyer.three@learnova.com',
+      name: 'Test Buyer Three',
+      subscriptions: ['AI Track::Prompt Engineering', 'Programming Track::Python'],
+    },
+    {
+      email: 'premium.student@learnova.com',
+      name: 'Premium Student',
+      subscriptions: ['Programming Track::C++', 'Programming Track::Python', 'Programming Track::Java', 'Programming Track::Data Structures'],
+    },
   ];
 
   for (const academyStudent of academyStudents) {
@@ -705,6 +726,301 @@ const seed = async () => {
     }
   }
 
+  // ========== CREATE ACADEMY CHATS WITH MESSAGES ==========
+  console.log('[DB SEED] Creating academy chats and messages...');
+
+  const programmingCourse = academyTrackMap.get('Programming Track');
+  const pythonSubject = academySubjectMap.get('Programming Track::Python');
+  const cppSubject = academySubjectMap.get('Programming Track::C++');
+  const designCourse = academyTrackMap.get('Design Track');
+  const figmaMasterySubject = academySubjectMap.get('Design Track::Figma Mastery');
+
+  // Create programming chat
+  if (pythonSubject) {
+    const programmingChat = await ensureSubjectChat({
+      orgId: academyOrg.id,
+      subjectId: pythonSubject.id,
+      createdBy: academyTeachers[0].id,
+      title: `Programming Track - Python Chat`,
+    });
+
+    // Add participants
+    for (const student of academyStudents) {
+      const user = await prisma.user.findUnique({ where: { email: student.email } });
+      if (user) {
+        await prisma.chat_participants.upsert({
+          where: {
+            chat_id_user_id: {
+              chat_id: programmingChat.id,
+              user_id: user.id,
+            },
+          },
+          update: {},
+          create: {
+            chat_id: programmingChat.id,
+            user_id: user.id,
+            role_in_chat: 'member',
+          },
+        });
+      }
+    }
+
+    // Add teacher to chat
+    await prisma.chat_participants.upsert({
+      where: {
+        chat_id_user_id: {
+          chat_id: programmingChat.id,
+          user_id: academyTeachers[0].id,
+        },
+      },
+      update: {},
+      create: {
+        chat_id: programmingChat.id,
+        user_id: academyTeachers[0].id,
+        role_in_chat: 'teacher',
+      },
+    });
+
+    // Add initial messages
+    const messageTexts = [
+      'Welcome to Python Programming! 🎉',
+      'Today we will cover fundamentals of Python.',
+      'Let\'s start with variables and data types.',
+      'Any questions about the introduction?',
+      'Great! Let\'s move to the next topic.',
+      'Here\'s a practical example for you to try.',
+      'Feel free to ask if anything is unclear.',
+    ];
+
+    for (let i = 0; i < messageTexts.length; i++) {
+      const sender = i % 2 === 0 ? academyTeachers[0] : academyStudents[0];
+      const senderUser = await prisma.user.findUnique({ where: { email: sender.email } });
+      if (senderUser) {
+        await addMessageIfMissing({
+          chatId: programmingChat.id,
+          senderId: senderUser.id,
+          content: messageTexts[i],
+        });
+      }
+    }
+  }
+
+  // Create design chat
+  if (figmaMasterySubject) {
+    const designChat = await ensureSubjectChat({
+      orgId: academyOrg.id,
+      subjectId: figmaMasterySubject.id,
+      createdBy: academyTeachers[1].id,
+      title: `Design Track - Figma Mastery Chat`,
+    });
+
+    // Add participants
+    const designStudents = academyStudents.filter(s => s.subscriptions.some(sub => sub.includes('Design')));
+    for (const student of designStudents) {
+      const user = await prisma.user.findUnique({ where: { email: student.email } });
+      if (user) {
+        await prisma.chat_participants.upsert({
+          where: {
+            chat_id_user_id: {
+              chat_id: designChat.id,
+              user_id: user.id,
+            },
+          },
+          update: {},
+          create: {
+            chat_id: designChat.id,
+            user_id: user.id,
+            role_in_chat: 'member',
+          },
+        });
+      }
+    }
+
+    // Add teacher
+    await prisma.chat_participants.upsert({
+      where: {
+        chat_id_user_id: {
+          chat_id: designChat.id,
+          user_id: academyTeachers[1].id,
+        },
+      },
+      update: {},
+      create: {
+        chat_id: designChat.id,
+        user_id: academyTeachers[1].id,
+        role_in_chat: 'teacher',
+      },
+    });
+
+    const designMessages = [
+      'Welcome to Figma Mastery course!',
+      'Today we\'ll learn UI design principles.',
+      'Figma is the leading design tool in the industry.',
+      'Let me share my screen to show you the basics.',
+      'We\'ll create a simple dashboard together.',
+      'Try following along with me.',
+      'Perfect! Now you know the essentials.',
+    ];
+
+    for (let i = 0; i < designMessages.length; i++) {
+      const sender = i % 2 === 0 ? academyTeachers[1] : (designStudents[0] || academyStudents[1]);
+      const senderUser = await prisma.user.findUnique({ where: { email: sender.email } });
+      if (senderUser) {
+        await addMessageIfMissing({
+          chatId: designChat.id,
+          senderId: senderUser.id,
+          content: designMessages[i],
+        });
+      }
+    }
+  }
+
+  // Create AI track chat
+  const aiTrackCourse = academyTrackMap.get('AI Track');
+  const dataAnalysisSubject = academySubjectMap.get('AI Track::Data Analysis');
+  if (dataAnalysisSubject) {
+    const aiChat = await ensureSubjectChat({
+      orgId: academyOrg.id,
+      subjectId: dataAnalysisSubject.id,
+      createdBy: academyTeachers[2].id,
+      title: `AI Track - Data Analysis Chat`,
+    });
+
+    // Add all academy students
+    for (const student of academyStudents) {
+      const user = await prisma.user.findUnique({ where: { email: student.email } });
+      if (user) {
+        await prisma.chat_participants.upsert({
+          where: {
+            chat_id_user_id: {
+              chat_id: aiChat.id,
+              user_id: user.id,
+            },
+          },
+          update: {},
+          create: {
+            chat_id: aiChat.id,
+            user_id: user.id,
+            role_in_chat: 'member',
+          },
+        });
+      }
+    }
+
+    // Add teacher
+    await prisma.chat_participants.upsert({
+      where: {
+        chat_id_user_id: {
+          chat_id: aiChat.id,
+          user_id: academyTeachers[2].id,
+        },
+      },
+      update: {},
+      create: {
+        chat_id: aiChat.id,
+        user_id: academyTeachers[2].id,
+        role_in_chat: 'teacher',
+      },
+    });
+
+    const aiMessages = [
+      'Welcome to Data Analysis for AI!',
+      'Data is the foundation of all AI models.',
+      'We\'ll start with data preprocessing.',
+      'This is crucial for model accuracy.',
+      'Let\'s explore some real datasets.',
+      'Notice the patterns in this data?',
+      'Excellent observations from the class!',
+    ];
+
+    for (let i = 0; i < aiMessages.length; i++) {
+      const sender = i % 2 === 0 ? academyTeachers[2] : academyStudents[Math.floor(Math.random() * academyStudents.length)];
+      const senderUser = await prisma.user.findUnique({ where: { email: sender.email } });
+      if (senderUser) {
+        await addMessageIfMissing({
+          chatId: aiChat.id,
+          senderId: senderUser.id,
+          content: aiMessages[i],
+        });
+      }
+    }
+  }
+
+  // ========== CREATE SCHOOL CHATS WITH MESSAGES ==========
+  const grade11Course = schoolCourseMap.get('Grade 11');
+  const grade11Subjects = await prisma.subject.findMany({
+    where: { Course_id: grade11Course.id },
+    take: 2,
+  });
+
+  if (grade11Subjects.length > 0) {
+    const schoolChatSubject = grade11Subjects[0];
+    const schoolChat = await ensureSubjectChat({
+      orgId: schoolOrg.id,
+      subjectId: schoolChatSubject.id,
+      createdBy: schoolTeachers[0].id,
+      title: `Grade 11 - ${schoolChatSubject.name} Chat`,
+    });
+
+    // Add students and teachers
+    for (const student of schoolStudents) {
+      const user = await prisma.user.findUnique({ where: { email: student.email } });
+      if (user && student.className === 'Grade 11') {
+        await prisma.chat_participants.upsert({
+          where: {
+            chat_id_user_id: {
+              chat_id: schoolChat.id,
+              user_id: user.id,
+            },
+          },
+          update: {},
+          create: {
+            chat_id: schoolChat.id,
+            user_id: user.id,
+            role_in_chat: 'member',
+          },
+        });
+      }
+    }
+
+    await prisma.chat_participants.upsert({
+      where: {
+        chat_id_user_id: {
+          chat_id: schoolChat.id,
+          user_id: schoolTeachers[0].id,
+        },
+      },
+      update: {},
+      create: {
+        chat_id: schoolChat.id,
+        user_id: schoolTeachers[0].id,
+        role_in_chat: 'teacher',
+      },
+    });
+
+    const schoolMessages = [
+      'Good morning class! ☀️',
+      'Today\'s lesson is on important topics',
+      'Please open your textbooks to chapter 5.',
+      'Who can summarize the main points?',
+      'Great summary!',
+      'Let\'s discuss the applications.',
+      'Homework: Complete the exercises.',
+    ];
+
+    for (let i = 0; i < schoolMessages.length; i++) {
+      const sender = i % 2 === 0 ? schoolTeachers[0] : (schoolStudents.find(s => s.className === 'Grade 11') || schoolStudents[0]);
+      const senderUser = await prisma.user.findUnique({ where: { email: sender.email } });
+      if (senderUser) {
+        await addMessageIfMissing({
+          chatId: schoolChat.id,
+          senderId: senderUser.id,
+          content: schoolMessages[i],
+        });
+      }
+    }
+  }
+
   const summary = {
     organizations: await prisma.organization.count(),
     courses: await prisma.course.count(),
@@ -713,21 +1029,62 @@ const seed = async () => {
     students: await prisma.student.count(),
     academyUsers: await prisma.academy_user.count(),
     subjectSubscriptions: await prisma.student_subject_subscription.count(),
+    coursePayments: await prisma.student_course_payment.count(),
     chats: await prisma.chats.count(),
     messages: await prisma.messages.count(),
+    chatParticipants: await prisma.chat_participants.count(),
     marks: await prisma.marks.count(),
   };
 
   console.log('[DB SEED] Completed.');
   console.log(JSON.stringify({
     loginAccounts: {
-      schoolStudent: { email: 'student.school.g10@learnova.com', password: DEFAULT_PASSWORD },
-      academyStudent: { email: 'student.academy.one@learnova.com', password: DEFAULT_PASSWORD },
-      academyBuyer: { email: 'academy_buyer@learnova.com', password: DEFAULT_PASSWORD },
-      schoolOrg: { email: 'school@learnova.com', password: DEFAULT_PASSWORD },
-      academyOrg: { email: 'academy@learnova.com', password: DEFAULT_PASSWORD },
+      // School Accounts
+      schoolStudent1: { email: 'student.school.g10@learnova.com', password: DEFAULT_PASSWORD, type: 'School Student - Grade 10' },
+      schoolStudent2: { email: 'student.school.g11@learnova.com', password: DEFAULT_PASSWORD, type: 'School Student - Grade 11' },
+      schoolStudent3: { email: 'student.school.tawjihi@learnova.com', password: DEFAULT_PASSWORD, type: 'School Student - Tawjihi' },
+      
+      // Academy Students with existing subscriptions
+      academyStudent1: { email: 'student.academy.one@learnova.com', password: DEFAULT_PASSWORD, type: 'Academy - Lina (Python + Figma)' },
+      academyStudent2: { email: 'student.academy.two@learnova.com', password: DEFAULT_PASSWORD, type: 'Academy - Zaid (C++ + Data Analysis)' },
+      academyStudent3: { email: 'student.academy.three@learnova.com', password: DEFAULT_PASSWORD, type: 'Academy - Rama (Prompt Engineering)' },
+      
+      // Academy Students - Ready for payment testing
+      testBuyer1: { email: 'test.buyer.one@learnova.com', password: DEFAULT_PASSWORD, type: 'Academy - Test Buyer (Java)' },
+      testBuyer2: { email: 'test.buyer.two@learnova.com', password: DEFAULT_PASSWORD, type: 'Academy - Test Buyer (Figma)' },
+      testBuyer3: { email: 'test.buyer.three@learnova.com', password: DEFAULT_PASSWORD, type: 'Academy - Test Buyer (AI + Python)' },
+      premiumStudent: { email: 'premium.student@learnova.com', password: DEFAULT_PASSWORD, type: 'Academy - Premium (All Programming)' },
+      
+      // Free accounts
+      academyStudent: { email: 'academy_student@learnova.com', password: DEFAULT_PASSWORD, type: 'Academy - Free Student' },
+      academyStudent2: { email: 'academy_student2@learnova.com', password: DEFAULT_PASSWORD, type: 'Academy - Free Student 2' },
+      academyBuyer: { email: 'academy_buyer@learnova.com', password: DEFAULT_PASSWORD, type: 'Academy - Buyer (No purchases yet)' },
+      
+      // Organization Accounts
+      schoolOrg: { email: 'school@learnova.com', password: DEFAULT_PASSWORD, type: 'School Organization' },
+      academyOrg: { email: 'academy@learnova.com', password: DEFAULT_PASSWORD, type: 'Academy Organization' },
     },
     summary,
+    paidCourses: {
+      programmingTrack: {
+        courses: ['C++: $10', 'Python: $15', 'Java: $12', 'Data Structures: $20'],
+        totalIfAllPurchased: '$57',
+      },
+      designTrack: {
+        courses: ['UI/UX Basics: $10', 'Figma Mastery: $15'],
+        totalIfAllPurchased: '$25',
+      },
+      aiTrack: {
+        courses: ['Data Analysis: $18', 'Prompt Engineering: $12'],
+        totalIfAllPurchased: '$30',
+      },
+    },
+    chatRooms: {
+      programmingChat: 'Python Programming group with messages',
+      designChat: 'Figma Mastery group with messages',
+      aiChat: 'Data Analysis group with messages',
+      schoolChat: 'Grade 11 subject group with messages',
+    },
   }, null, 2));
 };
 

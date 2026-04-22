@@ -129,6 +129,49 @@ export const setOnline = async (courseId, userId) => {
   }
 };
 
+export const setStudentMessageReaction = async ({ chatId, messageId, userId, reaction }) => {
+  try {
+    if (!db) {
+      throw new Error('Firebase Realtime Database is not initialized');
+    }
+
+    if (!chatId || !messageId || !userId || !reaction) {
+      throw new Error('Missing student reaction payload fields');
+    }
+
+    const ref = db.ref(`student_chats/${chatId}/messages/${messageId}/reactions/${userId}`);
+    await ref.set({
+      reaction: String(reaction),
+      updated_at: new Date().toISOString(),
+    });
+
+    return true;
+  } catch (error) {
+    console.error('❌ Firebase push failed:', error);
+    throw error;
+  }
+};
+
+export const clearStudentMessageReaction = async ({ chatId, messageId, userId }) => {
+  try {
+    if (!db) {
+      throw new Error('Firebase Realtime Database is not initialized');
+    }
+
+    if (!chatId || !messageId || !userId) {
+      throw new Error('Missing student reaction remove payload fields');
+    }
+
+    const ref = db.ref(`student_chats/${chatId}/messages/${messageId}/reactions/${userId}`);
+    await ref.remove();
+
+    return true;
+  } catch (error) {
+    console.error('❌ Firebase push failed:', error);
+    throw error;
+  }
+};
+
 /**
  * Get course messages from Firebase Realtime Database
  * Returns all messages for a course, sorted by created_at
