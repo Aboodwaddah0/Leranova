@@ -877,6 +877,14 @@ export async function editStudentChatMessage(messageId, content) {
   return unwrap(response, null);
 }
 
+export async function reactStudentChatMessage(messageId, reaction) {
+  const payload = {
+    reaction: String(reaction || '').trim(),
+  };
+  const response = await api.patch(`/chats/messages/${messageId}/reaction`, payload);
+  return unwrap(response, null);
+}
+
 export async function clearStudentChat(chatId) {
   await api.delete(`/chats/${chatId}/clear`);
   return true;

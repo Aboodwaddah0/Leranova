@@ -7,6 +7,7 @@ import {
   sendStudentChatTextMessage,
   deleteStudentMessageById,
   editStudentMessageById,
+  toggleStudentMessageReaction,
   sendMessageWithBotReply,
   sendMessageWithAutoChat,
   sendCourseChatMessage,
@@ -64,6 +65,10 @@ const sendStudentMessageSchema = Joi.object({
 
 const editStudentMessageSchema = Joi.object({
   content: Joi.string().trim().min(1).max(5000).required(),
+});
+
+const studentReactionSchema = Joi.object({
+  reaction: Joi.string().trim().valid('👍', '❤️', '😂', '🔥', '👏', '😮').required(),
 });
 
 export const listStudentChats = async (req, res, next) => {
@@ -180,6 +185,37 @@ export const editStudentMessage = async (req, res, next) => {
     return res.status(200).json({
       message: 'Message updated successfully',
       data: message,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const reactStudentMessage = async (req, res, next) => {
+  try {
+    const messageId = Number(req.params.messageId);
+    if (!messageId || Number.isNaN(messageId)) {
+      return next(new AppError('Invalid message ID', 400));
+    }
+
+    const { error, value } = studentReactionSchema.validate(req.body, {
+      abortEarly: true,
+      stripUnknown: true,
+    });
+
+    if (error) {
+      return next(new AppError(error.details[0].message, 400));
+    }
+
+    const result = await toggleStudentMessageReaction({
+      messageId,
+      userId: req.user.id,
+      reaction: value.reaction,
+    });
+
+    return res.status(200).json({
+      message: 'Message reaction updated successfully',
+      data: result,
     });
   } catch (error) {
     return next(error);

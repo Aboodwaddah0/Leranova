@@ -6,6 +6,8 @@ import {
   markMessageSeen,
   setTyping,
   setOnline,
+  setStudentMessageReaction,
+  clearStudentMessageReaction,
 } from './firebaseService.js';
 
 const SYSTEM_BOT_EMAIL = 'system-bot@learnova.local';
@@ -15,6 +17,7 @@ let CACHED_SYSTEM_BOT_USER_ID = process.env.SYSTEM_BOT_USER_ID
   : null;
 
 const MAX_MESSAGE_LENGTH = 5000;
+const ALLOWED_REACTIONS = ['👍', '❤️', '😂', '🔥', '👏', '😮'];
 
 const serializeCourseChat = (chat) => {
   if (!chat) {
@@ -66,37 +69,65 @@ const serializeStudentChatListItem = (chat) => ({
   unreadCount: Number(chat.unreadCount || 0),
 });
 
-const serializeStudentChatMessage = (message) => ({
-  id: message.id,
-  chatId: message.chat_id,
-  senderId: message.sender_user_id,
-  text: message.content,
-  content: message.content,
-  isDeleted: Boolean(message.is_deleted),
-  editedAt: message.edited_at ?? null,
-  isEdited: Boolean(message.edited_at),
-  replyToMessageId: message.replyToMessageId ?? null,
-  replyTo: message.replyTo
-    ? {
-        id: message.replyTo.id,
-        text: message.replyTo.content,
-        content: message.replyTo.content,
-        senderName: message.replyTo.user?.name || null,
-        senderId: message.replyTo.sender_user_id,
-        isDeleted: Boolean(message.replyTo.is_deleted),
-      }
-    : null,
-  createdAt: message.sent_at,
-  isSeen: Boolean(message.is_seen),
-  seenAt: message.seen_at ?? null,
-  sender: message.user
-    ? {
-        id: message.user.id,
-        name: message.user.name ?? null,
-        email: message.user.email ?? null,
-      }
-    : null,
-});
+const serializeStudentChatMessage = (message, viewerUserId = null) => {
+  const groupedReactions = new Map();
+  let myReaction = null;
+
+  (message.reactions || []).forEach((item) => {
+    if (!item?.reaction) {
+      return;
+    }
+
+    const emoji = String(item.reaction);
+    groupedReactions.set(emoji, (groupedReactions.get(emoji) || 0) + 1);
+
+    if (viewerUserId && Number(item.user_id) === Number(viewerUserId)) {
+      myReaction = emoji;
+    }
+  });
+
+  const reactions = Array.from(groupedReactions.entries())
+    .map(([emoji, count]) => ({
+      emoji,
+      count,
+      reactedByMe: myReaction === emoji,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  return {
+    id: message.id,
+    chatId: message.chat_id,
+    senderId: message.sender_user_id,
+    text: message.content,
+    content: message.content,
+    isDeleted: Boolean(message.is_deleted),
+    editedAt: message.edited_at ?? null,
+    isEdited: Boolean(message.edited_at),
+    replyToMessageId: message.replyToMessageId ?? null,
+    replyTo: message.replyTo
+      ? {
+          id: message.replyTo.id,
+          text: message.replyTo.content,
+          content: message.replyTo.content,
+          senderName: message.replyTo.user?.name || null,
+          senderId: message.replyTo.sender_user_id,
+          isDeleted: Boolean(message.replyTo.is_deleted),
+        }
+      : null,
+    reactions,
+    myReaction,
+    createdAt: message.sent_at,
+    isSeen: Boolean(message.is_seen),
+    seenAt: message.seen_at ?? null,
+    sender: message.user
+      ? {
+          id: message.user.id,
+          name: message.user.name ?? null,
+          email: message.user.email ?? null,
+        }
+      : null,
+  };
+};
 
 const getSystemBotUserId = async () => {
   if (CACHED_SYSTEM_BOT_USER_ID) {
@@ -1619,13 +1650,19 @@ export const listMessagesForStudentChat = async ({ chatId, userId }) => {
           },
         },
       },
+      reactions: {
+        select: {
+          user_id: true,
+          reaction: true,
+        },
+      },
     },
     orderBy: {
       sent_at: 'asc',
     },
   });
 
-  return messages.map(serializeStudentChatMessage);
+  return messages.map((message) => serializeStudentChatMessage(message, userId));
 };
 
 export const sendStudentChatTextMessage = async ({ chatId, userId, content, replyToMessageId = null }) => {
@@ -1681,6 +1718,12 @@ export const sendStudentChatTextMessage = async ({ chatId, userId, content, repl
           },
         },
       },
+      reactions: {
+        select: {
+          user_id: true,
+          reaction: true,
+        },
+      },
     },
   });
 
@@ -1689,7 +1732,7 @@ export const sendStudentChatTextMessage = async ({ chatId, userId, content, repl
     replyToMessageId: message.replyToMessageId ?? null,
   });
 
-  return serializeStudentChatMessage(message);
+  return serializeStudentChatMessage(message, userId);
 };
 
 export const deleteStudentMessageById = async ({ messageId, userId }) => {
@@ -1783,10 +1826,153 @@ export const editStudentMessageById = async ({ messageId, userId, content }) => 
           },
         },
       },
+      reactions: {
+        select: {
+          user_id: true,
+          reaction: true,
+        },
+      },
     },
   });
 
-  return serializeStudentChatMessage(updated);
+  return serializeStudentChatMessage(updated, userId);
+};
+
+export const toggleStudentMessageReaction = async ({ messageId, userId, reaction }) => {
+  const nextReaction = String(reaction || '').trim();
+  if (!ALLOWED_REACTIONS.includes(nextReaction)) {
+    throw new AppError('Invalid reaction', 400);
+  }
+
+  const message = await prisma.messages.findUnique({
+    where: { id: messageId },
+    select: {
+      id: true,
+      chat_id: true,
+      is_deleted: true,
+    },
+  });
+
+  if (!message) {
+    throw new AppError('Message not found', 404);
+  }
+
+  if (message.is_deleted) {
+    throw new AppError('Cannot react to deleted message', 409);
+  }
+
+  await verifyStudentAccessToChat({ chatId: message.chat_id, userId });
+
+  const existing = await prisma.message_reaction.findUnique({
+    where: {
+      message_id_user_id: {
+        message_id: messageId,
+        user_id: userId,
+      },
+    },
+    select: {
+      id: true,
+      reaction: true,
+    },
+  });
+
+  let action = 'added';
+
+  if (existing?.reaction === nextReaction) {
+    await prisma.message_reaction.delete({
+      where: {
+        message_id_user_id: {
+          message_id: messageId,
+          user_id: userId,
+        },
+      },
+    });
+    action = 'removed';
+
+    try {
+      await clearStudentMessageReaction({
+        chatId: message.chat_id,
+        messageId,
+        userId,
+      });
+    } catch (error) {
+      console.warn('[CHAT] firebase reaction remove failed', {
+        messageId,
+        chatId: message.chat_id,
+        userId,
+        error: error?.message,
+      });
+    }
+  } else {
+    await prisma.message_reaction.upsert({
+      where: {
+        message_id_user_id: {
+          message_id: messageId,
+          user_id: userId,
+        },
+      },
+      update: {
+        reaction: nextReaction,
+      },
+      create: {
+        message_id: messageId,
+        user_id: userId,
+        reaction: nextReaction,
+      },
+    });
+    action = existing ? 'changed' : 'added';
+
+    try {
+      await setStudentMessageReaction({
+        chatId: message.chat_id,
+        messageId,
+        userId,
+        reaction: nextReaction,
+      });
+    } catch (error) {
+      console.warn('[CHAT] firebase reaction set failed', {
+        messageId,
+        chatId: message.chat_id,
+        userId,
+        reaction: nextReaction,
+        error: error?.message,
+      });
+    }
+  }
+
+  const updatedMessage = await prisma.messages.findUnique({
+    where: { id: messageId },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      replyTo: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+      reactions: {
+        select: {
+          user_id: true,
+          reaction: true,
+        },
+      },
+    },
+  });
+
+  return {
+    action,
+    message: serializeStudentChatMessage(updatedMessage, userId),
+  };
 };
 
 export const markStudentChatMessagesSeen = async ({ chatId, userId }) => {

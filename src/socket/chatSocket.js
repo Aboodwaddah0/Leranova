@@ -189,5 +189,27 @@ export const initChatSocket = (io) => {
         }
       }
     });
+
+    socket.on('react_message', async (payload = {}) => {
+      try {
+        const chatId = Number(payload.chatId);
+        if (!chatId || Number.isNaN(chatId)) {
+          return;
+        }
+
+        const message = payload.message || null;
+        if (!message) {
+          return;
+        }
+
+        const { room } = await resolveStudentChatRoom({ chatId, userId: user.id });
+        io.to(room).except(socket.id).emit('message_reaction', {
+          chatId,
+          message,
+        });
+      } catch {
+        // Ignore reaction broadcast failures
+      }
+    });
   });
 };

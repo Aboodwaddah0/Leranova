@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { CornerUpLeft, EllipsisVertical, MessageCircle, Pencil, SendHorizontal, Trash2, X } from 'lucide-react';
+import { CornerUpLeft, EllipsisVertical, MessageCircle, Pencil, SendHorizontal, Smile, Trash2, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { io } from 'socket.io-client';
 import StudentLayout from '../../components/student/StudentLayout';
@@ -11,6 +11,7 @@ import {
   editStudentChatMessage,
   fetchStudentChats,
   fetchStudentChatMessages,
+  reactStudentChatMessage,
   sendStudentChatMessage,
 } from '../../services/studentService';
 import { API_BASE_URL, STORAGE_KEYS } from '../../utils/constants';
@@ -18,6 +19,8 @@ import { API_BASE_URL, STORAGE_KEYS } from '../../utils/constants';
 const POLL_INTERVAL_MS = 5000;
 const SOCKET_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 const SWIPE_REPLY_THRESHOLD = 80;
+const COMPOSER_EMOJIS = ['😀', '😂', '😍', '😮', '😢', '🔥', '👍', '👏', '💡', '🎉'];
+const REACTION_EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '😮'];
 
 const toSafeArray = (value) => (Array.isArray(value) ? value : []);
 
@@ -82,9 +85,14 @@ export default function StudentChatPage() {
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingText, setEditingText] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+  const [showComposerEmojiPicker, setShowComposerEmojiPicker] = useState(false);
+  const [showEditEmojiPicker, setShowEditEmojiPicker] = useState(false);
+  const [reactionPickerForMessageId, setReactionPickerForMessageId] = useState(null);
+  const [reactingMessageId, setReactingMessageId] = useState(null);
 
   const messagesBoxRef = useRef(null);
   const draftInputRef = useRef(null);
+  const editInputRef = useRef(null);
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const selectedChatIdRef = useRef(null);
@@ -277,6 +285,17 @@ export default function StudentChatPage() {
       }
     });
 
+    socket.on('message_reaction', ({ chatId, message }) => {
+      const activeChatId = Number(selectedChatIdRef.current);
+      if (Number(chatId) === activeChatId) {
+        setMessages((current) => current.map((item) => (
+          Number(item.id) === Number(message.id)
+            ? { ...item, ...message }
+            : item
+        )));
+      }
+    });
+
     socket.on('disconnect', () => {
       setSocketReady(false);
       setSocketFailed(true);
@@ -333,14 +352,64 @@ export default function StudentChatPage() {
   }, [selectedChatId, socketFailed]);
 
   useEffect(() => {
+    if (editInputRef.current && editingMessageId) {
+      editInputRef.current.focus();
+    }
+  }, [editingMessageId]);
+
+  // Auto-close popups when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      // Don't interfere if edit modal is open
+      if (editingMessageId) return;
+      
+      // Close popups if clicking outside popup areas
+      const target = e.target;
+      if (!target.closest('[role="dialog"]') && 
+          !target.closest('.absolute') &&
+          target.tagName !== 'BUTTON') {
+        setShowComposerEmojiPicker(false);
+        setShowEditEmojiPicker(false);
+        setMessageMenuId(null);
+        setReactionPickerForMessageId(null);
+      }
+    };
+
+    if (!editingMessageId) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [editingMessageId]);
+
+  useEffect(() => {
     scrollToBottom();
   }, [messages, selectedChatId]);
 
   const handleSelectChat = async (chatId) => {
     const nextChatId = Number(chatId);
+    
+    // Close edit mode with confirmation if there are unsaved changes
+    if (editingMessageId && editingText.trim()) {
+      const shouldDiscard = window.confirm(
+        isArabic
+          ? 'هل تريد تجاهل التغييرات أم حفظها؟ (تجاهل التغييرات)'
+          : 'Discard unsaved changes?'
+      );
+      if (!shouldDiscard) {
+        return;
+      }
+    }
+
+    // Close all popups and reset state
     setSelectedChatId(nextChatId);
     setError('');
     setReplyToMessage(null);
+    setEditingMessageId(null);
+    setEditingText('');
+    setShowComposerEmojiPicker(false);
+    setShowEditEmojiPicker(false);
+    setMessageMenuId(null);
+    setReactionPickerForMessageId(null);
 
     try {
       await loadMessages(nextChatId);
@@ -407,6 +476,87 @@ export default function StudentChatPage() {
     setReplyToMessage(null);
   };
 
+  const insertComposerEmoji = (emoji, isEditMode = false) => {
+    if (isEditMode || editingMessageId) {
+      const input = editInputRef.current;
+      const value = String(editingText || '');
+      const start = input?.selectionStart ?? value.length;
+      const end = input?.selectionEnd ?? value.length;
+
+      setEditingText((current) => {
+        const base = String(current || '');
+        return `${base.slice(0, start)}${emoji}${base.slice(end)}`;
+      });
+
+      setShowEditEmojiPicker(false);
+      window.requestAnimationFrame(() => {
+        if (!input) {
+          return;
+        }
+        const nextPos = start + emoji.length;
+        input.focus();
+        input.setSelectionRange(nextPos, nextPos);
+      });
+      return;
+    }
+
+    setDraft((current) => `${current || ''}${emoji}`);
+    setShowComposerEmojiPicker(false);
+    window.requestAnimationFrame(() => {
+      const input = draftInputRef.current;
+      if (!input) {
+        return;
+      }
+      input.focus();
+      const end = String(input.value || '').length;
+      input.setSelectionRange(end, end);
+    });
+  };
+
+  const getMessageReactions = (message) => {
+    const list = Array.isArray(message?.reactions) ? message.reactions : [];
+    return list
+      .map((item) => ({
+        emoji: item.emoji,
+        count: Number(item.count || 0),
+        reactedByMe: Boolean(item.reactedByMe),
+      }))
+      .filter((item) => item.emoji && item.count > 0)
+      .sort((a, b) => b.count - a.count);
+  };
+
+  const handleReactToMessage = async (message, emoji) => {
+    if (!message?.id || reactingMessageId) {
+      return;
+    }
+
+    try {
+      setReactingMessageId(Number(message.id));
+      const result = await reactStudentChatMessage(message.id, emoji);
+      const updatedMessage = result?.message || null;
+      if (updatedMessage?.id) {
+        setMessages((current) => current.map((item) => (
+          Number(item.id) === Number(updatedMessage.id)
+            ? { ...item, ...updatedMessage }
+            : item
+        )));
+        
+        const socket = socketRef.current;
+        if (socket?.connected) {
+          socket.emit('react_message', {
+            chatId: selectedChatId,
+            message: updatedMessage,
+          });
+        }
+      }
+      setReactionPickerForMessageId(null);
+    } catch (reactionError) {
+      setError(reactionError?.response?.data?.message || reactionError?.message || (isArabic ? 'تعذر تحديث التفاعل.' : 'Failed to update reaction.'));
+    } finally {
+      setReactingMessageId(null);
+    }
+  };
+
   const handleDeleteMessage = async (messageId) => {
     if (!selectedChatId || !messageId || deletingMessageId) {
       return;
@@ -470,11 +620,17 @@ export default function StudentChatPage() {
     setEditingMessageId(Number(message.id));
     setEditingText(String(message.content || ''));
     setMessageMenuId(null);
+    setShowComposerEmojiPicker(false);
+    setReplyToMessage(null);
   };
 
   const handleCancelEdit = () => {
     setEditingMessageId(null);
     setEditingText('');
+    setShowEditEmojiPicker(false);
+    setShowComposerEmojiPicker(false);
+    setReactionPickerForMessageId(null);
+    setMessageMenuId(null);
   };
 
   const handleSaveEdit = async (messageId) => {
@@ -510,16 +666,20 @@ export default function StudentChatPage() {
       return;
     }
 
-    const confirmed = window.confirm(isArabic ? 'هل أنت متأكد من مسح كل الرسائل في هذه الدردشة؟' : 'Are you sure you want to clear all messages in this chat?');
+    const confirmed = window.confirm(isArabic ? 'هل أنت متأكد من مسح كل الرسائل في هذه الدردشة؟ (سيتم مسح الرسائل من جهازك فقط)' : 'Clear all messages in this chat? (This will only clear messages from your view)');
     if (!confirmed) {
       return;
     }
 
     try {
       setClearingChat(true);
-      await clearStudentChat(selectedChatId);
+      // Soft delete - only clear messages locally for this user, do not delete from database
       setMessages([]);
       setReplyToMessage(null);
+      setEditingMessageId(null);
+      setEditingText('');
+      setShowComposerEmojiPicker(false);
+      setShowEditEmojiPicker(false);
 
       setChats((current) => sortChatsByLatestActivity(current.map((chat) => (
         Number(chat.id) === Number(selectedChatId)
@@ -605,17 +765,14 @@ export default function StudentChatPage() {
   };
 
   return (
-    <StudentLayout
-      title={isArabic ? 'المحادثات' : 'Chat'}
-      subtitle={isArabic ? 'تواصل المواد المشتركة' : 'Subscribed materials chat'}
-    >
+    <StudentLayout>
       {error ? (
         <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           {error}
         </div>
       ) : null}
 
-      <div className="grid h-[calc(100vh-170px)] min-h-0 gap-5 overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/80 p-4 shadow-xl shadow-indigo-500/5 backdrop-blur-xl md:grid-cols-[340px_1fr]">
+      <div className={`grid h-[calc(100vh-118px)] min-h-0 gap-4 overflow-hidden rounded-[1.5rem] border border-white/70 bg-white/80 p-3 shadow-xl shadow-indigo-500/5 backdrop-blur-xl transition ${editingMessageId ? 'ring-2 ring-indigo-400' : ''} md:grid-cols-[320px_1fr]`}>
         <aside className="flex min-h-0 flex-col rounded-3xl border border-slate-200 bg-slate-50/80 p-3">
           <div className="mb-3 flex items-center gap-2 px-2 text-sm font-bold text-slate-700">
             <MessageCircle size={16} className="text-indigo-600" />
@@ -673,7 +830,7 @@ export default function StudentChatPage() {
         </aside>
 
         <section className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-2.5">
             <p className="text-sm font-black text-slate-900">
               {selectedChat ? getChatLabel(selectedChat, isArabic) : (isArabic ? 'اختر دردشة' : 'Select a chat')}
             </p>
@@ -690,7 +847,12 @@ export default function StudentChatPage() {
             </button>
           </div>
 
-          <div ref={messagesBoxRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 px-4 py-4">
+          <div ref={messagesBoxRef} className={`min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 transition ${editingMessageId ? 'bg-slate-900/5' : 'bg-slate-50/70'}`} onClick={() => {
+            setShowComposerEmojiPicker(false);
+            setShowEditEmojiPicker(false);
+            setReactionPickerForMessageId(null);
+            setMessageMenuId(null);
+          }}>
             {!selectedChat ? (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-6 text-sm text-slate-500">
                 {isArabic ? 'اختر دردشة لعرض الرسائل.' : 'Choose a chat to view messages.'}
@@ -705,9 +867,10 @@ export default function StudentChatPage() {
               const mine = Number(message.senderId) === Number(currentUserId);
               const canReply = !mine && !message.isDeleted;
               const isEditing = Number(editingMessageId) === Number(message.id);
+              const otherIsEditing = editingMessageId && !isEditing;
 
               return (
-                <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                <div key={message.id} className={`flex transition ${mine ? 'justify-end' : 'justify-start'} ${otherIsEditing ? 'pointer-events-none opacity-40' : ''}`}>
                   <motion.article
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -753,34 +916,6 @@ export default function StudentChatPage() {
                       <p className={`italic ${mine ? 'text-indigo-100' : 'text-slate-500'}`}>
                         {isArabic ? 'تم حذف هذه الرسالة' : 'This message was deleted'}
                       </p>
-                    ) : isEditing ? (
-                      <div className="space-y-2">
-                        <input
-                          value={editingText}
-                          onChange={(event) => setEditingText(event.target.value)}
-                          className="w-full rounded-lg border border-white/40 bg-white/95 px-3 py-2 text-sm text-slate-800 outline-none focus:border-white"
-                          autoFocus
-                        />
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={handleCancelEdit}
-                            className="rounded-lg border border-white/40 bg-white/15 px-2 py-1 text-xs font-semibold text-white transition hover:bg-white/25"
-                          >
-                            {isArabic ? 'إلغاء' : 'Cancel'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleSaveEdit(message.id)}
-                            disabled={savingEdit || !String(editingText || '').trim()}
-                            className="rounded-lg bg-white px-2 py-1 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {savingEdit
-                              ? (isArabic ? 'حفظ...' : 'Saving...')
-                              : (isArabic ? 'حفظ' : 'Save')}
-                          </button>
-                        </div>
-                      </div>
                     ) : (
                       <p className="whitespace-pre-wrap break-words">{message.content}</p>
                     )}
@@ -792,14 +927,18 @@ export default function StudentChatPage() {
                         <div className="relative ms-auto">
                           <button
                             type="button"
-                            onClick={() => setMessageMenuId((current) => (current === Number(message.id) ? null : Number(message.id)))}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setReactionPickerForMessageId(null);
+                              setMessageMenuId((current) => (current === Number(message.id) ? null : Number(message.id)));
+                            }}
                             className="inline-flex items-center rounded-md p-1 transition hover:bg-white/20"
                             aria-label={isArabic ? 'خيارات الرسالة' : 'Message actions'}
                           >
                             <EllipsisVertical size={13} />
                           </button>
                           {messageMenuId === Number(message.id) ? (
-                            <div className="absolute end-0 top-7 z-10 min-w-[110px] rounded-lg border border-slate-200 bg-white p-1 text-slate-700 shadow-lg">
+                            <div className="absolute end-0 top-7 z-10 min-w-[110px] rounded-lg border border-slate-200 bg-white p-1 text-slate-700 shadow-lg" onClick={(e) => e.stopPropagation()}>
                               <button
                                 type="button"
                                 onClick={() => handleStartEditMessage(message)}
@@ -818,7 +957,59 @@ export default function StudentChatPage() {
                           ) : null}
                         </div>
                       ) : null}
+                      {!message.isDeleted ? (
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMessageMenuId(null);
+                              setReactionPickerForMessageId((current) => (current === Number(message.id) ? null : Number(message.id)));
+                            }}
+                            className={`inline-flex items-center rounded-md p-1 transition ${mine ? 'hover:bg-white/20' : 'hover:bg-slate-200'}`}
+                            aria-label={isArabic ? 'إضافة تفاعل' : 'Add reaction'}
+                          >
+                            <Smile size={13} />
+                          </button>
+                          {reactionPickerForMessageId === Number(message.id) ? (
+                            <div className={`absolute top-7 z-10 flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white px-2 py-1 shadow-lg ${mine ? 'end-0' : 'start-0'}`} onClick={(e) => e.stopPropagation()}>
+                              {REACTION_EMOJIS.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() => {
+                                    handleReactToMessage(message, emoji);
+                                  }}
+                                  disabled={reactingMessageId === Number(message.id)}
+                                  className={`rounded-md px-1 py-0.5 text-base transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 ${message.myReaction === emoji ? 'bg-indigo-100 ring-1 ring-indigo-300' : ''}`}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
+                    {getMessageReactions(message).length ? (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {getMessageReactions(message).map((reaction) => {
+                          const active = reaction.reactedByMe;
+                          return (
+                            <button
+                              key={reaction.emoji}
+                              type="button"
+                              onClick={() => handleReactToMessage(message, reaction.emoji)}
+                              disabled={reactingMessageId === Number(message.id)}
+                              className={`inline-flex flex-shrink-0 items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] transition whitespace-nowrap ${active ? 'border-indigo-300 bg-indigo-100 text-indigo-700' : 'border-slate-200 bg-white/70 text-slate-700'}`}
+                            >
+                              <span className="text-xs">{reaction.emoji}</span>
+                              <span className="font-semibold">{reaction.count}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                     {swipingMessageId === Number(message.id) ? (
                       <div className={`mt-2 text-[11px] font-semibold ${mine ? 'text-indigo-100' : 'text-slate-400'}`}>
                         {isArabic ? 'اسحب يمينًا للرد' : 'Swipe right to reply'}
@@ -832,6 +1023,83 @@ export default function StudentChatPage() {
               <div className="text-xs font-semibold text-slate-500">{isArabic ? 'جاري الكتابة...' : 'Typing...'}</div>
             ) : null}
           </div>
+
+          {/* Edit Message Modal */}
+          {editingMessageId ? (
+            <div 
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+              onClick={() => {
+                setShowEditEmojiPicker(false);
+                setMessageMenuId(null);
+                setReactionPickerForMessageId(null);
+              }}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h2 className="mb-4 text-lg font-bold text-slate-800">
+                  {isArabic ? 'تعديل الرسالة' : 'Edit Message'}
+                </h2>
+                
+                <textarea
+                  ref={editInputRef}
+                  value={editingText}
+                  onChange={(event) => setEditingText(event.target.value)}
+                  className="mb-4 w-full min-h-[100px] resize-none rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm outline-none focus:border-indigo-400 focus:bg-white"
+                  placeholder={isArabic ? 'عدّل الرسالة...' : 'Edit message...'}
+                  autoFocus
+                />
+
+                {/* Emoji Picker */}
+                <div className="mb-4">
+                  <p className="mb-2 text-xs font-semibold text-slate-600">
+                    {isArabic ? 'أضف إيموجي:' : 'Add Emoji:'}
+                  </p>
+                  <div className="grid grid-cols-8 gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 max-h-[150px] overflow-y-auto">
+                    {COMPOSER_EMOJIS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => insertComposerEmoji(emoji, true)}
+                        className="flex items-center justify-center rounded-md text-xl transition hover:bg-slate-200 hover:scale-110 p-2"
+                        title={emoji}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={handleCancelEdit}
+                    className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                  >
+                    {isArabic ? 'إلغاء' : 'Cancel'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const msg = messages.find(m => Number(m.id) === Number(editingMessageId));
+                      if (msg) handleSaveEdit(msg.id);
+                    }}
+                    disabled={savingEdit || !String(editingText || '').trim()}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {savingEdit
+                      ? (isArabic ? 'حفظ...' : 'Saving...')
+                      : (isArabic ? 'حفظ' : 'Save')}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          ) : null}
 
           <div className="border-t border-slate-200 bg-white px-4 py-3">
             {replyToMessage ? (
@@ -850,31 +1118,68 @@ export default function StudentChatPage() {
                 </button>
               </div>
             ) : null}
-            {selectedChat ? (
-              <p className="mb-2 text-[11px] font-semibold text-slate-400">
-                {isArabic ? 'اسحب رسالة الطرف الآخر يمينًا للرد.' : 'Swipe other user messages right to reply.'}
-              </p>
-            ) : null}
             <div className="flex items-center gap-2">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowComposerEmojiPicker((current) => !current);
+                    setShowEditEmojiPicker(false);
+                    setReactionPickerForMessageId(null);
+                    setMessageMenuId(null);
+                  }}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 transition hover:bg-slate-100"
+                  aria-label={isArabic ? 'اختيار إيموجي' : 'Pick emoji'}
+                >
+                  <Smile size={18} />
+                </button>
+                {showComposerEmojiPicker ? (
+                  <div className="absolute top-full left-0 mt-2 z-20 flex max-w-xs flex-wrap gap-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                    {COMPOSER_EMOJIS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => insertComposerEmoji(emoji)}
+                        className="rounded-lg px-2 py-1 text-lg hover:bg-slate-100"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
               <textarea
                 ref={draftInputRef}
                 value={draft}
                 onChange={onDraftChange}
                 onKeyDown={onInputKeyDown}
+                onClick={() => {
+                  setShowComposerEmojiPicker(false);
+                  setShowEditEmojiPicker(false);
+                  setReactionPickerForMessageId(null);
+                  setMessageMenuId(null);
+                }}
                 rows={2}
                 placeholder={isArabic ? 'اكتب رسالتك...' : 'Write your message...'}
+                disabled={Boolean(editingMessageId)}
                 className="min-h-[54px] flex-1 resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none transition focus:border-indigo-400 focus:bg-white"
               />
               <button
                 type="button"
                 onClick={submitMessage}
-                disabled={!selectedChatId || !draft.trim() || sending}
+                disabled={!selectedChatId || !draft.trim() || sending || Boolean(editingMessageId)}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <SendHorizontal size={16} />
                 {isArabic ? 'إرسال' : 'Send'}
               </button>
             </div>
+            {editingMessageId ? (
+              <p className="mt-2 text-[11px] font-semibold text-indigo-600">
+                {isArabic ? 'أنت الآن في وضع تعديل رسالة. الإيموجي والكتابة ستبقى داخل الرسالة المعدّلة.' : 'You are editing a message. Emoji and typing stay in the edited message.'}
+              </p>
+            ) : null}
           </div>
         </section>
       </div>
