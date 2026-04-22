@@ -1,18 +1,34 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Search, Sparkles, Users2, Mail, BadgeCheck } from 'lucide-react';
+import { ArrowLeft, Search, Users2, BadgeCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
 import StudentLayout from '../../components/student/StudentLayout';
 import { fetchStudentTeachers } from '../../services/studentService';
 import { useLanguage } from '../../utils/i18n';
 
-const getInitials = (name = '') => {
-  const parts = String(name).trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return 'L';
-  return parts.slice(0, 2).map((part) => part.charAt(0)).join('').toUpperCase();
+const PEOPLE_FALLBACK_AVATARS = [
+  'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1542206395-9feb3edaa68d?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1541534401786-2077eed87a72?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1546961329-78bef0414d7c?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=500&q=80',
+];
+
+const getTeacherAvatarUrl = (teacher = {}, index = 0) => {
+  if (teacher.avatarUrl) {
+    return teacher.avatarUrl;
+  }
+  return PEOPLE_FALLBACK_AVATARS[index % PEOPLE_FALLBACK_AVATARS.length];
 };
 
-const teacherSearchText = (teacher = {}) => [teacher.name, teacher.specialization, teacher.work, teacher.bio, teacher.email]
+const getTeacherSubjects = (teacher = {}) => (Array.isArray(teacher.subjects) ? teacher.subjects : [])
+  .filter(Boolean)
+  .slice(0, 3);
+
+const teacherSearchText = (teacher = {}) => [teacher.name, teacher.specialization, teacher.work, teacher.bio, teacher.email, ...(Array.isArray(teacher.subjects) ? teacher.subjects : [])]
   .filter(Boolean)
   .join(' ')
   .toLowerCase();
@@ -65,43 +81,27 @@ export default function StudentTeachersPage() {
   );
 
   return (
-    <StudentLayout
-      title={t.student.teachers.title}
-      subtitle={t.student.teachers.subtitle}
-      actions={
-        <Link to="/dashboard/student" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-          <ArrowLeft size={16} /> {isArabic ? 'لوحة الطالب' : 'Dashboard'}
+    <StudentLayout>
+      <div className="mb-4">
+        <Link to="/dashboard/student" className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold backdrop-blur transition hover:border-white/40 hover:bg-white/20">
+          <ArrowLeft size={16} /> {isArabic ? 'عودة' : 'Back'}
         </Link>
-      }
-    >
+      </div>
+
       {error ? (
         <div className="mb-5 rounded-[1.5rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
           {error}
         </div>
       ) : null}
 
-      <section className="overflow-hidden rounded-[2rem] border border-white/70 bg-gradient-to-r from-indigo-600 via-slate-900 to-cyan-600 p-6 text-white shadow-2xl shadow-indigo-500/15">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-100">{isArabic ? 'دليل المدرسين' : 'Teacher directory'}</p>
-            <h1 className="mt-2 text-2xl font-black md:text-3xl">{isArabic ? 'مدرسين الأكاديمية بين يديك' : 'Meet the people teaching your courses'}</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-7 text-blue-50/90">
-              {isArabic
-                ? 'تصفح المدرسين، ابحث بالاسم، وافتح الملف الشخصي بسرعة.'
-                : 'Browse the instructors, search by name, and open a profile in one tap.'}
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur">
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-blue-100">{isArabic ? 'إجمالي المدرسين' : 'Teachers'}</p>
-              <p className="mt-1 text-2xl font-black">{teachers.length}</p>
-            </div>
-            <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur">
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-blue-100">{isArabic ? 'إجمالي المواد' : 'Subjects'}</p>
-              <p className="mt-1 text-2xl font-black">{totalSubjects}</p>
-            </div>
-          </div>
+      <section className="rounded-[1.6rem] border border-slate-200 bg-white px-5 py-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm font-bold text-slate-700">
+            {isArabic ? 'قائمة المعلمين' : 'Teachers list'}
+          </p>
+          <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
+            {teachers.length} {isArabic ? 'معلم' : 'Teachers'} • {totalSubjects} {t.student.teachers.subjects}
+          </span>
         </div>
       </section>
 
@@ -118,79 +118,55 @@ export default function StudentTeachersPage() {
       </div>
 
       {loading ? (
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <div className="mt-6 space-y-4">
           {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="h-[10.5rem] animate-pulse rounded-[1.75rem] border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/5" />
+            <div key={index} className="h-[7.5rem] animate-pulse rounded-[1.25rem] border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/5" />
           ))}
         </div>
       ) : filteredTeachers.length ? (
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          {filteredTeachers.map((teacher) => {
-            const initials = getInitials(teacher.name);
-            const isWide = Boolean(isArabic);
+        <div className="mt-6 space-y-4">
+          {filteredTeachers.map((teacher, index) => {
+            const avatarUrl = getTeacherAvatarUrl(teacher, index);
+            const subjectNames = getTeacherSubjects(teacher);
 
             return (
-              <motion.article
+              <Link
                 key={teacher.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25 }}
-                className="overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/90 shadow-xl shadow-indigo-500/5 backdrop-blur-xl"
+                to={`/teachers/${teacher.id}`}
+                className="block"
               >
-                <div className={`flex gap-4 p-4 sm:p-5 ${isWide ? 'flex-row-reverse text-right' : 'flex-row text-left'}`}>
-                  <div className="shrink-0">
-                    <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-indigo-600 via-sky-500 to-cyan-400 text-2xl font-black text-white shadow-lg shadow-indigo-500/20">
-                      {teacher.avatarUrl ? (
-                        <img src={teacher.avatarUrl} alt={teacher.name} className="h-full w-full object-cover" />
-                      ) : (
-                        initials
-                      )}
+                <motion.article
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="overflow-hidden rounded-[1.25rem] border border-white/70 bg-white/95 shadow-lg shadow-indigo-500/5 backdrop-blur-xl transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/10"
+                >
+                  <div className={`grid items-center gap-4 p-4 sm:p-5 md:grid-cols-[88px_1fr] ${isArabic ? 'md:[direction:rtl]' : ''}`}>
+                    <div className="mx-auto h-[88px] w-[88px] shrink-0 overflow-hidden rounded-2xl border border-white/80 bg-slate-100 shadow-sm shadow-indigo-500/10">
+                      <img src={avatarUrl} alt={teacher.name} className="h-full w-full object-cover" />
                     </div>
-                  </div>
 
-                  <div className="min-w-0 flex-1">
-                    <div className={`flex flex-wrap items-start justify-between gap-3 ${isArabic ? 'flex-row-reverse' : ''}`}>
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="text-lg font-black text-slate-900">{teacher.name}</h2>
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700">
-                            <BadgeCheck size={12} /> {teacher.subjectCount || 0} {t.student.teachers.subjects}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-sm font-semibold text-indigo-600">{teacher.specialization || teacher.work || (isArabic ? 'مدرس' : 'Teacher')}</p>
+                    <div className="min-w-0">
+                      <h2 className="text-lg font-black text-slate-900">{teacher.name}</h2>
+                      <p className="mt-1 text-sm font-semibold text-indigo-600">{teacher.specialization || teacher.work || (isArabic ? 'مدرس' : 'Teacher')}</p>
+                      <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700">
+                        <BadgeCheck size={12} /> {teacher.subjectCount || 0} {t.student.teachers.subjects}
                       </div>
 
-                      <Link
-                        to={`/teachers/${teacher.id}`}
-                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:text-indigo-700 hover:shadow-sm"
-                      >
-                        {t.student.teachers.profile}
-                        <ArrowLeft size={16} className={isArabic ? 'rotate-180' : ''} />
-                      </Link>
-                    </div>
-
-                    <p className="mt-3 line-clamp-2 text-sm leading-7 text-slate-600">
-                      {teacher.bio || (isArabic ? 'نبذة قصيرة عن المدرس ستظهر هنا.' : 'A short instructor bio will appear here.')}
-                    </p>
-
-                    <div className="mt-4 flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500">
-                      {teacher.email ? (
-                        <span className="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1.5">
-                          <Mail size={12} /> {teacher.email}
-                        </span>
-                      ) : null}
-                      <span className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1.5 text-indigo-700">
-                        <BookOpen size={12} /> {teacher.subjectCount || 0} {t.student.teachers.subjects}
-                      </span>
-                      {teacher.work ? (
-                        <span className="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1.5">
-                          <Sparkles size={12} /> {teacher.work}
-                        </span>
+                      {subjectNames.length ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {subjectNames.map((subjectName) => (
+                            <span key={subjectName} className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
+                              {subjectName}
+                            </span>
+                          ))}
+                        </div>
                       ) : null}
                     </div>
+
                   </div>
-                </div>
-              </motion.article>
+                </motion.article>
+              </Link>
             );
           })}
         </div>

@@ -151,12 +151,12 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
                 transition={{ duration: 0.3 }}
                 className="mb-6 overflow-hidden rounded-[2rem] border border-white/70 bg-white/75 p-6 shadow-xl backdrop-blur-2xl"
               >
-                <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex flex-col items-start gap-4">
                   <div>
                     {title ? <p className="text-xs font-bold uppercase tracking-[0.25em] text-indigo-600">{title}</p> : null}
                     {subtitle ? <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-900">{subtitle}</h1> : null}
                   </div>
-                  {actions ? <div className="flex flex-wrap gap-3">{actions}</div> : null}
+                  {actions ? <div className="flex flex-wrap items-start justify-start gap-3">{actions}</div> : null}
                 </div>
               </motion.section>
             ) : null}

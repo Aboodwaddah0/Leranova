@@ -59,6 +59,11 @@ const teacherSelect = {
   specialization: true,
   bio: true,
   createdAt: true,
+  subject: {
+    select: {
+      name: true,
+    },
+  },
   _count: {
     select: {
       subject: true,
@@ -89,6 +94,30 @@ const teacherSelfSelect = {
   },
 };
 
+const teacherSubjectSelect = {
+  Teacher_id: true,
+  name: true,
+};
+
+const attachTeacherSubjects = (teachers, subjects = []) => {
+  const grouped = subjects.reduce((acc, subject) => {
+    const teacherId = Number(subject?.Teacher_id || 0);
+    if (!teacherId) {
+      return acc;
+    }
+
+    const bucket = acc.get(teacherId) || [];
+    bucket.push(String(subject?.name || '').trim());
+    acc.set(teacherId, bucket);
+    return acc;
+  }, new Map());
+
+  return teachers.map((teacher) => ({
+    ...teacher,
+    subjects: (grouped.get(Number(teacher.Teacher_id)) || []).filter(Boolean),
+  }));
+};
+
 const serializeTeacher = (teacher) => ({
   id: teacher.Teacher_id,
   userId: teacher.Teacher_id,
@@ -104,6 +133,20 @@ const serializeTeacher = (teacher) => ({
   address: teacher?.user?.address ?? null,
   avatarUrl: null,
   subjectCount: Number(teacher?._count?.subject || 0),
+  subjects: Array.isArray(teacher?.subjects)
+    ? teacher.subjects
+      .map((subject) => {
+        if (typeof subject === 'string') return subject;
+        if (subject && typeof subject === 'object') return subject.name || subject.Name || '';
+        return '';
+      })
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+    : Array.isArray(teacher?.subject)
+      ? teacher.subject
+        .map((subject) => String(subject?.name || '').trim())
+        .filter(Boolean)
+      : [],
   user: {
     id: teacher?.user?.id,
     name: teacher?.user?.name || '',
@@ -231,12 +274,30 @@ export const getTeachers = async (requester) => {
     orderBy: { Teacher_id: 'asc' },
   });
 
-  return teachers.map(serializeTeacher);
+  const teacherIds = teachers.map((teacher) => teacher.Teacher_id);
+  const subjects = teacherIds.length
+    ? await prisma.subject.findMany({
+        where: { Teacher_id: { in: teacherIds } },
+        select: teacherSubjectSelect,
+        orderBy: { id: 'asc' },
+      })
+    : [];
+
+  return attachTeacherSubjects(teachers, subjects).map(serializeTeacher);
 };
 
 export const getTeacherById = async (orgId, teacherId) => {
   const teacher = await ensureTeacherBelongsToOrg(orgId, teacherId);
-  return serializeTeacher(teacher);
+  const subjects = await prisma.subject.findMany({
+    where: { Teacher_id: teacherId },
+    select: teacherSubjectSelect,
+    orderBy: { id: 'asc' },
+  });
+
+  return serializeTeacher({
+    ...teacher,
+    subjects,
+  });
 };
 
 export const getTeacherByIdForRequester = async (requester, teacherId) => {

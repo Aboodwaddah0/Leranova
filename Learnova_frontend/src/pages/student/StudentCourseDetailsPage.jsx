@@ -79,15 +79,13 @@ export default function StudentCourseDetailsPage() {
   };
 
   return (
-    <StudentLayout
-      title={isArabic ? 'تفاصيل الكورس' : 'Course details'}
-      subtitle={trackData?.track?.name || (isArabic ? 'الكورس' : 'Course')}
-      actions={
-        <Link to="/courses" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-          <ArrowLeft size={16} /> {isArabic ? 'العودة للكورسات' : 'Back to courses'}
+    <StudentLayout>
+      <div className="mb-4">
+        <Link to="/courses" className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold backdrop-blur transition hover:border-white/40 hover:bg-white/20">
+          <ArrowLeft size={16} /> {isArabic ? 'عودة' : 'Back'}
         </Link>
-      }
-    >
+      </div>
+
       {error ? <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{error}</div> : null}
 
       <section className="rounded-[2rem] border border-white/70 bg-gradient-to-r from-indigo-600 via-slate-900 to-cyan-600 p-6 text-white shadow-xl shadow-indigo-500/15">

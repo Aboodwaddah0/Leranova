@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
 import EducationLoading from '../../components/ui/EducationLoading';
 import {
@@ -54,6 +55,10 @@ export default function StudentProfilePage() {
     profile?.organization?.Role ||
     profile?.organizationType ||
     studentMode;
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,7 +146,12 @@ export default function StudentProfilePage() {
   };
 
   return (
-    <StudentLayout title={isArabic ? 'الملف الشخصي' : 'Profile'} subtitle={isArabic ? 'إدارة حساب الطالب' : 'Manage your student account'}>
+    <StudentLayout>
+      <div className="mb-4">
+        <Link to="/dashboard/student" className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold backdrop-blur transition hover:border-white/40 hover:bg-white/20">
+          <ArrowLeft size={16} /> {isArabic ? 'عودة' : 'Back'}
+        </Link>
+      </div>
       {loading ? (
         <EducationLoading
           isArabic={isArabic}
