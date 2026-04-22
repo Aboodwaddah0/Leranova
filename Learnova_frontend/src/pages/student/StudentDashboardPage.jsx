@@ -284,20 +284,7 @@ export default function StudentDashboardPage() {
     : 0;
 
   return (
-    <StudentLayout
-      title={t.student.badge}
-      subtitle={t.student.title}
-      actions={
-        <>
-          <Link to="/student/profile" className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-            {isArabic ? 'الملف الشخصي' : 'Profile'}
-          </Link>
-          <Link to="/dashboard/student/courses" className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
-            {isArabic ? 'استكشف الكورسات' : 'Explore courses'}
-          </Link>
-        </>
-      }
-    >
+    <StudentLayout>
       <div className="space-y-8">
         {loading ? (
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-700">

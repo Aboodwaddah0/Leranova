@@ -797,7 +797,14 @@ export async function fetchStudentChats() {
   return Array.isArray(data) ? data : [];
 }
 
-const normalizeTeacherRecord = (teacher = {}) => ({
+const normalizeTeacherRecord = (teacher = {}) => {
+  const normalizedSubjects = Array.isArray(teacher?.subjects)
+    ? teacher.subjects
+    : Array.isArray(teacher?.subject)
+      ? teacher.subject
+      : [];
+
+  return ({
   id: Number(teacher?.id || teacher?.Teacher_id || teacher?.userId || 0),
   userId: Number(teacher?.userId || teacher?.user?.id || teacher?.Teacher_id || teacher?.id || 0),
   name: teacher?.name || teacher?.user?.name || '',
@@ -811,7 +818,18 @@ const normalizeTeacherRecord = (teacher = {}) => ({
   address: teacher?.address ?? teacher?.user?.address ?? null,
   avatarUrl: teacher?.avatarUrl || teacher?.avatar || null,
   subjectCount: Number(teacher?.subjectCount || teacher?._count?.subject || 0),
-});
+  subjects: Array.isArray(normalizedSubjects)
+    ? normalizedSubjects
+      .map((subject) => {
+        if (typeof subject === 'string') return subject;
+        if (subject && typeof subject === 'object') return subject.name || subject.Name || '';
+        return '';
+      })
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+    : [],
+  });
+};
 
 export async function fetchStudentTeachers(search = '') {
   try {

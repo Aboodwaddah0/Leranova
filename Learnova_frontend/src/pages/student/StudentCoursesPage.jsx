@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { BookOpen, CheckCircle2, Layers3, Search, Sparkles } from 'lucide-react';
+import { ArrowLeft, BookOpen, CheckCircle2, Layers3, Search, Sparkles } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
 import {
   fetchAcademySubscriptions,
@@ -122,25 +122,23 @@ export default function StudentCoursesPage() {
   }, [myCourses, query]);
 
   return (
-    <StudentLayout
-      title={isArabic ? 'الكورسات' : 'Courses'}
-      subtitle={isArabic ? 'اختر كورس الأكاديمية' : 'Choose your academy courses'}
-      actions={
-        <Link to="/dashboard/student" className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-          {isArabic ? 'العودة للوحة' : 'Back to dashboard'}
-        </Link>
-      }
-    >
+    <StudentLayout>
       <section className="rounded-[2rem] border border-white/70 bg-gradient-to-r from-indigo-600 via-slate-900 to-cyan-600 p-6 text-white shadow-xl shadow-indigo-500/15">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-100">{isArabic ? 'أكاديمية Learnova' : 'Learnova academy'}</p>
-            <h1 className="mt-2 text-2xl font-black md:text-3xl">{isArabic ? 'تصفح الكورسات المتاحة' : 'Browse available courses'}</h1>
-            <p className="mt-2 text-sm text-blue-50/90">
-              {isArabic
-                ? 'ادخل أي كورس، ثم اشترك بالمادة التي تريدها لفتح المحتوى والدردشة الخاصة بها.'
-                : 'Open any course, then subscribe to a material to unlock its content and chat.'}
-            </p>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-100">{isArabic ? 'أكاديمية Learnova' : 'Learnova academy'}</p>
+              <h1 className="mt-2 text-2xl font-black md:text-3xl">{isArabic ? 'تصفح الكورسات المتاحة' : 'Browse available courses'}</h1>
+              <p className="mt-2 text-sm text-blue-50/90">
+                {isArabic
+                  ? 'ادخل أي كورس، ثم اشترك بالمادة التي تريدها لفتح المحتوى والدردشة الخاصة بها.'
+                  : 'Open any course, then subscribe to a material to unlock its content and chat.'}
+              </p>
+            </div>
+
+            <Link to="/dashboard/student" className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold backdrop-blur transition hover:border-white/40 hover:bg-white/20">
+              <ArrowLeft size={16} /> {isArabic ? 'عودة' : 'Back'}
+            </Link>
           </div>
 
           <div className="flex gap-3">
