@@ -7,6 +7,7 @@ import InstructorSchoolOnlyRoute from "./routes/InstructorSchoolOnlyRoute";
 import StudentProtectedRoute from "./routes/StudentProtectedRoute";
 import DashboardPlaceholderPage from "./pages/DashboardPlaceholderPage";
 import InstructorDashboardPage from "./pages/InstructorDashboardPage";
+import InstructorCoursesPage from "./pages/instructor/InstructorCoursesPage";
 import InstructorSubjectsPage from "./pages/instructor/InstructorSubjectsPage";
 import InstructorLessonsPage from "./pages/instructor/InstructorLessonsPage";
 import InstructorStudentsPage from "./pages/instructor/InstructorStudentsPage";
@@ -15,6 +16,7 @@ import StudentDashboardPage from "./pages/student/StudentDashboardPage";
 import StudentCoursesPage from "./pages/student/StudentCoursesPage";
 import StudentCourseDetailsPage from "./pages/student/StudentCourseDetailsPage";
 import StudentSchoolSubjectsPage from "./pages/student/StudentSchoolSubjectsPage";
+import StudentSchoolMarksPage from "./pages/student/StudentSchoolMarksPage";
 import StudentChatPage from "./pages/student/StudentChatPage";
 import StudentTeachersPage from "./pages/student/StudentTeachersPage";
 import StudentTeacherProfilePage from "./pages/student/StudentTeacherProfilePage";
@@ -55,6 +57,10 @@ function App() {
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/signup/checkout" element={<PaymentRedirect />} />
         <Route path="/payment-success" element={<PaymentSuccessPage />} />
+        <Route path="/payment/success" element={<PaymentSuccessPage />} />
+        <Route path="/subscription/success" element={<PaymentSuccessPage />} />
+        <Route path="/payment/cancel" element={<Navigate to="/signup" replace />} />
+        <Route path="/subscription/cancel" element={<Navigate to="/signup" replace />} />
 
         <Route path="/admin/login" element={<AdminLoginPage />} />
 
@@ -66,6 +72,8 @@ function App() {
           <Route element={<InstructorProtectedRoute />}>
             <Route path="/dashboard/instructor" element={<InstructorDashboardPage />} />
             <Route path="/dashboard/instructor/overview" element={<InstructorDashboardPage />} />
+            <Route path="/dashboard/instructor/courses" element={<InstructorCoursesPage />} />
+            
             <Route path="/dashboard/instructor/subjects" element={<InstructorSubjectsPage />} />
             <Route path="/dashboard/instructor/lessons" element={<InstructorLessonsPage />} />
             <Route path="/dashboard/instructor/students" element={<InstructorStudentsPage />} />
@@ -82,6 +90,7 @@ function App() {
               <Route path="/student/courses" element={<Navigate to="/courses" replace />} />
               <Route path="/courses/:courseId" element={<StudentCourseDetailsPage />} />
               <Route path="/student/subjects" element={<StudentPageErrorBoundary><StudentSchoolSubjectsPage /></StudentPageErrorBoundary>} />
+              <Route path="/student/marks" element={<StudentPageErrorBoundary><StudentSchoolMarksPage /></StudentPageErrorBoundary>} />
               <Route path="/student/courses/:courseId" element={<LegacyStudentCourseRedirect />} />
               <Route path="/courses/:courseId/subjects/:subjectId" element={<StudentSubjectPage />} />
               <Route path="/student/subjects/:subjectId" element={<Navigate to="/courses" replace />} />

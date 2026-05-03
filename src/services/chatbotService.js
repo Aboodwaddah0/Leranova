@@ -30,17 +30,43 @@ const BLOCKED_FILLER_PHRASES = [
 const CHATBOT_SYSTEM_PROMPT = [
   'أنت مساعد تعلم ذكي في Learnova بجودة عالية.',
   'افهم العربية الفصحى والعامية الشامية (فلسطيني/أردني) والكتابة غير الدقيقة.',
-  'استخدم فقط السياق المزوَّد من مواد الدرس، وممنوع المعرفة الخارجية.',
-  `إن لم توجد أدلة كافية فارجع نص الرفض حرفيًا: "${REFUSAL_ANSWER}".`,
-  'قدّم إجابة دقيقة ومختصرة وغير مكررة.',
+  'الأولوية للسياق المزوَّد من مواد الدرس. استخدمه أساسًا لإجابتك.',
+  'إن لم تجد إجابة واضحة في السياق: ابدأ بالسياق المتوفر وأكمل بمعرفة عامة موثوقة مع الإشارة لذلك.',
+  'إن كانت المواد فارغة تمامًا والسؤال تعليمي عام: أجب من معرفتك العامة مباشرةً.',
+  'للأسئلة عن الأسئلة المتوقعة في الامتحان أو الموضوعات المهمة أو النصائح الدراسية: استخدم محتوى الدرس واستنتج بحكمة وقدّم أفكارًا مفيدة بدون تردد.',
+  'قدّم إجابة دقيقة وشاملة وغير مكررة.',
   'للسؤال العام عن موضوع الحصة: قدّم ملخصًا مندمجًا من جميع المصادر المتاحة.',
-  'إذا لم يكن الجواب حرفيًا لكن الأدلة كافية: اسمح باستنتاج آمن دون تجاوز السياق.',
-  'إذا كان جزء من السؤال خارج السياق: أجب المدعوم فقط واذكر بوضوح أن الجزء الآخر غير مغطى.',
-  'لا تدمج أفكارًا غير مرتبطة ولا تخمّن.',
-  'استخدم سجل المحادثة الحديث فقط لفهم الضمائر والإحالات (مثل: هذا/هي/هناك/أين تقع) ولا تعتبره مصدر معرفة مستقل.',
+  'إذا كان جزء من السؤال خارج السياق: أجب المدعوم وأكمل الآخر بمعرفة عامة.',
+  'لا تدمج أفكارًا غير مرتبطة ولا تخمّن بلا أساس.',
+  'استخدم سجل المحادثة الحديث فقط لفهم الضمائر والإحالات.',
+].join(' ');
+
+const GENERAL_KNOWLEDGE_SYSTEM_PROMPT = [
+  'أنت مساعد تعلم ذكي في Learnova.',
+  'افهم العربية الفصحى والعامية الشامية (فلسطيني/أردني) والكتابة غير الدقيقة.',
+  'أجب على أسئلة الطالب بمعرفتك العامة الموثوقة لأن الموضوع غير مغطى في مواد الدرس.',
+  'كن دقيقًا وتعليميًا ومختصرًا. لا تختلق معلومات غير مؤكدة.',
+  'إن كان السؤال غامضًا جدًا، اطلب توضيحًا قصيرًا بدلًا من الرفض.',
+  'استخدم سجل المحادثة الحديث فقط لفهم الضمائر والإحالات.',
+].join(' ');
+
+const HYBRID_SYSTEM_PROMPT = [
+  'أنت مساعد تعلم ذكي في Learnova بجودة عالية.',
+  'افهم العربية الفصحى والعامية الشامية (فلسطيني/أردني) والكتابة غير الدقيقة.',
+  'لديك سياق جزئي من مواد الدرس وستكمل الإجابة بمعرفتك العامة.',
+  'أجب أولًا مما هو موجود في سياق الدرس، ثم أكمل بمعرفتك العامة إن لزم.',
+  'اذكر صراحةً أي جزء مصدره الدرس وأي جزء مصدره معرفتك العامة.',
+  'لا تكرر المعلومات ولا تخمّن بلا أساس.',
+  'استخدم سجل المحادثة الحديث فقط لفهم الضمائر والإحالات.',
 ].join(' ');
 
 const MAX_HISTORY_TURNS = 8;
+
+const TEMPERATURE_BY_STYLE = {
+  factual: 0.0,
+  analytical: 0.25,
+  summary: 0.4,
+};
 
 const DIALECT_TOKEN_MAP = new Map([
   ['شو', 'ماذا'],
@@ -62,6 +88,8 @@ const TYPO_TOKEN_MAP = new Map([
   ['عنون', 'عنوان'],
   ['مووضوع', 'موضوع'],
 ]);
+
+const GREETING_PATTERN = /^(?:مرحبا|مرحبا[ً-ٟ]*|هلا|هلو|اهلا|اهلين|أهلا|السلامs*عليكم|صباحs*الخير|مساءs*الخير|كيفs*حالك|hello|hi|hey)(?:s|$|[!?.،,؟])/iu;
 
 const parseJsonResponse = async (response) => {
   const text = await response.text().catch(() => '');
@@ -118,16 +146,31 @@ const normalizeChunk = (chunk, fallbackLessonId = null) => {
 };
 
 const normalizeArabicText = (text) => String(text || '')
-  .replace(/[\u0640]/g, '')
-  .replace(/[\u200f\u200e]/g, '')
+  .replace(/[ـ]/g, '')
+  .replace(/[‏‎]/g, '')
+  .replace(/[ً-ٰٟ]/g, '')
+  .replace(/[إأآٱ]/g, 'ا')
+  .replace(/ى/g, 'ي')
+  .replace(/ؤ/g, 'و')
+  .replace(/ئ/g, 'ي')
   .replace(/[“”]/g, '"')
   .replace(/[‘’]/g, "'")
   .replace(/[٫]/g, '.')
   .replace(/[،]{2,}/g, '،')
   .replace(/[؟?]{2,}/g, '؟')
   .replace(/[.]{2,}/g, '.')
-  .replace(/[\s\t\r\n]+/g, ' ')
+  .replace(/\s+/g, ' ')
   .trim();
+
+const hasArabicChars = (text) => /[؀-ۿ]/u.test(String(text || ''));
+const hasLatinChars = (text) => /[A-Za-z]/u.test(String(text || ''));
+const detectLang = (text) => {
+  const a = hasArabicChars(text), l = hasLatinChars(text);
+  if (a && !l) return 'ar';
+  if (l && !a) return 'en';
+  if (a && l) return 'mixed';
+  return 'unknown';
+};
 
 const applyTokenMap = (input, tokenMap) => {
   let output = input;
@@ -157,7 +200,7 @@ const normalizeUserQuestion = (rawQuestion) => {
     normalized = 'ما موضوع هذا الدرس';
   }
 
-  const summaryIntent = /ما\s*موضوع|ماذا\s*بحكي\s*الدرس|ما\s*بحكي\s*الدرس|موضوع\s*الحصة|عن\s*شو\s*الدرس|لخص|ملخص|summarize|summary/u.test(normalized);
+  const summaryIntent = /ماs*موضوع|ماذاs*بحكيs*الدرس|ماs*بحكيs*الدرس|موضوعs*الحصة|عنs*شوs*الدرس|لخ?[صُّ]|ملخ[صُّ]|اشرحs+الدرس|أهمs+النقاط|نقاطs+الدرس|mains+points|summarize|summary|keys+points/u.test(normalized);
   return {
     normalizedQuestion: normalized,
     retrievalQuestion: normalized,
@@ -305,14 +348,14 @@ const formatByQuestionStyle = (questionStyle, sentences) => {
   if (!sentences.length) return '';
 
   if (questionStyle === 'factual') {
-    return clipToMaxLength(sentences[0], 180);
+    return clipToMaxLength(sentences.slice(0, 4).join(' '), 800);
   }
 
   if (questionStyle === 'analytical') {
-    return clipToMaxLength(sentences[0], 220);
+    return clipToMaxLength(sentences.slice(0, 5).join(' '), 1000);
   }
 
-  return clipToMaxLength(sentences.slice(0, 6).join(' '), 760);
+  return clipToMaxLength(sentences.slice(0, 8).join(' '), 1500);
 };
 
 const ensureSummaryDepth = (answer, chunks) => {
@@ -338,7 +381,8 @@ const ensureSummaryDepth = (answer, chunks) => {
 };
 
 const polishAnswer = ({ rawAnswer, question, questionStyle, chunks }) => {
-  const cleaned = removeFillerPhrases(rawAnswer);
+  const stripped = stripRefusalSegments(rawAnswer);
+  const cleaned = removeFillerPhrases(stripped || rawAnswer);
   if (!cleaned) return '';
 
   const sentences = splitAnswerSentences(cleaned);
@@ -352,6 +396,27 @@ const polishAnswer = ({ rawAnswer, question, questionStyle, chunks }) => {
 
   return normalizeArabicText(styled);
 };
+
+const stripRefusalSegments = (text) => {
+  if (!text) return '';
+  const refusalRe = /(?:هذاs+غيرs+مغطى[^.]*.?|لاs+(?:يمكنني|أستطيع)s+الإجابة[^.]*.?|is+(?:cannot|can't)s+answer[^.]*.?)/giu;
+  return String(text).replace(refusalRe, '').replace(/s{2,}/g, ' ').trim();
+};
+
+const polishGeneralAnswer = (rawAnswer) => {
+  let cleaned = removeFillerPhrases(rawAnswer);
+  cleaned = stripRefusalSegments(cleaned);
+  if (!cleaned) return '';
+  const sentences = splitAnswerSentences(cleaned);
+  const deduped = dedupeAnswerSentences(sentences);
+  const joined = deduped.join(' ');
+  const result = normalizeArabicText(clipToMaxLength(joined, 2000));
+  if (!result || result === REFUSAL_ANSWER) return '';
+  return result;
+};
+
+const META_QUESTION_PATTERN = /(متوقع|متوقّع|محتمل|توقع|توقّع|تنبأ|أسئلة\s+امتحان|سؤال\s+امتحان|سؤال\s+متوقع|سؤال\s+مهم|أهم\s+سؤال|أهم\s+الأسئلة|اقتراح|نصيحة|نصائح|أنصح|اقترح|expected\s+question|exam\s+question|important\s+question|predict|suggest|recommend|study\s+tip)/iu;
+const isMetaQuestion = (value) => META_QUESTION_PATTERN.test(String(value || ''));
 
 const resolveRequesterContext = async (tokenUser) => {
   const role = String(tokenUser?.role || '').toUpperCase();
@@ -367,6 +432,47 @@ const resolveRequesterContext = async (tokenUser) => {
     };
   }
 
+  if (role === 'STUDENT') {
+    const student = await prisma.student.findUnique({
+      where: { Student_id: userId },
+      select: { OrgId: true },
+    });
+
+    if (student?.OrgId) {
+      return { role, userId, orgId: student.OrgId };
+    }
+
+    // Academy student — not in student table, check academy_user
+    const academyStudent = await prisma.academy_user.findUnique({
+      where: { user_academy_id: userId },
+      select: { OrgId: true },
+    });
+
+    if (!academyStudent?.OrgId) {
+      throw new AppError('Student is not linked to an organization', 403);
+    }
+
+    return { role, userId, orgId: academyStudent.OrgId };
+  }
+
+  if (role === 'TEACHER') {
+    const teacher = await prisma.teacher.findUnique({
+      where: { Teacher_id: userId },
+      select: { OrgId: true },
+    });
+
+    if (!teacher?.OrgId) {
+      throw new AppError('Teacher is not linked to an organization', 403);
+    }
+
+    return {
+      role,
+      userId,
+      orgId: teacher.OrgId,
+    };
+  }
+
+  // Fallback: check academy_user table
   const academyUser = await prisma.academy_user.findUnique({
     where: { user_academy_id: userId },
     select: { OrgId: true },
@@ -596,6 +702,29 @@ const makeRefusal = ({ scope, reason, mode = 'direct' }) => ({
   mode,
   scope,
   fallback: false,
+  source: 'none',
+});
+
+const makeGeneralAnswer = ({ answer, scope }) => ({
+  answer,
+  explanation: 'تمت الإجابة من المعرفة العامة لأن الموضوع غير مغطى في مواد الدرس.',
+  references: [],
+  confidence: 0,
+  mode: 'general',
+  scope,
+  fallback: true,
+  source: 'general',
+});
+
+const makeHybridAnswer = ({ answer, references, confidence, scope, mode, chunkCount }) => ({
+  answer,
+  explanation: `تمت الإجابة بدمج مواد الدرس (${chunkCount} مقاطع) مع المعرفة العامة.`,
+  references,
+  confidence,
+  mode,
+  scope,
+  fallback: true,
+  source: 'hybrid',
 });
 
 const isVagueQuestion = (value) => {
@@ -628,6 +757,9 @@ const isStrongEnough = ({ chunks, scope }) => {
 };
 
 const hasTopicalSupport = (question, chunks) => {
+  const qLang = detectLang(question);
+  const chunkLang = chunks.length ? detectLang(chunks.map((c) => c.text || '').join(' ').slice(0, 500)) : 'unknown';
+  if (qLang !== chunkLang && qLang !== 'unknown' && chunkLang !== 'unknown') return true;
   const questionTokens = toTokenSet(question);
   if (questionTokens.size < 2) return true;
 
@@ -689,6 +821,9 @@ const rerankChunks = (chunks, question) => {
 const isAnswerAlignedWithQuestion = ({ question, answer, confidence, mode }) => {
   if (mode === 'summary') return true;
   if (Number(confidence || 0) >= 0.5) return true;
+  const qLang = detectLang(question);
+  const aLang = detectLang(answer);
+  if (qLang !== aLang && qLang !== 'unknown' && aLang !== 'unknown') return true;
 
   const contentTokens = getQuestionContentTokens(question);
   if (!contentTokens.size) return true;
@@ -782,8 +917,8 @@ const askGroq = async ({ question, chunks, questionStyle, scope, modeHint, histo
     },
     body: JSON.stringify({
       model: GROQ_MODEL,
-      temperature: 0.0,
-      max_tokens: 500,
+      temperature: TEMPERATURE_BY_STYLE[questionStyle] ?? 0.0,
+      max_tokens: 800,
       messages: [
         { role: 'system', content: CHATBOT_SYSTEM_PROMPT },
         ...historyMessages,
@@ -812,6 +947,42 @@ const askGroq = async ({ question, chunks, questionStyle, scope, modeHint, histo
   return answer;
 };
 
+const askGroqGeneral = async ({ question, systemPrompt = GENERAL_KNOWLEDGE_SYSTEM_PROMPT, history = [] }) => {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new AppError('GROQ_API_KEY is not configured', 500);
+
+  const historyMessages = normalizeHistory(history).map((entry) => ({
+    role: entry.role,
+    content: entry.content,
+  }));
+
+  const response = await fetch(GROQ_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      temperature: 0.35,
+      max_tokens: 800,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...historyMessages,
+        { role: 'user', content: question },
+      ],
+    }),
+  });
+
+  const body = await parseJsonResponse(response);
+  if (!response.ok) throw new AppError(body?.error?.message || 'Groq general request failed', 502);
+
+  const answer = body?.choices?.[0]?.message?.content?.trim();
+  if (!answer) throw new AppError('Empty response from Groq (general)', 502);
+
+  return answer;
+};
+
 export const askChatbot = async ({ tokenUser, question, courseId, subjectId, lessonId, history = [] }) => {
   const normalizedInput = normalizeUserQuestion(question);
   const normalizedQuestion = normalizedInput.normalizedQuestion;
@@ -824,6 +995,19 @@ export const askChatbot = async ({ tokenUser, question, courseId, subjectId, les
       reason: 'السؤال عام جدًا ولا يسمح بإجابة دقيقة من سياق الحصة فقط.',
       mode: refusalMode,
     });
+  }
+
+  if (GREETING_PATTERN.test(String(question || '').trim())) {
+    return {
+      answer: 'أهلًا بك! كيف أستطيع مساعدتك في الدراسة اليوم؟',
+      explanation: 'رسالة ترحيب.',
+      references: [],
+      confidence: 1,
+      mode: 'conversational',
+      scope: lessonId ? 'lesson' : (subjectId ? 'subject' : 'course'),
+      fallback: false,
+      source: 'general',
+    };
   }
 
   const { orgId } = await resolveRequesterContext(tokenUser);
@@ -908,8 +1092,18 @@ export const askChatbot = async ({ tokenUser, question, courseId, subjectId, les
   }
 
   if (!selected) {
+    const scope = lessonId ? 'lesson' : (resolvedSubjectId ? 'subject' : 'course');
+    try {
+      const generalAnswer = await askGroqGeneral({ question: normalizedQuestion, history });
+      const polished = polishGeneralAnswer(generalAnswer);
+      if (polished && polished !== REFUSAL_ANSWER) {
+        return makeGeneralAnswer({ answer: polished, scope });
+      }
+    } catch {
+      // fall through to hard refusal
+    }
     return makeRefusal({
-      scope: lessonId ? 'lesson' : (resolvedSubjectId ? 'subject' : 'course'),
+      scope,
       reason: 'لا توجد مقاطع كافية وعالية الثقة ضمن هذا النطاق للإجابة بأمان.',
       mode: refusalMode,
     });
@@ -924,12 +1118,37 @@ export const askChatbot = async ({ tokenUser, question, courseId, subjectId, les
   }
 
   const confidence = calculateConfidence(selected.chunks);
-  if (confidence < MIN_CONFIDENCE_TO_ANSWER) {
-    return makeRefusal({
-      scope: selected.scope,
-      reason: 'الثقة أقل من الحد الأدنى الآمن للإجابة.',
-      mode: refusalMode,
-    });
+  const metaQuestion = isMetaQuestion(normalizedQuestion);
+  if (confidence < MIN_CONFIDENCE_TO_ANSWER || metaQuestion) {
+    try {
+      const weakContextStr = selected.chunks.slice(0, 6).map((c) => c.text).join('\n---\n');
+      const hybridQuestion = `السؤال: ${normalizedQuestion}\n\nسياق جزئي من الدرس:\n${weakContextStr}`;
+      const hybridAnswer = await askGroqGeneral({
+        question: hybridQuestion,
+        systemPrompt: HYBRID_SYSTEM_PROMPT,
+        history,
+      });
+      const polished = polishGeneralAnswer(hybridAnswer);
+      if (polished && polished !== REFUSAL_ANSWER) {
+        return makeHybridAnswer({
+          answer: polished,
+          references: buildReferences(selected.chunks.slice(0, 6)),
+          confidence,
+          scope: selected.scope,
+          mode: metaQuestion ? 'meta' : refusalMode,
+          chunkCount: selected.chunks.length,
+        });
+      }
+    } catch {
+      // fall through to hard refusal
+    }
+    if (confidence < MIN_CONFIDENCE_TO_ANSWER) {
+      return makeRefusal({
+        scope: selected.scope,
+        reason: 'الثقة أقل من الحد الأدنى الآمن للإجابة.',
+        mode: refusalMode,
+      });
+    }
   }
 
   const questionStyle = detectQuestionStyle(normalizedQuestion);
@@ -955,13 +1174,35 @@ export const askChatbot = async ({ tokenUser, question, courseId, subjectId, les
     });
   }
 
-  const normalizedAnswer = polishAnswer({
-    rawAnswer: answer,
-    question: normalizedQuestion,
-    questionStyle,
-    chunks: selected.chunks,
-  });
+  const normalizedAnswer = metaQuestion
+    ? polishGeneralAnswer(answer)
+    : polishAnswer({
+        rawAnswer: answer,
+        question: normalizedQuestion,
+        questionStyle,
+        chunks: selected.chunks,
+      });
   if (!normalizedAnswer || normalizedAnswer === REFUSAL_ANSWER) {
+    try {
+      const fallbackAnswer = await askGroqGeneral({
+        question: normalizedQuestion,
+        systemPrompt: HYBRID_SYSTEM_PROMPT,
+        history,
+      });
+      const fallbackPolished = polishGeneralAnswer(fallbackAnswer);
+      if (fallbackPolished && fallbackPolished !== REFUSAL_ANSWER) {
+        return makeHybridAnswer({
+          answer: fallbackPolished,
+          references: buildReferences(selected.chunks.slice(0, 4)),
+          confidence,
+          scope: selected.scope,
+          mode: answerMode,
+          chunkCount: selected.chunks.length,
+        });
+      }
+    } catch {
+      // fall through
+    }
     return makeRefusal({
       scope: selected.scope,
       reason: 'النموذج لم يجد دعمًا كافيًا داخل مواد الدرس للإجابة بأمان.',
@@ -969,12 +1210,17 @@ export const askChatbot = async ({ tokenUser, question, courseId, subjectId, les
     });
   }
 
-  if (!isAnswerAlignedWithQuestion({
-    question: normalizedQuestion,
-    answer: normalizedAnswer,
-    confidence,
-    mode: answerMode,
-  })) {
+  if (
+    !metaQuestion
+    && answerMode !== 'general'
+    && answerMode !== 'conversational'
+    && !isAnswerAlignedWithQuestion({
+      question: normalizedQuestion,
+      answer: normalizedAnswer,
+      confidence,
+      mode: answerMode,
+    })
+  ) {
     return makeRefusal({
       scope: selected.scope,
       reason: 'الإجابة المتولدة غير متطابقة موضوعيًا مع السؤال المطلوب ضمن مواد الدرس.',
@@ -1002,5 +1248,6 @@ export const askChatbot = async ({ tokenUser, question, courseId, subjectId, les
     mode: answerMode,
     scope: selected.scope,
     fallback: selected.fallback,
+    source: 'lesson',
   };
 };

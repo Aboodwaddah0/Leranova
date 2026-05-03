@@ -8,9 +8,12 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
-RUN npm ci --omit=dev
-
 COPY prisma ./prisma
+
+# Remove old client so it regenerates from current schema
+RUN rm -rf node_modules/.prisma node_modules/@prisma/client
+
+RUN npm ci
 RUN npx prisma generate
 
 # Production stage
@@ -27,6 +30,9 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/prisma ./prisma
 
 COPY . .
+
+# Regenerate Prisma client from the final schema (COPY . . may update schema.prisma)
+RUN npx prisma generate
 
 EXPOSE 5000
 

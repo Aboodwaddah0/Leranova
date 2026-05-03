@@ -42,6 +42,12 @@ const ensureTeacherOwnsSubject = async (teacherId, subjectId) => {
 		select: {
 			id: true,
 			Teacher_id: true,
+			Course_id: true,
+			course: {
+				select: {
+					Org_id: true,
+				},
+			},
 		},
 	});
 
@@ -50,6 +56,42 @@ const ensureTeacherOwnsSubject = async (teacherId, subjectId) => {
 	}
 
 	return subject;
+};
+
+const ensureStudentEligibleForSubject = async (studentId, subject) => {
+	const student = await prisma.student.findFirst({
+		where: {
+			Student_id: studentId,
+			OrgId: subject.course.Org_id,
+			OR: [
+				{
+					Course_id: subject.Course_id,
+				},
+				{
+					user: {
+						academy_user: {
+							is: {
+								enrollment: {
+									some: {
+										Course_id: subject.Course_id,
+									},
+								},
+							},
+						},
+					},
+				},
+			],
+		},
+		select: {
+			Student_id: true,
+		},
+	});
+
+	if (!student) {
+		throw new AppError('Student is not eligible for this subject', 403);
+	}
+
+	return student;
 };
 
 const ensureStudentExists = async (studentId) => {
@@ -84,8 +126,9 @@ const getTeacherMarkOrThrow = async (teacherId, markId) => {
 };
 
 export const createMark = async (teacherId, data) => {
-	await ensureTeacherOwnsSubject(teacherId, data.Subject_id);
+	const subject = await ensureTeacherOwnsSubject(teacherId, data.Subject_id);
 	await ensureStudentExists(data.Student_id);
+	await ensureStudentEligibleForSubject(data.Student_id, subject);
 
 	if (Number(data.Numbers) > Number(data.OutOf)) {
 		throw new AppError('Numbers cannot be greater than OutOf', 400);

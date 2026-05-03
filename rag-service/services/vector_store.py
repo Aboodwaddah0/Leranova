@@ -3,6 +3,9 @@ import hashlib
 from qdrant_client import QdrantClient, models as qmodels
 
 from config import settings
+from utils.logger import get_logger
+
+logger = get_logger("vector-store")
 
 
 def _get_client() -> QdrantClient:
@@ -14,18 +17,26 @@ def _get_client() -> QdrantClient:
 
 
 def _ensure_collection(client: QdrantClient, vector_size: int) -> None:
-    collection_exists = False
     try:
-        client.get_collection(settings.qdrant_collection)
-        collection_exists = True
-    except Exception:
-        collection_exists = False
-
-    if not collection_exists:
-        client.create_collection(
-            collection_name=settings.qdrant_collection,
-            vectors_config=qmodels.VectorParams(size=vector_size, distance=qmodels.Distance.COSINE),
+        info = client.get_collection(settings.qdrant_collection)
+        existing_size = info.config.params.vectors.size
+        if existing_size == vector_size:
+            return
+        logger.warning(
+            "[Qdrant] vector size mismatch existing=%d new=%d — recreating collection '%s'",
+            existing_size,
+            vector_size,
+            settings.qdrant_collection,
         )
+        client.delete_collection(settings.qdrant_collection)
+    except Exception:
+        pass  # collection does not exist yet
+
+    client.create_collection(
+        collection_name=settings.qdrant_collection,
+        vectors_config=qmodels.VectorParams(size=vector_size, distance=qmodels.Distance.COSINE),
+    )
+    logger.info("[Qdrant] collection '%s' ready with vector_size=%d", settings.qdrant_collection, vector_size)
 
 
 def _build_point_id(lesson_id: str, source_type: str, source_ref: str, chunk_index: int) -> int:

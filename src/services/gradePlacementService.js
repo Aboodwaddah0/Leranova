@@ -66,6 +66,10 @@ const calculateAgeAtDate = (dobValue, referenceDate) => {
   return age;
 };
 
+export const computeAgeFromDob = (dobValue, referenceDate = new Date()) => {
+  return calculateAgeAtDate(dobValue, referenceDate);
+};
+
 export const computeGradeLevelFromDob = (dobValue, settings, referenceDate = new Date()) => {
   if (!dobValue) {
     throw new AppError('DOB is required to calculate student grade level', 400);
@@ -76,6 +80,27 @@ export const computeGradeLevelFromDob = (dobValue, settings, referenceDate = new
   const entryAge = Number(settings.entryGradeMinAge || 6);
 
   const gradeLevel = age - entryAge + 1;
+  if (!Number.isInteger(gradeLevel) || gradeLevel < 1) {
+    throw new AppError('DOB is outside supported school grade range', 400);
+  }
+
+  return Math.min(gradeLevel, MAX_GRADE_LEVEL);
+};
+
+export const computeGradeLevelFromBirthYear = (dobValue, settings, referenceDate = new Date()) => {
+  if (!dobValue) {
+    throw new AppError('DOB is required to calculate student grade level', 400);
+  }
+
+  const dob = toUtcDate(dobValue);
+  const dobYear = dob.getUTCFullYear();
+  const referenceYear = referenceDate.getUTCFullYear();
+  
+  // Calculate age based on birth year only (ignore month/day to keep cohorts unified)
+  const ageByYear = referenceYear - dobYear;
+  const entryAge = Number(settings.entryGradeMinAge || 6);
+
+  const gradeLevel = ageByYear - entryAge + 1;
   if (!Number.isInteger(gradeLevel) || gradeLevel < 1) {
     throw new AppError('DOB is outside supported school grade range', 400);
   }

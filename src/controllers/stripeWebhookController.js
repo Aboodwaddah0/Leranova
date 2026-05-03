@@ -24,12 +24,24 @@ const markPaymentSucceeded = async (metadata) => {
       },
     });
 
+    const subscription = await tx.subscription.findUnique({
+      where: { id: subscriptionId },
+      select: { organizationId: true },
+    });
+
     await tx.subscription.update({
       where: { id: subscriptionId },
       data: {
         status: 'ACTIVE',
       },
     });
+
+    if (subscription?.organizationId) {
+      await tx.organization.update({
+        where: { id: subscription.organizationId },
+        data: { status: 'APPROVED' },
+      });
+    }
   });
 };
 

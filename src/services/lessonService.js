@@ -153,7 +153,10 @@ const ensureSubjectBelongsToOrganization = async (scope, subjectId) => {
 	});
 
 	if (!subject) {
-		throw new AppError('Subject not found or does not belong to your organization', 404);
+		throw new AppError(
+			`Subject (ID: ${subjectId}) not found or does not belong to your organization. Make sure the subject exists and is part of your organization's course. | المادة (معرف: ${subjectId}) غير موجودة أو لا تنتمي إلى مؤسستك. تأكد من وجود المادة وأنها جزء من مساقات مؤسستك.`,
+			404
+		);
 	}
 };
 
@@ -183,6 +186,9 @@ export const createLesson = async (actor, subjectId, data) => {
 	const scope = await resolveLessonScope(actor);
 	if (scope.role === 'STUDENT') {
 		throw new AppError('Students cannot create lessons', 403);
+	}
+	if (scope.role !== 'TEACHER') {
+		throw new AppError('Only teachers can create lessons. Organizations can only create courses and monitor subjects and materials.', 403);
 	}
 	await ensureSubjectBelongsToOrganization(scope, subjectId);
 

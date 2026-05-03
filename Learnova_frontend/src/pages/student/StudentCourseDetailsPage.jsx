@@ -79,7 +79,7 @@ export default function StudentCourseDetailsPage() {
   };
 
   return (
-    <StudentLayout>
+    <StudentLayout showAIAssistant>
       <div className="mb-4">
         <Link to="/courses" className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold backdrop-blur transition hover:border-white/40 hover:bg-white/20">
           <ArrowLeft size={16} /> {isArabic ? 'عودة' : 'Back'}

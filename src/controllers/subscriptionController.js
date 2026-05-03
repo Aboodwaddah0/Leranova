@@ -9,6 +9,7 @@ import {
   cancelSubscription,
   getSubscriptionLimits
 } from '../services/subscriptionService.js';
+import { getSubscriptionFeatureCatalog, resolveOrganizationIdFromUser } from '../services/featureService.js';
 import AppError from '../utils/appError.js';
 
 /**
@@ -213,6 +214,53 @@ export const getOrgLimits = async (req, res, next) => {
     return res.status(200).json({
       message: 'Subscription limits retrieved',
       data: limits
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * Get the current user's organization plan features
+ * GET /api/subscriptions/my-features
+ * Useful for diagnosing "Feature not available" errors
+ */
+export const getMyFeatures = async (req, res, next) => {
+  try {
+    const orgId = await resolveOrganizationIdFromUser(req.user);
+
+    if (!orgId) {
+      return res.status(400).json({ message: 'Cannot resolve organization from your account' });
+    }
+
+    const catalog = await getSubscriptionFeatureCatalog(orgId);
+
+    if (!catalog) {
+      const sub = await getOrganizationSubscription(orgId);
+      return res.status(200).json({
+        message: 'No active subscription found for your organization',
+        organizationId: orgId,
+        subscription: sub
+          ? { id: sub.id, planId: sub.planId, status: sub.status, endDate: sub.endDate }
+          : null,
+        features: [],
+      });
+    }
+
+    const now = new Date();
+    const isExpired = catalog.expiresAt ? new Date(catalog.expiresAt) <= now : false;
+
+    return res.status(200).json({
+      message: 'Feature catalog retrieved',
+      organizationId: orgId,
+      subscriptionId: catalog.subscriptionId,
+      planId: catalog.planId,
+      planName: catalog.planName,
+      status: catalog.status,
+      expiresAt: catalog.expiresAt,
+      isExpired,
+      featureCount: catalog.features.length,
+      features: catalog.features.map((f) => f.featureKey),
     });
   } catch (error) {
     return next(error);

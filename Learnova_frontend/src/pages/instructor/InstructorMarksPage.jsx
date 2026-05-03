@@ -11,6 +11,7 @@ import {
 import EducationLoading from "../../components/ui/EducationLoading";
 import { useLanguage } from "../../utils/i18n";
 import { notifyError } from "../../lib/notify";
+import Modal from "../../components/ui/Modal";
 
 const safeError = (error) => error?.response?.data?.message || error?.message || "Request failed";
 
@@ -23,10 +24,12 @@ export default function InstructorMarksPage() {
   const { isArabic } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [studentsLoading, setStudentsLoading] = useState(false);
   const [error, setError] = useState("");
   const [marks, setMarks] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [students, setStudents] = useState([]);
+  const [markModalOpen, setMarkModalOpen] = useState(false);
   const [form, setForm] = useState({
     id: null,
     Student_id: "",
@@ -38,16 +41,56 @@ export default function InstructorMarksPage() {
     time: "",
   });
 
+  const loadStudentsBySubject = async (subjectId, preferredStudentId = "") => {
+    if (!subjectId) {
+      setStudents([]);
+      setForm((current) => ({ ...current, Student_id: "" }));
+      return;
+    }
+
+    setStudentsLoading(true);
+
+    try {
+      const studentsData = await fetchInstructorStudents({ Subject_id: Number(subjectId) });
+      setStudents(studentsData);
+
+      const preferred = String(preferredStudentId || "");
+      const fallback = String(studentsData[0]?.id || "");
+
+      setForm((current) => {
+        const currentIsValid = studentsData.some((student) => String(student.id) === String(current.Student_id));
+        const preferredIsValid = preferred
+          ? studentsData.some((student) => String(student.id) === preferred)
+          : false;
+
+        return {
+          ...current,
+          Student_id: currentIsValid ? current.Student_id : (preferredIsValid ? preferred : fallback),
+        };
+      });
+    } catch (err) {
+      setStudents([]);
+      setForm((current) => ({ ...current, Student_id: "" }));
+      setError(safeError(err));
+    } finally {
+      setStudentsLoading(false);
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     setError("");
 
     try {
-      const [marksData, subjectsData, studentsData] = await Promise.all([
+      const [marksData, subjectsData] = await Promise.all([
         fetchInstructorMarks(),
         fetchInstructorSubjects(),
-        fetchInstructorStudents(),
       ]);
+
+      const initialSubjectId = String(form.Subject_id || subjectsData[0]?.id || "");
+      const studentsData = initialSubjectId
+        ? await fetchInstructorStudents({ Subject_id: Number(initialSubjectId) })
+        : [];
 
       setMarks(marksData);
       setSubjects(subjectsData);
@@ -55,7 +98,7 @@ export default function InstructorMarksPage() {
 
       setForm((current) => ({
         ...current,
-        Subject_id: current.Subject_id || String(subjectsData[0]?.id || ""),
+        Subject_id: current.Subject_id || initialSubjectId,
         Student_id: current.Student_id || String(studentsData[0]?.id || ""),
       }));
     } catch (err) {
@@ -98,34 +141,58 @@ export default function InstructorMarksPage() {
     setMarks(data);
   };
 
-  const onEdit = (mark) => {
+  const onEdit = async (mark) => {
+    const subjectId = String(mark.Subject_id || mark.subject?.id || "");
+    const studentId = String(mark.Student_id || mark.student?.id || "");
+
     setForm({
       id: mark.id,
-      Student_id: String(mark.Student_id || mark.student?.id || ""),
-      Subject_id: String(mark.Subject_id || mark.subject?.id || ""),
+      Student_id: studentId,
+      Subject_id: subjectId,
       Numbers: String(mark.Numbers ?? ""),
       OutOf: String(mark.OutOf ?? "100"),
       ExamPercentage: String(mark.ExamPercentage ?? "100"),
       MarkType: mark.MarkType || "EXAM",
       time: mark.time ? String(mark.time).slice(0, 10) : "",
     });
+
+    await loadStudentsBySubject(subjectId, studentId);
+    setMarkModalOpen(true);
   };
 
   const clearForm = () => {
-    setForm({
+    setForm((current) => ({
       id: null,
       Student_id: String(students[0]?.id || ""),
-      Subject_id: String(subjects[0]?.id || ""),
+      Subject_id: current.Subject_id || String(subjects[0]?.id || ""),
       Numbers: "",
       OutOf: "100",
       ExamPercentage: "100",
       MarkType: "EXAM",
       time: "",
-    });
+    }));
+  };
+
+  const onSubjectChange = async (subjectId) => {
+    setForm((current) => ({
+      ...current,
+      Subject_id: subjectId,
+      Student_id: "",
+    }));
+
+    await loadStudentsBySubject(subjectId);
   };
 
   const onSubmit = async (event) => {
     event.preventDefault();
+
+    if (!form.Subject_id || !form.Student_id) {
+      setError(isArabic
+        ? "اختر المادة والطالب أولًا"
+        : "Select subject and eligible student first");
+      return;
+    }
+
     setSaving(true);
     setError("");
 
@@ -147,6 +214,7 @@ export default function InstructorMarksPage() {
       }
 
       clearForm();
+      setMarkModalOpen(false);
       await refreshMarks();
     } catch (err) {
       setError(safeError(err));
@@ -178,6 +246,8 @@ export default function InstructorMarksPage() {
     }
   };
 
+  const hasEligibleStudents = students.length > 0;
+
   return (
     <InstructorLayout
       title={isArabic ? "العلامات" : "Marks"}
@@ -192,108 +262,140 @@ export default function InstructorMarksPage() {
         />
       ) : null}
 
-      <form onSubmit={onSubmit} className="mb-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 className="text-lg font-black text-slate-900">{isArabic ? "إضافة أو تعديل علامة" : "Add or edit mark"}</h3>
-        <p className="mt-1 text-xs text-slate-500">{isArabic ? "الحقول بعلامة * مطلوبة" : "Fields marked with * are required."}</p>
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <label className="space-y-1 text-xs font-semibold text-slate-700">
-            <span>{isArabic ? "الطالب" : "Student"} *</span>
-            <select
-              value={form.Student_id}
-              onChange={(event) => setForm((current) => ({ ...current, Student_id: event.target.value }))}
-              className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
-              required
-            >
-              <option value="">{isArabic ? "اختر الطالب" : "Select student"}</option>
-              {students.map((student) => (
-                <option key={student.id} value={student.id}>{student.user?.name || student.name || `#${student.id}`}</option>
-              ))}
-            </select>
-          </label>
+      <div className="mb-6">
+        <button
+          type="button"
+          onClick={() => { clearForm(); setMarkModalOpen(true); }}
+          className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white"
+        >
+          {isArabic ? "+ إضافة علامة" : "+ Add Mark"}
+        </button>
+      </div>
 
-          <label className="space-y-1 text-xs font-semibold text-slate-700">
-            <span>{isArabic ? "المادة" : "Subject"} *</span>
-            <select
-              value={form.Subject_id}
-              onChange={(event) => setForm((current) => ({ ...current, Subject_id: event.target.value }))}
-              className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
-              required
-            >
-              <option value="">{isArabic ? "اختر المادة" : "Select subject"}</option>
-              {subjects.map((subject) => (
-                <option key={subject.id} value={subject.id}>{subject.name}</option>
-              ))}
-            </select>
-          </label>
+      <Modal
+        open={markModalOpen}
+        onClose={() => setMarkModalOpen(false)}
+        title={isArabic ? "إضافة علامة" : "Add Mark"}
+        maxWidth="max-w-2xl"
+      >
+        <form onSubmit={onSubmit}>
+          <p className="mb-4 text-xs text-slate-500">{isArabic ? "الحقول بعلامة * مطلوبة" : "Fields marked with * are required."}</p>
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="space-y-1 text-xs font-semibold text-slate-700">
+              <span>{isArabic ? "الطالب" : "Student"} *</span>
+              <select
+                value={form.Student_id}
+                onChange={(event) => setForm((current) => ({ ...current, Student_id: event.target.value }))}
+                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                disabled={studentsLoading || !form.Subject_id || !hasEligibleStudents}
+                required
+              >
+                <option value="">
+                  {studentsLoading
+                    ? (isArabic ? "جاري تحميل الطلاب" : "Loading students")
+                    : (isArabic ? "اختر الطالب" : "Select student")}
+                </option>
+                {students.map((student) => (
+                  <option key={student.id} value={student.id}>{student.user?.name || student.name || `#${student.id}`}</option>
+                ))}
+              </select>
+              {!studentsLoading && form.Subject_id && !hasEligibleStudents ? (
+                <p className="text-[11px] text-rose-600">
+                  {isArabic
+                    ? "لا يوجد طلاب متاحون لهذه المادة."
+                    : "No eligible students found for this subject."}
+                </p>
+              ) : null}
+            </label>
 
-          <label className="space-y-1 text-xs font-semibold text-slate-700">
-            <span>{isArabic ? "نوع التقييم" : "Assessment type"}</span>
-            <input
-              value={form.MarkType}
-              onChange={(event) => setForm((current) => ({ ...current, MarkType: event.target.value }))}
-              className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
-              placeholder={isArabic ? "مثال: EXAM" : "Example: EXAM"}
-            />
-          </label>
+            <label className="space-y-1 text-xs font-semibold text-slate-700">
+              <span>{isArabic ? "المادة" : "Subject"} *</span>
+              <select
+                value={form.Subject_id}
+                onChange={(event) => onSubjectChange(event.target.value)}
+                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                required
+              >
+                <option value="">{isArabic ? "اختر المادة" : "Select subject"}</option>
+                {subjects.map((subject) => (
+                  <option key={subject.id} value={subject.id}>{subject.name}</option>
+                ))}
+              </select>
+            </label>
 
-          <label className="space-y-1 text-xs font-semibold text-slate-700">
-            <span>{isArabic ? "العلامة" : "Score"} *</span>
-            <input
-              value={form.Numbers}
-              onChange={(event) => setForm((current) => ({ ...current, Numbers: event.target.value }))}
-              type="number"
-              step="0.01"
-              className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
-              placeholder={isArabic ? "مثال: 85" : "Example: 85"}
-              required
-            />
-          </label>
+            <label className="space-y-1 text-xs font-semibold text-slate-700">
+              <span>{isArabic ? "نوع التقييم" : "Assessment type"}</span>
+              <input
+                value={form.MarkType}
+                onChange={(event) => setForm((current) => ({ ...current, MarkType: event.target.value }))}
+                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                placeholder={isArabic ? "مثال: EXAM" : "Example: EXAM"}
+              />
+            </label>
 
-          <label className="space-y-1 text-xs font-semibold text-slate-700">
-            <span>{isArabic ? "من" : "Out of"} *</span>
-            <input
-              value={form.OutOf}
-              onChange={(event) => setForm((current) => ({ ...current, OutOf: event.target.value }))}
-              type="number"
-              step="0.01"
-              className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
-              placeholder={isArabic ? "مثال: 100" : "Example: 100"}
-              required
-            />
-          </label>
+            <label className="space-y-1 text-xs font-semibold text-slate-700">
+              <span>{isArabic ? "العلامة" : "Score"} *</span>
+              <input
+                value={form.Numbers}
+                onChange={(event) => setForm((current) => ({ ...current, Numbers: event.target.value }))}
+                type="number"
+                step="0.01"
+                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                placeholder={isArabic ? "مثال: 85" : "Example: 85"}
+                required
+              />
+            </label>
 
-          <label className="space-y-1 text-xs font-semibold text-slate-700">
-            <span>{isArabic ? "نسبة الاختبار" : "Exam percentage"}</span>
-            <input
-              value={form.ExamPercentage}
-              onChange={(event) => setForm((current) => ({ ...current, ExamPercentage: event.target.value }))}
-              type="number"
-              step="0.01"
-              className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
-              placeholder={isArabic ? "مثال: 100" : "Example: 100"}
-            />
-          </label>
+            <label className="space-y-1 text-xs font-semibold text-slate-700">
+              <span>{isArabic ? "من" : "Out of"} *</span>
+              <input
+                value={form.OutOf}
+                onChange={(event) => setForm((current) => ({ ...current, OutOf: event.target.value }))}
+                type="number"
+                step="0.01"
+                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                placeholder={isArabic ? "مثال: 100" : "Example: 100"}
+                required
+              />
+            </label>
 
-          <label className="space-y-1 text-xs font-semibold text-slate-700">
-            <span>{isArabic ? "تاريخ العلامة" : "Mark date"}</span>
-            <input
-              value={form.time}
-              onChange={(event) => setForm((current) => ({ ...current, time: event.target.value }))}
-              type="date"
-              className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
-            />
-          </label>
+            <label className="space-y-1 text-xs font-semibold text-slate-700">
+              <span>{isArabic ? "نسبة الاختبار" : "Exam percentage"}</span>
+              <input
+                value={form.ExamPercentage}
+                onChange={(event) => setForm((current) => ({ ...current, ExamPercentage: event.target.value }))}
+                type="number"
+                step="0.01"
+                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                placeholder={isArabic ? "مثال: 100" : "Example: 100"}
+              />
+            </label>
 
-          <div className="md:col-span-3 flex gap-2">
-            <button type="submit" disabled={saving} className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
-              {form.id ? (isArabic ? "تحديث" : "Update") : (isArabic ? "إضافة" : "Add")}
-            </button>
-            <button type="button" onClick={clearForm} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700">
-              {isArabic ? "تفريغ" : "Clear"}
-            </button>
+            <label className="space-y-1 text-xs font-semibold text-slate-700">
+              <span>{isArabic ? "تاريخ العلامة" : "Mark date"}</span>
+              <input
+                value={form.time}
+                onChange={(event) => setForm((current) => ({ ...current, time: event.target.value }))}
+                type="date"
+                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+              />
+            </label>
+
+            <div className="md:col-span-3 flex gap-2">
+              <button
+                type="submit"
+                disabled={saving || studentsLoading || !hasEligibleStudents}
+                className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {form.id ? (isArabic ? "تحديث" : "Update") : (isArabic ? "إضافة" : "Add")}
+              </button>
+              <button type="button" onClick={clearForm} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700">
+                {isArabic ? "تفريغ" : "Clear"}
+              </button>
+            </div>
           </div>
-        </div>
-      </form>
+        </form>
+      </Modal>
 
       <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm">
         <table className="min-w-full text-left text-sm">

@@ -57,20 +57,22 @@ export default function StudentSubjectPage() {
         const matchedCourse = (courses || []).find((item) => Number(item.id) === numericCourseId) || null;
         let matchedSubject = (subjects || []).find((item) => Number(item.id) === numericSubjectId) || null;
 
+        let isEffectivelyLocked = false;
         if (context?.mode === 'ACADEMY') {
           const academySubject = (trackData?.subjects || []).find((item) => Number(item.id) === numericSubjectId) || null;
+          // academySubject has isSubscribed; matchedSubject (from getSubjects) does not
+          const refSubject = academySubject || matchedSubject;
+          isEffectivelyLocked = Boolean(refSubject?.isPaid && !refSubject?.isSubscribed);
           if (academySubject) {
             matchedSubject = matchedSubject || academySubject;
-            setIsLocked(Boolean(academySubject.isPaid && !academySubject.isSubscribed));
-          } else {
-            setIsLocked(Boolean(matchedSubject?.isPaid && !matchedSubject?.isSubscribed));
           }
+          setIsLocked(isEffectivelyLocked);
         } else {
           setIsLocked(false);
         }
 
         let lessonData = [];
-        if (!(context?.mode === 'ACADEMY' && matchedSubject?.isPaid && !matchedSubject?.isSubscribed)) {
+        if (!isEffectivelyLocked) {
           lessonData = await fetchSubjectLessons(numericSubjectId);
         }
 

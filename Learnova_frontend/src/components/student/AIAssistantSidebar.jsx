@@ -37,6 +37,21 @@ const suggestedQuestionsByLanguage = {
   ],
 };
 
+function SourceBadge({ source, isArabic }) {
+  if (!source || source === 'none' || source === 'lesson') return null;
+  const config = {
+    general: { label: isArabic ? 'معرفة عامة' : 'General Knowledge', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+    hybrid:  { label: isArabic ? 'درس + معرفة عامة' : 'Lesson + General', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
+  };
+  const badge = config[source];
+  if (!badge) return null;
+  return (
+    <span className={`mb-1 inline-block rounded-full border px-2 py-0.5 text-[10px] font-bold ${badge.cls}`}>
+      {badge.label}
+    </span>
+  );
+}
+
 export default function AIAssistantSidebar({ isArabic }) {
   const location = useLocation();
   const params = useParams();
@@ -133,6 +148,7 @@ export default function AIAssistantSidebar({ isArabic }) {
           role: entry.role,
           content: String(entry.content || '').trim(),
           isError: Boolean(entry.isError),
+          source: entry.source || null,
         }))
         .filter((entry) => entry.content);
 
@@ -154,6 +170,7 @@ export default function AIAssistantSidebar({ isArabic }) {
         role: entry.role,
         content: entry.content,
         isError: Boolean(entry.isError),
+        source: entry.source || null,
       }));
 
       localStorage.setItem(chatStorageKey, JSON.stringify(toStore));
@@ -238,6 +255,7 @@ export default function AIAssistantSidebar({ isArabic }) {
             id: `a-${Date.now()}`,
             role: 'assistant',
             content: assistantContent,
+            source: response?.source || null,
           },
         ];
       });
@@ -345,6 +363,7 @@ export default function AIAssistantSidebar({ isArabic }) {
                           {mine ? <MessageCircle size={12} /> : <Bot size={12} />}
                           <span>{mine ? (isArabic ? 'أنت' : 'You') : (isArabic ? 'المساعد' : 'Assistant')}</span>
                         </div>
+                        {!mine ? <SourceBadge source={message.source} isArabic={isArabic} /> : null}
                         <p>{message.content}</p>
                       </article>
                     );

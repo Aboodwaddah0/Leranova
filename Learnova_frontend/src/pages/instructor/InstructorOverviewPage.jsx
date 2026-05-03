@@ -11,11 +11,18 @@ import {
 import EducationLoading from "../../components/ui/EducationLoading";
 import { useLanguage } from "../../utils/i18n";
 import { notifyError } from "../../lib/notify";
+import { useSelector } from "react-redux";
+import { ORG_TYPES } from "../../utils/constants";
 
 const safeError = (error) => error?.response?.data?.message || error?.message || "Request failed";
 
 export default function InstructorOverviewPage() {
   const { isArabic } = useLanguage();
+  const authUser = useSelector((state) => state.auth.user);
+  const orgType = String(
+    authUser?.organizationType || authUser?.organization?.Role || ""
+  ).toUpperCase();
+  const isSchool = orgType === ORG_TYPES.SCHOOL;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [profile, setProfile] = useState(null);
@@ -122,7 +129,12 @@ export default function InstructorOverviewPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {[
-          [isArabic ? "الكورسات" : "Courses", stats.courses],
+          [
+            isSchool
+              ? isArabic ? "الصفوف" : "Grades"
+              : isArabic ? "الكورسات" : "Courses",
+            stats.courses,
+          ],
           [isArabic ? "المواد" : "Subjects", stats.subjects],
           [isArabic ? "الدروس" : "Lessons", stats.lessons],
           [isArabic ? "الطلاب" : "Students", stats.students],

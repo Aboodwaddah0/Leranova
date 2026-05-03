@@ -198,6 +198,41 @@ const resolveOrganizationId = async (tokenUser, userId) => {
     return Number(tokenUser?.orgId || userId);
   }
 
+  if (role === 'STUDENT') {
+    const student = await prisma.student.findUnique({
+      where: { Student_id: userId },
+      select: { OrgId: true },
+    });
+
+    if (student?.OrgId) return student.OrgId;
+
+    // Academy student — not in student table, check academy_user
+    const academyStudent = await prisma.academy_user.findUnique({
+      where: { user_academy_id: userId },
+      select: { OrgId: true },
+    });
+
+    if (!academyStudent?.OrgId) {
+      throw new AppError('Student is not linked to an organization', 403);
+    }
+
+    return academyStudent.OrgId;
+  }
+
+  if (role === 'TEACHER') {
+    const teacher = await prisma.teacher.findUnique({
+      where: { Teacher_id: userId },
+      select: { OrgId: true },
+    });
+
+    if (!teacher?.OrgId) {
+      throw new AppError('Teacher is not linked to an organization', 403);
+    }
+
+    return teacher.OrgId;
+  }
+
+  // Fallback: check academy_user table
   const academyUser = await prisma.academy_user.findUnique({
     where: { user_academy_id: userId },
     select: { OrgId: true },

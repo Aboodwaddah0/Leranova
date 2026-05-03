@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx prisma *)",
+      "Bash(docker restart *)",
+      "Bash(docker-compose up *)",
+      "Bash(docker build *)",
+      "Bash(node *)",
+      "Bash(docker exec *)",
+      "Bash(docker-compose restart *)",
+      "Bash(curl -s -X POST \"http://localhost:5000/api/auth/user/login\" -H \"Content-Type: application/json\" -d \"{\\\\\"email\\\\\":\\\\\"sara1@knowledge.com\\\\\",\\\\\"password\\\\\":\\\\\"123456789\\\\\"}\")",
+      "Bash(winpty docker *)",
+      "Bash(npm run *)"
+    ]
+  }
+}

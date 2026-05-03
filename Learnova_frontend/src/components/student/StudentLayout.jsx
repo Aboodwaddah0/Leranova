@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { Home, BookOpen, UserCircle2, LogOut, MessageCircle, Users2 } from 'lucide-react';
+import { Home, BookOpen, UserCircle2, LogOut, MessageCircle, Users2, BarChart2 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
@@ -16,6 +16,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
   const user = useSelector((state) => state.auth?.user);
   const organizationType = String(user?.organizationType || user?.organization?.Role || '').trim().toUpperCase();
   const isSchoolStudent = organizationType === 'SCHOOL';
+  const isRtl = isArabic;
 
   const navItems = useMemo(() => ([
     {
@@ -34,6 +35,12 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
         ? pathname === '/student/subjects' || pathname.startsWith('/courses/')
         : pathname === '/courses' || pathname.startsWith('/courses/')),
     },
+    ...(isSchoolStudent ? [{
+      to: '/student/marks',
+      label: isArabic ? 'درجاتي' : 'My Marks',
+      icon: BarChart2,
+      match: (pathname) => pathname === '/student/marks',
+    }] : []),
     {
       to: '/student/chat',
       label: t?.student?.chat?.title || (isArabic ? 'المحادثات' : 'Chat'),
@@ -59,7 +66,11 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
   const activeNavItem = navItems.find((item) => item.match(location.pathname)) || null;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,_#e1e0ff_0%,_#f7f9fb_42%,_#c9e6ff_100%)] text-slate-900 lang-en">
+    <div
+      dir={isRtl ? 'rtl' : 'ltr'}
+      lang={lang}
+      className={`min-h-screen bg-[radial-gradient(circle_at_top_right,_#e1e0ff_0%,_#f7f9fb_42%,_#c9e6ff_100%)] text-slate-900 ${isRtl ? 'lang-ar' : 'lang-en'}`}
+    >
       <header className="sticky top-0 z-50 border-b border-white/60 bg-white/75 backdrop-blur-xl shadow-sm">
         <div className="mx-auto flex max-w-[1700px] items-center justify-between gap-4 px-4 py-3 lg:px-6">
           <div className="flex items-center gap-4">
@@ -105,7 +116,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
         </div>
       </header>
 
-      <aside className="fixed left-0 top-0 hidden h-full w-64 flex-col rounded-r-[2rem] border-r border-white/70 bg-white/75 px-4 pb-6 pt-20 shadow-2xl shadow-indigo-500/5 backdrop-blur-2xl lg:flex">
+      <aside className={`fixed top-0 hidden h-full w-64 flex-col bg-white/75 px-4 pb-6 pt-20 shadow-2xl shadow-indigo-500/5 backdrop-blur-2xl lg:flex ${isRtl ? 'right-0 rounded-l-[2rem] border-l border-white/70' : 'left-0 rounded-r-[2rem] border-r border-white/70'}`}>
         <div className="mb-6 rounded-3xl bg-gradient-to-br from-indigo-600 to-cyan-500 p-4 text-white shadow-lg">
           <p className="text-xs uppercase tracking-[0.25em] text-blue-100">{isArabic ? 'تعلم متقدم' : 'Premium Learning'}</p>
           <h2 className="mt-2 text-xl font-black">{title || (isArabic ? 'مساحة الطالب' : 'Student space')}</h2>
@@ -141,7 +152,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
         </div>
       </aside>
 
-      <main className="px-4 py-6 lg:ml-64 lg:px-8">
+      <main className={`px-4 py-6 lg:px-8 ${isRtl ? 'lg:mr-64' : 'lg:ml-64'}`}>
         <div className="mx-auto flex max-w-[1600px] gap-8">
           <div className="min-w-0 flex-1">
             {(title || subtitle || actions) ? (

@@ -329,7 +329,12 @@ const resolveLessonContextFromApi = async (lessonId) => {
   for (const course of courses || []) {
     const subjects = await fetchCourseSubjects(course.id);
     for (const subject of subjects || []) {
-      const lessons = await fetchSubjectLessons(subject.id);
+      let lessons = [];
+      try {
+        lessons = await fetchSubjectLessons(subject.id);
+      } catch {
+        continue;
+      }
       const matchedLesson = (lessons || []).find((item) => Number(item?.id) === numericLessonId);
 
       if (matchedLesson) {
@@ -587,9 +592,20 @@ export async function fetchLessonDetails(lessonId) {
   try {
     const lessonContext = await resolveLessonContextFromApi(lessonId);
     if (lessonContext) {
-      const attachmentsResponse = await api.get(`/lessons/${lessonId}/assets`);
-      const attachmentsRaw = ensureArray(unwrap(attachmentsResponse, []));
-      const attachments = attachmentsRaw.map(toNormalizedAttachment);
+      // Primary source: attachments already loaded with the lesson list
+      let attachments = ensureArray(lessonContext.lesson.attachments);
+
+      // Try to get a fresh/complete attachment list from the dedicated endpoint
+      try {
+        const attachmentsResponse = await api.get(`/lessons/${lessonId}/assets`);
+        const attachmentsRaw = ensureArray(unwrap(attachmentsResponse, []));
+        if (attachmentsRaw.length > 0) {
+          attachments = attachmentsRaw.map(toNormalizedAttachment);
+        }
+      } catch {
+        // Assets endpoint failed — keep using attachments from the lesson list
+      }
+
       const videoAttachment = attachments.find((item) => String(item.fileType || '').toUpperCase() === 'VIDEO');
 
       return {

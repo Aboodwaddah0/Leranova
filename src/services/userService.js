@@ -4,7 +4,7 @@ import { hashPassword } from "../utils/hashPassword.js";
 import { decryptPassword, encryptPassword } from "../utils/passwordCrypto.js";
 import AppError from "../utils/appError.js";
 import { ensureCourseForGradeLevel } from "./courseService.js";
-import { computeGradeLevelFromDob, parseDobInput } from "./gradePlacementService.js";
+import { computeGradeLevelFromDob, computeGradeLevelFromBirthYear, parseDobInput, computeAgeFromDob } from "./gradePlacementService.js";
 import { getOrCreateSchoolSettings } from "./schoolSettingsService.js";
 
 const isSchoolStudent = (data) => {
@@ -28,7 +28,7 @@ const buildDomainFromSubdomain = (subdomain) => {
   return `${sanitized}.com`;
 };
 
-const prepareSchoolPlacement = async (data, tx = prisma) => {
+const prepareSchoolPlacement = async (data, tx = prisma, isImport = false) => {
   if (!isSchoolStudent(data)) {
     return {
       dob: data.dob ? parseDobInput(data.dob) : null,
@@ -44,7 +44,10 @@ const prepareSchoolPlacement = async (data, tx = prisma) => {
   }
 
   const settings = await getOrCreateSchoolSettings(data.orgId, tx);
-  const gradeLevel = computeGradeLevelFromDob(dob, settings);
+  // For imports, use birth year only to keep cohorts unified. For individual creation, use full DOB calculation.
+  const gradeLevel = isImport 
+    ? computeGradeLevelFromBirthYear(dob, settings)
+    : computeGradeLevelFromDob(dob, settings);
   const course = await ensureCourseForGradeLevel(data.orgId, gradeLevel, tx);
 
   return {
@@ -57,6 +60,7 @@ const prepareSchoolPlacement = async (data, tx = prisma) => {
 
 const buildRoleNested = (data) => {
   const role = String(data.role || '').toUpperCase();
+  const orgRole = String(data.orgRole || '').trim().toUpperCase();
   if (role === 'TEACHER') {
     return {
       teacher: {
@@ -70,7 +74,7 @@ const buildRoleNested = (data) => {
   if (role === 'PARENT') {
     return { parent: { create: { Work: data.work ?? null } } };
   }
-  if (role ==='STUDENT') {
+  if (role ==='STUDENT' && orgRole === 'SCHOOL') {
     return {
       student: {
         create: {
@@ -92,7 +96,23 @@ const buildAcademyUserNested= (data)=>{
   const organizationType = String(data.orgRole || '').trim().toUpperCase();
 
   if (role === 'STUDENT' && organizationType === 'ACADEMY') {
-    return { academy_user: { create: { OrgId: data.orgId } } };
+    // Create academy_user with optional enrollment if courseId provided
+    const academyUserData = {
+      OrgId: data.orgId,
+      DOB: data.dob ? new Date(data.dob) : null,
+    };
+
+    // If courseId is provided AND enrollNow flag is true, create enrollment
+    // This prevents accidental automatic enrollment when creating users.
+    if (data.courseId && data.enrollNow === true) {
+      academyUserData.enrollment = {
+        create: [
+          { Course_id: Number(data.courseId) }
+        ]
+      };
+    }
+
+    return { academy_user: { create: academyUserData } };
   }
 
   return {};
@@ -323,7 +343,7 @@ export const generateUsers = async (data, domain) => {
     }
 
     try {
-      const schoolPlacement = await prepareSchoolPlacement(user);
+      const schoolPlacement = await prepareSchoolPlacement(user, prisma, true);
       const userPayload = {
         ...user,
         parentId: resolvedParentId ?? null,
@@ -336,6 +356,9 @@ export const generateUsers = async (data, domain) => {
       const passwordHashed = await hashPassword(user.finalPassword);
       const passwordEncrypted = encryptPassword(user.finalPassword);
 
+      // compute age from dob if available
+      const finalAge = userPayload.dob ? computeAgeFromDob(userPayload.dob) : userPayload.age ?? null;
+
       const createdUser = await prisma.user.create({
         data: {
           name: userPayload.name,
@@ -343,7 +366,7 @@ export const generateUsers = async (data, domain) => {
           passwordHashed,
           passwordEncrypted,
           role: userPayload.role,
-          age: userPayload.age,
+          age: finalAge,
           gender: userPayload.gender,
           address: userPayload.address,
           ...buildRoleNested(userPayload),
@@ -358,6 +381,11 @@ export const generateUsers = async (data, domain) => {
               AcademicStatus: true,
             },
           },
+          academy_user: {
+            select: {
+              DOB: true,
+            },
+          },
         },
       });
 
@@ -370,7 +398,7 @@ export const generateUsers = async (data, domain) => {
         age: createdUser.age,
         gender: createdUser.gender,
         address: createdUser.address,
-        dob: createdUser.student?.DOB ?? null,
+        dob: createdUser.student?.DOB ?? createdUser.academy_user?.DOB ?? null,
         gradeLevel: createdUser.student?.GradeLevel ?? null,
         courseId: createdUser.student?.Course_id ?? null,
         academicStatus: createdUser.student?.AcademicStatus ?? null,
@@ -491,6 +519,11 @@ export const addUserWithGeneratedCredentials = async (data, domain) => {
       age: true,
       gender: true,
       address: true,
+      academy_user: {
+        select: {
+          DOB: true,
+        },
+      },
     },
   });
 
@@ -504,10 +537,30 @@ export const addUserWithGeneratedCredentials = async (data, domain) => {
   };
 };
 
-const buildOrganizationUsersWhere = (orgId, orgRole, orgSubdomain = null) => {
+const buildOrganizationUsersWhere = (orgId, orgRole, orgSubdomain = null, filters = {}) => {
   const normalizedOrgRole = String(orgRole || '').trim().toUpperCase();
+  const { courseId } = filters || {};
 
   if (normalizedOrgRole === 'ACADEMY') {
+    // For academy: if courseId provided, filter by enrollment; otherwise show all
+    if (courseId) {
+      return {
+        OR: [
+          {
+            role: 'STUDENT',
+            academy_user: {
+              is: {
+                OrgId: orgId,
+                enrollment: { some: { Course_id: Number(courseId) } },
+              },
+            },
+          },
+          { role: 'TEACHER', teacher: { is: { OrgId: orgId } } },
+        ],
+      };
+    }
+
+    // No courseId filter: return all academy students and teachers
     return {
       OR: [
         { role: 'STUDENT', academy_user: { is: { OrgId: orgId } } },
@@ -516,8 +569,22 @@ const buildOrganizationUsersWhere = (orgId, orgRole, orgSubdomain = null) => {
     };
   }
 
+  // SCHOOL logic
   const orgDomain = orgSubdomain ? `@${String(orgSubdomain).toLowerCase()}.com` : null;
 
+  if (courseId) {
+    // Filter by Course_id for school students
+    return {
+      OR: [
+        { role: 'STUDENT', student: { is: { OrgId: orgId, Course_id: Number(courseId) } } },
+        { role: 'TEACHER', teacher: { is: { OrgId: orgId } } },
+        { role: 'PARENT', parent: { is: { student: { some: { OrgId: orgId, Course_id: Number(courseId) } } } } },
+        ...(orgDomain ? [{ role: 'PARENT', email: { endsWith: orgDomain } }] : []),
+      ],
+    };
+  }
+
+  // No courseId filter: return all school users
   return {
     OR: [
       { role: 'STUDENT', student: { is: { OrgId: orgId } } },
@@ -547,25 +614,39 @@ const findOrganizationUserById = async (id, orgId, orgRole, orgSubdomain) => {
   });
 };
 
-export const getAllUsers = async (orgId, orgRole) => {
+export const getAllUsers = async (orgId, orgRole, filters = {}) => {
+  const normalizedOrgRole = String(orgRole || '').trim().toUpperCase();
   const orgSubdomain = await getOrganizationSubdomain(orgId);
-  const users = await prisma.user.findMany({
-    where: buildOrganizationUsersWhere(orgId, orgRole, orgSubdomain),
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      age: true,
-      gender: true,
-      address: true,
-      passwordEncrypted: true,
-      student: {
-        select: {
-          Parent_id: true,
-        },
+
+  const baseSelect = {
+    id: true,
+    name: true,
+    email: true,
+    role: true,
+    age: true,
+    gender: true,
+    address: true,
+    passwordEncrypted: true,
+    academy_user: {
+      select: {
+        DOB: true,
       },
     },
+  };
+
+  // Only include student/parent data for SCHOOL orgs
+  if (normalizedOrgRole === 'SCHOOL') {
+    baseSelect.student = {
+      select: {
+        Parent_id: true,
+        Course_id: true,
+      },
+    };
+  }
+
+  const users = await prisma.user.findMany({
+    where: buildOrganizationUsersWhere(orgId, orgRole, orgSubdomain, filters),
+    select: baseSelect,
   });
 
   return users.map((user) => {
@@ -586,7 +667,8 @@ export const getAllUsers = async (orgId, orgRole) => {
       gender: user.gender,
       address: user.address,
       password: decryptedPassword || '-',
-      student: user.student,
+      student: user.student || null,
+      academy_user: user.academy_user,
     };
   });
 };

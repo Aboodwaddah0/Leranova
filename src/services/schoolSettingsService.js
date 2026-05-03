@@ -1,5 +1,6 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
+import { ensureSchoolClassesForOrg, normalizeClassRanges } from './schoolClassService.js';
 
 const DEFAULT_SETTINGS = {
   schoolYearStartMonth: 9,
@@ -10,6 +11,7 @@ const DEFAULT_SETTINGS = {
   passThresholdPercentage: 50,
   minSubjectPassPercentage: 50,
   requireAllSubjectsPass: true,
+  classRanges: [],
 };
 
 const ensureValidMonthDay = (month, day, fieldPrefix) => {
@@ -35,6 +37,7 @@ const normalizeSettingsPayload = (payload = {}) => {
       payload.minSubjectPassPercentage === undefined ? undefined : Number(payload.minSubjectPassPercentage),
     requireAllSubjectsPass:
       payload.requireAllSubjectsPass === undefined ? undefined : Boolean(payload.requireAllSubjectsPass),
+    classRanges: payload.classRanges === undefined ? undefined : normalizeClassRanges(payload.classRanges),
   };
 
   if (normalized.schoolYearStartMonth !== undefined || normalized.schoolYearStartDay !== undefined) {
@@ -99,15 +102,19 @@ export const getSchoolSettingsByOrg = async (orgId) => {
   return getOrCreateSchoolSettings(orgId);
 };
 
-export const updateSchoolSettingsByOrg = async (orgId, payload) => {
+export const updateSchoolSettingsByOrg = async (orgId, payload, tx = prisma) => {
   const normalized = normalizeSettingsPayload(payload);
 
-  await getOrCreateSchoolSettings(orgId);
+  await getOrCreateSchoolSettings(orgId, tx);
 
-  return prisma.organization_school_settings.update({
+  const updated = await tx.organization_school_settings.update({
     where: { OrgId: orgId },
     data: normalized,
   });
+
+  await ensureSchoolClassesForOrg(orgId, updated.classRanges ?? [], tx);
+
+  return updated;
 };
 
 export const isPromotionDueToday = (settings, now = new Date()) => {
@@ -126,6 +133,7 @@ export const toSchoolSettingsDto = (settings) => ({
   passThresholdPercentage: Number(settings.passThresholdPercentage),
   minSubjectPassPercentage: Number(settings.minSubjectPassPercentage),
   requireAllSubjectsPass: settings.requireAllSubjectsPass,
+  classRanges: Array.isArray(settings.classRanges) ? settings.classRanges : [],
   createdAt: settings.createdAt,
   updatedAt: settings.updatedAt,
 });

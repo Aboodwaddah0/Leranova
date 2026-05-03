@@ -37,8 +37,20 @@ export const checkFeature = (featureKey, options = {}) => {
       const access = await checkFeatureAccess(organizationId, featureKey);
 
       if (!access.allowed) {
+        const reason = access.reason;
+        const message =
+          reason === 'no_active_subscription'
+            ? 'No active subscription found for your organization'
+            : reason === 'subscription_expired'
+              ? 'Your subscription has expired'
+              : reason === 'feature_not_in_plan'
+                ? `The feature "${featureKey}" is not included in your current plan (${access.planName || 'unknown'})`
+                : 'Feature not available for your current plan';
+
         return res.status(403).json({
-          message: 'Feature not available for your current plan',
+          message,
+          reason,
+          featureKey,
           data: access,
         });
       }

@@ -12,6 +12,8 @@ import {
   createRegistrationCheckoutSession,
   ensureStripeConfigured,
 } from './stripeService.js';
+import { ensureSchoolClassesForOrg, normalizeClassRanges } from './schoolClassService.js';
+import { getOrCreateSchoolSettings } from './schoolSettingsService.js';
 
 const PASSWORD_RESET_EXPIRY_MINUTES = 15;
 const normalizeSubdomain = (subdomain) => String(subdomain || '').trim().toLowerCase();
@@ -35,6 +37,13 @@ export const registerOrganization = async (data) => {
   const normalizedSubdomain = normalizeSubdomain(data.subdomain);
   const normalizedPlanId = Number(data.planId);
   const hasSelectedPlan = Number.isInteger(normalizedPlanId) && normalizedPlanId > 0;
+
+  // Validate classRanges for school organizations
+  if (normalizedRole === 'SCHOOL') {
+    if (!Array.isArray(data.classRanges) || data.classRanges.length === 0) {
+      throw new AppError('classRanges is required for school organizations and must contain at least one range', 400);
+    }
+  }
 
   const existingOrganization = await prisma.organization.findUnique({
     where: { Email: data.Email },
@@ -89,7 +98,7 @@ export const registerOrganization = async (data) => {
         PhoneNumber: data.PhoneNumber ?? null,
         Description: data.Description ?? null,
         Role: normalizedRole,
-        status: 'PENDING',
+        status: 'APPROVED',
       },
       select: {
         id: true,
@@ -105,6 +114,20 @@ export const registerOrganization = async (data) => {
         status: true,
       },
     });
+
+    if (normalizedRole === 'SCHOOL') {
+      const classRanges = normalizeClassRanges(data.classRanges);
+      await getOrCreateSchoolSettings(organization.id, tx);
+
+      if (classRanges.length > 0) {
+        await tx.organization_school_settings.update({
+          where: { OrgId: organization.id },
+          data: { classRanges },
+        });
+
+        await ensureSchoolClassesForOrg(organization.id, classRanges, tx);
+      }
+    }
 
     if (!selectedPlan) {
       return {
@@ -206,7 +229,7 @@ export const loginOrganization = async ({ Email, password }) => {
   }
 
   if (organization.status !== 'APPROVED') {
-    throw new AppError('Organization account is not approved yet', 403);
+    throw new AppError('Organization account is not active yet', 403);
   }
 
   const token = generateToken({

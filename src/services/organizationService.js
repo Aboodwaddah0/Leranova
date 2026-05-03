@@ -1,6 +1,8 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { hashPassword } from '../utils/hashPassword.js';
+import { ensureSchoolClassesForOrg, normalizeClassRanges } from './schoolClassService.js';
+import { getOrCreateSchoolSettings } from './schoolSettingsService.js';
 
 const organizationSelect = {
   id: true,
@@ -21,6 +23,16 @@ const normalizeSubdomain = (subdomain) => String(subdomain || '').trim().toLower
 
 export const createOrganization = async (data) => {
   const normalizedSubdomain = normalizeSubdomain(data.subdomain);
+  const normalizedRole = normalizeOrganizationRole(data.Role);
+  
+  // Validate classRanges for school organizations
+  if (normalizedRole === 'SCHOOL') {
+    if (!Array.isArray(data.classRanges) || data.classRanges.length === 0) {
+      throw new AppError('classRanges is required for school organizations and must contain at least one range', 400);
+    }
+  }
+  
+  const normalizedClassRanges = normalizedRole === 'SCHOOL' ? normalizeClassRanges(data.classRanges) : [];
 
   const existingOrganization = await prisma.organization.findUnique({
     where: {
@@ -47,24 +59,39 @@ export const createOrganization = async (data) => {
 
   const hashedPassword = await hashPassword(data.password);
 
-  const organization = await prisma.organization.create({
-    data: {
-      Name: data.Name,
-      subdomain: normalizedSubdomain,
-      Email: data.Email,
-      Password_Hashed: hashedPassword,
-      Phone: data.Phone ?? null,
-      Founded: data.Founded ? new Date(data.Founded) : null,
-      Address: data.Address ?? null,
-      PhoneNumber: data.PhoneNumber ?? null,
-      Description: data.Description ?? null,
-      Role: normalizeOrganizationRole(data.Role),
-      status: data.status ?? 'PENDING',
-    },
-    select: organizationSelect,
-  });
+  return prisma.$transaction(async (tx) => {
+    const organization = await tx.organization.create({
+      data: {
+        Name: data.Name,
+        subdomain: normalizedSubdomain,
+        Email: data.Email,
+        Password_Hashed: hashedPassword,
+        Phone: data.Phone ?? null,
+        Founded: data.Founded ? new Date(data.Founded) : null,
+        Address: data.Address ?? null,
+        PhoneNumber: data.PhoneNumber ?? null,
+        Description: data.Description ?? null,
+        Role: normalizedRole,
+        status: data.status ?? 'PENDING',
+      },
+      select: organizationSelect,
+    });
 
-  return organization;
+    if (normalizedRole === 'SCHOOL') {
+      await getOrCreateSchoolSettings(organization.id, tx);
+
+      if (normalizedClassRanges.length > 0) {
+        await tx.organization_school_settings.update({
+          where: { OrgId: organization.id },
+          data: { classRanges: normalizedClassRanges },
+        });
+
+        await ensureSchoolClassesForOrg(organization.id, normalizedClassRanges, tx);
+      }
+    }
+
+    return organization;
+  });
 };
 
 export const getAllOrganizations = async (data) => {

@@ -88,12 +88,20 @@ const ensureSubjectPaymentRules = async (courseId, data = {}) => {
 
   if (orgRole === 'SCHOOL') {
     if (isPaid === true || (price !== undefined && price > 0)) {
-      throw new AppError('School class subjects must be free', 400);
+      throw new AppError(
+        'School class subjects must be free (isPaid: false, price: 0). Your organization is a school, so all subjects in school courses must be free of charge. | ' +
+        'مواد المدارس يجب أن تكون مجانية. مؤسستك مدرسة، لذا يجب أن تكون جميع المواد في المساقات المدرسية مجانية.',
+        400
+      );
     }
   }
 
   if (isPaid === true && Number(price ?? 0) <= 0) {
-    throw new AppError('Paid subjects must have a price greater than 0', 400);
+    throw new AppError(
+      'Paid subjects must have a price greater than 0. You marked this subject as paid (isPaid: true), so the price must be greater than zero. | ' +
+      'المواد المدفوعة يجب أن يكون لها سعر أكبر من صفر. لقد حددت هذه المادة كمدفوعة، لذا يجب أن يكون السعر أكبر من صفر.',
+      400
+    );
   }
 };
 
@@ -106,7 +114,10 @@ const ensureTeacherBelongsToOrg = async (orgId, teacherId) => {
   });
 
   if (!teacher) {
-    throw new AppError('Teacher not found or does not belong to your organization', 404);
+    throw new AppError(
+      `Teacher (ID: ${teacherId}) not found or does not belong to your organization. Make sure the teacher exists and is part of your organization. | المدرس (معرف: ${teacherId}) غير موجود أو لا ينتمي إلى مؤسستك. تأكد من وجود المدرس وأنه جزء من مؤسستك.`,
+      404
+    );
   }
 
   return teacher;
@@ -120,18 +131,27 @@ export const createSubject = async (actor, courseId, data) => {
   await ensureCourseBelongsToOrg(scope.orgId, courseId);
   await ensureSubjectPaymentRules(courseId, data);
 
-  const teacherId = scope.role === 'TEACHER' ? scope.teacherId : data.Teacher_id;
+  let resolvedTeacherId;
 
-  if (!teacherId) {
-    throw new AppError('Teacher_id is required for organization subject creation', 400);
+  if (scope.role === 'TEACHER') {
+    resolvedTeacherId = scope.teacherId;
+  } else {
+    // Both SCHOOL and ACADEMY: teacher must be assigned explicitly per subject
+    resolvedTeacherId = data.Teacher_id ? Number(data.Teacher_id) : null;
+    if (!resolvedTeacherId) {
+      throw new AppError(
+        'Teacher_id is required. Each subject must be assigned to a teacher. | معرف المدرس مطلوب. يجب تعيين كل مادة إلى مدرس.',
+        400
+      );
+    }
   }
 
-  await ensureTeacherBelongsToOrg(scope.orgId, teacherId);
+  await ensureTeacherBelongsToOrg(scope.orgId, resolvedTeacherId);
 
   const subject = await prisma.subject.create({
     data: {
       Course_id: courseId,
-      Teacher_id: teacherId,
+      Teacher_id: resolvedTeacherId,
       name: data.name,
       isPaid: Boolean(data.isPaid),
       price: data.isPaid ? Number(data.price ?? 0) : 0,
@@ -173,6 +193,14 @@ export const getSubjects = async (actor, courseId) => {
         : {}),
       course: {
         Org_id: scope.orgId,
+      },
+    },
+    include: {
+      teacher: {
+        select: {
+          Teacher_id: true,
+          user: { select: { id: true, name: true } },
+        },
       },
     },
     orderBy: {

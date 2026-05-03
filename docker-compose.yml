@@ -7,6 +7,11 @@ services:
     container_name: learnova-api
     ports:
       - "5000:5000"
+    volumes:
+      - ./src:/app/src
+      - ./prisma:/app/prisma
+      - ./scripts:/app/scripts
+    command: sh -c "npx prisma migrate deploy && npx nodemon --watch src --ext js,mjs server.js"
     environment:
       DATABASE_URL: mysql://root:root@db:3306/learnova
       PORT: 5000
