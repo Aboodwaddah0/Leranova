@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
-import { isTeacherOrOrganization } from '../middlewares/isTeacherOrOrganization.js';
+import { isTeacher } from '../middlewares/isTeacher.js';
 import {
 	createLessonController,
 	getLessonsController,
@@ -9,6 +9,7 @@ import {
 	updateLessonController,
 	deleteLessonController,
 } from '../controllers/lessonController.js';
+import { ensureLessonAccess } from '../middlewares/ensureLessonAccess.js';
 
 const router = Router({ mergeParams: true });
 
@@ -21,9 +22,9 @@ const lessonUpload = multer({
 	},
 });
 router.get('/', getLessonsController);
-router.get('/:lessonId', getLessonByIdController);
-router.post('/', isTeacherOrOrganization, lessonUpload.single('video'), createLessonController);
-router.patch('/:lessonId', isTeacherOrOrganization, lessonUpload.single('video'), updateLessonController);
-router.delete('/:lessonId', isTeacherOrOrganization, deleteLessonController);
+router.get('/:lessonId', ensureLessonAccess, getLessonByIdController);
+router.post('/', isTeacher, lessonUpload.single('video'), createLessonController);
+router.patch('/:lessonId', isTeacher, lessonUpload.single('video'), updateLessonController);
+router.delete('/:lessonId', isTeacher, deleteLessonController);
 
 export default router;

@@ -125,28 +125,39 @@ export const getPlanById = async (planId) => {
 };
 
 /**
- * Get active subscription for an organization
+ * Get active subscription for an organization.
+ * Accepts ACTIVE status first; falls back to any non-cancelled, non-expired subscription
+ * so that PENDING subscriptions with a future endDate are treated as valid.
  */
 export const getOrganizationSubscription = async (organizationId) => {
-  const subscription = await prisma.subscription.findFirst({
-    where: {
-      organizationId,
-      status: 'ACTIVE'
-    },
-    include: {
-      plan: {
-        include: {
-          planFeatures: {
-            include: {
-              feature: true,
-            },
-          },
+  const include = {
+    plan: {
+      include: {
+        planFeatures: {
+          include: { feature: true },
         },
-      }
-    }
+      },
+    },
+  };
+
+  const active = await prisma.subscription.findFirst({
+    where: { organizationId, status: 'ACTIVE' },
+    include,
   });
 
-  return subscription;
+  if (active) return active;
+
+  // Fallback: any non-cancelled subscription that hasn't expired yet
+  const now = new Date();
+  return prisma.subscription.findFirst({
+    where: {
+      organizationId,
+      status: { notIn: ['CANCELLED', 'EXPIRED'] },
+      OR: [{ endDate: null }, { endDate: { gt: now } }],
+    },
+    include,
+    orderBy: { id: 'desc' },
+  });
 };
 
 /**
@@ -172,10 +183,12 @@ export const createSubscription = async (organizationId, planId, autoRenew = tru
     });
   }
 
-  // Calculate end date based on plan duration
+  // Calculate end date based on plan duration (null durationDays = lifetime)
   const startDate = new Date();
-  const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + plan.durationDays);
+  const durationDays = Number(plan.durationDays);
+  const endDate = Number.isFinite(durationDays) && durationDays > 0
+    ? new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + durationDays)
+    : null;
 
   // Create new subscription
   const subscription = await prisma.subscription.create({
@@ -206,23 +219,22 @@ export const createSubscription = async (organizationId, planId, autoRenew = tru
 };
 
 /**
- * Check if subscription is still valid
+ * Check if subscription is still valid.
+ * Uses getOrganizationSubscription so PENDING-but-not-expired subscriptions count.
  */
 export const isSubscriptionActive = async (organizationId) => {
-  const subscription = await prisma.subscription.findFirst({
-    where: {
-      organizationId,
-      status: 'ACTIVE'
-    }
-  });
+  const subscription = await getOrganizationSubscription(organizationId);
 
   if (!subscription) {
     return false;
   }
 
-  // Check if subscription hasn't expired
-  const now = new Date();
-  return subscription.endDate > now;
+  // null endDate = lifetime / no expiry
+  if (!subscription.endDate) {
+    return true;
+  }
+
+  return new Date(subscription.endDate) > new Date();
 };
 
 /**

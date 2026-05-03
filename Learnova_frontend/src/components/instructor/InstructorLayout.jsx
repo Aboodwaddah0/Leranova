@@ -10,6 +10,7 @@ import { useLanguage } from "../../utils/i18n";
 
 const navItems = [
   { to: "/dashboard/instructor/overview", labelAr: "النظرة العامة", labelEn: "Overview", end: true },
+  { to: "/dashboard/instructor/courses", labelAr: "الكورسات", labelEn: "Courses" },
   { to: "/dashboard/instructor/subjects", labelAr: "المواد", labelEn: "Subjects" },
   { to: "/dashboard/instructor/lessons", labelAr: "الدروس", labelEn: "Lessons" },
   { to: "/dashboard/instructor/students", labelAr: "الطلاب", labelEn: "Students" },
@@ -63,9 +64,14 @@ export default function InstructorLayout({ title, subtitle, children, actions })
     };
   }, [authUser]);
 
-  const canViewMarks = organizationType === ORG_TYPES.SCHOOL;
-  const visibleNavItems = canViewMarks
-    ? navItems
+  const isSchool = organizationType === ORG_TYPES.SCHOOL;
+  const canViewMarks = isSchool;
+  const visibleNavItems = isSchool
+    ? navItems.map((item) => ({
+        ...item,
+        labelEn: item.to === "/dashboard/instructor/courses" ? "Grades" : item.labelEn,
+        labelAr: item.to === "/dashboard/instructor/courses" ? "الصفوف" : item.labelAr,
+      }))
     : navItems.filter((item) => item.to !== "/dashboard/instructor/marks");
 
   return (

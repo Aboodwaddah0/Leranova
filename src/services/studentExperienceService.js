@@ -435,7 +435,8 @@ export const getAcademyTrackSubjects = async (userId, trackId) => {
       const hasPaidSubscription = Boolean(
         subscription && ['PAID', 'SUCCESS'].includes(toUpper(subscription.paymentStatus || subscription.status)),
       );
-      const isSubscribed = !Boolean(subject.isPaid) || hasPaidSubscription;
+      const hasFreeEnrollment = Boolean(subscription && !subject.isPaid);
+      const isSubscribed = hasPaidSubscription || hasFreeEnrollment;
 
       return {
         id: subject.id,
@@ -487,11 +488,12 @@ export const subscribeAcademySubject = async ({ userId, subjectId, paymentMethod
     throw new AppError('Material not found in this academy', 404);
   }
 
-  const amount = Number(subject.isPaid ? subject.price : 0);
+  const effectivelyPaid = Boolean(subject.isPaid) || Number(subject.price) > 0;
+  const amount = Number(effectivelyPaid ? subject.price : 0);
 
   const resolvedMethod = toUpper(paymentMethod || 'STRIPE');
 
-  if (subject.isPaid && resolvedMethod === 'STRIPE') {
+  if (effectivelyPaid && resolvedMethod === 'STRIPE') {
     ensureStripeConfigured();
 
     const academyUser = await prisma.academy_user.findUnique({

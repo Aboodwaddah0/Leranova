@@ -5,6 +5,12 @@ import { encryptPassword } from '../src/utils/passwordCrypto.js';
 
 const DEFAULT_PASSWORD = '12345678';
 
+const schoolClassRanges = [
+  { startGradeLevel: 10, endGradeLevel: 10 },
+  { startGradeLevel: 11, endGradeLevel: 11 },
+  { startGradeLevel: 12, endGradeLevel: 12 },
+];
+
 const schoolClasses = [
   {
     name: 'Grade 10',
@@ -451,6 +457,15 @@ const seed = async () => {
     email: 'school@learnova.com',
     role: 'SCHOOL',
     subdomain: 'jerusalem-school',
+  });
+
+  await prisma.organization_school_settings.upsert({
+    where: { OrgId: schoolOrg.id },
+    update: { classRanges: schoolClassRanges },
+    create: {
+      OrgId: schoolOrg.id,
+      classRanges: schoolClassRanges,
+    },
   });
 
   const academyOrg = await ensureOrganization({

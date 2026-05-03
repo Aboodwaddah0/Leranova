@@ -391,16 +391,22 @@ export const getMyTeacherCourses = async (teacherId) => {
   return prisma.course.findMany({
     where: {
       Org_id: teacher.OrgId,
+      OR: [
+        { Teacher_id: teacher.Teacher_id },
+        { subject: { some: { Teacher_id: teacher.Teacher_id } } },
+      ],
     },
     select: {
       id: true,
       Name: true,
       GradeLevel: true,
       Description: true,
-      Start: true,
-      End: true,
       isPaid: true,
       price: true,
+      Thumbnail: true,
+      kind: true,
+      createdAt: true,
+      updatedAt: true,
     },
     orderBy: {
       id: 'asc',

@@ -82,22 +82,34 @@ export const deleteInstructorLesson = async (subjectId, lessonId) => {
   return data?.data || null;
 };
 
-export const uploadInstructorLessonAttachment = async ({ lessonId, file }) => {
+export const uploadInstructorLessonAttachments = async ({ lessonId, files, onProgress }) => {
   const formData = new FormData();
-  formData.append("file", file);
+  const fileArray = Array.isArray(files) ? files : [files];
+  fileArray.forEach((file) => formData.append("files", file));
 
   const { data } = await api.post(`/lessons/${lessonId}/attachments`, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
+    headers: { "Content-Type": "multipart/form-data" },
+    onUploadProgress: onProgress
+      ? (e) => onProgress(Math.round((e.loaded * 100) / (e.total || 1)))
+      : undefined,
   });
 
-  return data?.data || null;
+  return Array.isArray(data?.data) ? data.data : [];
+};
+
+export const deleteInstructorLessonAttachment = async ({ lessonId, attachmentId }) => {
+  const { data } = await api.delete(`/lessons/${lessonId}/attachments/${attachmentId}`);
+  return data;
 };
 
 export const fetchInstructorLessonAttachments = async (lessonId) => {
   const { data } = await api.get(`/lessons/${lessonId}/attachments`);
   return data?.data || [];
+};
+
+export const fetchLessonRagStatus = async (lessonId, baseline = 0) => {
+  const { data } = await api.get(`/lessons/${lessonId}/attachments/rag-status?baseline=${baseline}`);
+  return data;
 };
 
 export const fetchInstructorLessonComments = async (lessonId) => {

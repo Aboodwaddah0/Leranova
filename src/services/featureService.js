@@ -194,6 +194,20 @@ export const checkFeatureAccess = async (organizationId, featureKey) => {
   }
 
   const features = await buildFeatureCatalog(subscription.plan);
+
+  // If the plan has no feature restrictions configured, allow everything
+  if (features.length === 0) {
+    return {
+      allowed: true,
+      reason: null,
+      featureKey: normalizedFeatureKey,
+      subscriptionId: subscription.id,
+      planId: subscription.planId,
+      planName: subscription.plan.name,
+      feature: { featureKey: normalizedFeatureKey, enabled: true, hasLimit: false, limit: null },
+    };
+  }
+
   const matchedFeature = features.find((feature) => feature.featureKey === normalizedFeatureKey);
 
   if (!matchedFeature) {

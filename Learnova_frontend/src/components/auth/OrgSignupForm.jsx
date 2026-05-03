@@ -11,10 +11,19 @@ const initialState = {
   Founded: "",
   Address: "",
   Description: "",
+  classRanges: [
+    {
+      startGradeLevel: 1,
+      endGradeLevel: 5,
+    },
+  ],
 };
+
+
 
 export default function OrgSignupForm({ selectedPlanId, onSubmit, loading, t }) {
   const [formState, setFormState] = useState(initialState);
+  const [error, setError] = useState("");
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -25,19 +34,74 @@ export default function OrgSignupForm({ selectedPlanId, onSubmit, loading, t }) 
     }));
   };
 
+  const handleClassRangeChange = (index, field, value) => {
+    setFormState((prev) => {
+      const updatedRanges = [...prev.classRanges];
+      updatedRanges[index] = {
+        ...updatedRanges[index],
+        [field]: Number(value),
+      };
+      return { ...prev, classRanges: updatedRanges };
+    });
+  };
+
+  const addClassRange = () => {
+    setFormState((prev) => ({
+      ...prev,
+      classRanges: [
+        ...prev.classRanges,
+        {
+          startGradeLevel: 1,
+          endGradeLevel: 5,
+        },
+      ],
+    }));
+  };
+
+  const removeClassRange = (index) => {
+    setFormState((prev) => ({
+      ...prev,
+      classRanges: prev.classRanges.filter((_, i) => i !== index),
+    }));
+  };
+
   const submit = (event) => {
     event.preventDefault();
 
-    const normalizedPlanId = selectedPlanId ? Number(selectedPlanId) : undefined;
+    try {
+      const normalizedPlanId = selectedPlanId ? Number(selectedPlanId) : undefined;
+      const classRanges = formState.Role === ORG_TYPES.SCHOOL ? formState.classRanges : [];
 
-    onSubmit({
-      ...formState,
-      ...(normalizedPlanId ? { planId: normalizedPlanId } : {}),
-      PhoneNumber: formState.Phone,
-      Address: formState.Address || null,
-      Founded: formState.Founded || null,
-      Description: formState.Description || null,
-    });
+      if (formState.Role === ORG_TYPES.SCHOOL && classRanges.length === 0) {
+        throw new Error("Please enter at least one class range for a school account.");
+      }
+
+      setError("");
+
+      const payload = {
+        Name: formState.Name,
+        subdomain: formState.subdomain,
+        Email: formState.Email,
+        password: formState.password,
+        Role: formState.Role,
+        Phone: formState.Phone,
+        Address: formState.Address || null,
+        Founded: formState.Founded || null,
+        Description: formState.Description || null,
+        ...(normalizedPlanId ? { planId: normalizedPlanId } : {}),
+        ...(formState.Role === ORG_TYPES.SCHOOL ? { classRanges } : {}),
+        PhoneNumber: formState.Phone,
+      };
+
+      console.log("🚀 Sending payload:", payload);
+      console.log("📌 Role:", formState.Role);
+      console.log("📌 ORG_TYPES.SCHOOL:", ORG_TYPES.SCHOOL);
+      console.log("📌 Will send classRanges?", formState.Role === ORG_TYPES.SCHOOL);
+
+      onSubmit(payload);
+    } catch (submitError) {
+      setError(submitError.message || "Invalid class ranges");
+    }
   };
 
   return (
@@ -57,7 +121,7 @@ export default function OrgSignupForm({ selectedPlanId, onSubmit, loading, t }) 
           placeholder={t.signup.fields.subdomain}
           value={formState.subdomain}
           onChange={handleChange}
-          pattern="^[a-z0-9-]+$"
+          pattern="[a-z0-9-]+"
           required
         />
         <input
@@ -112,6 +176,73 @@ export default function OrgSignupForm({ selectedPlanId, onSubmit, loading, t }) 
         />
       </div>
 
+      {formState.Role === ORG_TYPES.SCHOOL && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="mb-4 flex items-center justify-between">
+            <label className="block text-sm font-semibold text-slate-700">
+              Class ranges / نطاقات الصفوف
+            </label>
+            <button
+              type="button"
+              onClick={addClassRange}
+              className="rounded-lg bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800"
+            >
+              + Add Range
+            </button>
+          </div>
+          <div className="space-y-3">
+            {formState.classRanges.map((range, index) => (
+              <div key={index} className="flex items-end gap-2">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    From / من
+                  </label>
+                  <select
+                    className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+                    value={range.startGradeLevel}
+                    onChange={(e) => handleClassRangeChange(index, "startGradeLevel", e.target.value)}
+                  >
+                    {[...Array(12)].map((_, i) => (
+                      <option key={i + 1} value={i + 1}>
+                        Grade {i + 1}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    To / إلى
+                  </label>
+                  <select
+                    className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+                    value={range.endGradeLevel}
+                    onChange={(e) => handleClassRangeChange(index, "endGradeLevel", e.target.value)}
+                  >
+                    {[...Array(12)].map((_, i) => (
+                      <option key={i + 1} value={i + 1}>
+                        Grade {i + 1}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {formState.classRanges.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeClassRange(index)}
+                    className="mb-1 rounded-lg bg-rose-100 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-200"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-slate-500">
+            Define grade ranges for your school organization.
+          </p>
+        </div>
+      )}
+
       <textarea
         className="min-h-24 w-full rounded-xl border border-slate-200 px-4 py-3"
         name="Description"
@@ -119,6 +250,8 @@ export default function OrgSignupForm({ selectedPlanId, onSubmit, loading, t }) 
         value={formState.Description}
         onChange={handleChange}
       />
+
+      {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
 
       <button
         type="submit"

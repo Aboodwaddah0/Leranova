@@ -13,6 +13,12 @@ export const createEnrollmentController = async (req, res, next) => {
     const { error, value } = createEnrollmentSchema.validate(req.body);
     if (error) return next(new AppError(error.details[0].message, 400));
 
+    const userRole = String(req.user?.role || '').trim().toUpperCase();
+
+    if (userRole === 'STUDENT') {
+      return next(new AppError('Students must use /api/enrollments/initiate-payment to enroll in courses', 403));
+    }
+
     const enrollment = await createEnrollment(req.user.id, req.user.role, value);
     return res.status(201).json({
       message: 'Enrollment created successfully',

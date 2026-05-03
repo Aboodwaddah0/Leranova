@@ -8,7 +8,8 @@ import {
   recordPaymentHandler,
   getOrgPayments,
   checkActive,
-  getOrgLimits
+  getOrgLimits,
+  getMyFeatures,
 } from '../controllers/subscriptionController.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 
@@ -30,5 +31,6 @@ router.post('/payments', authMiddleware, recordPaymentHandler);
 router.get('/organizations/:orgId/payments', authMiddleware, getOrgPayments);
 router.get('/organizations/:orgId/active', authMiddleware, checkActive);
 router.get('/organizations/:orgId/limits', authMiddleware, getOrgLimits);
+router.get('/my-features', authMiddleware, getMyFeatures);
 
 export default router;

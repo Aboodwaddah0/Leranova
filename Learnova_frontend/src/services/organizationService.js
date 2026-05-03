@@ -1,4 +1,4 @@
-import api from "../utils/api";
+import api, { buildQueryString } from "../utils/api";
 
 const isFormData = (payload) => typeof FormData !== "undefined" && payload instanceof FormData;
 
@@ -55,10 +55,7 @@ export const fetchOrganizationCourses = async () => {
 
 export const createOrganizationCourse = async (payload) => {
   try {
-    const requestConfig = isFormData(payload)
-      ? { headers: { "Content-Type": "multipart/form-data" } }
-      : undefined;
-    const { data } = await api.post("/courses", payload, requestConfig);
+    const { data } = await api.post("/courses", payload);
     return data?.data || null;
   } catch (error) {
     const message = String(error?.response?.data?.message || error?.message || "").toLowerCase();
@@ -78,10 +75,7 @@ export const createOrganizationCourse = async (payload) => {
 
 export const updateOrganizationCourse = async (courseId, payload) => {
   try {
-    const requestConfig = isFormData(payload)
-      ? { headers: { "Content-Type": "multipart/form-data" } }
-      : undefined;
-    const { data } = await api.patch(`/courses/${courseId}`, payload, requestConfig);
+    const { data } = await api.patch(`/courses/${courseId}`, payload);
     return data?.data || null;
   } catch (error) {
     const message = String(error?.response?.data?.message || error?.message || "").toLowerCase();
@@ -129,8 +123,9 @@ export const deleteCourseSubject = async (courseId, subjectId) => {
   return data?.data || null;
 };
 
-export const fetchOrganizationUsers = async () => {
-  const { data } = await api.get("/users");
+export const fetchOrganizationUsers = async (params = {}) => {
+  const query = buildQueryString(params);
+  const { data } = await api.get(`/users${query}`);
   return data?.data || [];
 };
 
@@ -193,4 +188,22 @@ export const updateSchoolSettings = async (payload) => {
 export const runAnnualPromotion = async (payload = {}) => {
   const { data } = await api.post("/school-settings/promotions/run", payload);
   return data?.data || null;
+};
+
+export const addStudentToCourse = async (studentUserId, courseId) => {
+  const { data } = await api.post("/enrollments", {
+    studentUserId,
+    Course_id: courseId,
+  });
+  return data?.data || null;
+};
+
+export const removeStudentFromCourse = async (studentUserId, courseId) => {
+  const { data } = await api.delete(`/enrollments/user/${studentUserId}/course/${courseId}`);
+  return data?.data || null;
+};
+
+export const fetchStudentCourses = async (studentUserId) => {
+  const { data } = await api.get(`/enrollments/user/${studentUserId}`);
+  return data?.data || [];
 };

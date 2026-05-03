@@ -15,7 +15,7 @@ def _get_model() -> WhisperModel:
 
 def transcribe_audio_segments(audio_path: str):
     model = _get_model()
-    segments, _ = model.transcribe(audio_path)
+    segments, _ = model.transcribe(audio_path, language=settings.whisper_language)
 
     normalized = []
     for segment in segments:

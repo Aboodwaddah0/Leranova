@@ -1,6 +1,10 @@
 import Joi from 'joi';
 
 const subdomainPattern = /^[a-z0-9-]+$/;
+const classRangeSchema = Joi.object({
+  startGradeLevel: Joi.number().integer().min(1).max(12).required(),
+  endGradeLevel: Joi.number().integer().min(1).max(12).required(),
+});
 
 export const registerOrganizationSchema = Joi.object({
   Name: Joi.string().max(255).required(),
@@ -9,6 +13,7 @@ export const registerOrganizationSchema = Joi.object({
   password: Joi.string().min(6).required(),
   Role: Joi.string().valid('ACADEMY', 'SCHOOL', 'Academy', 'School').required(),
   planId: Joi.number().integer().positive().optional().allow(null),
+  classRanges: Joi.array().items(classRangeSchema).optional().allow(null),
   Phone: Joi.string().max(50).allow('', null),
   Founded: Joi.date().iso().allow(null),
   Address: Joi.string().max(255).allow('', null),

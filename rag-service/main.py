@@ -18,6 +18,7 @@ from services.audio_extractor import extract_audio_to_wav
 from services.transcription import transcribe_audio_segments
 from services.chunking import split_into_chunk_records, split_segments_into_chunk_records
 from services.embedding import embed_chunks, embed_text
+from services.reranker import rerank
 from services.vector_store import store_lesson_chunks, retrieve_lesson_chunks, count_lesson_chunks
 from services.text_extractor import extract_pdf_pages, extract_docx_sections, extract_txt_sections
 from utils.logger import get_logger
@@ -310,12 +311,13 @@ def retrieve(request: RetrieveRequest) -> RetrieveResponse:
         raise HTTPException(status_code=400, detail="query is required")
 
     query_vector = embed_text(query)
-    matches = retrieve_lesson_chunks(
+    # Over-fetch so the cross-encoder has enough candidates to pick from
+    candidates = retrieve_lesson_chunks(
         query_vector=query_vector,
         lesson_id=request.lessonId,
-        limit=request.limit,
+        limit=request.limit * 3,
     )
-
+    matches = rerank(query, candidates, top_k=request.limit)
     return RetrieveResponse(matches=matches)
 
 

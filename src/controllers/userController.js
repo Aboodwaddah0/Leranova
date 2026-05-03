@@ -56,9 +56,9 @@ export const generateUsersFromExcel = async (req, res) => {
     }
 
     // Keep orgId server-side from token and allow optional email/password from Excel.
-    const rowsWithOrg = validatedRows.map(({ name, role, age, gender, address, email, password, dob, work, specialization, bio, parentNationalId }) =>
+    const rowsWithOrg = validatedRows.map(({ name, role, age, gender, address, email, password, dob, work, specialization, bio, parentNationalId, courseId }) =>
       role === 'STUDENT' || role === 'TEACHER'
-        ? { name, role, age, gender, address, email, password, dob, work, specialization, bio, parentNationalId, orgId: organizationId, orgRole: req.user?.role }
+        ? { name, role, age, gender, address, email, password, dob, work, specialization, bio, parentNationalId, courseId, orgId: organizationId, orgRole: req.user?.role }
         : { name, role, age, gender, address, email, password, dob, work, specialization, bio, parentNationalId }
     );
     const organization = await prisma.organization.findUnique({
@@ -199,7 +199,8 @@ export const createUserWithGeneratedCredentialsController = async (req, res) => 
 
 export const getAllUsersController = async (req, res) => {
   try {
-    const users = await getAllUsers(req.user?.id, req.user?.role);
+    const courseId = req.query.courseId ? Number(req.query.courseId) : null;
+    const users = await getAllUsers(req.user?.id, req.user?.role, { courseId });
     return res.status(200).json({
       message: 'Users retrieved successfully',
       total: users.length,

@@ -312,3 +312,45 @@ No vectors in Qdrant:
 Auth failures:
 
 - Verify `JWT_SECRET` is present and consistent.
+
+## Documentation & Guides
+
+Comprehensive guides for course authoring, API usage, and UI implementation:
+
+### 📚 [Course Authoring Flow Guide](./COURSE_AUTHORING_FLOW.md)
+Complete step-by-step guide explaining the course/subject/lesson creation flow with:
+- Conceptual model (Organization → Course → Subject → Lesson)
+- Request/response examples for each step
+- Validation rules (free vs paid, school vs academy)
+- Complete end-to-end example scenario
+- Common mistakes and how to fix them
+- **Languages:** English + Arabic
+
+### 🚨 [Validation Errors Reference](./VALIDATION_ERRORS_REFERENCE.md)
+Comprehensive reference for all validation errors with:
+- What went wrong (cause and explanation)
+- Why it happened (technical reason)
+- How to fix it (step-by-step solution)
+- Prevention tips for each error type
+- Quick troubleshooting decision tree
+- **Languages:** English + Arabic
+
+### 📖 [Instructor UI Improvement Guide](./INSTRUCTOR_UI_IMPROVEMENT_GUIDE.md)
+Recommended UI improvements for course creation with:
+- Current state vs desired state analysis
+- Three UI options (Wizard, Dashboard, Multi-tab)
+- Component structure and wireframes
+- Bilingual message examples
+- Implementation checklist (4 phases)
+- Code examples for key components
+- Translation keys for i18n
+
+### 📋 [Agent Governance Rules](./AGENTS.md)
+System governance rules for AI agents working on this project (required reading for developers).
+
+### 📋 [Setup Checklist](./SETUP_CHECKLIST.md)
+Deployment patterns and setup verification steps.
+
+---
+
+**New to Learnova?** Start with the Course Authoring Flow Guide to understand the structure, then reference the Validation Errors guide when building/testing.

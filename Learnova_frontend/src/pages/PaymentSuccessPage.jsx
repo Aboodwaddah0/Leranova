@@ -67,10 +67,14 @@ export default function PaymentSuccessPage() {
       </button>
 
       <div className="w-full max-w-xl rounded-3xl border border-slate-200 bg-white p-8 text-center shadow">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{t.payment.successBadge}</p>
-        <h1 className="mt-3 text-3xl font-black text-slate-900">{t.payment.successTitle}</h1>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-600">{t.payment.successBadge}</p>
+        <h1 className="mt-3 text-3xl font-black text-slate-900">
+          {isArabic ? "تم تفعيل الحساب بنجاح" : "Account activated successfully"}
+        </h1>
         <p className="mt-3 text-slate-600">
-          {t.payment.successText}
+          {isArabic
+            ? "تم تفعيل حساب مؤسستك وتفعيل الخطة. يمكنك الآن تسجيل الدخول."
+            : "Your organization account is now active and the plan is enabled. You can log in now."}
         </p>
         {verificationMessage ? (
           <p className="mt-3 text-sm font-semibold text-indigo-700">{verificationMessage}</p>
@@ -81,10 +85,10 @@ export default function PaymentSuccessPage() {
           </p>
         ) : null}
         <Link
-          to="/courses"
-          className="mt-6 inline-flex h-11 items-center rounded-xl bg-sky-700 px-5 font-semibold text-white"
+          to="/login"
+          className="mt-6 inline-flex h-11 items-center rounded-xl bg-emerald-600 px-5 font-semibold text-white hover:bg-emerald-700"
         >
-          {isArabic ? "الانتقال إلى كورساتي" : "Go to my courses"}
+          {isArabic ? "الانتقال إلى تسجيل الدخول" : "Go to login"}
         </Link>
       </div>
     </main>

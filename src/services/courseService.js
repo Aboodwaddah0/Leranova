@@ -16,38 +16,60 @@ const getOrganizationRole = async (orgId) => {
   return String(organization.Role || '').trim().toUpperCase();
 };
 
+const ensureTeacherBelongsToOrg = async (orgId, teacherId) => {
+  if (teacherId === undefined || teacherId === null || teacherId === '') {
+    return null;
+  }
+
+  const numericTeacherId = Number(teacherId);
+  if (!Number.isInteger(numericTeacherId) || numericTeacherId <= 0) {
+    throw new AppError('Invalid teacher id', 400);
+  }
+
+  const teacher = await prisma.teacher.findFirst({
+    where: {
+      Teacher_id: numericTeacherId,
+      OrgId: orgId,
+    },
+    select: { Teacher_id: true },
+  });
+
+  if (!teacher) {
+    throw new AppError('Teacher not found or does not belong to your organization', 404);
+  }
+
+  return numericTeacherId;
+};
+
+const normalizeCourseTeacherId = (data) => data?.Teacher_id ?? data?.teacherId;
+
 
 export const createCourse = async (orgId, data) => {
   const payload = data && typeof data === 'object' ? data : {};
 
   if (!String(payload.Name || '').trim()) {
-    throw new AppError('Name is required', 400);
+    throw new AppError(
+      'Course name is required. | اسم المساق مطلوب.',
+      400
+    );
   }
 
   const organizationRole = await getOrganizationRole(orgId);
-  const isPaid = Boolean(payload.isPaid);
-  const price = isPaid ? Number(payload.price ?? 0) : 0;
+  const teacherId = await ensureTeacherBelongsToOrg(orgId, normalizeCourseTeacherId(payload));
+  const resolvedTeacherId = organizationRole === 'SCHOOL' ? null : teacherId;
 
-  if (organizationRole === 'SCHOOL' && (isPaid || price > 0)) {
-    throw new AppError('School courses must be free', 400);
-  }
-
-  if (isPaid && price <= 0) {
-    throw new AppError('Paid courses must have a price greater than 0', 400);
-  }
-
+  // Courses are always free — payment is at the subject level for academy
   const course = await prisma.$transaction(async (tx) => {
     const createdCourse = await tx.course.create({
       data: {
         Org_id: orgId,
+        Teacher_id: resolvedTeacherId,
         Name: payload.Name,
         kind: organizationRole === 'SCHOOL' ? 'CLASS' : 'TRACK',
         Description: payload.Description ?? null,
         Thumbnail: payload.Thumbnail ?? null,
-        Start: payload.Start ? new Date(payload.Start) : null,
-        End: payload.End ? new Date(payload.End) : null,
-        price,
-        isPaid,
+        price: 0,
+        isPaid: false,
       },
     });
 
@@ -74,53 +96,89 @@ export const createCourse = async (orgId, data) => {
 };
 
 export const getCourses = async (orgId) => {
+  const organizationRole = await getOrganizationRole(orgId);
+
+  if (organizationRole === 'ACADEMY') {
+    return prisma.course.findMany({
+      where: { Org_id: orgId },
+      orderBy: { id: 'asc' },
+      include: {
+        teacher: {
+          select: { Teacher_id: true, user: { select: { id: true, name: true, email: true } } },
+        },
+      },
+    });
+  }
+
+  // SCHOOL: teacher is per-subject, not per-course
   const courses = await prisma.course.findMany({
-    where: {
-      Org_id: orgId,
-    },
-    orderBy: {
-      id: 'asc',
+    where: { Org_id: orgId },
+    orderBy: { id: 'asc' },
+    select: {
+      id: true,
+      Org_id: true,
+      Teacher_id: true,
+      Name: true,
+      kind: true,
+      GradeLevel: true,
+      Description: true,
+      Thumbnail: true,
+      price: true,
+      isPaid: true,
+      createdAt: true,
+      updatedAt: true,
     },
   });
-
-  return courses;
+  return courses.map((c) => ({ ...c, teacher: null }));
 };
 
 export const getCourseById = async (orgId, courseId) => {
-  const course = await prisma.course.findFirst({
-    where: {
-      id: courseId,
-      Org_id: orgId,
-    },
-  });
+  const organizationRole = await getOrganizationRole(orgId);
+  const notFoundError = new AppError(
+    `Course (ID: ${courseId}) not found or does not belong to your organization. Make sure the course exists and is part of your organization. | المساق (معرف: ${courseId}) غير موجود أو لا ينتمي إلى مؤسستك. تأكد من وجود المساق وأنة جزء من مؤسستك.`,
+    404
+  );
 
-  if (!course) {
-    throw new AppError('Course not found', 404);
+  if (organizationRole === 'ACADEMY') {
+    const course = await prisma.course.findFirst({
+      where: { id: courseId, Org_id: orgId },
+      include: {
+        teacher: {
+          select: { Teacher_id: true, user: { select: { id: true, name: true, email: true } } },
+        },
+      },
+    });
+    if (!course) throw notFoundError;
+    return course;
   }
 
-  return course;
+  // SCHOOL: teacher is per-subject
+  const course = await prisma.course.findFirst({
+    where: { id: courseId, Org_id: orgId },
+    select: {
+      id: true,
+      Org_id: true,
+      Teacher_id: true,
+      Name: true,
+      kind: true,
+      GradeLevel: true,
+      Description: true,
+      Thumbnail: true,
+      price: true,
+      isPaid: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+  if (!course) throw notFoundError;
+  return { ...course, teacher: null };
 };
 
 export const updateCourse = async (orgId, courseId, data) => {
   const organizationRole = await getOrganizationRole(orgId);
   await getCourseById(orgId, courseId);
 
-  const hasPrice = Object.prototype.hasOwnProperty.call(data, 'price');
-  const hasIsPaid = Object.prototype.hasOwnProperty.call(data, 'isPaid');
-  const isPaid = hasIsPaid ? Boolean(data.isPaid) : undefined;
-  const price = hasPrice ? Number(data.price ?? 0) : undefined;
-
-  if (
-    organizationRole === 'SCHOOL' &&
-    ((hasIsPaid && isPaid === true) || (hasPrice && Number(price) > 0))
-  ) {
-    throw new AppError('School courses must be free', 400);
-  }
-
-  if (isPaid === true && Number(price ?? 0) <= 0) {
-    throw new AppError('Paid courses must have a price greater than 0', 400);
-  }
-
+  // Courses are always free — payment is at the subject level for academy
   const updated = await prisma.course.update({
     where: {
       id: courseId,
@@ -130,10 +188,8 @@ export const updateCourse = async (orgId, courseId, data) => {
       kind: organizationRole === 'SCHOOL' ? 'CLASS' : 'TRACK',
       Description: data.Description ?? undefined,
       Thumbnail: data.Thumbnail ?? undefined,
-      Start: data.Start ? new Date(data.Start) : undefined,
-      End: data.End ? new Date(data.End) : undefined,
-      isPaid,
-      price: isPaid === false ? 0 : price,
+      isPaid: false,
+      price: 0,
     },
   });
 
