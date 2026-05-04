@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bell, ChevronDown, Search, UserCircle2 } from "lucide-react";
+import { Bell, ChevronDown, Search, UserCircle2, Trash2, Pencil } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { logout, setAuthSession } from "../redux/slices/authSlice";
 import {
@@ -12,32 +12,34 @@ import {
   deleteOrganizationCourse,
   deleteOrganizationTeacher,
   deleteOrganizationUser,
+  addStudentToCourse,
   fetchCourseSubjects,
+  fetchMyOrganizationProfile,
   fetchOrganizationCourses,
   fetchOrganizationRevenue,
   fetchOrganizationTeachers,
   fetchOrganizationUsers,
-  fetchMyOrganizationProfile,
   fetchSchoolSettings,
+  fetchStudentCourses,
   importUsersFromExcel,
   linkParentToStudents,
+  removeStudentFromCourse,
   runAnnualPromotion,
-  updateMyOrganizationProfile,
   updateCourseSubject,
+  updateMyOrganizationProfile,
   updateOrganizationCourse,
   updateOrganizationTeacher,
   updateOrganizationUser,
   updateSchoolSettings,
-  addStudentToCourse,
-  removeStudentFromCourse,
-  fetchStudentCourses,
 } from "../services/organizationService";
-import authPhoto from "../assets/authPhoto.jpg";
-import QuantumMeshBackground from "../components/ui/QuantumMeshBackground";
-import Modal from "../components/ui/Modal";
 import { useLanguage } from "../utils/i18n";
 import { notifyError, notifySuccess } from "../lib/notify";
-import { formatGradeName, getCourseLabel, getCourseSingleLabel } from "../utils/gradeHelpers";
+import { formatGradeName } from "../utils/gradeHelpers";
+import QuantumMeshBackground from "../components/ui/QuantumMeshBackground";
+import Modal from "../components/ui/Modal";
+
+const DEFAULT_COURSE_THUMBNAIL =
+  "https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=600&auto=format&fit=crop&ixlib=rb-4.0.3";
 
 const TABS = {
   OVERVIEW: "overview",
@@ -48,28 +50,14 @@ const TABS = {
   SCHOOL: "school",
 };
 
-const DEFAULT_COURSE_THUMBNAIL = authPhoto;
+const safeError = (error) =>
+  error?.response?.data?.message || error?.message || "Request failed";
 
-const safeError = (error) => {
-  const apiErrors = error?.response?.data?.errors;
-  if (Array.isArray(apiErrors) && apiErrors.length > 0) {
-    return apiErrors.slice(0, 5).join(" | ");
-  }
-
-  return error?.response?.data?.message || error?.message || "Request failed";
-};
-
-const formatSkippedRows = (skippedRows, max = 3) => {
-  if (!Array.isArray(skippedRows) || skippedRows.length === 0) {
-    return "";
-  }
-
-  return skippedRows
-    .slice(0, max)
-    .map((row, index) => {
-      const name = row?.name ? `${row.name}: ` : "";
-      const reason = row?.reason || "Unknown validation issue";
-      return `${index + 1}) ${name}${reason}`;
+const formatSkippedRows = (rows) => {
+  return rows
+    .map(({ index, name, reason }) => {
+      const reason_str = reason || "Unknown validation issue";
+      return `${index + 1}) ${name}${reason_str}`;
     })
     .join(" | ");
 };
@@ -129,7 +117,7 @@ const copyCredentialsToClipboard = async (email, password) => {
 
   try {
     await navigator.clipboard.writeText(value);
-  } catch (_error) {
+  } catch {
     // Ignore clipboard failures and keep UI flow successful.
   }
 };
@@ -192,11 +180,11 @@ const prepareCourseThumbnailFile = async (file) => {
 
 export default function OrganizationWorkspacePage() {
   const dispatch = useDispatch();
-  const { lang, isArabic, t, toggleLang } = useLanguage();
+  const { isArabic, t } = useLanguage();
   const auth = useSelector((state) => state.auth);
   const organization = auth.user || {};
   const [organizationProfile, setOrganizationProfile] = useState(organization);
-  const organizationType = String((organizationProfile?.Role || organization?.Role) || "").toUpperCase();
+  const organizationType = String((organizationProfile?.type || organization?.type || organizationProfile?.Role || organization?.Role) || "").toUpperCase();
   const isSchool = organizationType === "SCHOOL";
   const isAcademy = organizationType === "ACADEMY";
   const canManageCourses = isSchool || isAcademy;
@@ -211,6 +199,16 @@ export default function OrganizationWorkspacePage() {
   const [courses, setCourses] = useState([]);
   const [subjectsByCourse, setSubjectsByCourse] = useState({});
   const [selectedCourseId, setSelectedCourseId] = useState(null);
+  const [subjectsLoading, setSubjectsLoading] = useState(false);
+  const [subjectSelectionTouched, setSubjectSelectionTouched] = useState(false);
+  const [subjectsFilterInitialized, setSubjectsFilterInitialized] = useState(false);
+  const [selectedTeacherId, setSelectedTeacherId] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState({
+    open: false,
+    title: "",
+    label: "",
+    onConfirm: null,
+  });
   const [users, setUsers] = useState([]);
   const [schoolSettings, setSchoolSettings] = useState(null);
   
@@ -292,12 +290,14 @@ export default function OrganizationWorkspacePage() {
   const [studentEnrollments, setStudentEnrollments] = useState([]);
 
   const [teacherSearch, setTeacherSearch] = useState("");
+  const [teacherTrack, setTeacherTrack] = useState("ALL");
   const [courseSearch, setCourseSearch] = useState("");
+  const [courseTrack, setCourseTrack] = useState("ALL");
+  const [coursePrice, setCoursePrice] = useState("ALL");
   const [subjectSearch, setSubjectSearch] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
+  const [studentStatus, setStudentStatus] = useState("ALL");
   const [parentSearch, setParentSearch] = useState("");
-  const [topBarSearch, setTopBarSearch] = useState("");
-  const [showTopUserMenu, setShowTopUserMenu] = useState(false);
   const [parentLinkFilter, setParentLinkFilter] = useState("ALL");
   const [studentGenderFilter, setStudentGenderFilter] = useState("ALL");
 
@@ -406,39 +406,111 @@ export default function OrganizationWorkspacePage() {
     return ids;
   }, [studentUsers]);
 
+  const currentSubjects = useMemo(() => {
+    return selectedCourseId ? subjectsByCourse[selectedCourseId] || [] : [];
+  }, [selectedCourseId, subjectsByCourse]);
+
   const teacherOptions = useMemo(() => {
-    return teachersWithPasswords.map((teacher) => {
-      const label = teacher?.user?.name || teacher?.name || `#${teacher.id}`;
-      const id = teacher.id || teacher.Teacher_id;
-      return { id, label };
-    }).filter((option) => option.id);
+    return teachersWithPasswords
+      .map((teacher) => {
+        const label = teacher?.user?.name || teacher?.name || `#${teacher.id}`;
+        const id = teacher.id || teacher.Teacher_id;
+        return { id, label };
+      })
+      .filter((option) => option.id);
   }, [teachersWithPasswords]);
 
   const filteredTeachers = useMemo(() => {
-    return teachersWithPasswords.filter((teacher) => includesQuery([
-      teacher?.user?.name,
-      teacher?.user?.email,
-      teacher?.specialization,
-      teacher?.bio,
-    ], teacherSearch));
-  }, [teachersWithPasswords, teacherSearch]);
+    return teachersWithPasswords.filter((teacher) => {
+      const matchesTrack = teacherTrack === "ALL" || normalizeText(teacher?.specialization) === normalizeText(teacherTrack);
+      const matchesSearch = includesQuery([
+        teacher?.user?.name,
+        teacher?.user?.email,
+        teacher?.specialization,
+        teacher?.bio,
+      ], teacherSearch);
+
+      return matchesTrack && matchesSearch;
+    });
+  }, [teachersWithPasswords, teacherSearch, teacherTrack]);
+
+  const teacherTrackOptions = useMemo(() => {
+    const tracks = new Set();
+    teachersWithPasswords.forEach((teacher) => {
+      const value = String(teacher?.specialization || "").trim();
+      if (value) {
+        tracks.add(value);
+      }
+    });
+    return Array.from(tracks);
+  }, [teachersWithPasswords]);
 
   const filteredCourses = useMemo(() => {
-    return courses.filter((course) => includesQuery([
-      course?.Name,
-      course?.Description,
-    ], courseSearch));
-  }, [courses, courseSearch]);
+    return courses.filter((course) => {
+      const trackLabel = formatGradeName(course, isSchool, isArabic) || course?.Name || course?.name || "";
+      const priceLabel = course?.isPaid ? "PAID" : "FREE";
+      const matchesTrack = courseTrack === "ALL" || normalizeText(trackLabel) === normalizeText(courseTrack);
+      const matchesPrice = coursePrice === "ALL" || normalizeText(priceLabel) === normalizeText(coursePrice);
+      const matchesSearch = includesQuery([
+        course?.Name,
+        course?.Description,
+        course?.Teacher_name,
+      ], courseSearch);
 
-  const currentSubjects = selectedCourseId ? subjectsByCourse[selectedCourseId] || [] : [];
+      return matchesTrack && matchesPrice && matchesSearch;
+    });
+  }, [courses, courseSearch, courseTrack, coursePrice, isSchool, isArabic]);
+
+  const courseTrackOptions = useMemo(() => {
+    const tracks = new Set();
+    courses.forEach((course) => {
+      const label = formatGradeName(course, isSchool, isArabic) || course?.Name || course?.name || "";
+      if (label) {
+        tracks.add(label);
+      }
+    });
+    return Array.from(tracks);
+  }, [courses, isSchool, isArabic]);
 
   const filteredSubjects = useMemo(() => {
-    return currentSubjects.filter((subject) => includesQuery([
-      subject?.name,
-      subject?.Description,
-      subject?.teacher?.user?.name,
-    ], subjectSearch));
-  }, [currentSubjects, subjectSearch]);
+    return currentSubjects.filter((subject) => {
+      const teacherId = Number(subject?.Teacher_id || subject?.teacher?.user?.id || 0);
+      const matchesTeacher = !selectedTeacherId || teacherId === Number(selectedTeacherId);
+
+      const courseName = subject?.course?.Name || subject?.course?.name || "";
+      const gradeLabel = formatGradeName(subject?.course, isSchool, isArabic) || "";
+
+      const matchesSearch = includesQuery([
+        subject?.name,
+        subject?.Description,
+        subject?.teacher?.user?.name,
+        courseName,
+        gradeLabel,
+      ], subjectSearch);
+
+      return matchesTeacher && matchesSearch;
+    });
+  }, [currentSubjects, subjectSearch, selectedTeacherId, isArabic, isSchool]);
+
+  const sortedSubjectCourses = useMemo(() => {
+    const list = Array.isArray(courses) ? [...courses] : [];
+
+    if (isSchool) {
+      list.sort((a, b) => {
+        const aLevel = Number(a?.GradeLevel ?? a?.gradeLevel ?? Number.MAX_SAFE_INTEGER);
+        const bLevel = Number(b?.GradeLevel ?? b?.gradeLevel ?? Number.MAX_SAFE_INTEGER);
+        if (aLevel !== bLevel) return aLevel - bLevel;
+        return Number(a?.id || 0) - Number(b?.id || 0);
+      });
+      return list;
+    }
+
+    list.sort((a, b) => Number(a?.id || 0) - Number(b?.id || 0));
+    return list;
+  }, [courses, isSchool]);
+
+  const shouldShowSubjectsEmptyState =
+    subjectSelectionTouched && !subjectsLoading && selectedCourseId && filteredSubjects.length === 0;
 
   const filteredStudents = useMemo(() => {
     return studentUsers.filter((student) => {
@@ -451,10 +523,12 @@ export default function OrganizationWorkspacePage() {
 
       const gender = normalizeText(student?.gender);
       const matchesGender = studentGenderFilter === "ALL" || gender === normalizeText(studentGenderFilter);
+      const statusValue = normalizeText(student?.status || student?.Status || student?.student?.status);
+      const matchesStatus = studentStatus === "ALL" || statusValue === normalizeText(studentStatus);
 
-      return matchesSearch && matchesGender;
+      return matchesSearch && matchesGender && matchesStatus;
     });
-  }, [studentUsers, studentSearch, studentGenderFilter]);
+  }, [studentUsers, studentSearch, studentGenderFilter, studentStatus]);
 
   const filteredParents = useMemo(() => {
     return parentUsers.filter((parent) => {
@@ -597,7 +671,7 @@ export default function OrganizationWorkspacePage() {
         if (selectedCourseId) params.courseId = selectedCourseId;
         const nextUsers = await fetchOrganizationUsers(params);
         if (!cancelled) setUsers(nextUsers);
-      } catch (_err) {
+      } catch {
         // ignore filter errors silently
       } finally {
         if (!cancelled) setLoading(false);
@@ -619,20 +693,23 @@ export default function OrganizationWorkspacePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSchool, isAcademy]);
 
-  const loadSubjectsForCourse = async (courseId) => {
+  const loadSubjectsForCourse = async (courseId, options = {}) => {
+    const force = Boolean(options.force);
     if (!courseId) {
-      return;
+      return [];
     }
 
-    if (subjectsByCourse[courseId]) {
-      return;
+    if (!force && subjectsByCourse[courseId]) {
+      return subjectsByCourse[courseId];
     }
 
     try {
       const subjects = await fetchCourseSubjects(courseId);
       setSubjectsByCourse((prev) => ({ ...prev, [courseId]: subjects }));
+      return subjects;
     } catch (err) {
       setError(safeError(err));
+      return [];
     }
   };
 
@@ -640,6 +717,69 @@ export default function OrganizationWorkspacePage() {
     loadSubjectsForCourse(selectedCourseId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCourseId]);
+
+  useEffect(() => {
+    if (activeTab !== "subjects" || subjectsFilterInitialized || sortedSubjectCourses.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const chooseDefaultSelection = async () => {
+      setSubjectsLoading(true);
+
+      try {
+        let fallbackId = Number(sortedSubjectCourses[0]?.id || 0) || null;
+        let bestId = fallbackId;
+
+        for (const course of sortedSubjectCourses) {
+          const candidateId = Number(course?.id || 0);
+          if (!candidateId) {
+            continue;
+          }
+
+          const subjects = await loadSubjectsForCourse(candidateId);
+          if (!fallbackId) {
+            fallbackId = candidateId;
+          }
+
+          if (Array.isArray(subjects) && subjects.length > 0) {
+            bestId = candidateId;
+            break;
+          }
+        }
+
+        if (!cancelled) {
+          setSelectedCourseId(bestId || fallbackId || null);
+          setSubjectSelectionTouched(false);
+          setSubjectsFilterInitialized(true);
+        }
+      } finally {
+        if (!cancelled) {
+          setSubjectsLoading(false);
+        }
+      }
+    };
+
+    chooseDefaultSelection();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, sortedSubjectCourses, subjectsFilterInitialized]);
+
+  const handleSubjectsCourseChange = async (nextCourseId) => {
+    setSubjectSelectionTouched(true);
+    setSelectedCourseId(nextCourseId || null);
+    if (!nextCourseId) {
+      return;
+    }
+
+    setSubjectsLoading(true);
+    await loadSubjectsForCourse(nextCourseId);
+    setSubjectsLoading(false);
+  };
 
   useEffect(() => {
     if (error) {
@@ -670,77 +810,6 @@ export default function OrganizationWorkspacePage() {
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, [isLinkDrawerOpen]);
-
-  const getActiveSearchValue = () => {
-    if (activeTab === TABS.TEACHERS) {
-      return teacherSearch;
-    }
-    if (activeTab === TABS.COURSES) {
-      return courseSearch;
-    }
-    if (activeTab === "subjects") {
-      return subjectSearch;
-    }
-    if (activeTab === TABS.STUDENTS) {
-      return studentSearch;
-    }
-    if (activeTab === TABS.PARENTS) {
-      return parentSearch;
-    }
-    return "";
-  };
-
-  useEffect(() => {
-    setTopBarSearch(getActiveSearchValue());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
-
-  const updateActiveSearchValue = (value) => {
-    if (activeTab === TABS.TEACHERS) {
-      setTeacherSearch(value);
-      return;
-    }
-
-    if (activeTab === TABS.COURSES) {
-      setCourseSearch(value);
-      return;
-    }
-
-    if (activeTab === "subjects") {
-      setSubjectSearch(value);
-      return;
-    }
-
-    if (activeTab === TABS.STUDENTS) {
-      setStudentSearch(value);
-      return;
-    }
-
-    if (activeTab === TABS.PARENTS) {
-      setParentSearch(value);
-    }
-  };
-
-  const isTopSearchDisabled = activeTab === TABS.OVERVIEW || activeTab === TABS.SCHOOL;
-
-  const topSearchPlaceholder = (() => {
-    if (activeTab === TABS.TEACHERS) {
-      return isArabic ? "ابحث عن مدرس" : "Search teachers";
-    }
-    if (activeTab === TABS.COURSES) {
-      return isSchool ? (isArabic ? "ابحث عن صف" : "Search grades") : (isArabic ? "ابحث عن كورس" : "Search courses");
-    }
-    if (activeTab === "subjects") {
-      return isArabic ? "ابحث عن مادة" : "Search subjects";
-    }
-    if (activeTab === TABS.STUDENTS) {
-      return isArabic ? "ابحث عن طالب" : "Search students";
-    }
-    if (activeTab === TABS.PARENTS) {
-      return isArabic ? "ابحث عن ولي أمر" : "Search parents";
-    }
-    return isArabic ? "اختر تبويب لتفعيل البحث" : "Select a tab to enable search";
-  })();
 
   const setField = (setter) => (event) => {
     const { name, value, type, checked } = event.target;
@@ -824,7 +893,7 @@ export default function OrganizationWorkspacePage() {
     }));
   };
 
-  const handleCoursePaidToggle = (event) => {
+  const _handleCoursePaidToggle = (event) => {
     const checked = event.target.checked;
     setCourseForm((prev) => ({
       ...prev,
@@ -885,6 +954,19 @@ export default function OrganizationWorkspacePage() {
     }
   };
 
+  const closeDeleteConfirm = () => {
+    setConfirmDelete({ open: false, title: "", label: "", onConfirm: null });
+  };
+
+  const openDeleteConfirm = ({ title, label, onConfirm }) => {
+    setConfirmDelete({
+      open: true,
+      title,
+      label,
+      onConfirm,
+    });
+  };
+
   const saveTeacher = async (event) => {
     event.preventDefault();
 
@@ -906,6 +988,8 @@ export default function OrganizationWorkspacePage() {
         if (teacherAutoCredentials) {
           const generated = await createOrganizationUserWithGeneratedCredentials({
             name: teacherForm.name,
+            specialization: teacherForm.specialization || undefined,
+            bio: teacherForm.bio || undefined,
             role: "TEACHER",
           });
 
@@ -920,29 +1004,23 @@ export default function OrganizationWorkspacePage() {
           const next = await fetchOrganizationTeachers();
           setTeachers(next);
           resetTeacherForm();
+          setTeacherModalOpen(false);
 
           const generatedEmail = generated?.credentials?.email || "-";
           const generatedPassword = generated?.credentials?.password || "-";
-          setTeacherModalOpen(false);
           await copyCredentialsToClipboard(generatedEmail, generatedPassword);
-          return `${isArabic ? "تم إنشاء الحساب تلقائيًا" : "Account created with generated credentials"}: ${generatedEmail} / ${generatedPassword}`;
+          return `${isArabic ? "تم إنشاء الحساب" : "Account created"}: ${generatedEmail} / ${generatedPassword}`;
         }
 
         await createOrganizationTeacher(payload);
-
-        const next = await fetchOrganizationTeachers();
-        setTeachers(next);
-        resetTeacherForm();
-        setTeacherModalOpen(false);
-
-        await copyCredentialsToClipboard(payload.email, payload.password);
-        return `${isArabic ? "تم إنشاء الحساب" : "Account created"}: ${payload.email || "-"} / ${payload.password || "-"}`;
       }
 
       const next = await fetchOrganizationTeachers();
       setTeachers(next);
       resetTeacherForm();
       setTeacherModalOpen(false);
+      await copyCredentialsToClipboard(payload.email, payload.password);
+      return `${isArabic ? "تم حفظ المدرس" : "Teacher saved"}`;
     }, t.organization.messages.teacherSaved);
   };
 
@@ -953,10 +1031,10 @@ export default function OrganizationWorkspacePage() {
       Name: profileForm.Name,
       Email: profileForm.Email,
       subdomain: profileForm.subdomain,
-      Phone: profileForm.Phone || null,
-      Address: profileForm.Address || null,
-      Description: profileForm.Description || null,
-      Founded: profileForm.Founded || null,
+      Phone: profileForm.Phone,
+      Address: profileForm.Address,
+      Description: profileForm.Description,
+      Founded: profileForm.Founded || undefined,
       password: profileForm.password || undefined,
     };
 
@@ -1314,7 +1392,7 @@ export default function OrganizationWorkspacePage() {
           course?.id || "",
           displayName,
           course?.Description || "",
-          Boolean(course?.isPaid) ? "PAID" : "FREE",
+          course?.isPaid ? "PAID" : "FREE",
           Number(course?.price || 0).toFixed(2),
         ];
       }
@@ -1331,7 +1409,7 @@ export default function OrganizationWorkspacePage() {
     setSuccess(isArabic ? "تم تنزيل قائمة الكورسات" : "Courses list downloaded");
   };
 
-  const downloadSubjectsList = () => {
+  const _downloadSubjectsList = () => {
     const dateLabel = new Date().toISOString().slice(0, 10);
     const rows = filteredSubjects.map((subject) => [
       subject?.id || "",
@@ -1525,126 +1603,102 @@ export default function OrganizationWorkspacePage() {
     t.organization.title;
 
   return (
-    <main className={`admin-management-theme dashboard-page relative min-h-screen overflow-hidden px-4 py-8 ${isArabic ? "lang-ar" : "lang-en"}`}>
+    <main className={`admin-management-theme dashboard-page organization-workspace-shell relative min-h-screen overflow-hidden ${isArabic ? "lang-ar" : "lang-en"}`}>
       <QuantumMeshBackground />
 
-      <header className="dashboard-topbar relative z-20 mx-auto mb-6 w-full max-w-[1800px] rounded-[28px] px-5 py-4 backdrop-blur-xl">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="dashboard-brand-icon flex h-12 w-12 items-center justify-center rounded-2xl">
-              <UserCircle2 size={24} />
+      {confirmDelete.open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 px-4 py-6 backdrop-blur-sm"
+          onClick={closeDeleteConfirm}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-subject-title"
+            className="w-full max-w-[320px] rounded-[28px] border border-slate-200 bg-white px-5 py-6 text-center shadow-[0_28px_80px_-24px_rgba(15,23,42,0.45)] sm:max-w-[340px]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#fceef1] text-slate-800 shadow-inner">
+              <Trash2 size={34} strokeWidth={1.8} />
             </div>
-            <div>
-              <p className="dashboard-kicker text-xs font-black uppercase tracking-[0.22em]">Learnova</p>
-              <h1 className="dashboard-title mt-1 text-2xl font-black">{organizationTitle}</h1>
-              <p className="dashboard-subtitle mt-1 text-sm">{t.organization.subtitle}</p>
-            </div>
-          </div>
 
-          <div className="flex flex-1 flex-wrap items-center justify-end gap-3 lg:max-w-4xl">
-            <label className="dashboard-input-shell flex min-w-[240px] flex-1 items-center gap-3 rounded-2xl border px-4 py-3 text-sm">
-              <Search size={16} />
-              <input
-                type="search"
-                value={topBarSearch}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setTopBarSearch(value);
-                  updateActiveSearchValue(value);
-                }}
-                disabled={isTopSearchDisabled}
-                placeholder={topSearchPlaceholder}
-                className="w-full bg-transparent outline-none"
-              />
-            </label>
+            <h3 id="delete-subject-title" className="mt-5 text-2xl font-black tracking-tight text-slate-900">
+              {confirmDelete.title || (isArabic ? "حذف؟" : "Delete?")}
+            </h3>
 
-            <button
-              type="button"
-              className="dashboard-icon-btn relative rounded-2xl border p-3 transition hover:text-slate-900"
-              aria-label={isArabic ? "الإشعارات" : "Notifications"}
-            >
-              <Bell size={18} />
-              <span className="dashboard-notification-dot absolute right-2 top-2 h-2.5 w-2.5 rounded-full" />
-            </button>
+            <p className="mt-3 text-sm font-medium leading-6 text-slate-500">
+              {isArabic
+                ? "هل أنت متأكد أنك تريد حذف هذا العنصر؟"
+                : "Are you sure you want to delete this item?"}
+            </p>
 
-            <div className="relative">
+            <p className="mt-3 text-lg font-semibold text-slate-900">
+              {`"${confirmDelete.label || ""}"`}
+            </p>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <button
                 type="button"
-                onClick={() => setShowTopUserMenu((prev) => !prev)}
-                className="dashboard-user-chip flex items-center gap-3 rounded-2xl border px-4 py-2.5"
+                onClick={closeDeleteConfirm}
+                className="h-12 flex-1 rounded-2xl border-2 border-indigo-100 bg-white text-base font-bold text-[#6b6e99] transition hover:border-indigo-200 hover:bg-indigo-50/40"
               >
-                <div className="dashboard-user-avatar flex h-10 w-10 items-center justify-center rounded-full">
-                  <UserCircle2 size={20} />
-                </div>
-                <div className="min-w-0 text-left">
-                  <p className="dashboard-title truncate text-sm font-semibold">{organizationTitle}</p>
-                  <p className="dashboard-muted truncate text-xs">{String(organizationType || t.organization.badge)}</p>
-                </div>
-                <ChevronDown size={16} className="dashboard-muted" />
+                {isArabic ? "إلغاء" : "Cancel"}
               </button>
 
-              {showTopUserMenu ? (
-                <div className="dashboard-menu absolute right-0 z-30 mt-2 w-56 rounded-2xl border p-2 shadow-xl">
-                  <button type="button" className="dashboard-menu-item w-full rounded-xl px-3 py-2 text-left text-sm font-medium">
-                    {isArabic ? "الملف الشخصي" : "Profile"}
-                  </button>
-                  <button type="button" className="dashboard-menu-item w-full rounded-xl px-3 py-2 text-left text-sm font-medium">
-                    {isArabic ? "الإعدادات" : "Settings"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => dispatch(logout())}
-                    className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-rose-700 hover:bg-rose-50"
-                  >
-                    {isArabic ? "تسجيل الخروج" : "Logout"}
-                  </button>
-                </div>
-              ) : null}
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!confirmDelete.onConfirm) return;
+                  await confirmDelete.onConfirm();
+                }}
+                className="h-12 flex-1 rounded-2xl bg-gradient-to-r from-rose-500 to-red-500 text-base font-bold text-white shadow-[0_16px_30px_-14px_rgba(239,68,68,0.85)] transition hover:from-rose-600 hover:to-red-600"
+              >
+                <span className="inline-flex items-center justify-center gap-2">
+                  <Trash2 size={16} />
+                  {isArabic ? "حذف" : "Delete"}
+                </span>
+              </button>
             </div>
-
-            <button type="button" onClick={toggleLang} className="dashboard-lang-btn rounded-2xl border px-4 py-2 text-sm font-semibold">
-              {lang === "en" ? t.common.switchToArabic : t.common.switchToEnglish}
-            </button>
           </div>
         </div>
-      </header>
+      )}
 
-      <div className="relative z-10 grid min-h-[92vh] w-full gap-6 lg:grid-cols-[260px_1fr]">
-        <aside className="dashboard-sidebar flex h-full flex-col justify-between rounded-[28px] border p-6">
-          <div>
+      <div className="organization-workspace-shell__content relative z-10">
+        <aside className="dashboard-sidebar organization-workspace-shell__sidebar flex h-full flex-col gap-5 rounded-none border p-4">
+          <div className="rounded-[1.75rem] bg-gradient-to-br from-indigo-600 via-violet-600 to-cyan-500 p-5 text-white shadow-lg shadow-indigo-500/20">
             <p className="text-xs font-black uppercase tracking-[0.22em]">Learnova</p>
             <h1 className="mt-2 text-2xl font-black">{organizationTitle}</h1>
-            <p className="mt-2 text-sm text-[#EAE0CF]/90">{t.organization.badge}</p>
-
-            <nav className="mt-8 space-y-2">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${
-                    activeTab === tab.id
-                      ? "dashboard-sidebar-item-active"
-                      : "dashboard-sidebar-item"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
+            <p className="mt-2 text-sm text-indigo-50/90">{t.organization.badge}</p>
           </div>
+
+          <nav className="space-y-2">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold transition-all duration-200 ${
+                  activeTab === tab.id
+                    ? "dashboard-sidebar-item-active"
+                    : "dashboard-sidebar-item"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
 
           <button
             type="button"
             onClick={() => dispatch(logout())}
-            className="mt-8 rounded-2xl border border-[#EAE0CF]/50 bg-white/10 px-4 py-3 text-sm font-semibold text-[#EAE0CF] transition hover:bg-white/20"
+            className="mt-auto rounded-2xl border border-transparent bg-transparent px-4 py-3 text-sm font-semibold text-red-500 transition-all duration-200 hover:border-red-500 hover:bg-red-500 hover:text-white hover:shadow-md hover:scale-[1.01]"
           >
             {t.dashboard.logout}
           </button>
         </aside>
 
-        <section className="dashboard-panel space-y-5 rounded-[28px] border p-6 md:p-8">
-          <header className="dashboard-hero rounded-3xl p-6 shadow-xl">
+        <section className="dashboard-panel organization-workspace-shell__main space-y-5 rounded-[2rem] border p-5 md:p-8">
+          <header className="dashboard-hero rounded-[2rem] p-6 shadow-xl">
             <p className="dashboard-hero-kicker text-xs font-bold uppercase tracking-[0.2em]">{t.organization.badge}</p>
             <h2 className="mt-2 text-3xl font-black">{organizationTitle}</h2>
             <p className="mt-2 text-sm">{t.organization.subtitle}</p>
@@ -1787,108 +1841,133 @@ export default function OrganizationWorkspacePage() {
               </form>
             </Modal>
 
-            <article className="rounded-3xl border border-slate-200 bg-white p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-lg font-bold text-slate-900">{t.organization.teachers.listTitle}</h2>
-                <button type="button" onClick={() => { resetTeacherForm(); setTeacherModalOpen(true); }} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
+            <article className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900">{isArabic ? "إدارة المدرسين" : "Teachers Management"}</h2>
+                  <p className="mt-1 text-sm text-slate-600">{isArabic ? "كل المدرسين داخل المنظمة" : "All instructors in your organization"}</p>
+                </div>
+                <button type="button" onClick={() => { resetTeacherForm(); setTeacherModalOpen(true); }} className="rounded-full bg-purple-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-purple-700">
                   {isArabic ? "+ إضافة مدرس" : "+ Add Teacher"}
                 </button>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <input
-                  value={teacherSearch}
-                  onChange={(event) => setTeacherSearch(event.target.value)}
-                  placeholder={isArabic ? "فلترة المعلمين (اسم/بريد/تخصص)" : "Filter teachers (name/email/specialization)"}
-                  className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm md:w-80"
-                />
+
+              <div className="mt-4 flex flex-wrap items-end gap-3">
+                <label className="flex min-w-[240px] flex-1 items-center gap-2 rounded-[14px] border border-slate-300 bg-white px-4 py-3">
+                  <Search size={16} className="text-slate-400" />
+                  <input
+                    value={teacherSearch}
+                    onChange={(event) => setTeacherSearch(event.target.value)}
+                    placeholder={isArabic ? "ابحث عن مدرس..." : "Search teachers..."}
+                    className="w-full bg-transparent text-sm outline-none"
+                  />
+                </label>
+
+                <select value={teacherTrack} onChange={(event) => setTeacherTrack(event.target.value)} className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">
+                  <option value="ALL">{isArabic ? "كل المسارات" : "All Tracks"}</option>
+                  {teacherTrackOptions.map((track) => (
+                    <option key={track} value={track}>{track}</option>
+                  ))}
+                </select>
+
                 <button
                   type="button"
-                  onClick={() => setTeacherSearch("")}
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700"
+                  onClick={() => { setTeacherSearch(""); setTeacherTrack("ALL"); }}
+                  className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   {isArabic ? "مسح" : "Clear"}
                 </button>
+
                 <button
                   type="button"
                   onClick={downloadTeachersList}
-                  className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-100"
+                  className="h-11 rounded-[14px] border border-sky-200 bg-sky-50 px-4 text-sm font-semibold text-sky-700 transition hover:bg-sky-100"
                 >
                   {isArabic ? "تنزيل CSV" : "Download CSV"}
                 </button>
               </div>
-              <div className="mt-4 overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="text-xs uppercase tracking-wider text-slate-500">
-                    <tr>
-                      <th className="py-2 pr-3">{t.organization.teachers.name}</th>
-                      <th className="py-2 pr-3">{t.organization.teachers.email}</th>
-                      <th className="py-2 pr-3">{t.organization.teachers.password}</th>
-                      <th className="py-2 pr-3">{t.organization.teachers.specialization}</th>
-                      <th className="py-2 pr-3">{t.organization.common.actions}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredTeachers.length === 0 ? (
-                      <tr>
-                        <td colSpan="5" className="py-4 text-slate-500">{t.organization.common.empty}</td>
-                      </tr>
-                    ) : filteredTeachers.map((teacher) => (
-                      <tr key={teacher.id} className="border-t border-slate-100">
-                        <td className="py-2 pr-3">{teacher?.user?.name || "-"}</td>
-                        <td className="py-2 pr-3">{teacher?.user?.email || "-"}</td>
-                        <td className="py-2 pr-3">{teacher?.user?.password || "-"}</td>
-                        <td className="py-2 pr-3">{teacher?.specialization || "-"}</td>
-                        <td className="py-2 pr-3">
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => { setTeacherForm({ id: teacher.id, name: teacher?.user?.name || "", email: teacher?.user?.email || "", password: "", specialization: teacher?.specialization || "", bio: teacher?.bio || "" }); setTeacherModalOpen(true); }}
-                              className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700"
-                            >
-                              {t.organization.common.edit}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleAction(async () => {
-                                await deleteOrganizationTeacher(teacher.id);
-                                const next = await fetchOrganizationTeachers();
-                                setTeachers(next);
-                              }, t.organization.messages.teacherDeleted)}
-                              className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700"
-                            >
-                              {t.organization.common.delete}
-                            </button>
+
+              <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {filteredTeachers.length === 0 ? (
+                  <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center text-sm text-slate-500 md:col-span-2 xl:col-span-3">
+                    {t.organization.common.empty}
+                  </div>
+                ) : filteredTeachers.map((teacher) => {
+                  const initials = String(teacher?.user?.name || teacher?.name || "T")
+                    .trim()
+                    .split(/\s+/)
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((part) => part[0]?.toUpperCase())
+                    .join("") || "T";
+                  const specialization = teacher?.specialization || (isArabic ? "غير محدد" : "Unspecified");
+                  const courseCount = Number(teacher?.coursesCount || teacher?.courseCount || 0);
+                  const studentCount = Number(teacher?.studentsCount || teacher?.studentCount || 0);
+
+                  return (
+                    <article key={teacher.id} className="relative overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                      <div className="h-1 w-full bg-gradient-to-r from-indigo-500 via-violet-500 to-cyan-500" />
+                      <div className="p-6 text-center">
+                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-xl font-black text-white shadow-lg shadow-indigo-500/25">
+                          {initials}
+                        </div>
+                        <h3 className="mt-4 text-lg font-black text-slate-900">{teacher?.user?.name || "-"}</h3>
+                        <p className="mt-1 text-sm text-slate-500">{teacher?.user?.email || "-"}</p>
+                        <span className="mt-3 inline-flex rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700">
+                          {specialization}
+                        </span>
+
+                        <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-200 pt-4 text-center">
+                          <div>
+                            <p className="text-lg font-black text-purple-600">{courseCount}</p>
+                            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{isArabic ? "كورسات" : "Courses"}</p>
                           </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                          <div>
+                            <p className="text-lg font-black text-purple-600">{studentCount}</p>
+                            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{isArabic ? "طلاب" : "Students"}</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-5 flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => { setTeacherForm({ id: teacher.id, name: teacher?.user?.name || "", email: teacher?.user?.email || "", password: "", specialization: teacher?.specialization || "", bio: teacher?.bio || "" }); setTeacherModalOpen(true); }}
+                            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+                            title={t.organization.common.edit}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openDeleteConfirm({
+                              title: isArabic ? "حذف المدرس؟" : "Delete Teacher?",
+                              label: teacher?.user?.name || teacher?.user?.email || `${teacher.id}`,
+                              onConfirm: async () => {
+                                await handleAction(async () => {
+                                  await deleteOrganizationTeacher(teacher.id);
+                                  const next = await fetchOrganizationTeachers();
+                                  setTeachers(next);
+                                  closeDeleteConfirm();
+                                }, t.organization.messages.teacherDeleted);
+                              },
+                            })}
+                            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-rose-50 hover:text-rose-700"
+                            title={t.organization.common.delete}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             </article>
           </section>
         )}
 
         {!loading && activeTab === TABS.COURSES && (
-          <section className="rounded-[32px] border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-[0_18px_56px_-26px_rgba(16,20,26,0.22)]">
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-sky-700">{isSchool ? (isArabic ? "قسم الصفوف" : "Grades section") : (isArabic ? "قسم الكورسات" : "Courses section")}</p>
-                <h2 className="mt-2 text-2xl font-black text-slate-900">{isSchool ? (isArabic ? "الصفوف" : "Grades") : t.organization.courses.listTitle}</h2>
-                <p className="mt-2 text-sm text-slate-600">{isSchool ? (isArabic ? "هنا تضيف الصفوف وتعدّلها" : "Add and edit grades in their own section") : (isArabic ? "هنا تضيف الكورسات وتعدّلها وتدير تفاصيلها بشكل مستقل" : "Add, edit, and manage courses in their own section")}</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-sm font-bold text-sky-700">
-                  {courses.length} {isSchool ? (isArabic ? "صف" : "grades") : (isArabic ? "كورس" : "courses")}
-                </span>
-                {canManageCourses && (
-                  <button type="button" onClick={() => { resetCourseForm(); setCourseModalOpen(true); }} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
-                    {isSchool ? (isArabic ? "+ إضافة صف" : "+ Add Grade") : (isArabic ? "+ إضافة كورس" : "+ Add Course")}
-                  </button>
-                )}
-              </div>
-            </div>
-
+          <section className="space-y-4">
             {canManageCourses && (
               <Modal open={courseModalOpen} onClose={() => { setCourseModalOpen(false); resetCourseForm(); }} title={courseForm.id ? t.organization.courses.formTitle : (isSchool ? (isArabic ? "إضافة صف جديد" : "Add New Grade") : (isArabic ? "إضافة كورس جديد" : "Add New Course"))} maxWidth="max-w-lg">
                 <form onSubmit={saveCourse} className="space-y-3">
@@ -1921,135 +2000,212 @@ export default function OrganizationWorkspacePage() {
               </Modal>
             )}
 
-            <div className="mt-5 grid gap-4 lg:grid-cols-3">
-              {canManageCourses ? null : (
-                <div className="rounded-[28px] border border-amber-200 bg-amber-50 p-5 shadow-sm">
+            <article className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-sky-700">{isSchool ? (isArabic ? "قسم الصفوف" : "Grades section") : (isArabic ? "قسم الكورسات" : "Courses section")}</p>
+                  <h2 className="mt-2 text-2xl font-black text-slate-900">{isSchool ? (isArabic ? "الصفوف" : "Grades") : t.organization.courses.listTitle}</h2>
+                  <p className="mt-2 text-sm text-slate-600">{isSchool ? (isArabic ? "هنا تضيف الصفوف وتعدّلها" : "Add and edit grades in their own section") : (isArabic ? "هنا تضيف الكورسات وتعدّلها وتدير تفاصيلها بشكل مستقل" : "Add, edit, and manage courses in their own section")}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-sm font-bold text-sky-700">
+                    {filteredCourses.length} {isSchool ? (isArabic ? "صف" : "grades") : (isArabic ? "كورس" : "courses")}
+                  </span>
+                  {canManageCourses && (
+                    <button type="button" onClick={() => { resetCourseForm(); setCourseModalOpen(true); }} className="rounded-full bg-purple-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-purple-700">
+                      {isSchool ? (isArabic ? "+ إضافة صف" : "+ Add Grade") : (isArabic ? "+ إضافة كورس" : "+ Add Course")}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {!canManageCourses && (
+                <div className="mt-5 rounded-[24px] border border-amber-200 bg-amber-50 p-5">
                   <p className="text-sm font-bold text-amber-900">{isArabic ? "إنشاء الكورس متاح فقط لحسابات المنظمة." : "Course creation is available only for organization accounts."}</p>
                   <p className="mt-2 text-sm text-amber-800">{isArabic ? "المعلمون يمكنهم إدارة المواد والدروس فقط." : "Teachers can manage subjects and lessons only."}</p>
                 </div>
               )}
 
-              <article className="rounded-[28px] border border-slate-200 bg-white p-5 lg:col-span-2 shadow-sm">
-                <h2 className="text-lg font-bold text-slate-900">{t.organization.courses.listTitle}</h2>
-                    <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-5 flex flex-wrap items-end gap-3">
+                <label className="flex min-w-[240px] flex-1 items-center gap-2 rounded-[14px] border border-slate-300 bg-white px-4 py-3">
+                  <Search size={16} className="text-slate-400" />
                   <input
                     value={courseSearch}
                     onChange={(event) => setCourseSearch(event.target.value)}
                     placeholder={isSchool ? (isArabic ? "فلترة الصفوف" : "Filter grades") : (isArabic ? "فلترة الكورسات (الاسم/الوصف)" : "Filter courses (name/description)")}
-                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm md:w-80"
+                    className="w-full bg-transparent text-sm outline-none"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setCourseSearch("")}
-                    className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700"
-                  >
-                    {isArabic ? "مسح" : "Clear"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={downloadCoursesList}
-                    className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-100"
-                  >
-                    {isArabic ? "تنزيل CSV" : "Download CSV"}
-                  </button>
-                </div>
-                <div className="mt-4 overflow-x-auto">
-                  <table className="min-w-full text-left text-sm">
-                    <thead className="text-xs uppercase tracking-wider text-slate-500">
-                      <tr>
-                        <th className="py-2 pr-3">{isArabic ? 'الصورة' : 'Image'}</th>
-                        <th className="py-2 pr-3">{isSchool ? (isArabic ? "الصف" : "Grade") : t.organization.courses.name}</th>
-                        <th className="py-2 pr-3">{t.organization.courses.description}</th>
-                        <th className="py-2 pr-3">{t.organization.common.actions}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredCourses.length === 0 ? (
-                        <tr>
-                          <td colSpan={isAcademy ? 5 : 5} className="py-4 text-slate-500">{t.organization.common.empty}</td>
-                        </tr>
-                      ) : filteredCourses.map((course) => (
-                        <tr key={course.id} className="border-t border-slate-100">
-                          <td className="py-2 pr-3">
-                            <img
-                              src={getCourseThumbnailUrl(course.Thumbnail)}
-                              alt={course.Name || (isArabic ? 'صورة الكورس' : 'Course image')}
-                              onError={(event) => {
-                                event.currentTarget.src = DEFAULT_COURSE_THUMBNAIL;
-                              }}
-                              className="h-12 w-12 rounded-xl border border-slate-200 object-cover"
-                            />
-                          </td>
-                          <td className="py-2 pr-3">
-                            <span className="font-semibold text-slate-900">
-                              {formatGradeName(course, isSchool, isArabic) || course.Name || "-"}
-                            </span>
-                          </td>
-                          <td className="py-2 pr-3">{course.Description || "-"}</td>
-                          <td className="py-2 pr-3">
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => openCourseEditor(course)}
-                                className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700"
-                              >
-                                {t.organization.common.edit}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleAction(async () => {
-                                  await deleteOrganizationCourse(course.id);
-                                  const next = await fetchOrganizationCourses();
-                                  setCourses(next);
-                                  setSubjectsByCourse((prev) => {
-                                    const clone = { ...prev };
-                                    delete clone[course.id];
-                                    return clone;
-                                  });
-                                  if (selectedCourseId === course.id) {
-                                    setSelectedCourseId(next?.[0]?.id || null);
-                                  }
-                                }, t.organization.messages.courseDeleted)}
-                                className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700"
-                              >
-                                {t.organization.common.delete}
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </article>
-            </div>
+                </label>
+
+                <select value={courseTrack} onChange={(event) => setCourseTrack(event.target.value)} className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">
+                  <option value="ALL">{isArabic ? "كل المسارات" : "All Tracks"}</option>
+                  {courseTrackOptions.map((track) => (
+                    <option key={track} value={track}>{track}</option>
+                  ))}
+                </select>
+
+                <select value={coursePrice} onChange={(event) => setCoursePrice(event.target.value)} className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">
+                  <option value="ALL">{isArabic ? "كل الأسعار" : "All Prices"}</option>
+                  <option value="FREE">{isArabic ? "مجاني" : "Free"}</option>
+                  <option value="PAID">{isArabic ? "مدفوع" : "Paid"}</option>
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => { setCourseSearch(""); setCourseTrack("ALL"); setCoursePrice("ALL"); }}
+                  className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  {isArabic ? "مسح" : "Clear"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={downloadCoursesList}
+                  className="h-11 rounded-[14px] border border-sky-200 bg-sky-50 px-4 text-sm font-semibold text-sky-700 transition hover:bg-sky-100"
+                >
+                  {isArabic ? "تنزيل CSV" : "Download CSV"}
+                </button>
+              </div>
+
+              <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {filteredCourses.length === 0 ? (
+                  <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center text-sm text-slate-500 md:col-span-2 xl:col-span-3">
+                    {t.organization.common.empty}
+                  </div>
+                ) : filteredCourses.map((course, index) => {
+                  const accentClasses = ["from-cyan-500 to-blue-600", "from-violet-500 to-fuchsia-600", "from-amber-500 to-orange-500", "from-emerald-500 to-teal-500"];
+                  const accent = accentClasses[index % accentClasses.length];
+                  const trackLabel = formatGradeName(course, isSchool, isArabic) || course.Name || course.name || "-";
+                  const priceLabel = course?.isPaid ? (isArabic ? "مدفوع" : "Paid") : (isArabic ? "مجاني" : "Free");
+
+                  return (
+                    <article key={course.id} className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                      <div className={`flex h-44 items-center justify-center bg-gradient-to-br ${accent} p-6`}>
+                        <img
+                          src={getCourseThumbnailUrl(course.Thumbnail)}
+                          alt={course.Name || (isArabic ? 'صورة الكورس' : 'Course image')}
+                          onError={(event) => {
+                            event.currentTarget.src = DEFAULT_COURSE_THUMBNAIL;
+                          }}
+                          className="h-full w-full rounded-[20px] object-cover shadow-lg shadow-black/10"
+                        />
+                      </div>
+                      <div className="p-5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="truncate text-lg font-black text-slate-900">{trackLabel}</h3>
+                            <p className="mt-1 text-sm text-slate-500">{course?.Teacher_name || course?.teacherName || course?.teacher?.name || course?.teacher?.user?.name || (isArabic ? "غير محدد" : "Unassigned")}</p>
+                          </div>
+                          <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{priceLabel}</div>
+                        </div>
+
+                        <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">{course.Description || (isArabic ? "لا يوجد وصف" : "No description")}</p>
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">{trackLabel}</span>
+                          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">{priceLabel}</span>
+                        </div>
+
+                        <div className="mt-5 flex items-center justify-between border-t border-slate-200 pt-4">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{isArabic ? "السعر" : "Price"}</p>
+                            <p className="mt-1 text-base font-black text-slate-900">{course?.Price != null && course?.Price !== "" ? `${course.Price} $` : (isArabic ? "مجاني" : "Free")}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openCourseEditor(course)}
+                              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+                              title={t.organization.common.edit}
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openDeleteConfirm({
+                                title: isArabic ? "حذف الكورس؟" : "Delete Course?",
+                                label: trackLabel,
+                                onConfirm: async () => {
+                                  await handleAction(async () => {
+                                    await deleteOrganizationCourse(course.id);
+                                    const next = await fetchOrganizationCourses();
+                                    setCourses(next);
+                                    setSubjectsByCourse((prev) => {
+                                      const clone = { ...prev };
+                                      delete clone[course.id];
+                                      return clone;
+                                    });
+                                    if (selectedCourseId === course.id) {
+                                      setSelectedCourseId(next?.[0]?.id || null);
+                                    }
+                                    closeDeleteConfirm();
+                                  }, t.organization.messages.courseDeleted);
+                                },
+                              })}
+                              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-rose-50 hover:text-rose-700"
+                              title={t.organization.common.delete}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </article>
           </section>
         )}
 
+
         {!loading && activeTab === "subjects" && (
-          <section className="rounded-[32px] border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-[0_18px_56px_-26px_rgba(16,20,26,0.22)]">
-                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.22em] text-sky-700">{isArabic ? "قسم المواد" : "Subjects section"}</p>
-                    <h2 className="mt-2 text-2xl font-black text-slate-900">{t.organization.subjects.listTitle}</h2>
-                    <p className="mt-2 text-sm text-slate-600">{isSchool ? (isArabic ? "كل المواد هنا في الصفوف" : "All subjects organized by grade") : (isArabic ? "كل المواد هنا في قسم مستقل داخل الصفحة نفسها" : "All subjects are isolated in their own section on the same page")}</p>
+          <section className="space-y-6">
+            <article className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-[20px] border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "إجمالي المواد" : "Total Subjects"}</p>
+                      <p className="mt-2 text-3xl font-black text-slate-900">{currentSubjects.length}</p>
+                    </div>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 text-xl">📚</div>
                   </div>
-                  <span className="rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-sm font-bold text-sky-700">
-                    {currentSubjects.length} {isArabic ? "مادة" : "subjects"}
-                  </span>
                 </div>
+                
+                <div className="rounded-[20px] border border-slate-200 bg-gradient-to-br from-blue-50 to-white p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "المدرسون" : "Instructors"}</p>
+                      <p className="mt-2 text-3xl font-black text-slate-900">{teachers.length}</p>
+                    </div>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-xl">👨‍🏫</div>
+                  </div>
+                </div>
+                
+                <div className="rounded-[20px] border border-slate-200 bg-gradient-to-br from-green-50 to-white p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "المسار الحالي" : "Current Track"}</p>
+                      <p className="mt-2 text-lg font-black text-slate-900 line-clamp-1">{selectedCourseId ? (formatGradeName(courses.find((c) => c.id === selectedCourseId), isSchool, isArabic) || "-") : "-"}</p>
+                    </div>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-xl">🎓</div>
+                  </div>
+                </div>
+              </div>
+            </article>
 
             <Modal open={subjectModalOpen} onClose={() => { setSubjectModalOpen(false); resetSubjectForm(); }} title={subjectForm.id ? t.organization.subjects.formTitle : (isArabic ? "إضافة مادة جديدة" : "Add New Subject")} maxWidth="max-w-lg">
               <form onSubmit={saveSubject} className="space-y-3">
                 <p className="text-xs text-slate-500">{isSchool ? t.organization.subjects.gradeHint : t.organization.subjects.courseHint}</p>
                 <div className="mt-4 space-y-3">
-                  <select value={selectedCourseId || ""} onChange={(event) => setSelectedCourseId(Number(event.target.value) || null)} className="h-11 w-full rounded-xl border border-slate-200 px-3">
+                  <select value={selectedCourseId || ""} onChange={(event) => handleSubjectsCourseChange(Number(event.target.value) || null)} className="h-11 w-full rounded-xl border border-slate-200 px-3">
                      <option value="">
                        {isSchool
                          ? (isArabic ? t.organization.subjects.selectGradeFirst : t.organization.subjects.selectGradeFirst)
                          : (isArabic ? t.organization.subjects.selectCourseFirst : t.organization.subjects.selectCourseFirst)}
                      </option>
-                     {courses.map((course) => (
+                     {sortedSubjectCourses.map((course) => (
                        <option key={course.id} value={course.id}>{formatGradeName(course, isSchool, isArabic) || course.Name}</option>
                      ))}
                   </select>
@@ -2103,85 +2259,127 @@ export default function OrganizationWorkspacePage() {
               </form>
             </Modal>
 
-            <div className="mt-5">
-              <article className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-lg font-bold text-slate-900">{t.organization.subjects.listTitle}</h2>
-                  <button type="button" onClick={() => { resetSubjectForm(); setSubjectModalOpen(true); }} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
-                    {isArabic ? "+ إضافة مادة" : "+ Add Subject"}
-                  </button>
+            <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900">{isArabic ? "إدارة المواد" : "Subjects Management"}</h2>
+                  <p className="mt-1 text-sm text-slate-600">{isArabic ? "إدارة المواد حسب المسار والمدرس" : "Manage all subjects across your tracks & grades"}</p>
                 </div>
-                <p className="mt-1 text-xs text-slate-500">
-                  {selectedCourseId
-                    ? isSchool
-                      ? `${t.organization.subjects.selectedGrade}: ${formatGradeName(courses.find((course) => course.id === selectedCourseId), isSchool, isArabic) || "-"}`
-                      : `${t.organization.subjects.selectedCourse}: ${formatGradeName(courses.find((course) => course.id === selectedCourseId), isSchool, isArabic) || "-"}`
-                    : isSchool
-                      ? t.organization.subjects.selectGradeFirst
-                      : t.organization.subjects.selectCourseFirst}
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <input
-                    value={subjectSearch}
-                    onChange={(event) => setSubjectSearch(event.target.value)}
-                    placeholder={isArabic ? "فلترة المواد (الاسم/المعلم)" : "Filter subjects (name/teacher)"}
-                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm md:w-80"
-                  />
+                <button type="button" onClick={() => { resetSubjectForm(); setSubjectModalOpen(true); }} className="rounded-full bg-purple-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-purple-700">
+                  {isArabic ? "+ إضافة مادة" : "+ Add Subject"}
+                </button>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="flex-1 min-w-[200px]">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "اختر الصف/المسار" : "Select Track"}</label>
+                    <select
+                      value={selectedCourseId || ""}
+                      onChange={(event) => handleSubjectsCourseChange(Number(event.target.value) || null)}
+                      className="h-11 w-full rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700"
+                    >
+                      {sortedSubjectCourses.map((course) => (
+                        <option key={course.id} value={course.id}>
+                          {formatGradeName(course, isSchool, isArabic) || course.Name || course.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex-1 min-w-[200px]">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "المدرس" : "Filter by Teacher"}</label>
+                    <select value={selectedTeacherId} onChange={(e) => setSelectedTeacherId(e.target.value)} className="h-11 w-full rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">
+                      <option value="">{isArabic ? "الكل" : "All Teachers"}</option>
+                      {teacherOptions.map((opt) => (
+                        <option key={opt.id} value={opt.id}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex-1 min-w-[240px]">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "بحث" : "Search Subjects"}</label>
+                    <div className="flex items-center gap-2 rounded-[14px] border border-slate-300 bg-white px-4">
+                      <Search size={16} className="text-slate-400" />
+                      <input
+                        value={subjectSearch}
+                        onChange={(e) => setSubjectSearch(e.target.value)}
+                        placeholder={isArabic ? "ابحث عن مادة أو معلم" : "Name, teacher, course..."}
+                        className="w-full bg-transparent py-3 text-sm outline-none"
+                      />
+                    </div>
+                  </div>
+
                   <button
                     type="button"
-                    onClick={() => setSubjectSearch("")}
-                    className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700"
+                    onClick={() => { setSelectedTeacherId(""); setSubjectSearch(""); }}
+                    className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                   >
                     {isArabic ? "مسح" : "Clear"}
                   </button>
-                  <button
-                    type="button"
-                    onClick={downloadSubjectsList}
-                    className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-100"
-                  >
-                    {isArabic ? "تنزيل CSV" : "Download CSV"}
-                  </button>
                 </div>
-                <div className="mt-4 overflow-x-auto">
-                  <table className="min-w-full text-left text-sm">
-                    <thead className="text-xs uppercase tracking-wider text-slate-500">
-                      <tr>
-                        <th className="py-2 pr-3">{t.organization.subjects.name}</th>
-                        <th className="py-2 pr-3">{t.organization.subjects.teacher}</th>
-                        <th className="py-2 pr-3">{t.organization.common.actions}</th>
+              </div>
+
+              {subjectsLoading ? (
+                <div className="mt-6 space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="h-16 rounded-[14px] border border-slate-200 bg-slate-50 animate-pulse" />
+                  ))}
+                </div>
+              ) : filteredSubjects.length > 0 ? (
+                <div className="mt-6 overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-slate-200">
+                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">#</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "المادة" : "Subject Name"}</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "الصف/المسار" : "Track"}</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "المدرس" : "Teacher"}</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "الوصف" : "Description"}</th>
+                        <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "الإجراءات" : "Actions"}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredSubjects.length === 0 ? (
-                        <tr>
-                          <td colSpan="3" className="py-4 text-slate-500">{t.organization.common.empty}</td>
-                        </tr>
-                      ) : filteredSubjects.map((subject) => (
-                        <tr key={subject.id} className="border-t border-slate-100">
-                          <td className="py-2 pr-3">{subject.name}</td>
-                          <td className="py-2 pr-3">{subject?.teacher?.user?.name || "-"}</td>
-                          <td className="py-2 pr-3">
-                            <div className="flex gap-2">
+                      {filteredSubjects.map((subject, idx) => (
+                        <tr key={subject.id} className="border-b border-slate-200 hover:bg-slate-50 transition">
+                          <td className="px-4 py-3 text-sm font-semibold text-slate-600">{idx + 1}</td>
+                          <td className="px-4 py-3 text-sm font-semibold text-slate-900">{subject.name}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className="inline-block rounded-full bg-purple-100 px-3 py-1 text-purple-700 font-semibold text-xs">
+                              {formatGradeName(subject?.course || courses.find((c) => c.id === selectedCourseId), isSchool, isArabic)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{subject?.teacher?.user?.name || "-"}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600 line-clamp-2">{subject.Description || "-"}</td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-2">
                               <button
                                 type="button"
                                 onClick={() => { setSubjectForm({ id: subject.id, name: subject.name, Description: subject.Description || "", Teacher_id: subject.Teacher_id || "", isPaid: Boolean(subject.isPaid), price: subject.price ? String(subject.price) : "" }); setSubjectModalOpen(true); }}
-                                className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700"
+                                className="rounded-lg border border-slate-300 bg-white p-2 text-slate-700 hover:bg-slate-50 transition"
+                                title={isArabic ? "تعديل" : "Edit"}
                               >
-                                {t.organization.common.edit}
+                                <Pencil size={16} />
                               </button>
                               <button
                                 type="button"
-                                onClick={() => handleAction(async () => {
-                                  await deleteCourseSubject(selectedCourseId, subject.id);
-                                  const next = await fetchCourseSubjects(selectedCourseId);
-                                  setSubjectsByCourse((prev) => ({
-                                    ...prev,
-                                    [selectedCourseId]: next,
-                                  }));
-                                }, t.organization.messages.subjectDeleted)}
-                                className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700"
+                                onClick={() => openDeleteConfirm({
+                                  title: isArabic ? "حذف المادة؟" : "Delete Subject?",
+                                  label: subject.name,
+                                  onConfirm: async () => {
+                                    await handleAction(async () => {
+                                      await deleteCourseSubject(selectedCourseId, subject.id);
+                                      const next = await fetchCourseSubjects(selectedCourseId);
+                                      setSubjectsByCourse((prev) => ({ ...prev, [selectedCourseId]: next }));
+                                      setSubjectSelectionTouched(true);
+                                      closeDeleteConfirm();
+                                    }, t.organization.messages.subjectDeleted);
+                                  },
+                                })}
+                                className="rounded-lg border border-rose-300 bg-rose-50 p-2 text-rose-700 hover:bg-rose-100 transition"
+                                title={isArabic ? "حذف" : "Delete"}
                               >
-                                {t.organization.common.delete}
+                                <Trash2 size={16} />
                               </button>
                             </div>
                           </td>
@@ -2190,7 +2388,17 @@ export default function OrganizationWorkspacePage() {
                     </tbody>
                   </table>
                 </div>
-              </article>
+              ) : shouldShowSubjectsEmptyState ? (
+                <div className="mt-8 rounded-[20px] border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
+                  <p className="text-sm font-semibold text-slate-600">{isArabic ? "لا توجد مواد لهذا المسار" : "No subjects in this track"}</p>
+                  <p className="mt-1 text-xs text-slate-500">{isArabic ? "حاول تغيير الفلاتر أو أضف مادة جديدة" : "Try adjusting filters or add a new subject"}</p>
+                </div>
+              ) : (
+                <div className="mt-8 rounded-[20px] border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
+                  <p className="text-sm font-semibold text-slate-600">{isArabic ? "اختر مسارًا لعرض المواد" : "Choose a track to view subjects"}</p>
+                  <p className="mt-1 text-xs text-slate-500">{isArabic ? "يمكنك التبديل بين الصفوف/المسارات من الأعلى" : "Use the selector above to switch grades/tracks"}</p>
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -2231,24 +2439,32 @@ export default function OrganizationWorkspacePage() {
               </form>
             </Modal>
 
-            <article className="rounded-3xl border border-slate-200 bg-white p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-lg font-bold text-slate-900">{t.organization.students.listTitle}</h2>
-                <button type="button" onClick={() => { resetStudentForm(); setStudentModalOpen(true); }} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
+            <article className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900">{t.organization.students.listTitle}</h2>
+                  <p className="mt-1 text-sm text-slate-600">{isArabic ? "قائمة الطلاب مع الحالة والروابط" : "Students with status, course, and quick actions"}</p>
+                </div>
+                <button type="button" onClick={() => { resetStudentForm(); setStudentModalOpen(true); }} className="rounded-full bg-purple-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-purple-700">
                   {isArabic ? "+ إضافة طالب" : "+ Add Student"}
                 </button>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <input
-                  value={studentSearch}
-                  onChange={(event) => setStudentSearch(event.target.value)}
-                  placeholder={isArabic ? "فلترة الطلاب (الاسم/البريد/العنوان)" : "Filter students (name/email/address)"}
-                  className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm md:w-72"
-                />
+
+              <div className="mt-5 flex flex-wrap items-end gap-3">
+                <label className="flex min-w-[240px] flex-1 items-center gap-2 rounded-[14px] border border-slate-300 bg-white px-4 py-3">
+                  <Search size={16} className="text-slate-400" />
+                  <input
+                    value={studentSearch}
+                    onChange={(event) => setStudentSearch(event.target.value)}
+                    placeholder={isArabic ? "فلترة الطلاب (الاسم/البريد/العنوان)" : "Filter students (name/email/address)"}
+                    className="w-full bg-transparent text-sm outline-none"
+                  />
+                </label>
+
                 <select
                   value={selectedCourseId || ""}
                   onChange={(event) => setSelectedCourseId(event.target.value ? Number(event.target.value) : null)}
-                  className="h-10 rounded-xl border border-slate-200 px-3 text-sm"
+                  className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700"
                 >
                   <option value="">
                     {isSchool
@@ -2259,96 +2475,127 @@ export default function OrganizationWorkspacePage() {
                     <option key={c.id} value={c.id}>{formatGradeName(c, isSchool, isArabic) || c.Name || c.name}</option>
                   ))}
                 </select>
+
                 <select
-                  value={studentGenderFilter}
-                  onChange={(event) => setStudentGenderFilter(event.target.value)}
-                  className="h-10 rounded-xl border border-slate-200 px-3 text-sm"
+                  value={studentStatus}
+                  onChange={(event) => setStudentStatus(event.target.value)}
+                  className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700"
                 >
-                  <option value="ALL">{isArabic ? "كل الأجناس" : "All genders"}</option>
-                  <option value="MALE">{t.organization.students.male}</option>
-                  <option value="FEMALE">{t.organization.students.female}</option>
+                  <option value="ALL">{isArabic ? "كل الحالات" : "All Status"}</option>
+                  <option value="ACTIVE">{isArabic ? "نشط" : "Active"}</option>
+                  <option value="INACTIVE">{isArabic ? "غير نشط" : "Inactive"}</option>
                 </select>
+
                 <button
                   type="button"
                   onClick={() => {
                     setStudentSearch("");
+                    setSelectedCourseId(null);
                     setStudentGenderFilter("ALL");
+                    setStudentStatus("ALL");
                   }}
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700"
+                  className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   {isArabic ? "مسح" : "Clear"}
                 </button>
+
                 <button
                   type="button"
                   onClick={downloadStudentsList}
-                  className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-100"
+                  className="h-11 rounded-[14px] border border-sky-200 bg-sky-50 px-4 text-sm font-semibold text-sky-700 transition hover:bg-sky-100"
                 >
                   {isArabic ? "تنزيل CSV" : "Download CSV"}
                 </button>
               </div>
-              <div className="mt-4 overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="text-xs uppercase tracking-wider text-slate-500">
-                    <tr>
-                      <th className="py-2 pr-3">{t.organization.students.name}</th>
-                      <th className="py-2 pr-3">{t.organization.students.email}</th>
-                      <th className="py-2 pr-3">{t.organization.students.password}</th>
-                      {isSchool && <th className="py-2 pr-3">{t.organization.students.parent}</th>}
-                      <th className="py-2 pr-3">{t.organization.students.age}</th>
-                      <th className="py-2 pr-3">{t.organization.common.actions}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredStudents.length === 0 ? (
+
+              <div className="mt-6 overflow-hidden rounded-[24px] border border-slate-200">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
                       <tr>
-                        <td colSpan={isSchool ? "6" : "5"} className="py-4 text-slate-500">{t.organization.common.empty}</td>
+                        <th className="px-4 py-3">#</th>
+                        <th className="px-4 py-3">{t.organization.students.name}</th>
+                        <th className="px-4 py-3">{t.organization.students.email}</th>
+                        <th className="px-4 py-3">{isSchool ? (isArabic ? "الصف" : "Grade") : (isArabic ? "الدورة" : "Course")}</th>
+                        <th className="px-4 py-3">{t.organization.students.age}</th>
+                        <th className="px-4 py-3">{isArabic ? "الحالة" : "Status"}</th>
+                        <th className="px-4 py-3">{t.organization.common.actions}</th>
                       </tr>
-                    ) : filteredStudents.map((student) => (
-                      <tr key={student.id} className="border-t border-slate-100">
-                      <td className="py-2 pr-3">{student.name}</td>
-                      <td className="py-2 pr-3">{student.email}</td>
-                      <td className="py-2 pr-3">{student.password || "-"}</td>
-                      {isSchool && <td className="py-2 pr-3">{parentNameById.get(Number(student?.student?.Parent_id)) || "-"}</td>}
-                      <td className="py-2 pr-3">{student.age ?? "-"}</td>
-                        <td className="py-2 pr-3">
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => { setStudentForm({ id: student.id, name: student.name || "", email: student.email || "", password: "", age: student.age || "", gender: student.gender || "MALE", address: student.address || "", dob: student.dob ? String(student.dob).slice(0, 10) : "", parentNationalId: "" }); setStudentModalOpen(true); }}
-                              className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700"
-                            >
-                              {t.organization.common.edit}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openEnrollmentModal(student)}
-                              className="rounded-lg border border-blue-200 px-2 py-1 text-xs font-semibold text-blue-700"
-                            >
-                              {isArabic
-                                ? isSchool
-                                  ? "إدارة الصفوف"
-                                  : "إدارة الكورسات"
-                                : isSchool
-                                  ? "Manage Grades"
-                                  : "Manage Courses"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleAction(async () => {
-                                await deleteOrganizationUser(student.id);
-                                const next = await fetchOrganizationUsers();
-                                setUsers(next);
-                              }, t.organization.messages.studentDeleted)}
-                              className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700"
-                            >
-                              {t.organization.common.delete}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {filteredStudents.length === 0 ? (
+                        <tr>
+                          <td colSpan="7" className="px-4 py-6 text-center text-slate-500">{t.organization.common.empty}</td>
+                        </tr>
+                      ) : filteredStudents.map((student, index) => {
+                        const statusValue = String(student?.status || student?.Status || "").toUpperCase();
+                        const statusLabel = statusValue || "-";
+                        const statusClass = statusValue === "ACTIVE"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : statusValue === "INACTIVE"
+                            ? "bg-slate-100 text-slate-600"
+                            : "bg-sky-100 text-sky-700";
+
+                        return (
+                          <tr key={student.id} className="hover:bg-slate-50/70">
+                            <td className="px-4 py-4 font-semibold text-slate-500">{index + 1}</td>
+                            <td className="px-4 py-4 font-semibold text-slate-900">{student.name}</td>
+                            <td className="px-4 py-4 text-slate-600">{student.email}</td>
+                            <td className="px-4 py-4 text-slate-600">{selectedCourseId ? (formatGradeName(courses.find((course) => course.id === selectedCourseId), isSchool, isArabic) || "-") : (isArabic ? "الكل" : "All")}</td>
+                            <td className="px-4 py-4 text-slate-600">{student.age ?? "-"}</td>
+                            <td className="px-4 py-4">
+                              <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${statusClass}`}>{statusLabel}</span>
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => { setStudentForm({ id: student.id, name: student.name || "", email: student.email || "", password: "", age: student.age || "", gender: student.gender || "MALE", address: student.address || "", dob: student.dob ? String(student.dob).slice(0, 10) : "", parentNationalId: "" }); setStudentModalOpen(true); }}
+                                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+                                  title={t.organization.common.edit}
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openEnrollmentModal(student)}
+                                  className="rounded-xl border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-50"
+                                >
+                                  {isArabic
+                                    ? isSchool
+                                      ? "إدارة الصفوف"
+                                      : "إدارة الكورسات"
+                                    : isSchool
+                                      ? "Manage Grades"
+                                      : "Manage Courses"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openDeleteConfirm({
+                                    title: isArabic ? "حذف الطالب؟" : "Delete Student?",
+                                    label: student.name || student.email || `${student.id}`,
+                                    onConfirm: async () => {
+                                      await handleAction(async () => {
+                                        await deleteOrganizationUser(student.id);
+                                        const next = await fetchOrganizationUsers();
+                                        setUsers(next);
+                                        closeDeleteConfirm();
+                                      }, t.organization.messages.studentDeleted);
+                                    },
+                                  })}
+                                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-rose-50 hover:text-rose-700"
+                                  title={t.organization.common.delete}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </article>
           </section>
@@ -2454,14 +2701,21 @@ export default function OrganizationWorkspacePage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleAction(async () => {
-                                await deleteOrganizationUser(parent.id);
-                                const next = await fetchOrganizationUsers();
-                                setUsers(next);
-                                if (parentForm.id === parent.id) {
-                                  resetParentForm();
-                                }
-                              }, t.organization.messages.parentDeleted)}
+                              onClick={() => openDeleteConfirm({
+                                title: isArabic ? "حذف ولي الأمر؟" : "Delete Parent?",
+                                label: parent.name || parent.email || `${parent.id}`,
+                                onConfirm: async () => {
+                                  await handleAction(async () => {
+                                    await deleteOrganizationUser(parent.id);
+                                    const next = await fetchOrganizationUsers();
+                                    setUsers(next);
+                                    if (parentForm.id === parent.id) {
+                                      resetParentForm();
+                                    }
+                                    closeDeleteConfirm();
+                                  }, t.organization.messages.parentDeleted);
+                                },
+                              })}
                               className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700"
                             >
                               {t.organization.common.delete}

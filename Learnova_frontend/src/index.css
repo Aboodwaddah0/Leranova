@@ -109,8 +109,8 @@ a {
 .admin-management-theme a.bg-slate-900,
 .admin-management-theme a.bg-slate-950,
 .admin-management-theme a.bg-sky-700 {
-  background-color: var(--admin-btn) !important;
-  border-color: var(--admin-btn) !important;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #06b6d4 100%) !important;
+  border-color: transparent !important;
   color: #fff !important;
 }
 
@@ -122,8 +122,8 @@ a {
 .admin-management-theme a.bg-slate-900:hover,
 .admin-management-theme a.bg-slate-950:hover,
 .admin-management-theme a.bg-sky-700:hover {
-  background-color: var(--admin-btn-hover) !important;
-  border-color: var(--admin-btn-hover) !important;
+  background: linear-gradient(135deg, #4338ca 0%, #6d28d9 55%, #0891b2 100%) !important;
+  border-color: transparent !important;
 }
 
 .admin-management-theme button.bg-amber-500,
@@ -157,17 +157,21 @@ a {
 }
 
 .admin-management-theme.dashboard-page {
-  background-color: var(--dash-page-bg);
+  background:
+    radial-gradient(circle at 16% 12%, rgba(99, 102, 241, 0.14), transparent 32%),
+    radial-gradient(circle at 86% 14%, rgba(168, 85, 247, 0.1), transparent 26%),
+    radial-gradient(circle at 78% 84%, rgba(14, 165, 233, 0.08), transparent 28%),
+    #f0f2ff;
 }
 
 .admin-management-theme .dashboard-topbar {
-  border: 1px solid var(--dash-border);
-  background: rgba(255, 255, 255, 0.8);
-  box-shadow: 0 18px 56px -26px var(--dash-shadow);
+  border: 1px solid rgba(229, 231, 235, 0.95);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 4px 24px rgba(124, 58, 237, 0.05);
 }
 
 .admin-management-theme .dashboard-brand-icon {
-  background: linear-gradient(135deg, var(--dash-navy), var(--dash-sea));
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
   color: var(--dash-ivory);
   box-shadow: 0 10px 28px -14px rgba(31, 105, 171, 0.35);
 }
@@ -203,7 +207,7 @@ a {
 }
 
 .admin-management-theme .dashboard-input-shell input::placeholder {
-  color: var(--dash-mist);
+  color: #94a3b8;
 }
 
 .admin-management-theme .dashboard-notification-dot {
@@ -224,15 +228,15 @@ a {
 }
 
 .admin-management-theme .dashboard-lang-btn {
-  border-color: var(--dash-navy) !important;
-  background-color: var(--dash-navy) !important;
+  border-color: transparent !important;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
   color: var(--dash-ivory) !important;
 }
 
 .admin-management-theme .dashboard-panel {
-  border-color: var(--dash-border);
-  background-color: var(--dash-surface);
-  box-shadow: 0 18px 56px -26px rgba(16, 20, 26, 0.35);
+  border-color: rgba(229, 231, 235, 0.95);
+  background-color: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 4px 24px rgba(124, 58, 237, 0.08);
 }
 
 .admin-management-theme .dashboard-panel-divider {
@@ -240,28 +244,29 @@ a {
 }
 
 .admin-management-theme .dashboard-sidebar {
-  border-color: rgba(186, 230, 253, 0.5);
-  background: linear-gradient(180deg, var(--dash-navy), var(--dash-sea));
-  color: var(--dash-ivory);
-  box-shadow: 0 18px 56px -26px rgba(31, 105, 171, 0.45);
+  border-color: rgba(229, 231, 235, 0.95);
+  background: rgba(255, 255, 255, 0.98);
+  color: var(--dash-text-strong);
+  box-shadow: 4px 0 24px rgba(124, 58, 237, 0.07);
 }
 
 .admin-management-theme .dashboard-sidebar-item-active {
-  background-color: #ffffff;
-  color: #1a5d96;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  color: #ffffff;
+  box-shadow: 0 12px 24px -14px rgba(99, 102, 241, 0.45);
 }
 
 .admin-management-theme .dashboard-sidebar-item {
-  color: var(--dash-ivory);
+  color: var(--dash-text-muted);
 }
 
 .admin-management-theme .dashboard-sidebar-item:hover {
-  background-color: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: linear-gradient(135deg, rgba(237, 233, 254, 0.95), rgba(219, 234, 254, 0.95));
+  color: var(--dash-text-strong);
 }
 
 .admin-management-theme .dashboard-hero {
-  background: linear-gradient(90deg, var(--dash-navy), var(--dash-sea));
+  background: linear-gradient(135deg, #7c3aed, #4f46e5, #3b82f6);
   color: var(--dash-ivory);
 }
 
@@ -270,13 +275,77 @@ a {
 }
 
 .admin-management-theme .dashboard-hero-btn {
-  border-color: rgba(255, 255, 255, 0.35);
+  border-color: rgba(255, 255, 255, 0.25);
   background-color: rgba(255, 255, 255, 0.15);
   color: var(--dash-ivory);
 }
 
 .admin-management-theme .dashboard-hero-btn:hover {
   background-color: rgba(255, 255, 255, 0.25);
+}
+
+.admin-management-theme.organization-workspace-shell {
+  --org-sidebar-width: 272px;
+}
+
+.admin-management-theme.organization-workspace-shell .organization-workspace-shell__content {
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.admin-management-theme.organization-workspace-shell .organization-workspace-shell__sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 30;
+  width: var(--org-sidebar-width);
+  height: 100vh;
+  overflow: hidden;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-management-theme.organization-workspace-shell .organization-workspace-shell__sidebar nav {
+  overflow: hidden;
+}
+
+.admin-management-theme.organization-workspace-shell .organization-workspace-shell__main {
+  min-height: 100vh;
+  margin-left: var(--org-sidebar-width);
+  width: calc(100vw - var(--org-sidebar-width));
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  scrollbar-gutter: stable;
+}
+
+.admin-management-theme.organization-workspace-shell .organization-workspace-shell__main > header.dashboard-hero {
+  position: sticky;
+  top: 1rem;
+  z-index: 5;
+}
+
+.admin-management-theme.organization-workspace-shell .organization-workspace-shell__main > :not(header.dashboard-hero) {
+  position: relative;
+}
+
+@media (max-width: 1024px) {
+  .admin-management-theme.organization-workspace-shell {
+    --org-sidebar-width: 240px;
+  }
+
+  .admin-management-theme.organization-workspace-shell .organization-workspace-shell__main {
+    padding: 0.75rem;
+  }
+}
+
+@media (max-width: 800px) {
+  .admin-management-theme.organization-workspace-shell {
+    --org-sidebar-width: 220px;
+  }
 }
 
 /* Gooey toast: Learnova sizing + language-aware alignment */
