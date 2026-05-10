@@ -30,6 +30,9 @@ def rerank(query: str, chunks: list[dict[str, Any]], top_k: int) -> list[dict[st
     if not chunks:
         return []
 
+    if len(chunks) == 1:
+        return chunks[:top_k]
+
     model = _get_model()
     pairs = [(query, c.get("text") or "") for c in chunks]
     raw_scores = model.predict(pairs)

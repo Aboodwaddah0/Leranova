@@ -136,23 +136,24 @@ export const createSubject = async (actor, courseId, data) => {
   if (scope.role === 'TEACHER') {
     resolvedTeacherId = scope.teacherId;
   } else {
-    // Both SCHOOL and ACADEMY: teacher must be assigned explicitly per subject
     resolvedTeacherId = data.Teacher_id ? Number(data.Teacher_id) : null;
-    if (!resolvedTeacherId) {
-      throw new AppError(
-        'Teacher_id is required. Each subject must be assigned to a teacher. | معرف المدرس مطلوب. يجب تعيين كل مادة إلى مدرس.',
-        400
-      );
-    }
   }
 
-  await ensureTeacherBelongsToOrg(scope.orgId, resolvedTeacherId);
+  if (resolvedTeacherId) {
+    await ensureTeacherBelongsToOrg(scope.orgId, resolvedTeacherId);
+  }
+
+  const VALID_LEVELS = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'];
+  const level = data.level && VALID_LEVELS.includes(String(data.level).toUpperCase())
+    ? String(data.level).toUpperCase()
+    : null;
 
   const subject = await prisma.subject.create({
     data: {
-      Course_id: courseId,
-      Teacher_id: resolvedTeacherId,
+      course: { connect: { id: courseId } },
+      ...(resolvedTeacherId ? { teacher: { connect: { Teacher_id: resolvedTeacherId } } } : {}),
       name: data.name,
+      level,
       isPaid: Boolean(data.isPaid),
       price: data.isPaid ? Number(data.price ?? 0) : 0,
       imageUrl: data.imageUrl ?? '',
@@ -283,6 +284,11 @@ export const updateSubject = async (actor, courseId, subjectId, data) => {
         ? scope.teacherId
         : (requestedTeacherId ?? undefined),
       name: data.name ?? undefined,
+      level: data.level !== undefined
+        ? (data.level && ['BEGINNER','INTERMEDIATE','ADVANCED','EXPERT'].includes(String(data.level).toUpperCase())
+            ? String(data.level).toUpperCase()
+            : null)
+        : undefined,
       isPaid: data.isPaid ?? undefined,
       price: data.isPaid === false ? 0 : (data.price ?? undefined),
       imageUrl: data.imageUrl ?? undefined,

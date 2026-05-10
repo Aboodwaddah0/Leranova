@@ -882,7 +882,22 @@ export async function fetchStudentChatMessages(chatId) {
   return Array.isArray(data) ? data : [];
 }
 
-export async function sendStudentChatMessage(chatId, content, replyToMessageId = null) {
+export async function sendStudentChatMessage(chatId, content, replyToMessageId = null, files = []) {
+  const hasFiles = Array.isArray(files) && files.length > 0;
+
+  if (hasFiles) {
+    const form = new FormData();
+    if (content) form.append('content', content);
+    if (Number.isInteger(Number(replyToMessageId)) && Number(replyToMessageId) > 0) {
+      form.append('replyToMessageId', String(Number(replyToMessageId)));
+    }
+    files.forEach((file) => form.append('files', file));
+    const response = await api.post(`/chats/${chatId}/messages`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return unwrap(response, null);
+  }
+
   const payload = {
     content,
     ...(Number.isInteger(Number(replyToMessageId)) && Number(replyToMessageId) > 0
@@ -1023,3 +1038,34 @@ export function getFallbackStudentMarks() {
 export function getFallbackLessons() {
   return fallbackLessons;
 }
+
+export const fetchLessonAiContent = async (lessonId, lang = 'ar') => {
+  const response = await api.get(`/lessons/${lessonId}/ai-content`, { params: { lang } });
+  return response?.data?.data ?? response?.data ?? null;
+};
+
+export const regenerateLessonAiContent = async (lessonId, lang = 'ar') => {
+  const response = await api.post(`/lessons/${lessonId}/ai-content/regenerate`, { lang });
+  return response?.data?.data ?? response?.data ?? null;
+};
+
+export const regenerateLessonFlashcards = async (lessonId, lang = 'ar') => {
+  const response = await api.post(`/lessons/${lessonId}/ai-content/flashcards/regenerate`, { lang });
+  return response?.data?.data ?? response?.data ?? null;
+};
+
+export const regenerateLessonMindmap = async (lessonId, lang = 'ar') => {
+  const response = await api.post(`/lessons/${lessonId}/ai-content/mindmap/regenerate`, { lang });
+  return response?.data?.data ?? response?.data ?? null;
+};
+
+// ── Quiz ─────────────────────────────────────────────────────────────────────
+export const fetchStudentLessonQuiz = async (lessonId, lang = 'ar') => {
+  const response = await api.get(`/lessons/${lessonId}/quiz`, { params: { lang } });
+  return response?.data?.data ?? null;
+};
+
+export const submitStudentQuizAttempt = async (lessonId, answers, lang = 'ar') => {
+  const response = await api.post(`/lessons/${lessonId}/quiz/attempt`, { answers, lang });
+  return response?.data?.data ?? null;
+};

@@ -22,6 +22,17 @@ export const updateTeacherSchema = Joi.object({
   address: Joi.string().max(255).allow('', null),
 }).min(1);
 
+export const updateMyTeacherProfileSchema = Joi.object({
+  name:           Joi.string().max(255),
+  gender:         Joi.string().valid('FEMALE', 'MALE').allow(null),
+  age:            Joi.number().integer().min(0).allow(null),
+  address:        Joi.string().max(255).allow('', null),
+  work:           Joi.string().max(255).allow('', null),
+  specialization: Joi.string().max(255).allow('', null),
+  bio:            Joi.string().allow('', null),
+  password:       Joi.string().min(8),
+}).min(1);
+
 export const teacherListQuerySchema = Joi.object({
   search: Joi.string().max(255).allow(''),
 });

@@ -346,6 +346,34 @@ export const updateTeacher = async (orgId, teacherId, data) => {
   return serializeTeacher(teacher);
 };
 
+export const updateMyTeacherProfile = async (teacherId, data) => {
+  const userData = {
+    name:    data.name    ?? undefined,
+    age:     data.age     ?? undefined,
+    gender:  data.gender  ?? undefined,
+    address: data.address ?? undefined,
+  };
+
+  if (data.password !== undefined) {
+    userData.passwordHashed    = await hashPassword(data.password);
+    userData.passwordEncrypted = encryptPassword(data.password);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: teacherId }, data: userData });
+    await tx.teacher.update({
+      where: { Teacher_id: teacherId },
+      data: {
+        Work:           data.work           ?? undefined,
+        specialization: data.specialization ?? undefined,
+        bio:            data.bio            ?? undefined,
+      },
+    });
+  });
+
+  return getMyTeacherProfile(teacherId);
+};
+
 export const deleteTeacher = async (orgId, teacherId) => {
   await ensureTeacherBelongsToOrg(orgId, teacherId);
 
@@ -519,6 +547,7 @@ export const getMyTeacherStudents = async (teacherId, filters = {}) => {
       Course_id: true,
       academy_user: {
         select: {
+          AcademicStatus: true,
           user: {
             select: {
               id: true,
@@ -569,12 +598,14 @@ export const getMyTeacherStudents = async (teacherId, filters = {}) => {
   const studentsById = new Map();
 
   const addStudentEntry = ({ courseId, user, student }) => {
-    if (!user || !student) {
-      return;
-    }
+    // user is required; student profile may be null for academy students
+    // (who exist in enrollment/academy_user but not in the school student table)
+    if (!user) return;
 
-    const current = studentsById.get(student.Student_id) || {
-      id: student.Student_id,
+    // Academy students have no Student_id — use their user.id as the deduplication key
+    const key = student?.Student_id != null ? String(student.Student_id) : `u${user.id}`;
+    const current = studentsById.get(key) || {
+      id: student?.Student_id ?? user.id,
       user: {
         id: user.id,
         name: user.name,
@@ -584,9 +615,9 @@ export const getMyTeacherStudents = async (teacherId, filters = {}) => {
         address: user.address,
       },
       student: {
-        gradeLevel: student.GradeLevel,
-        academicStatus: student.AcademicStatus,
-        dob: student.DOB,
+        gradeLevel: student?.GradeLevel ?? null,
+        academicStatus: student?.AcademicStatus ?? null,
+        dob: student?.DOB ?? null,
       },
       courses: [],
     };
@@ -600,12 +631,18 @@ export const getMyTeacherStudents = async (teacherId, filters = {}) => {
       });
     }
 
-    studentsById.set(student.Student_id, current);
+    studentsById.set(key, current);
   };
 
   for (const enrollment of enrolledUsers) {
     const user = enrollment.academy_user?.user;
-    const student = user?.student;
+    // Prefer school student profile; fall back to academy_user's own AcademicStatus
+    const student = user?.student ?? {
+      Student_id: null,
+      GradeLevel: null,
+      AcademicStatus: enrollment.academy_user?.AcademicStatus ?? 'ACTIVE',
+      DOB: null,
+    };
     addStudentEntry({
       courseId: enrollment.Course_id,
       user,

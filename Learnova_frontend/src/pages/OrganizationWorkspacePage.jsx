@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bell, ChevronDown, Search, UserCircle2, Trash2, Pencil } from "lucide-react";
+import { Bell, ChevronDown, Eye, Search, UserCircle2, Trash2, Pencil } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { logout, setAuthSession } from "../redux/slices/authSlice";
 import {
@@ -10,6 +10,7 @@ import {
   createOrganizationUserWithGeneratedCredentials,
   deleteCourseSubject,
   deleteOrganizationCourse,
+  fetchSubjectLessonsForOrg,
   deleteOrganizationTeacher,
   deleteOrganizationUser,
   addStudentToCourse,
@@ -31,12 +32,172 @@ import {
   updateOrganizationTeacher,
   updateOrganizationUser,
   updateSchoolSettings,
+  fetchAcademicYears,
+  createAcademicYear,
+  fetchTerms,
+  createTerm,
+  updateTerm,
+  reopenTerm,
 } from "../services/organizationService";
 import { useLanguage } from "../utils/i18n";
 import { notifyError, notifySuccess } from "../lib/notify";
 import { formatGradeName } from "../utils/gradeHelpers";
 import QuantumMeshBackground from "../components/ui/QuantumMeshBackground";
 import Modal from "../components/ui/Modal";
+
+/* ─── Read-only lesson viewer used by org admins ──────────────────────── */
+function LessonsViewModal({ open, subject, lessons, loading, isArabic, onClose }) {
+  const [expandedId, setExpandedId] = useState(null);
+
+  if (!open) return null;
+
+  const nonVideoAttachments = (lesson) =>
+    (lesson.attachments || []).filter(
+      (a) => String(a.fileType || a.type || '').toUpperCase() !== 'VIDEO'
+    );
+
+  const ext = (a) => {
+    const name = a.originalName || a.name || '';
+    const dot = name.lastIndexOf('.');
+    return dot !== -1 ? name.slice(dot + 1).toUpperCase() : (a.mimeType || 'FILE').split('/').pop().toUpperCase();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-[24px] border border-slate-200 bg-white shadow-2xl">
+        {/* Header */}
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-3 rounded-t-[24px] border-b border-slate-100 bg-white px-6 py-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">
+              {isArabic ? "محتوى المادة" : "Subject content"}
+            </p>
+            <h2 className="mt-0.5 text-xl font-black text-slate-900">{subject?.name || ""}</h2>
+            {!loading && (
+              <p className="mt-1 text-xs text-slate-400">
+                {isArabic
+                  ? `${lessons.length} درس مُضاف من المدرس`
+                  : `${lessons.length} lesson${lessons.length !== 1 ? 's' : ''} installed by teacher`}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-1 rounded-xl border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+            </div>
+          ) : lessons.length === 0 ? (
+            <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center">
+              <p className="text-sm font-semibold text-slate-500">
+                {isArabic
+                  ? "لم يقم المدرس بإضافة أي دروس لهذه المادة بعد."
+                  : "The teacher has not installed any lessons yet."}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {lessons.map((lesson, idx) => {
+                const open2 = expandedId === lesson.id;
+                const files = nonVideoAttachments(lesson);
+                return (
+                  <div key={lesson.id} className="overflow-hidden rounded-2xl border border-slate-200">
+                    {/* Lesson header row — click to expand */}
+                    <button
+                      type="button"
+                      onClick={() => setExpandedId(open2 ? null : lesson.id)}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
+                    >
+                      <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
+                        {idx + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-900">{lesson.title || lesson.name || "-"}</p>
+                        {lesson.description ? (
+                          <p className="mt-0.5 text-xs text-slate-400 line-clamp-1">{lesson.description}</p>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-shrink-0 items-center gap-2">
+                        {lesson.videoUrl ? (
+                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">
+                            {isArabic ? "فيديو" : "Video"}
+                          </span>
+                        ) : null}
+                        {files.length > 0 ? (
+                          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                            {files.length} {isArabic ? "ملف" : "file(s)"}
+                          </span>
+                        ) : null}
+                        <span className="text-slate-400">{open2 ? "▲" : "▼"}</span>
+                      </div>
+                    </button>
+
+                    {/* Expanded content */}
+                    {open2 && (
+                      <div className="space-y-4 border-t border-slate-100 bg-slate-50 px-4 pb-4 pt-4">
+                        {/* Video player */}
+                        {lesson.videoUrl ? (
+                          <div>
+                            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                              {isArabic ? "الفيديو" : "Video"}
+                            </p>
+                            <video
+                              controls
+                              src={lesson.videoUrl}
+                              className="w-full rounded-xl bg-slate-900"
+                              style={{ maxHeight: 320 }}
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-400">{isArabic ? "لا يوجد فيديو لهذا الدرس." : "No video for this lesson."}</p>
+                        )}
+
+                        {/* Attachments */}
+                        {files.length > 0 ? (
+                          <div>
+                            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                              {isArabic ? "المرفقات" : "Attachments"}
+                            </p>
+                            <div className="space-y-2">
+                              {files.map((att) => (
+                                <a
+                                  key={att.id}
+                                  href={att.fileUrl || att.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  download={att.originalName || att.name}
+                                  className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-50"
+                                >
+                                  <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-[10px] font-black text-indigo-600">
+                                    {ext(att)}
+                                  </span>
+                                  <span className="truncate">{att.originalName || att.name || "File"}</span>
+                                  <span className="ml-auto flex-shrink-0 text-xs text-slate-400">↓</span>
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const DEFAULT_COURSE_THUMBNAIL =
   "https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=600&auto=format&fit=crop&ixlib=rb-4.0.3";
@@ -50,8 +211,36 @@ const TABS = {
   SCHOOL: "school",
 };
 
-const safeError = (error) =>
-  error?.response?.data?.message || error?.message || "Request failed";
+const AUTO_GRADE_RE = /^Auto-created grade course for level (\d+)$/i;
+const translateCourseDescription = (desc, isArabic) => {
+  if (!desc) return desc;
+  const m = desc.match(AUTO_GRADE_RE);
+  if (m && isArabic) return `تم إنشاء مسار الصف تلقائيًا للمستوى ${m[1]}`;
+  return desc;
+};
+
+const safeError = (error) => {
+  const responseData = error?.response?.data;
+  const responseMessage = responseData?.message;
+  const nestedErrorMessage = responseData?.error?.message || responseData?.error;
+  const detailsMessage = Array.isArray(responseData?.errors)
+    ? responseData.errors.map((item) => item?.message || item?.detail || String(item)).filter(Boolean).join(" | ")
+    : typeof responseData?.details === "string"
+      ? responseData.details
+      : null;
+
+  const message = responseMessage || nestedErrorMessage || detailsMessage || error?.message;
+  if (message) {
+    return message;
+  }
+
+  const requestUrl = String(error?.config?.url || error?.response?.config?.url || "");
+  if (requestUrl.includes("/school-settings/promotions/run")) {
+    return "تعذر تشغيل الترقية السنوية. تأكد من أن جميع الفصول مغلقة أو مقفلة وأن الدرجات مكتملة، ثم أعد المحاولة.";
+  }
+
+  return "Request failed";
+};
 
 const formatSkippedRows = (rows) => {
   return rows
@@ -180,7 +369,7 @@ const prepareCourseThumbnailFile = async (file) => {
 
 export default function OrganizationWorkspacePage() {
   const dispatch = useDispatch();
-  const { isArabic, t } = useLanguage();
+  const { lang, isArabic, t, toggleLang } = useLanguage();
   const auth = useSelector((state) => state.auth);
   const organization = auth.user || {};
   const [organizationProfile, setOrganizationProfile] = useState(organization);
@@ -210,8 +399,33 @@ export default function OrganizationWorkspacePage() {
     onConfirm: null,
   });
   const [users, setUsers] = useState([]);
-  const [schoolSettings, setSchoolSettings] = useState(null);
-  
+
+  // Academic Year & Terms state
+  const [academicYears, setAcademicYears] = useState([]);
+  const [selectedYear, setSelectedYear] = useState(null);
+  const [yearTerms, setYearTerms] = useState([]);
+
+  useEffect(() => {
+    const active = academicYears.find(y => y.isActive);
+    if (!active) return;
+    const start = new Date(active.startDate);
+    const end = new Date(active.endDate);
+    setSchoolForm(f => ({
+      ...f,
+      schoolYearStartMonth: start.getUTCMonth() + 1,
+      schoolYearStartDay: start.getUTCDate(),
+      promotionMonth: end.getUTCMonth() + 1,
+      promotionDay: end.getUTCDate(),
+    }));
+  }, [academicYears]);
+  const [academicYearLoading, setAcademicYearLoading] = useState(false);
+  const [yearModal, setYearModal] = useState(false);
+  const [yearWizardStep, setYearWizardStep] = useState(1);
+  const [yearForm, setYearForm] = useState({ name: "", startDate: "", endDate: "", numberOfTerms: 1 });
+  const [termForm, setTermForm] = useState({ termNumber: 1, name: "", startDate: "", endDate: "", changeReason: "" });
+  const [editTermModal, setEditTermModal] = useState(null); // { term, changeReason, endDate }
+  const [reopenModal, setReopenModal] = useState(null);    // { term, changeReason }
+
   const [organizationRevenue, setOrganizationRevenue] = useState(null);
 
   const [profileForm, setProfileForm] = useState({
@@ -257,6 +471,7 @@ export default function OrganizationWorkspacePage() {
     Teacher_id: "",
     isPaid: false,
     price: "",
+    level: "",
   });
 
   const [studentForm, setStudentForm] = useState({
@@ -317,15 +532,19 @@ export default function OrganizationWorkspacePage() {
       },
     ],
   });
+  const [schoolSettingsModalOpen, setSchoolSettingsModalOpen] = useState(false);
   const [showPromotionConfirm, setShowPromotionConfirm] = useState(false);
 
   const [teacherModalOpen, setTeacherModalOpen] = useState(false);
   const [courseModalOpen, setCourseModalOpen] = useState(false);
   const [subjectModalOpen, setSubjectModalOpen] = useState(false);
+  const [lessonsModalOpen, setLessonsModalOpen] = useState(false);
+  const [lessonsModalSubject, setLessonsModalSubject] = useState(null);
+  const [lessonsModalData, setLessonsModalData] = useState([]);
+  const [lessonsModalLoading, setLessonsModalLoading] = useState(false);
   const [studentModalOpen, setStudentModalOpen] = useState(false);
   const [parentModalOpen, setParentModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
-  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
 
   const studentUsers = useMemo(
     () => users.filter((user) => String(user.role || "").toUpperCase() === "STUDENT"),
@@ -640,7 +859,8 @@ export default function OrganizationWorkspacePage() {
 
       if (isSchool) {
         const settings = await fetchSchoolSettings();
-        setSchoolSettings(settings);
+        const years = await fetchAcademicYears().catch(() => []);
+        setAcademicYears(years);
         if (settings) {
           setSchoolForm({
             schoolYearStartMonth: Number(settings.schoolYearStartMonth || 9),
@@ -902,6 +1122,21 @@ export default function OrganizationWorkspacePage() {
     }));
   };
 
+  const openLessonsModal = async (subject) => {
+    setLessonsModalSubject(subject);
+    setLessonsModalData([]);
+    setLessonsModalOpen(true);
+    setLessonsModalLoading(true);
+    try {
+      const lessons = await fetchSubjectLessonsForOrg(subject.id);
+      setLessonsModalData(lessons);
+    } catch {
+      setLessonsModalData([]);
+    } finally {
+      setLessonsModalLoading(false);
+    }
+  };
+
   const resetSubjectForm = () => {
     setSubjectForm({
       id: null,
@@ -910,6 +1145,7 @@ export default function OrganizationWorkspacePage() {
       Teacher_id: "",
       isPaid: false,
       price: "",
+      level: "",
     });
   };
 
@@ -1129,10 +1365,11 @@ export default function OrganizationWorkspacePage() {
       Description: subjectForm.Description || undefined,
       // Both school and academy: teacher is assigned per subject
       ...(subjectForm.Teacher_id ? { Teacher_id: Number(subjectForm.Teacher_id) } : {}),
-      // ACADEMY: send payment info
+      // ACADEMY: send payment info + level
       ...(isAcademy ? {
         isPaid: Boolean(subjectForm.isPaid),
         price: subjectForm.isPaid ? Number(subjectForm.price) || 0 : 0,
+        level: subjectForm.level || null,
       } : {}),
     };
 
@@ -1320,7 +1557,7 @@ export default function OrganizationWorkspacePage() {
     if (!enrollmentTargetStudent?.id) return;
 
     await handleAction(async () => {
-      await addStudentToCourse(enrollmentTargetStudent.id, courseId);
+      await addStudentToCourse(enrollmentTargetStudent.id, courseId, isSchool);
       const enrollments = await fetchStudentCourses(enrollmentTargetStudent.id);
       setStudentEnrollments(enrollments);
       return isArabic ? "تم إضافة الطالب إلى الكورس" : "Student enrolled in course";
@@ -1530,41 +1767,8 @@ export default function OrganizationWorkspacePage() {
         classRanges: schoolForm.classRanges,
       };
 
-      const next = await updateSchoolSettings(payload);
-      setSchoolSettings(next);
-      setSettingsModalOpen(false);
+      await updateSchoolSettings(payload);
     }, t.organization.messages.schoolSaved);
-  };
-
-  const handleSchoolClassRangeChange = (index, field, value) => {
-    setSchoolForm((prev) => {
-      const updatedRanges = [...prev.classRanges];
-      updatedRanges[index] = {
-        ...updatedRanges[index],
-        [field]: Number(value),
-      };
-      return { ...prev, classRanges: updatedRanges };
-    });
-  };
-
-  const addSchoolClassRange = () => {
-    setSchoolForm((prev) => ({
-      ...prev,
-      classRanges: [
-        ...prev.classRanges,
-        {
-          startGradeLevel: 1,
-          endGradeLevel: 5,
-        },
-      ],
-    }));
-  };
-
-  const removeSchoolClassRange = (index) => {
-    setSchoolForm((prev) => ({
-      ...prev,
-      classRanges: prev.classRanges.filter((_, i) => i !== index),
-    }));
   };
 
   const confirmRunPromotionAction = async () => {
@@ -1573,6 +1777,100 @@ export default function OrganizationWorkspacePage() {
     }, t.organization.messages.promotionDone);
     setShowPromotionConfirm(false);
   };
+
+  // ── Academic Year handlers ──────────────────────────────────────────────
+  const loadTermsForYear = async (year) => {
+    setSelectedYear(year);
+    setAcademicYearLoading(true);
+    try {
+      const terms = await fetchTerms(year.id);
+      setYearTerms(terms);
+    } catch { setYearTerms([]); }
+    finally { setAcademicYearLoading(false); }
+  };
+
+  const handleCreateYear = async (e) => {
+    e.preventDefault();
+    await handleAction(async () => {
+      const created = await createAcademicYear({
+        name: yearForm.name,
+        startDate: yearForm.startDate,
+        endDate: yearForm.endDate,
+        numberOfTerms: Number(yearForm.numberOfTerms),
+      });
+      setAcademicYears((prev) => [created, ...prev.filter((y) => y.id !== created.id)]);
+      setSelectedYear(created);
+      setYearTerms([]);
+      setYearWizardStep(2);
+      setTermForm({ termNumber: 1, name: "", startDate: "", endDate: "", changeReason: "" });
+    }, isArabic ? "تم إنشاء السنة الدراسية" : "Academic year created");
+  };
+
+  const handleCreateTerm = async (e) => {
+    e.preventDefault();
+    if (!selectedYear) return;
+    const maxTerms = Number(selectedYear.numberOfTerms || 0);
+    if (maxTerms && yearTerms.length >= maxTerms) {
+      setError(isArabic ? "لقد وصلت إلى العدد المحدد من الفصول لهذه السنة" : "This academic year already has the configured number of terms");
+      return;
+    }
+    await handleAction(async () => {
+      const created = await createTerm(selectedYear.id, {
+        termNumber: Number(termForm.termNumber),
+        name: termForm.name,
+        startDate: termForm.startDate,
+        endDate: termForm.endDate,
+      });
+      setYearTerms((prev) => [...prev, created].sort((a, b) => a.termNumber - b.termNumber));
+      const nextTermNumber = Number(created.termNumber || termForm.termNumber) + 1;
+      const hasMoreTerms = nextTermNumber <= maxTerms;
+
+      if (hasMoreTerms) {
+        setTermForm({ termNumber: nextTermNumber, name: "", startDate: "", endDate: "", changeReason: "" });
+        return isArabic
+          ? `تم حفظ الفصل ${created.termNumber}. أكمل الفصل التالي ${nextTermNumber}/${maxTerms}.`
+          : `Saved term ${created.termNumber}. Continue with term ${nextTermNumber}/${maxTerms}.`;
+      }
+
+      setYearModal(false);
+      setYearWizardStep(1);
+      setSelectedYear(null);
+      setYearForm({ name: "", startDate: "", endDate: "", numberOfTerms: 1 });
+      setTermForm({ termNumber: 1, name: "", startDate: "", endDate: "", changeReason: "" });
+      return isArabic ? "تم إنشاء جميع الفصول لهذه السنة" : "All terms for this year were created";
+    }, isArabic ? "تم إنشاء الفصل" : "Term created");
+  };
+
+  const handleUpdateTerm = async (e) => {
+    e.preventDefault();
+    if (!selectedYear || !editTermModal) return;
+    await handleAction(async () => {
+      const payload = { changeReason: editTermModal.changeReason };
+      if (editTermModal.term.status === "PLANNED" && editTermModal.startDate) payload.startDate = editTermModal.startDate;
+      if (editTermModal.endDate) payload.endDate = editTermModal.endDate;
+      if (editTermModal.name) payload.name = editTermModal.name;
+      const updated = await updateTerm(selectedYear.id, editTermModal.term.id, payload);
+      setYearTerms((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      setEditTermModal(null);
+    }, isArabic ? "تم تحديث الفصل" : "Term updated");
+  };
+
+  const handleReopenTerm = async (e) => {
+    e.preventDefault();
+    if (!selectedYear || !reopenModal) return;
+    await handleAction(async () => {
+      const updated = await reopenTerm(selectedYear.id, reopenModal.term.id, reopenModal.changeReason);
+      setYearTerms((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      setReopenModal(null);
+    }, isArabic ? "تم إعادة فتح الفصل" : "Term reopened");
+  };
+
+  const termStatusColor = (status) => ({
+    PLANNED: "bg-slate-100 text-slate-600",
+    ACTIVE:  "bg-green-100 text-green-700",
+    CLOSED:  "bg-amber-100 text-amber-700",
+    LOCKED:  "bg-red-100 text-red-700",
+  }[status] || "bg-slate-100 text-slate-600");
 
   const tabs = useMemo(() => {
     const courseTabLabel = isSchool
@@ -1603,7 +1901,7 @@ export default function OrganizationWorkspacePage() {
     t.organization.title;
 
   return (
-    <main className={`admin-management-theme dashboard-page organization-workspace-shell relative min-h-screen overflow-hidden ${isArabic ? "lang-ar" : "lang-en"}`}>
+    <main dir={isArabic ? "rtl" : "ltr"} className={`admin-management-theme dashboard-page organization-workspace-shell relative min-h-screen overflow-hidden ${isArabic ? "lang-ar" : "lang-en"}`}>
       <QuantumMeshBackground />
 
       {confirmDelete.open && (
@@ -1663,8 +1961,8 @@ export default function OrganizationWorkspacePage() {
         </div>
       )}
 
-      <div className="organization-workspace-shell__content relative z-10">
-        <aside className="dashboard-sidebar organization-workspace-shell__sidebar flex h-full flex-col gap-5 rounded-none border p-4">
+      <div dir={isArabic ? "rtl" : "ltr"} className="organization-workspace-shell__content relative z-10">
+        <aside className={`dashboard-sidebar organization-workspace-shell__sidebar flex h-full flex-col gap-5 rounded-none border p-4 ${isArabic ? "right-0 left-auto" : "left-0"}`}>
           <div className="rounded-[1.75rem] bg-gradient-to-br from-indigo-600 via-violet-600 to-cyan-500 p-5 text-white shadow-lg shadow-indigo-500/20">
             <p className="text-xs font-black uppercase tracking-[0.22em]">Learnova</p>
             <h1 className="mt-2 text-2xl font-black">{organizationTitle}</h1>
@@ -1677,11 +1975,11 @@ export default function OrganizationWorkspacePage() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold transition-all duration-200 ${
+                className={`w-full rounded-2xl px-4 py-3 text-sm font-semibold transition-all duration-200 ${
                   activeTab === tab.id
                     ? "dashboard-sidebar-item-active"
                     : "dashboard-sidebar-item"
-                }`}
+                } ${isArabic ? "text-right" : "text-left"}`}
               >
                 {tab.label}
               </button>
@@ -1697,11 +1995,20 @@ export default function OrganizationWorkspacePage() {
           </button>
         </aside>
 
-        <section className="dashboard-panel organization-workspace-shell__main space-y-5 rounded-[2rem] border p-5 md:p-8">
-          <header className="dashboard-hero rounded-[2rem] p-6 shadow-xl">
-            <p className="dashboard-hero-kicker text-xs font-bold uppercase tracking-[0.2em]">{t.organization.badge}</p>
-            <h2 className="mt-2 text-3xl font-black">{organizationTitle}</h2>
-            <p className="mt-2 text-sm">{t.organization.subtitle}</p>
+        <section className={`dashboard-panel organization-workspace-shell__main space-y-5 rounded-[2rem] border p-5 md:p-8 ${isArabic ? "mr-[272px] ml-0" : ""}`}>
+          <header className="dashboard-hero rounded-[2rem] p-6 shadow-xl flex items-start justify-between">
+            <div>
+              <p className="dashboard-hero-kicker text-xs font-bold uppercase tracking-[0.2em]">{t.organization.badge}</p>
+              <h2 className="mt-2 text-3xl font-black">{organizationTitle}</h2>
+              <p className="mt-2 text-sm">{t.organization.subtitle}</p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleLang}
+              className="rounded-xl border border-white/30 bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/30"
+            >
+              {lang === "en" ? t.common.switchToArabic : t.common.switchToEnglish}
+            </button>
           </header>
 
           {loading && <p className="text-sm text-slate-500">{t.common.loading}</p>}
@@ -1913,6 +2220,7 @@ export default function OrganizationWorkspacePage() {
                         </div>
                         <h3 className="mt-4 text-lg font-black text-slate-900">{teacher?.user?.name || "-"}</h3>
                         <p className="mt-1 text-sm text-slate-500">{teacher?.user?.email || "-"}</p>
+                        <p className="mt-1 text-sm text-slate-500">{(isArabic ? "كلمة المرور" : "Password")}: {teacher?.user?.password || "-"}</p>
                         <span className="mt-3 inline-flex rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700">
                           {specialization}
                         </span>
@@ -2096,21 +2404,27 @@ export default function OrganizationWorkspacePage() {
                             <h3 className="truncate text-lg font-black text-slate-900">{trackLabel}</h3>
                             <p className="mt-1 text-sm text-slate-500">{course?.Teacher_name || course?.teacherName || course?.teacher?.name || course?.teacher?.user?.name || (isArabic ? "غير محدد" : "Unassigned")}</p>
                           </div>
-                          <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{priceLabel}</div>
+                          {!isSchool && (
+                            <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{priceLabel}</div>
+                          )}
                         </div>
 
-                        <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">{course.Description || (isArabic ? "لا يوجد وصف" : "No description")}</p>
+                        <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">{translateCourseDescription(course.Description, isArabic) || (isArabic ? "لا يوجد وصف" : "No description")}</p>
 
                         <div className="mt-4 flex flex-wrap gap-2">
                           <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">{trackLabel}</span>
-                          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">{priceLabel}</span>
+                          {!isSchool && (
+                            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">{priceLabel}</span>
+                          )}
                         </div>
 
-                        <div className="mt-5 flex items-center justify-between border-t border-slate-200 pt-4">
-                          <div>
-                            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{isArabic ? "السعر" : "Price"}</p>
-                            <p className="mt-1 text-base font-black text-slate-900">{course?.Price != null && course?.Price !== "" ? `${course.Price} $` : (isArabic ? "مجاني" : "Free")}</p>
-                          </div>
+                        <div className={`mt-5 flex items-center border-t border-slate-200 pt-4 ${isSchool ? 'justify-end' : 'justify-between'}`}>
+                          {!isSchool && (
+                            <div>
+                              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{isArabic ? "السعر" : "Price"}</p>
+                              <p className="mt-1 text-base font-black text-slate-900">{course?.Price != null && course?.Price !== "" ? `${course.Price} $` : (isArabic ? "مجاني" : "Free")}</p>
+                            </div>
+                          )}
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
@@ -2211,14 +2525,56 @@ export default function OrganizationWorkspacePage() {
                   </select>
                   <input name="name" value={subjectForm.name} onChange={setField(setSubjectForm)} placeholder={t.organization.subjects.name} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
                   <textarea name="Description" value={subjectForm.Description} onChange={setField(setSubjectForm)} placeholder={t.organization.subjects.description} className="min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2" />
-                  <select name="Teacher_id" value={subjectForm.Teacher_id} onChange={setField(setSubjectForm)} required className="h-11 w-full rounded-xl border border-slate-200 px-3">
-                    <option value="">{isArabic ? "اختر المدرس المسؤول عن المادة" : "Select the teacher responsible for this subject"}</option>
+                  <select name="Teacher_id" value={subjectForm.Teacher_id} onChange={setField(setSubjectForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3">
+                    <option value="">{isArabic ? "اختر المدرس (اختياري)" : "Select teacher (optional)"}</option>
                     {teacherOptions.map((option) => (
                       <option key={option.id} value={option.id}>{option.label}</option>
                     ))}
                   </select>
                   {isAcademy ? (
                     <div className="space-y-2">
+                      {/* Level selector — academy only */}
+                      <div>
+                        <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                          {isArabic ? "مستوى المادة" : "Subject Level"}
+                        </label>
+                        <div className="grid grid-cols-4 gap-2">
+                          {[
+                            { value: "BEGINNER",     arLabel: "مبتدئ",    enLabel: "Beginner",     color: "emerald" },
+                            { value: "INTERMEDIATE", arLabel: "متوسط",    enLabel: "Intermediate", color: "blue"    },
+                            { value: "ADVANCED",     arLabel: "متقدم",    enLabel: "Advanced",     color: "violet"  },
+                            { value: "EXPERT",       arLabel: "خبير",     enLabel: "Expert",       color: "rose"    },
+                          ].map(({ value, arLabel, enLabel, color }) => {
+                            const selected = subjectForm.level === value;
+                            const colorMap = {
+                              emerald: selected ? "bg-emerald-600 text-white border-emerald-600" : "border-emerald-200 text-emerald-700 hover:bg-emerald-50",
+                              blue:    selected ? "bg-blue-600 text-white border-blue-600"       : "border-blue-200 text-blue-700 hover:bg-blue-50",
+                              violet:  selected ? "bg-violet-600 text-white border-violet-600"   : "border-violet-200 text-violet-700 hover:bg-violet-50",
+                              rose:    selected ? "bg-rose-600 text-white border-rose-600"       : "border-rose-200 text-rose-700 hover:bg-rose-50",
+                            };
+                            return (
+                              <button
+                                key={value}
+                                type="button"
+                                onClick={() => setSubjectForm((prev) => ({ ...prev, level: prev.level === value ? "" : value }))}
+                                className={`rounded-xl border px-2 py-2 text-xs font-bold transition ${colorMap[color]}`}
+                              >
+                                {isArabic ? arLabel : enLabel}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {subjectForm.level && (
+                          <button
+                            type="button"
+                            onClick={() => setSubjectForm((prev) => ({ ...prev, level: "" }))}
+                            className="mt-1 text-xs text-slate-400 underline"
+                          >
+                            {isArabic ? "إزالة المستوى" : "Clear level"}
+                          </button>
+                        )}
+                      </div>
+
                       <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 px-3 py-2.5">
                         <input
                           type="checkbox"
@@ -2258,6 +2614,16 @@ export default function OrganizationWorkspacePage() {
                 </div>
               </form>
             </Modal>
+
+            {/* ── Lessons read-only modal ── */}
+            <LessonsViewModal
+              open={lessonsModalOpen}
+              subject={lessonsModalSubject}
+              lessons={lessonsModalData}
+              loading={lessonsModalLoading}
+              isArabic={isArabic}
+              onClose={() => { setLessonsModalOpen(false); setLessonsModalSubject(null); setLessonsModalData([]); }}
+            />
 
             <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
@@ -2336,6 +2702,7 @@ export default function OrganizationWorkspacePage() {
                         <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "الصف/المسار" : "Track"}</th>
                         <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "المدرس" : "Teacher"}</th>
                         <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "الوصف" : "Description"}</th>
+                        {isAcademy && <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "المستوى" : "Level"}</th>}
                         <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "الإجراءات" : "Actions"}</th>
                       </tr>
                     </thead>
@@ -2351,11 +2718,38 @@ export default function OrganizationWorkspacePage() {
                           </td>
                           <td className="px-4 py-3 text-sm text-slate-700">{subject?.teacher?.user?.name || "-"}</td>
                           <td className="px-4 py-3 text-sm text-slate-600 line-clamp-2">{subject.Description || "-"}</td>
+                          {isAcademy && (
+                            <td className="px-4 py-3">
+                              {subject.level ? (
+                                <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
+                                  subject.level === 'BEGINNER'     ? 'bg-emerald-100 text-emerald-700' :
+                                  subject.level === 'INTERMEDIATE' ? 'bg-blue-100 text-blue-700'       :
+                                  subject.level === 'ADVANCED'     ? 'bg-violet-100 text-violet-700'   :
+                                  subject.level === 'EXPERT'       ? 'bg-rose-100 text-rose-700'       :
+                                  'bg-slate-100 text-slate-600'
+                                }`}>
+                                  {isArabic
+                                    ? (subject.level === 'BEGINNER' ? 'مبتدئ' : subject.level === 'INTERMEDIATE' ? 'متوسط' : subject.level === 'ADVANCED' ? 'متقدم' : 'خبير')
+                                    : subject.level.charAt(0) + subject.level.slice(1).toLowerCase()}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-400">—</span>
+                              )}
+                            </td>
+                          )}
                           <td className="px-4 py-3 text-center">
                             <div className="flex items-center justify-center gap-2">
                               <button
                                 type="button"
-                                onClick={() => { setSubjectForm({ id: subject.id, name: subject.name, Description: subject.Description || "", Teacher_id: subject.Teacher_id || "", isPaid: Boolean(subject.isPaid), price: subject.price ? String(subject.price) : "" }); setSubjectModalOpen(true); }}
+                                onClick={() => openLessonsModal(subject)}
+                                className="rounded-lg border border-indigo-200 bg-indigo-50 p-2 text-indigo-700 hover:bg-indigo-100 transition"
+                                title={isArabic ? "عرض المحتوى" : "View content"}
+                              >
+                                <Eye size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setSubjectForm({ id: subject.id, name: subject.name, Description: subject.Description || "", Teacher_id: subject.Teacher_id || "", isPaid: Boolean(subject.isPaid), price: subject.price ? String(subject.price) : "", level: subject.level || "" }); setSubjectModalOpen(true); }}
                                 className="rounded-lg border border-slate-300 bg-white p-2 text-slate-700 hover:bg-slate-50 transition"
                                 title={isArabic ? "تعديل" : "Edit"}
                               >
@@ -2484,6 +2878,8 @@ export default function OrganizationWorkspacePage() {
                   <option value="ALL">{isArabic ? "كل الحالات" : "All Status"}</option>
                   <option value="ACTIVE">{isArabic ? "نشط" : "Active"}</option>
                   <option value="INACTIVE">{isArabic ? "غير نشط" : "Inactive"}</option>
+                  <option value="GRADUATED">{isArabic ? "متخرج" : "Graduated"}</option>
+                  <option value="FILED">{isArabic ? "مؤرشف" : "Filed"}</option>
                 </select>
 
                 <button
@@ -2516,6 +2912,7 @@ export default function OrganizationWorkspacePage() {
                         <th className="px-4 py-3">#</th>
                         <th className="px-4 py-3">{t.organization.students.name}</th>
                         <th className="px-4 py-3">{t.organization.students.email}</th>
+                        <th className="px-4 py-3">{isArabic ? "كلمة المرور" : "Password"}</th>
                         <th className="px-4 py-3">{isSchool ? (isArabic ? "الصف" : "Grade") : (isArabic ? "الدورة" : "Course")}</th>
                         <th className="px-4 py-3">{t.organization.students.age}</th>
                         <th className="px-4 py-3">{isArabic ? "الحالة" : "Status"}</th>
@@ -2525,22 +2922,29 @@ export default function OrganizationWorkspacePage() {
                     <tbody className="divide-y divide-slate-100 bg-white">
                       {filteredStudents.length === 0 ? (
                         <tr>
-                          <td colSpan="7" className="px-4 py-6 text-center text-slate-500">{t.organization.common.empty}</td>
+                          <td colSpan="8" className="px-4 py-6 text-center text-slate-500">{t.organization.common.empty}</td>
                         </tr>
                       ) : filteredStudents.map((student, index) => {
                         const statusValue = String(student?.status || student?.Status || "").toUpperCase();
-                        const statusLabel = statusValue || "-";
-                        const statusClass = statusValue === "ACTIVE"
-                          ? "bg-emerald-100 text-emerald-700"
-                          : statusValue === "INACTIVE"
-                            ? "bg-slate-100 text-slate-600"
-                            : "bg-sky-100 text-sky-700";
+                        const statusLabel = {
+                          ACTIVE:    isArabic ? "نشط"     : "Active",
+                          INACTIVE:  isArabic ? "غير نشط" : "Inactive",
+                          GRADUATED: isArabic ? "متخرج"   : "Graduated",
+                          FILED:     isArabic ? "مؤرشف"   : "Filed",
+                        }[statusValue] || (statusValue || "-");
+                        const statusClass = {
+                          ACTIVE:    "bg-emerald-100 text-emerald-700",
+                          INACTIVE:  "bg-slate-100 text-slate-600",
+                          GRADUATED: "bg-blue-100 text-blue-700",
+                          FILED:     "bg-amber-100 text-amber-700",
+                        }[statusValue] || "bg-slate-100 text-slate-500";
 
                         return (
                           <tr key={student.id} className="hover:bg-slate-50/70">
                             <td className="px-4 py-4 font-semibold text-slate-500">{index + 1}</td>
                             <td className="px-4 py-4 font-semibold text-slate-900">{student.name}</td>
                             <td className="px-4 py-4 text-slate-600">{student.email}</td>
+                            <td className="px-4 py-4 text-slate-600">{student.password || "-"}</td>
                             <td className="px-4 py-4 text-slate-600">{selectedCourseId ? (formatGradeName(courses.find((course) => course.id === selectedCourseId), isSchool, isArabic) || "-") : (isArabic ? "الكل" : "All")}</td>
                             <td className="px-4 py-4 text-slate-600">{student.age ?? "-"}</td>
                             <td className="px-4 py-4">
@@ -2548,6 +2952,29 @@ export default function OrganizationWorkspacePage() {
                             </td>
                             <td className="px-4 py-4">
                               <div className="flex flex-wrap gap-2">
+                                {/* Quick status change */}
+                                {isSchool ? (
+                                  <select
+                                    value={statusValue || "ACTIVE"}
+                                    onChange={async (e) => {
+                                      const next = e.target.value;
+                                      try {
+                                        await updateOrganizationUser(student.id, { academicStatus: next });
+                                        const next2 = await fetchOrganizationUsers();
+                                        setUsers(next2);
+                                        notifySuccess(isArabic ? "تم تحديث الحالة" : "Status updated");
+                                      } catch (err) {
+                                        notifyError(safeError(err));
+                                      }
+                                    }}
+                                    className="rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 focus:border-indigo-400 focus:outline-none"
+                                  >
+                                    <option value="ACTIVE">{isArabic ? "نشط" : "Active"}</option>
+                                    <option value="INACTIVE">{isArabic ? "غير نشط" : "Inactive"}</option>
+                                    <option value="GRADUATED">{isArabic ? "متخرج" : "Graduated"}</option>
+                                    <option value="FILED">{isArabic ? "مؤرشف" : "Filed"}</option>
+                                  </select>
+                                ) : null}
                                 <button
                                   type="button"
                                   onClick={() => { setStudentForm({ id: student.id, name: student.name || "", email: student.email || "", password: "", age: student.age || "", gender: student.gender || "MALE", address: student.address || "", dob: student.dob ? String(student.dob).slice(0, 10) : "", parentNationalId: "" }); setStudentModalOpen(true); }}
@@ -2830,169 +3257,333 @@ export default function OrganizationWorkspacePage() {
         ) : null}
 
         {!loading && isSchool && activeTab === TABS.SCHOOL && (
-          <section className="grid gap-4 md:grid-cols-2">
-            <Modal open={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} title={isArabic ? "إعدادات المدرسة" : "School Settings"} maxWidth="max-w-2xl">
-            <form onSubmit={saveSchoolSettingsAction} className="rounded-3xl border border-slate-200 bg-white p-5">
-              <h2 className="text-lg font-bold text-slate-900">{t.organization.school.title}</h2>
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className="rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
-                  <span className="mb-1 flex items-center gap-2 font-semibold">
-                    {t.organization.school.schoolYearStartMonth}
-                    <span className="cursor-help text-xs text-slate-500" title={t.organization.school.hints.schoolYearStartMonth}>?</span>
-                  </span>
-                  <input name="schoolYearStartMonth" type="number" min="1" max="12" value={schoolForm.schoolYearStartMonth} onChange={setField(setSchoolForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
-                  <p className="mt-1 text-xs text-slate-500">{t.organization.school.examples.schoolYearStartMonth}</p>
-                </label>
+          <>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    {isArabic ? "الإعدادات العامة" : "General Settings"}
+                  </h2>
+                  <p className="mt-2 text-sm text-slate-600">
+                    {isArabic
+                      ? "إعدادات القبول ونِسب النجاح والمواد المطلوبة للنجاح."
+                      : "Admission age, pass thresholds, and subject pass rules."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSchoolSettingsModalOpen(true)}
+                  className="shrink-0 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+                >
+                  {isArabic ? "تعديل" : "Edit"}
+                </button>
+              </div>
 
-                <label className="rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
-                  <span className="mb-1 flex items-center gap-2 font-semibold">
-                    {t.organization.school.schoolYearStartDay}
-                    <span className="cursor-help text-xs text-slate-500" title={t.organization.school.hints.schoolYearStartDay}>?</span>
-                  </span>
-                  <input name="schoolYearStartDay" type="number" min="1" max="31" value={schoolForm.schoolYearStartDay} onChange={setField(setSchoolForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
-                  <p className="mt-1 text-xs text-slate-500">{t.organization.school.examples.schoolYearStartDay}</p>
-                </label>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {isArabic ? "سن القبول" : "Entry Age"}
+                  </p>
+                  <p className="mt-1 text-lg font-bold text-slate-900">{schoolForm.entryGradeMinAge}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {isArabic ? "نسبة النجاح العامة" : "Overall Pass"}
+                  </p>
+                  <p className="mt-1 text-lg font-bold text-slate-900">{schoolForm.passThresholdPercentage}%</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {isArabic ? "الحد الأدنى لكل مادة" : "Per Subject"}
+                  </p>
+                  <p className="mt-1 text-lg font-bold text-slate-900">{schoolForm.minSubjectPassPercentage}%</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {isArabic ? "اشتراط النجاح في الجميع" : "All Subjects Pass"}
+                  </p>
+                  <p className="mt-1 text-lg font-bold text-slate-900">
+                    {schoolForm.requireAllSubjectsPass ? (isArabic ? "مفعل" : "Enabled") : (isArabic ? "غير مفعل" : "Disabled")}
+                  </p>
+                </div>
+              </div>
+            </section>
 
-                <label className="rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
-                  <span className="mb-1 flex items-center gap-2 font-semibold">
-                    {t.organization.school.promotionMonth}
-                    <span className="cursor-help text-xs text-slate-500" title={t.organization.school.hints.promotionMonth}>?</span>
-                  </span>
-                  <input name="promotionMonth" type="number" min="1" max="12" value={schoolForm.promotionMonth} onChange={setField(setSchoolForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
-                  <p className="mt-1 text-xs text-slate-500">{t.organization.school.examples.promotionMonth}</p>
-                </label>
+            <section className="rounded-3xl border border-teal-200 bg-white p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    {isArabic ? "إعدادات الترفيع السنوي" : "Annual Promotion"}
+                  </h2>
+                  <p className="mt-2 text-sm text-slate-600">
+                    {isArabic
+                      ? "إدارة السنوات الدراسية والفصول وتشغيل الترفيع بعد إغلاقها."
+                      : "Manage academic years, terms, and run promotion after closure."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setYearWizardStep(1);
+                    setYearForm({ name: "", startDate: "", endDate: "", numberOfTerms: 1 });
+                    setTermForm({ termNumber: 1, name: "", startDate: "", endDate: "", changeReason: "" });
+                    setYearModal(true);
+                  }}
+                  className="shrink-0 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
+                >
+                  {isArabic ? "إدارة السنوات" : "Manage Years"}
+                </button>
+              </div>
 
-                <label className="rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
-                  <span className="mb-1 flex items-center gap-2 font-semibold">
-                    {t.organization.school.promotionDay}
-                    <span className="cursor-help text-xs text-slate-500" title={t.organization.school.hints.promotionDay}>?</span>
-                  </span>
-                  <input name="promotionDay" type="number" min="1" max="31" value={schoolForm.promotionDay} onChange={setField(setSchoolForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
-                  <p className="mt-1 text-xs text-slate-500">{t.organization.school.examples.promotionDay}</p>
-                </label>
+              <div className="mt-5 space-y-3">
+                {academicYears.length === 0 ? (
+                  <p className="text-sm text-slate-500">
+                    {isArabic ? "لا توجد سنوات دراسية بعد." : "No academic years yet."}
+                  </p>
+                ) : academicYears.map((year) => (
+                  <button
+                    key={year.id}
+                    type="button"
+                    onClick={() => loadTermsForYear(year)}
+                    className={"flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition " + (selectedYear?.id === year.id ? "border-teal-600 bg-teal-50" : "border-slate-200 bg-white hover:border-teal-200 hover:bg-teal-50")}
+                  >
+                    <span className="font-semibold text-slate-800">{year.name}</span>
+                    <span className="text-xs text-slate-500">
+                      {year.isActive ? (isArabic ? "نشطة" : "Active") : (isArabic ? "غير نشطة" : "Inactive")}
+                    </span>
+                  </button>
+                ))}
+              </div>
 
-                <label className="rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
-                  <span className="mb-1 flex items-center gap-2 font-semibold">
-                    {t.organization.school.entryGradeMinAge}
-                    <span className="cursor-help text-xs text-slate-500" title={t.organization.school.hints.entryGradeMinAge}>?</span>
-                  </span>
-                  <input name="entryGradeMinAge" type="number" min="4" max="10" value={schoolForm.entryGradeMinAge} onChange={setField(setSchoolForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
-                  <p className="mt-1 text-xs text-slate-500">{t.organization.school.examples.entryGradeMinAge}</p>
-                </label>
-
-                <label className="rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
-                  <span className="mb-1 flex items-center gap-2 font-semibold">
-                    {t.organization.school.passThresholdPercentage}
-                    <span className="cursor-help text-xs text-slate-500" title={t.organization.school.hints.passThresholdPercentage}>?</span>
-                  </span>
-                  <input name="passThresholdPercentage" type="number" min="0" max="100" value={schoolForm.passThresholdPercentage} onChange={setField(setSchoolForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
-                  <p className="mt-1 text-xs text-slate-500">{t.organization.school.examples.passThresholdPercentage}</p>
-                </label>
-
-                <label className="rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
-                  <span className="mb-1 flex items-center gap-2 font-semibold">
-                    {t.organization.school.minSubjectPassPercentage}
-                    <span className="cursor-help text-xs text-slate-500" title={t.organization.school.hints.minSubjectPassPercentage}>?</span>
-                  </span>
-                  <input name="minSubjectPassPercentage" type="number" min="0" max="100" value={schoolForm.minSubjectPassPercentage} onChange={setField(setSchoolForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
-                  <p className="mt-1 text-xs text-slate-500">{t.organization.school.examples.minSubjectPassPercentage}</p>
-                </label>
-
-                <label className="rounded-xl border border-slate-200 p-3 text-sm text-slate-700 sm:col-span-2">
-                  <span className="mb-2 flex items-center gap-2 font-semibold">
-                    {t.organization.school.requireAllSubjectsPass}
-                    <span className="cursor-help text-xs text-slate-500" title={t.organization.school.hints.requireAllSubjectsPass}>?</span>
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <input name="requireAllSubjectsPass" type="checkbox" checked={schoolForm.requireAllSubjectsPass} onChange={setField(setSchoolForm)} />
-                    <span>{schoolForm.requireAllSubjectsPass ? t.organization.school.options.enabled : t.organization.school.options.disabled}</span>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-500">{t.organization.school.examples.requireAllSubjectsPass}</p>
-                </label>
-
-                <label className="rounded-xl border border-slate-200 p-3 text-sm text-slate-700 sm:col-span-2">
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className="font-semibold">Class ranges / نطاقات الصفوف</span>
+              {selectedYear && (
+                <div className="mt-5 rounded-2xl border border-slate-200 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-900">{selectedYear.name}</p>
+                      <p className="text-xs text-slate-500">
+                        {yearTerms.length}/{selectedYear.numberOfTerms} {isArabic ? "فصل" : "term(s)"}
+                      </p>
+                    </div>
                     <button
                       type="button"
-                      onClick={addSchoolClassRange}
-                      className="rounded-lg bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800"
+                      onClick={() => {
+                        setYearWizardStep(2);
+                        setTermForm({ termNumber: yearTerms.length + 1, name: "", startDate: "", endDate: "", changeReason: "" });
+                        setYearModal(true);
+                      }}
+                      disabled={yearTerms.length >= Number(selectedYear.numberOfTerms || 0)}
+                      className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-semibold text-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      + Add Range
+                      {isArabic ? "+ إضافة فصل" : "+ Add Term"}
                     </button>
                   </div>
-                  <div className="space-y-3">
-                    {schoolForm.classRanges.map((range, index) => (
-                      <div key={index} className="flex items-end gap-2">
-                        <div className="flex-1">
-                          <label className="block text-xs font-medium text-slate-600 mb-1">From / من</label>
-                          <select
-                            className="h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
-                            value={range.startGradeLevel || 1}
-                            onChange={(e) => handleSchoolClassRangeChange(index, "startGradeLevel", e.target.value)}
-                          >
-                            {[...Array(12)].map((_, i) => (
-                              <option key={i + 1} value={i + 1}>
-                                Grade {i + 1}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="flex-1">
-                          <label className="block text-xs font-medium text-slate-600 mb-1">To / إلى</label>
-                          <select
-                            className="h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
-                            value={range.endGradeLevel || 5}
-                            onChange={(e) => handleSchoolClassRangeChange(index, "endGradeLevel", e.target.value)}
-                          >
-                            {[...Array(12)].map((_, i) => (
-                              <option key={i + 1} value={i + 1}>
-                                Grade {i + 1}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        {schoolForm.classRanges.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeSchoolClassRange(index)}
-                            className="mb-1 rounded-lg bg-rose-100 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-200"
-                          >
-                            Remove
-                          </button>
-                        )}
+                  <div className="mt-4">
+                    {academicYearLoading ? (
+                      <p className="text-sm text-slate-500">{isArabic ? "جارٍ التحميل..." : "Loading..."}</p>
+                    ) : yearTerms.length === 0 ? (
+                      <p className="text-sm text-slate-500">{isArabic ? "لا توجد فصول لهذه السنة." : "No terms for this year."}</p>
+                    ) : (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {yearTerms.map((term) => (
+                          <div key={term.id} className="rounded-2xl border border-slate-200 p-4">
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="font-semibold text-slate-800">{term.name}</span>
+                              <span className={"rounded-full px-2 py-0.5 text-xs font-bold " + termStatusColor(term.status)}>{term.status}</span>
+                            </div>
+                            <p className="mt-1.5 text-xs text-slate-500">
+                              {String(term.startDate).slice(0, 10)} → {String(term.endDate).slice(0, 10)}
+                            </p>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
-                  <p className="mt-2 text-xs text-slate-500">Define grade ranges for your school organization.</p>
+                </div>
+              )}
+
+              <div className="mt-5 rounded-2xl border border-rose-100 bg-rose-50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-rose-800">{isArabic ? "تشغيل الترفيع السنوي" : "Run Annual Promotion"}</p>
+                    <p className="text-xs text-rose-700">
+                      {isArabic
+                        ? "يعمل بعد إغلاق كل الفصول وإدخال الدرجات."
+                        : "Available after all terms are closed and marks are entered."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={confirmRunPromotionAction}
+                    disabled={actionLoading}
+                    className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+                  >
+                    {isArabic ? "تشغيل" : "Run"}
+                  </button>
+                </div>
+              </div>
+            </section>
+
+          </div>
+
+          <Modal open={schoolSettingsModalOpen} onClose={() => setSchoolSettingsModalOpen(false)} title={isArabic ? "إعدادات المدرسة" : "School Settings"} maxWidth="max-w-lg">
+            <form onSubmit={async (e) => { await saveSchoolSettingsAction(e); setSchoolSettingsModalOpen(false); }} className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-semibold text-slate-700">{isArabic ? "الحد الأدنى لسن القبول" : "Min Entry Age (Grade 1)"}</span>
+                  <input name="entryGradeMinAge" type="number" min="4" max="10" value={schoolForm.entryGradeMinAge} onChange={setField(setSchoolForm)} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm focus:border-blue-400 focus:bg-white focus:outline-none" />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-semibold text-slate-700">{isArabic ? "نسبة النجاح الإجمالية" : "Overall Pass Threshold"}</span>
+                  <div className="flex items-center gap-2">
+                    <input name="passThresholdPercentage" type="number" min="0" max="100" value={schoolForm.passThresholdPercentage} onChange={setField(setSchoolForm)} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm focus:border-violet-400 focus:bg-white focus:outline-none" />
+                    <span className="shrink-0 text-sm font-semibold text-slate-500">%</span>
+                  </div>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-semibold text-slate-700">{isArabic ? "الحد الأدنى لكل مادة" : "Min Per-Subject Score"}</span>
+                  <div className="flex items-center gap-2">
+                    <input name="minSubjectPassPercentage" type="number" min="0" max="100" value={schoolForm.minSubjectPassPercentage} onChange={setField(setSchoolForm)} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm focus:border-violet-400 focus:bg-white focus:outline-none" />
+                    <span className="shrink-0 text-sm font-semibold text-slate-500">%</span>
+                  </div>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input name="requireAllSubjectsPass" type="checkbox" checked={schoolForm.requireAllSubjectsPass} onChange={setField(setSchoolForm)} className="mt-0.5 h-4 w-4 accent-violet-600" />
+                  <div>
+                    <span className="block font-semibold text-slate-800">{isArabic ? "يشترط النجاح في جميع المواد" : "Require all subjects to pass"}</span>
+                  </div>
                 </label>
               </div>
-
-              <button type="submit" disabled={actionLoading} className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">{t.organization.common.save}</button>
-            </form>
-            </Modal>
-
-            <article className="rounded-3xl border border-slate-200 bg-white p-5">
-              <h2 className="text-lg font-bold text-slate-900">{isArabic ? "إعدادات المدرسة" : "School Settings"}</h2>
-              <p className="mt-2 text-sm text-slate-600">{isArabic ? "إدارة إعدادات السنة الدراسية والترقية" : "Manage school year and promotion settings"}</p>
-              <button type="button" onClick={() => setSettingsModalOpen(true)} className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
-                {isArabic ? "تعديل الإعدادات" : "Edit Settings"}
-              </button>
-            </article>
-
-            <article className="rounded-3xl border border-slate-200 bg-white p-5">
-              <h2 className="text-lg font-bold text-slate-900">{t.organization.school.promotionTitle}</h2>
-              <p className="mt-2 text-sm text-slate-600">{t.organization.school.promotionHint}</p>
-              <p className="mt-1 text-xs text-amber-700">{t.organization.school.promotionWarning}</p>
-              <button type="button" onClick={confirmRunPromotionAction} disabled={actionLoading} className="mt-4 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-900">
-                {t.organization.school.runPromotion}
-              </button>
-              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                <p className="font-semibold">{t.organization.school.currentSettings}</p>
-                <pre className="mt-2 overflow-auto text-xs">{JSON.stringify(schoolSettings, null, 2)}</pre>
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button type="button" onClick={() => setSchoolSettingsModalOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm">{isArabic ? "إلغاء" : "Cancel"}</button>
+                <button type="submit" className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">{isArabic ? "حفظ" : "Save"}</button>
               </div>
-            </article>
-          </section>
+            </form>
+          </Modal>
+
+                    {/* Academic Year Wizard Modal */}
+          <Modal
+            open={yearModal}
+            onClose={() => {
+              setYearModal(false);
+              setYearWizardStep(1);
+            }}
+            title={yearWizardStep === 1
+              ? (isArabic ? "الخطوة 1: إنشاء سنة دراسية" : "Step 1: Create Academic Year")
+              : (isArabic ? "الخطوة 2: إضافة الفصول" : "Step 2: Add Terms")}
+            maxWidth="max-w-lg"
+          >
+            <div className="flex items-center gap-2">
+              {[1, 2].map((step) => (
+                <div key={step} className="flex flex-1 items-center gap-2">
+                  <div className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold ${yearWizardStep >= step ? "bg-teal-600 text-white" : "bg-slate-100 text-slate-400"}`}>
+                    {step}
+                  </div>
+                  <div className={`h-1 flex-1 rounded-full ${yearWizardStep > step ? "bg-teal-600" : "bg-slate-100"}`} />
+                </div>
+              ))}
+            </div>
+
+            <p className="mt-4 text-xs text-slate-500">
+              {yearWizardStep === 1
+                ? (isArabic ? "حدد اسم السنة وتواريخها وعدد الفصول قبل المتابعة." : "Set the year name, dates, and term count before continuing.")
+                : (isArabic ? `أضف الفصل ${termForm.termNumber} من ${selectedYear?.numberOfTerms || 1}` : `Add term ${termForm.termNumber} of ${selectedYear?.numberOfTerms || 1}`)}
+            </p>
+
+            {yearWizardStep === 1 ? (
+              <form onSubmit={handleCreateYear} className="mt-4 grid gap-3">
+                <input required placeholder={isArabic ? "الاسم (مثال: 2025-2026)" : "Name (e.g. 2025–2026)"} value={yearForm.name} onChange={(e) => setYearForm((f) => ({ ...f, name: e.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                <label className="text-sm text-slate-600">{isArabic ? "تاريخ البداية" : "Start Date"}
+                  <input required type="date" value={yearForm.startDate} onChange={(e) => setYearForm((f) => ({ ...f, startDate: e.target.value }))} className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                </label>
+                <label className="text-sm text-slate-600">{isArabic ? "تاريخ النهاية" : "End Date"}
+                  <input required type="date" value={yearForm.endDate} onChange={(e) => setYearForm((f) => ({ ...f, endDate: e.target.value }))} className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                </label>
+                <label className="text-sm text-slate-600">{isArabic ? "عدد الفصول" : "Number of Terms"}
+                  <input type="number" min="1" max="4" value={yearForm.numberOfTerms} onChange={(e) => setYearForm((f) => ({ ...f, numberOfTerms: e.target.value }))} className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                </label>
+                <p className="text-xs text-slate-500">
+                  {isArabic
+                    ? "بعد إنشاء السنة ستنتقل تلقائيًا للخطوة الثانية لإضافة الفصول واحدًا تلو الآخر."
+                    : "After saving the year, you will move to the second step to add terms one by one."}
+                </p>
+                <div className="flex gap-2">
+                  <button type="submit" disabled={actionLoading} className="flex-1 rounded-xl bg-slate-900 py-2 text-sm font-semibold text-white">{isArabic ? "إنشاء ومتابعة" : "Create & Continue"}</button>
+                  <button type="button" onClick={() => { setYearModal(false); setYearWizardStep(1); }} className="flex-1 rounded-xl border border-slate-200 py-2 text-sm text-slate-600">{isArabic ? "إلغاء" : "Cancel"}</button>
+                </div>
+              </form>
+            ) : (
+              selectedYear && (
+                <form onSubmit={handleCreateTerm} className="mt-4 grid gap-3">
+                  <input required type="number" min="1" max={selectedYear.numberOfTerms || 1} placeholder={isArabic ? "رقم الفصل" : "Term number"} value={termForm.termNumber} onChange={(e) => setTermForm((f) => ({ ...f, termNumber: e.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                  <input required placeholder={isArabic ? "اسم الفصل (مثال: الفصل الأول)" : "Term name (e.g. First Term)"} value={termForm.name} onChange={(e) => setTermForm((f) => ({ ...f, name: e.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                  <label className="text-sm text-slate-600">{isArabic ? "تاريخ البداية" : "Start Date"}
+                    <input required type="date" value={termForm.startDate} onChange={(e) => setTermForm((f) => ({ ...f, startDate: e.target.value }))} className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                  </label>
+                  <label className="text-sm text-slate-600">{isArabic ? "تاريخ النهاية" : "End Date"}
+                    <input required type="date" value={termForm.endDate} onChange={(e) => setTermForm((f) => ({ ...f, endDate: e.target.value }))} className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                  </label>
+                  <p className="text-xs text-slate-500">
+                    {isArabic
+                      ? "يجب أن تكون تواريخ الفصل داخل تواريخ السنة الدراسية ولا تتداخل مع فصل آخر."
+                      : "Term dates must stay inside the academic year and must not overlap another term."}
+                  </p>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setYearWizardStep(1)} className="flex-1 rounded-xl border border-slate-200 py-2 text-sm text-slate-600">{isArabic ? "رجوع" : "Back"}</button>
+                    <button type="submit" disabled={actionLoading} className="flex-1 rounded-xl bg-slate-900 py-2 text-sm font-semibold text-white">{isArabic ? "إضافة" : "Add"}</button>
+                  </div>
+                </form>
+              )
+            )}
+          </Modal>
+
+          {/* Edit Term Modal */}
+          {editTermModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+              <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-5 shadow-xl">
+                <h3 className="text-lg font-bold text-slate-900">{isArabic ? "تعديل الفصل" : "Edit Term"}</h3>
+                {editTermModal.term.status === "ACTIVE" && (
+                  <p className="mt-1 text-xs text-amber-600">{isArabic ? "الفصل نشط — يمكن تمديد تاريخ النهاية فقط" : "Term is ACTIVE — only end date extension allowed"}</p>
+                )}
+                <form onSubmit={handleUpdateTerm} className="mt-4 grid gap-3">
+                  {editTermModal.term.status === "PLANNED" && (
+                    <>
+                      <input placeholder={isArabic ? "الاسم" : "Name"} value={editTermModal.name} onChange={(e) => setEditTermModal((m) => ({ ...m, name: e.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                      <label className="text-sm text-slate-600">{isArabic ? "تاريخ البداية" : "Start Date"}
+                        <input type="date" value={editTermModal.startDate} onChange={(e) => setEditTermModal((m) => ({ ...m, startDate: e.target.value }))} className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                      </label>
+                    </>
+                  )}
+                  <label className="text-sm text-slate-600">{isArabic ? "تاريخ النهاية الجديد" : "New End Date"}
+                    <input type="date" value={editTermModal.endDate} onChange={(e) => setEditTermModal((m) => ({ ...m, endDate: e.target.value }))} className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                  </label>
+                  <textarea required rows={2} placeholder={isArabic ? "سبب التعديل (مطلوب)" : "Reason for change (required)"} value={editTermModal.changeReason} onChange={(e) => setEditTermModal((m) => ({ ...m, changeReason: e.target.value }))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={actionLoading} className="flex-1 rounded-xl bg-slate-900 py-2 text-sm font-semibold text-white">{isArabic ? "حفظ" : "Save"}</button>
+                    <button type="button" onClick={() => setEditTermModal(null)} className="flex-1 rounded-xl border border-slate-200 py-2 text-sm text-slate-600">{isArabic ? "إلغاء" : "Cancel"}</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Reopen Term Modal */}
+          {reopenModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+              <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-5 shadow-xl">
+                <h3 className="text-lg font-bold text-slate-900">{isArabic ? "إعادة فتح الفصل" : "Reopen Term"}</h3>
+                <p className="mt-1 text-sm text-slate-600">{reopenModal.term.name} — {isArabic ? "سيتحول من مغلق إلى نشط" : "will change from CLOSED to ACTIVE"}</p>
+                <form onSubmit={handleReopenTerm} className="mt-4 grid gap-3">
+                  <textarea required rows={2} placeholder={isArabic ? "سبب إعادة الفتح (مطلوب)" : "Reason for reopening (required)"} value={reopenModal.changeReason} onChange={(e) => setReopenModal((m) => ({ ...m, changeReason: e.target.value }))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={actionLoading} className="flex-1 rounded-xl bg-amber-500 py-2 text-sm font-semibold text-slate-900">{isArabic ? "إعادة فتح" : "Reopen"}</button>
+                    <button type="button" onClick={() => setReopenModal(null)} className="flex-1 rounded-xl border border-slate-200 py-2 text-sm text-slate-600">{isArabic ? "إلغاء" : "Cancel"}</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+          </>
         )}
 
         {showPromotionConfirm && (
@@ -3008,7 +3599,6 @@ export default function OrganizationWorkspacePage() {
                 <p>{t.organization.school.passThresholdPercentage}: {schoolForm.passThresholdPercentage}%</p>
                 <p>{t.organization.school.minSubjectPassPercentage}: {schoolForm.minSubjectPassPercentage}%</p>
                 <p>{t.organization.school.requireAllSubjectsPass}: {schoolForm.requireAllSubjectsPass ? t.organization.school.options.enabled : t.organization.school.options.disabled}</p>
-                <p>Class ranges: {schoolForm.classRanges?.map(r => `${r.startGradeLevel}-${r.endGradeLevel}`).join(", ") || '-'}</p>
               </div>
               <p className="mt-3 text-xs font-semibold text-rose-700">{t.organization.school.confirmation.warning}</p>
               <div className="mt-4 flex justify-end gap-2">
@@ -3094,7 +3684,7 @@ export default function OrganizationWorkspacePage() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => handleUnenrollStudent(enrollment.Course_id)}
+                          onClick={() => handleUnenrollStudent(enrollment.course?.id)}
                           disabled={actionLoading}
                           className="ml-4 px-4 py-2 rounded-lg border border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -3118,41 +3708,26 @@ export default function OrganizationWorkspacePage() {
                 </h4>
                 <div className="space-y-3">
                   {courses
-                    .filter((course) => !studentEnrollments.some((enrollment) => enrollment.Course_id === course.id))
-                    .map((course) => (
-                      <div key={course.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-colors">
-                        <div className="flex-1">
-                          <p className="font-semibold text-slate-900">{formatGradeName(course, isSchool, isArabic) || course.Name}</p>
-                          <p className="text-sm text-slate-600 mt-1">{course.Description}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleEnrollStudent(course.id)}
-                          disabled={actionLoading}
-                          className="ml-4 px-4 py-2 rounded-lg border border-green-200 text-green-700 hover:bg-green-50 hover:border-green-300 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isArabic ? "إضافة" : "Enroll"}
-                        </button>
+ .filter((course) => !studentEnrollments.some((enrollment) => enrollment.course?.id === course.id))
+ .map((course) => (
+                    <div key={course.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-colors">
+                      <div className="flex-1">
+                        <p className="font-semibold text-slate-900">{formatGradeName(course, isSchool, isArabic) || course.Name}</p>
+                        <p className="text-sm text-slate-600 mt-1">{translateCourseDescription(course.Description, isArabic) || ""}</p>
                       </div>
-                    ))}
+                      <button
+                        type="button"
+                        onClick={() => handleEnrollStudent(course.id)}
+                        disabled={actionLoading}
+                        className="ml-4 px-4 py-2 rounded-lg bg-slate-950 text-white hover:bg-slate-800 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isArabic ? "إضافة" : "Enroll"}
+                      </button>
+                    </div>
+                  ))}
                 </div>
-                {courses.filter((course) => !studentEnrollments.some((enrollment) => enrollment.Course_id === course.id)).length === 0 && (
-                  <div className="text-center py-8">
-                    <div className="text-slate-400 text-4xl mb-2">✅</div>
-                    <p className="text-slate-500">
-                      {isArabic
-                        ? isSchool
-                          ? "الطالب مسجل في جميع الصفوف"
-                          : "الطالب مسجل في جميع الكورسات"
-                        : isSchool
-                          ? "Student is enrolled in all available grades"
-                          : "Student is enrolled in all available courses"}
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
-
             <div className="border-t border-slate-200 p-6 rounded-b-3xl bg-slate-50">
               <div className="flex justify-end">
                 <button

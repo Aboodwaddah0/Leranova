@@ -1,5 +1,5 @@
 from typing import Literal
-from pydantic import BaseModel, AnyHttpUrl, model_validator
+from pydantic import BaseModel, AnyHttpUrl, model_validator, Field
 
 
 class IngestRequest(BaseModel):
@@ -66,3 +66,29 @@ class RetrieveMatch(BaseModel):
 
 class RetrieveResponse(BaseModel):
     matches: list[RetrieveMatch]
+
+
+class QueryRequest(BaseModel):
+    question: str
+    lesson_ids: list[str] = Field(default_factory=list)
+    limit: int = Field(default=10, ge=1, le=50)
+
+
+class QueryMatch(BaseModel):
+    text: str | None = None
+    sourceType: str | None = None
+    sourceName: str | None = None
+    timestamp: float | None = None
+    page: int | None = None
+    section: str | None = None
+    score: float | None = None
+    sourceHint: str | None = None
+    lessonId: str | None = None
+    courseId: int | None = None
+    subjectId: int | None = None
+    organizationId: str | None = None
+    chunkIndex: int | None = None
+
+
+class QueryResponse(BaseModel):
+    chunks: list[QueryMatch]

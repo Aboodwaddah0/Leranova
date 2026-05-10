@@ -11,6 +11,7 @@ import lessonAttachmentRoutes from './routes/lessonAttachmentRoutes.js';
 import lessonProgressRoutes from './routes/lessonProgressRoutes.js';
 import commentRoutes from './routes/commentRoutes.js';
 import chatbotRoutes from './routes/chatbotRoutes.js';
+import lessonAiContentRoutes from './routes/lessonAiContentRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import organizationRoutes from './routes/organizationRoutes.js';
 import organizationSelfRoutes from './routes/organizationSelfRoutes.js';
@@ -21,6 +22,10 @@ import adminFeatureRoutes from './routes/adminFeatureRoutes.js';
 import schoolSettingsRoutes from './routes/schoolSettingsRoutes.js';
 import adminAnalyticsRoutes from './routes/adminAnalyticsRoutes.js';
 import studentExperienceRoutes from './routes/studentExperienceRoutes.js';
+import academicYearRoutes from './routes/academicYearRoutes.js';
+import quizRoutes from './routes/quizRoutes.js';
+import noteRoutes from './routes/noteRoutes.js';
+import parentRoutes from './routes/parentRoutes.js';
 
 import userRoutes from './routes/userRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
@@ -58,6 +63,9 @@ app.use('/api/lessons/:lessonId/attachments', lessonAttachmentRoutes);
 app.use('/api/lessons/:lessonId/assets', lessonAttachmentRoutes);
 app.use('/api/lessons/progress', lessonProgressRoutes);
 app.use('/api/lessons/:lessonId/comments', commentRoutes);
+app.use('/api/lessons/:lessonId/ai-content', lessonAiContentRoutes);
+app.use('/api/subjects/:subjectId/lessons/:lessonId', quizRoutes);
+app.use('/api/lessons/:lessonId', quizRoutes);
 
 app.use('/api/organizations', organizationRoutes);
 app.use('/api/organization-profile', organizationSelfRoutes);
@@ -68,9 +76,13 @@ app.use('/api/admin/plans', adminPlanRoutes);
 app.use('/api/admin', adminFeatureRoutes);
 app.use('/api/admin/analytics', adminAnalyticsRoutes);
 app.use('/api/school-settings', schoolSettingsRoutes);
+app.use('/api/academic-years', academicYearRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/student', studentExperienceRoutes);
+
+app.use('/api/notes', noteRoutes);
+app.use('/api/parent', parentRoutes);
 
 // auth routes
 app.use('/api/auth', authRoutes);

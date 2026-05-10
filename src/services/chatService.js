@@ -1,6 +1,7 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { askChatbot } from './chatbotService.js';
+import { uploadChatAttachment } from './cloudinary.service.js';
 import {
   pushCourseMessage,
   markMessageSeen,
@@ -126,6 +127,13 @@ const serializeStudentChatMessage = (message, viewerUserId = null) => {
           email: message.user.email ?? null,
         }
       : null,
+    attachments: (message.message_attachments || []).map((a) => ({
+      id: a.id,
+      fileName: a.file_name,
+      fileUrl: a.file_url,
+      fileType: a.file_type || null,
+      fileSize: a.file_size ? Number(a.file_size) : null,
+    })),
   };
 };
 
@@ -1664,52 +1672,38 @@ export const listMessagesForStudentChat = async ({ chatId, userId }) => {
   });
 
   const messages = await prisma.messages.findMany({
-    where: {
-      chat_id: chatId,
-    },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-      replyTo: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      },
-      reactions: {
-        select: {
-          user_id: true,
-          reaction: true,
-        },
-      },
-    },
-    orderBy: {
-      sent_at: 'asc',
-    },
+    where: { chat_id: chatId },
+    include: MSG_INCLUDE,
+    orderBy: { sent_at: 'asc' },
   });
 
   return messages.map((message) => serializeStudentChatMessage(message, userId));
 };
 
-export const sendStudentChatTextMessage = async ({ chatId, userId, content, replyToMessageId = null }) => {
+const MSG_INCLUDE = {
+  user: { select: { id: true, name: true, email: true } },
+  replyTo: { include: { user: { select: { id: true, name: true } } } },
+  reactions: { select: { user_id: true, reaction: true } },
+  message_attachments: true,
+};
+
+const MAX_CHAT_FILES = 5;
+const MAX_CHAT_FILE_BYTES = 20 * 1024 * 1024; // 20 MB per file
+
+export const sendStudentChatTextMessage = async ({ chatId, userId, content, replyToMessageId = null, files = [] }) => {
   await verifyStudentAccessToChat({ chatId, userId });
 
   const cleaned = String(content || '').trim();
-  if (!cleaned) {
+  if (!cleaned && files.length === 0) {
     throw new AppError('Message content cannot be empty', 400);
   }
 
   if (cleaned.length > MAX_MESSAGE_LENGTH) {
     throw new AppError(`Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`, 413);
+  }
+
+  if (files.length > MAX_CHAT_FILES) {
+    throw new AppError(`You can attach at most ${MAX_CHAT_FILES} files per message`, 400);
   }
 
   const resolvedReplyToMessageId = await resolveReplyToMessageId({
@@ -1718,53 +1712,44 @@ export const sendStudentChatTextMessage = async ({ chatId, userId, content, repl
     replyToMessageId,
   });
 
-  console.info('[STUDENT_CHAT] send payload', {
-    chatId,
-    userId,
-    replyToMessageId: resolvedReplyToMessageId,
-  });
+  // Upload files to Cloudinary first
+  const uploadedFiles = await Promise.all(
+    files.map(async (file) => {
+      if (file.size > MAX_CHAT_FILE_BYTES) {
+        throw new AppError(`File "${file.originalname}" exceeds the 20 MB limit`, 400);
+      }
+      const { fileUrl } = await uploadChatAttachment(file.buffer, {
+        folder: 'learnova/chat',
+        resource_type: 'auto',
+      });
+      return {
+        file_name: file.originalname,
+        file_url: fileUrl,
+        file_type: file.mimetype || null,
+        file_size: file.size,
+      };
+    })
+  );
+
+  const messageType = uploadedFiles.length > 0
+    ? (uploadedFiles.every((f) => (f.file_type || '').startsWith('image/')) ? 'image' : 'file')
+    : 'text';
 
   const message = await prisma.messages.create({
     data: {
       chat_id: chatId,
       sender_user_id: userId,
       replyToMessageId: resolvedReplyToMessageId,
-      message_type: 'text',
+      message_type: messageType,
       content: cleaned,
       sent_at: new Date(),
       is_seen: false,
       seen_at: null,
+      ...(uploadedFiles.length > 0 ? {
+        message_attachments: { create: uploadedFiles },
+      } : {}),
     },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-      replyTo: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      },
-      reactions: {
-        select: {
-          user_id: true,
-          reaction: true,
-        },
-      },
-    },
-  });
-
-  console.info('[STUDENT_CHAT] message saved', {
-    messageId: message.id,
-    replyToMessageId: message.replyToMessageId ?? null,
+    include: MSG_INCLUDE,
   });
 
   return serializeStudentChatMessage(message, userId);

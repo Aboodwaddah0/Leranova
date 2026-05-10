@@ -7,11 +7,14 @@ import {
 	forgotPasswordController,
 	resetPasswordController,
 	changePasswordController,
+	getMeController,
 } from '../controllers/authController.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { loginAdminController } from '../controllers/adminAuthController.js';
 
 const router = Router();
+
+router.get('/me', authMiddleware, getMeController);
 
 // Traditional registration and login
 router.post('/organization/register', register);

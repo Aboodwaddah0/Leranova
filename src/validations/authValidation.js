@@ -33,7 +33,7 @@ export const loginUserSchema = Joi.object({
 });
 
 export const loginParentSchema = Joi.object({
-  nationalId: Joi.string().trim().min(5).max(50).required(),
+  email: Joi.string().trim().email().required(),
   password: Joi.string().required(),
 });
 

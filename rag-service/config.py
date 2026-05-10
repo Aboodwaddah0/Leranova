@@ -11,7 +11,7 @@ class Settings:
     app_host: str = os.getenv("APP_HOST", "0.0.0.0")
     app_port: int = int(os.getenv("APP_PORT", "8000"))
 
-    embedding_model_name: str = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-m3")
+    embedding_model_name: str = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-small-en")
     reranker_model_name: str = os.getenv("RERANKER_MODEL_NAME", "BAAI/bge-reranker-v2-m3")
 
     qdrant_url: str = os.getenv("QDRANT_URL", "")
@@ -30,6 +30,7 @@ class Settings:
     chunk_overlap_words: int = int(os.getenv("CHUNK_OVERLAP_WORDS", "50"))
 
     request_timeout_seconds: int = int(os.getenv("REQUEST_TIMEOUT_SECONDS", "120"))
+    max_download_bytes: int = int(os.getenv("MAX_DOWNLOAD_BYTES", str(500 * 1024 * 1024)))
 
 
 settings = Settings()

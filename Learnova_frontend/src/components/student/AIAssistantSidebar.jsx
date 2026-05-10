@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSelector } from 'react-redux';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Sparkles, X, SendHorizontal, Bot, MessageCircle } from 'lucide-react';
 import { useLocation, useParams } from 'react-router-dom';
@@ -52,9 +53,10 @@ function SourceBadge({ source, isArabic }) {
   );
 }
 
-export default function AIAssistantSidebar({ isArabic }) {
+export default function AIAssistantSidebar({ isArabic, lessonId: lessonIdProp }) {
   const location = useLocation();
   const params = useParams();
+  const currentUser = useSelector((state) => state.auth?.user);
   const [isOpen, setIsOpen] = useState(() => localStorage.getItem(STORAGE_KEY) === '1');
   const [question, setQuestion] = useState('');
   const [thinking, setThinking] = useState(false);
@@ -64,8 +66,13 @@ export default function AIAssistantSidebar({ isArabic }) {
 
   const routeContext = useMemo(() => {
     const search = new URLSearchParams(location.search || '');
-    return parseRouteContext(location.pathname, search, params);
-  }, [location.pathname, location.search, params]);
+    const ctx = parseRouteContext(location.pathname, search, params);
+    // When a parent component knows the active lesson (e.g. inline viewer), override URL-derived lessonId
+    if (lessonIdProp && Number.isFinite(Number(lessonIdProp))) {
+      ctx.lessonId = Number(lessonIdProp);
+    }
+    return ctx;
+  }, [location.pathname, location.search, params, lessonIdProp]);
 
   useEffect(() => {
     const lessonMatch = location.pathname.match(/\/lessons\/(\d+)/i);
@@ -73,6 +80,11 @@ export default function AIAssistantSidebar({ isArabic }) {
       setMessages([]);
     }
   }, [location.pathname]);
+
+  // Clear messages when the active lesson changes in the inline viewer
+  useEffect(() => {
+    if (lessonIdProp) setMessages([]);
+  }, [lessonIdProp]);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,18 +126,20 @@ export default function AIAssistantSidebar({ isArabic }) {
   }, [routeContext]);
 
   const chatStorageKey = useMemo(() => {
+    const userId = currentUser?.id ?? 'guest';
     const courseId = Number(resolvedContext.courseId);
     const subjectId = Number(resolvedContext.subjectId);
     const lessonId = Number(resolvedContext.lessonId);
 
     const keyParts = [
+      `u${userId}`,
       Number.isInteger(courseId) && courseId > 0 ? `c${courseId}` : 'c0',
       Number.isInteger(subjectId) && subjectId > 0 ? `s${subjectId}` : 's0',
       Number.isInteger(lessonId) && lessonId > 0 ? `l${lessonId}` : 'l0',
     ];
 
     return `${CHAT_STORAGE_PREFIX}:${keyParts.join('_')}`;
-  }, [resolvedContext]);
+  }, [resolvedContext, currentUser?.id]);
 
   useEffect(() => {
     try {
@@ -214,10 +228,7 @@ export default function AIAssistantSidebar({ isArabic }) {
       content: normalized,
     };
 
-    setMessages((current) => [
-      ...current,
-      userMessage,
-    ]);
+    setMessages((current) => [...current, userMessage]);
 
     try {
       if (!Number.isInteger(Number(resolvedContext.courseId)) || Number(resolvedContext.courseId) <= 0) {
@@ -227,7 +238,7 @@ export default function AIAssistantSidebar({ isArabic }) {
       const historyForRequest = messages
         .filter((entry) => entry && (entry.role === 'user' || entry.role === 'assistant'))
         .filter((entry) => !entry.isError)
-        .slice(-10)
+        .slice(-8)
         .map((entry) => ({ role: entry.role, content: entry.content }));
 
       const response = await askStudentTutor({
@@ -235,7 +246,7 @@ export default function AIAssistantSidebar({ isArabic }) {
         courseId: resolvedContext.courseId,
         subjectId: resolvedContext.subjectId,
         lessonId: resolvedContext.lessonId,
-        history: [...historyForRequest, { role: 'user', content: normalized }],
+        history: historyForRequest,
       });
       const assistantContent = String(response?.answer || response?.message || '').trim();
 
@@ -261,7 +272,7 @@ export default function AIAssistantSidebar({ isArabic }) {
       });
     } catch (error) {
       setMessages((current) => [
-        ...current,
+        ...current.filter((m) => m.id !== userMessage.id),
         {
           id: `e-${Date.now()}`,
           role: 'assistant',

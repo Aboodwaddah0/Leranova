@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FileText, MessageCircle, PlayCircle, ArrowLeft, Settings, CircleCheckBig } from 'lucide-react';
+import { FileText, MessageCircle, PlayCircle, ArrowLeft, Settings, CircleCheckBig, Brain, ClipboardList, Map } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
+import Flashcards from '../../components/student/Flashcards';
+import MindMap from '../../components/student/MindMap';
+import Quiz from '../../components/student/Quiz';
 import { useLanguage } from '../../utils/i18n';
 import {
   createLessonComment,
@@ -10,6 +13,11 @@ import {
   fetchLessonDetails,
   fetchSubjectLessons,
   updateStudentLessonProgress,
+  fetchLessonAiContent,
+  regenerateLessonFlashcards,
+  regenerateLessonMindmap,
+  fetchStudentLessonQuiz,
+  submitStudentQuizAttempt,
 } from '../../services/studentService';
 import {
   calculateProgressForLessons,
@@ -35,12 +43,25 @@ export default function StudentLessonPage() {
   const [progressTick, setProgressTick] = useState(0);
   const [autoNextCountdown, setAutoNextCountdown] = useState(null);
   const autoNextIntervalRef = useRef(null);
+  const [aiContent, setAiContent] = useState(null);
+  const [flashcardsLoading, setFlashcardsLoading] = useState(false);
+  const [mindmapLoading, setMindmapLoading] = useState(false);
+  const [flashcardsError, setFlashcardsError] = useState('');
+  const [mindmapError, setMindmapError] = useState('');
+  const [lessonQuiz, setLessonQuiz] = useState(null);
+  const [quizSubmitting, setQuizSubmitting] = useState(false);
 
-  const tabs = useMemo(() => ([
-    { id: 'comments', label: isArabic ? 'التعليقات' : 'Comments', icon: MessageCircle },
-    { id: 'attachments', label: isArabic ? 'المرفقات' : 'Attachments', icon: FileText },
-    { id: 'notes', label: isArabic ? 'ملاحظات' : 'Notes', icon: Settings },
-  ]), [isArabic]);
+  const tabs = useMemo(() => {
+    const base = [
+      { id: 'comments', label: isArabic ? 'التعليقات' : 'Comments', icon: MessageCircle },
+      { id: 'attachments', label: isArabic ? 'المرفقات' : 'Attachments', icon: FileText },
+      { id: 'flashcards', label: isArabic ? 'البطاقات التعليمية' : 'Flashcards', icon: Brain },
+      { id: 'mindmap', label: isArabic ? 'الخريطة الذهنية' : 'Mind Map', icon: Map },
+      { id: 'notes', label: isArabic ? 'ملاحظات' : 'Notes', icon: Settings },
+    ];
+    if (lessonQuiz) base.push({ id: 'quiz', label: isArabic ? '🧠 الاختبار' : '🧠 Quiz', icon: ClipboardList });
+    return base;
+  }, [isArabic, lessonQuiz]);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,6 +129,62 @@ export default function StudentLessonPage() {
   ) || (isArabic ? 'شاهد واقرأ واسأل دون مغادرة الصفحة.' : 'Watch, read, and ask questions without leaving the page.');
 
   useEffect(() => subscribeToProgress(() => setProgressTick((current) => current + 1)), []);
+
+  const lang = isArabic ? 'ar' : 'en';
+
+  const loadInitialAiContent = async () => {
+    setFlashcardsLoading(true);
+    setMindmapLoading(true);
+    setFlashcardsError('');
+    setMindmapError('');
+    try {
+      const data = await fetchLessonAiContent(numericLessonId, lang);
+      setAiContent(data);
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || (isArabic ? 'فشل توليد المحتوى.' : 'Failed to generate content.');
+      setFlashcardsError(msg);
+      setMindmapError(msg);
+    } finally {
+      setFlashcardsLoading(false);
+      setMindmapLoading(false);
+    }
+  };
+
+  const regenFlashcards = async () => {
+    setFlashcardsLoading(true);
+    setFlashcardsError('');
+    try {
+      const data = await regenerateLessonFlashcards(numericLessonId, lang);
+      setAiContent((prev) => ({ ...prev, flashcards: data?.flashcards ?? [] }));
+    } catch (err) {
+      setFlashcardsError(err?.response?.data?.message || err?.message || (isArabic ? 'فشل توليد البطاقات.' : 'Failed to generate flashcards.'));
+    } finally {
+      setFlashcardsLoading(false);
+    }
+  };
+
+  const regenMindmap = async () => {
+    setMindmapLoading(true);
+    setMindmapError('');
+    try {
+      const data = await regenerateLessonMindmap(numericLessonId, lang);
+      setAiContent((prev) => ({ ...prev, mindmap: data?.mindmap ?? null }));
+    } catch (err) {
+      setMindmapError(err?.response?.data?.message || err?.message || (isArabic ? 'فشل توليد الخريطة.' : 'Failed to generate mind map.'));
+    } finally {
+      setMindmapLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (Number.isFinite(numericLessonId) && numericLessonId > 0) {
+      setAiContent(null);
+      loadInitialAiContent();
+      // Load quiz (published only — null if no quiz or not published)
+      fetchStudentLessonQuiz(numericLessonId, lang).then(setLessonQuiz).catch(() => setLessonQuiz(null));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [numericLessonId, lang]);
 
   const courseLessonIds = useMemo(
     () => subjectLessons.map((item) => Number(item.id)).filter((id) => Number.isInteger(id) && id > 0),
@@ -241,6 +318,7 @@ export default function StudentLessonPage() {
     <StudentLayout showAIAssistant>
       {loading ? <div className="h-[34rem] animate-pulse rounded-[1.75rem] border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/5" /> : null}
       {error ? <div className="mb-5 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{error}</div> : null}
+
       <div className="grid gap-8 xl:grid-cols-[1.4fr_0.75fr]">
         <section className="space-y-6">
           <div className="flex items-center justify-between gap-3">
@@ -362,7 +440,49 @@ export default function StudentLessonPage() {
                   : `This lesson belongs to ${subjectTitle}. Continue in order to keep the AI tutor context aligned.`}
               </div>
             ) : null}
+
+            {tab === 'quiz' ? (
+              <div className="mt-4">
+                <Quiz
+                  quiz={lessonQuiz}
+                  isArabic={isArabic}
+                  submitting={quizSubmitting}
+                  onSubmit={async (answers) => {
+                    setQuizSubmitting(true);
+                    try {
+                      return await submitStudentQuizAttempt(numericLessonId, answers, lang);
+                    } catch { return null; } finally { setQuizSubmitting(false); }
+                  }}
+                />
+              </div>
+            ) : null}
+
+            {tab === 'flashcards' ? (
+              <div className="mt-4">
+                <Flashcards
+                  cards={aiContent?.flashcards || []}
+                  isArabic={isArabic}
+                  onGenerate={regenFlashcards}
+                  loading={flashcardsLoading}
+                  error={flashcardsError}
+                />
+              </div>
+            ) : null}
+
+            {tab === 'mindmap' ? (
+              <div className="mt-4">
+                <MindMap
+                  mindmap={aiContent?.mindmap || null}
+                  lessonTitle={lessonTitle}
+                  isArabic={isArabic}
+                  onGenerate={regenMindmap}
+                  loading={mindmapLoading}
+                  error={mindmapError}
+                />
+              </div>
+            ) : null}
           </div>
+
         </section>
 
         <aside className="space-y-6">
@@ -425,6 +545,7 @@ export default function StudentLessonPage() {
           </div>
         </aside>
       </div>
+
     </StudentLayout>
   );
 }

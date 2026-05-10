@@ -123,6 +123,11 @@ export const deleteCourseSubject = async (courseId, subjectId) => {
   return data?.data || null;
 };
 
+export const fetchSubjectLessonsForOrg = async (subjectId) => {
+  const { data } = await api.get(`/subjects/${subjectId}/lessons`);
+  return data?.data || [];
+};
+
 export const fetchOrganizationUsers = async (params = {}) => {
   const query = buildQueryString(params);
   const { data } = await api.get(`/users${query}`);
@@ -190,11 +195,11 @@ export const runAnnualPromotion = async (payload = {}) => {
   return data?.data || null;
 };
 
-export const addStudentToCourse = async (studentUserId, courseId) => {
-  const { data } = await api.post("/enrollments", {
-    studentUserId,
-    Course_id: courseId,
-  });
+export const addStudentToCourse = async (studentUserId, courseId, isSchool = false) => {
+  const payload = isSchool
+    ? { studentUserId, Course_id: courseId }
+    : { user_Academy_id: studentUserId, Course_id: courseId };
+  const { data } = await api.post("/enrollments", payload);
   return data?.data || null;
 };
 
@@ -206,4 +211,41 @@ export const removeStudentFromCourse = async (studentUserId, courseId) => {
 export const fetchStudentCourses = async (studentUserId) => {
   const { data } = await api.get(`/enrollments/user/${studentUserId}`);
   return data?.data || [];
+};
+
+// ── Academic Years ──────────────────────────────────────────────────────────
+export const fetchAcademicYears = async () => {
+  const { data } = await api.get("/academic-years");
+  return data?.data || [];
+};
+
+export const createAcademicYear = async (payload) => {
+  const { data } = await api.post("/academic-years", payload);
+  return data?.data || null;
+};
+
+export const updateAcademicYear = async (yearId, payload) => {
+  const { data } = await api.patch(`/academic-years/${yearId}`, payload);
+  return data?.data || null;
+};
+
+// ── Terms ───────────────────────────────────────────────────────────────────
+export const fetchTerms = async (yearId) => {
+  const { data } = await api.get(`/academic-years/${yearId}/terms`);
+  return data?.data || [];
+};
+
+export const createTerm = async (yearId, payload) => {
+  const { data } = await api.post(`/academic-years/${yearId}/terms`, payload);
+  return data?.data || null;
+};
+
+export const updateTerm = async (yearId, termId, payload) => {
+  const { data } = await api.patch(`/academic-years/${yearId}/terms/${termId}`, payload);
+  return data?.data || null;
+};
+
+export const reopenTerm = async (yearId, termId, changeReason) => {
+  const { data } = await api.post(`/academic-years/${yearId}/terms/${termId}/reopen`, { changeReason });
+  return data?.data || null;
 };

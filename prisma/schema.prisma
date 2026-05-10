@@ -11,6 +11,7 @@ model academy_user {
   user_academy_id         Int                        @id
   OrgId                   Int
   DOB                     DateTime?                  @db.Date
+  AcademicStatus          String                     @default("ACTIVE") @db.VarChar(20)
   organization            organization               @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_academy_user_org")
   user                    user                       @relation(fields: [user_academy_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_academy_user_user")
   enrollment              enrollment[]
@@ -20,6 +21,7 @@ model academy_user {
   updatedAt               DateTime                   @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([OrgId], map: "fk_academy_user_org")
+  @@index([AcademicStatus], map: "idx_academy_user_academic_status")
 }
 
 model chat_participants {
@@ -151,10 +153,71 @@ model lesson {
   subject            subject              @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_subject")
   rag_assets         lesson_rag_asset[]
   attachments        lesson_attachment[]
+  ai_content         lesson_ai_content?
+  quiz               quiz?
   createdAt          DateTime             @default(now()) @db.Timestamp(0)
   updatedAt          DateTime             @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([Subject_id], map: "idx_lesson_subject_id")
+}
+
+model quiz {
+  id           Int             @id @default(autoincrement())
+  lessonId     Int             @unique
+  title        String          @db.VarChar(255)
+  description  String?         @db.Text
+  difficulty   String          @default("MEDIUM") @db.VarChar(10)
+  passingScore Int             @default(70)
+  isPublished  Boolean         @default(false)
+  lesson       lesson          @relation(fields: [lessonId], references: [id], onDelete: Cascade, map: "fk_quiz_lesson")
+  questions    quiz_question[]
+  attempts     quiz_attempt[]
+  createdAt    DateTime        @default(now()) @db.Timestamp(0)
+  updatedAt    DateTime        @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@index([lessonId], map: "idx_quiz_lesson_id")
+}
+
+model quiz_question {
+  id            Int      @id @default(autoincrement())
+  quizId        Int
+  lang          String   @default("ar") @db.VarChar(5)
+  question      String   @db.Text
+  options       Json
+  correctAnswer Int
+  explanation   String?  @db.Text
+  orderIndex    Int      @default(0)
+  quiz          quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade, map: "fk_quiz_question_quiz")
+  createdAt     DateTime @default(now()) @db.Timestamp(0)
+  updatedAt     DateTime @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@index([quizId], map: "idx_quiz_question_quiz_id")
+  @@index([quizId, lang], map: "idx_quiz_question_quiz_lang")
+}
+
+model quiz_attempt {
+  id        Int      @id @default(autoincrement())
+  quizId    Int
+  studentId Int
+  answers   Json
+  score     Int
+  isPassed  Boolean
+  quiz      quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade, map: "fk_quiz_attempt_quiz")
+  student   user     @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "fk_quiz_attempt_user")
+  createdAt DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([quizId], map: "idx_quiz_attempt_quiz_id")
+  @@index([studentId], map: "idx_quiz_attempt_student_id")
+}
+
+model lesson_ai_content {
+  id         Int      @id @default(autoincrement())
+  lessonId   Int      @unique
+  flashcards Json
+  mindmap    Json
+  createdAt  DateTime @default(now()) @db.Timestamp(0)
+  updatedAt  DateTime @default(now()) @updatedAt @db.Timestamp(0)
+  lesson     lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_ai_content_lesson")
 }
 
 model lesson_attachment {
@@ -323,6 +386,8 @@ model organization {
   payments               payment[]
   school_settings        organization_school_settings?
   promotion_runs         organization_promotion_run[]
+  academic_years         academic_year[]
+  student_notes          student_note[]
   status                 organization_status           @default(PENDING)
   createdAt              DateTime                      @default(now()) @db.Timestamp(0)
   updatedAt              DateTime                      @default(now()) @updatedAt @db.Timestamp(0)
@@ -436,6 +501,7 @@ model student {
   organization      organization                @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_org")
   parent            parent?                     @relation(fields: [Parent_id], references: [Parent_id], onUpdate: Restrict, map: "fk_student_parent")
   user              user                        @relation(fields: [Student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_user")
+  student_notes     student_note[]
   createdAt         DateTime                    @default(now()) @db.Timestamp(0)
   updatedAt         DateTime                    @default(now()) @updatedAt @db.Timestamp(0)
 
@@ -444,6 +510,26 @@ model student {
   @@index([AcademicStatus], map: "idx_student_academic_status")
   @@index([OrgId], map: "idx_student_org_id")
   @@index([Parent_id], map: "idx_student_parent_id")
+}
+
+model student_note {
+  id        Int      @id @default(autoincrement())
+  studentId Int
+  teacherId Int
+  orgId     Int
+  title     String?  @db.VarChar(255)
+  content   String   @db.Text
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now()) @db.Timestamp(0)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamp(0)
+
+  student student      @relation(fields: [studentId], references: [Student_id], onDelete: Cascade)
+  teacher teacher      @relation(fields: [teacherId], references: [Teacher_id], onDelete: Cascade)
+  org     organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([teacherId])
+  @@index([orgId])
 }
 
 model organization_school_settings {
@@ -498,8 +584,9 @@ model student_promotion_history {
 model subject {
   id          Int      @id @default(autoincrement())
   Course_id   Int
-  Teacher_id  Int
+  Teacher_id  Int?
   name        String   @db.VarChar(255)
+  level       String?  @db.VarChar(20)
   isPaid      Boolean  @default(false)
   price       Decimal  @default(0) @db.Decimal(10, 2)
   imageUrl    String   @default("") @db.VarChar(500)
@@ -509,7 +596,7 @@ model subject {
   marks       marks[]
   subscriptions student_subject_subscription[]
   course      course   @relation(fields: [Course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_course")
-  teacher     teacher  @relation(fields: [Teacher_id], references: [Teacher_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_teacher")
+  teacher     teacher? @relation(fields: [Teacher_id], references: [Teacher_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_teacher")
   createdAt   DateTime @default(now()) @db.Timestamp(0)
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamp(0)
 
@@ -540,16 +627,17 @@ model student_subject_subscription {
 }
 
 model teacher {
-  Teacher_id     Int          @id
+  Teacher_id     Int            @id
   OrgId          Int
-  Work           String?      @db.VarChar(255)
-  specialization String?      @db.VarChar(255)
-  bio            String?      @db.Text
-  createdAt      DateTime     @default(now()) @db.Timestamp(0)
-  organization   organization @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_teacher_org")
+  Work           String?        @db.VarChar(255)
+  specialization String?        @db.VarChar(255)
+  bio            String?        @db.Text
+  createdAt      DateTime       @default(now()) @db.Timestamp(0)
+  organization   organization   @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_teacher_org")
   course         course[]
   subject        subject[]
-  user           user         @relation(fields: [Teacher_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_teacher_user")
+  user           user           @relation(fields: [Teacher_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_teacher_user")
+  student_notes  student_note[]
 
   @@index([OrgId], map: "idx_teacher_org_id")
 }
@@ -575,9 +663,11 @@ model user {
   message_reactions      message_reaction[]
   notification           notification[]
   lesson_progress        lesson_progress[]
+  quiz_attempts          quiz_attempt[]
   parent                 parent?
   student                student?
   teacher                teacher?
+  term_audit_logs        term_edit_audit[]
   createdAt              DateTime            @default(now()) @db.Timestamp(0)
   updatedAt              DateTime            @default(now()) @updatedAt @db.Timestamp(0)
 }
@@ -640,4 +730,69 @@ enum lesson_attachment_file_type {
 enum course_kind {
   CLASS
   TRACK
+}
+
+enum term_status {
+  PLANNED
+  ACTIVE
+  CLOSED
+  LOCKED
+}
+
+model academic_year {
+  id            Int           @id @default(autoincrement())
+  OrgId         Int
+  name          String        @db.VarChar(100)
+  startDate     DateTime      @db.Date
+  endDate       DateTime      @db.Date
+  numberOfTerms Int           @default(1)
+  isActive      Boolean       @default(false)
+  organization  organization  @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_academic_year_org")
+  terms         term[]
+  createdAt     DateTime      @default(now()) @db.Timestamp(0)
+  updatedAt     DateTime      @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@unique([OrgId, isActive], map: "uq_org_active_academic_year")
+  @@index([OrgId], map: "idx_academic_year_org")
+  @@index([isActive], map: "idx_academic_year_is_active")
+}
+
+model term {
+  id             Int           @id @default(autoincrement())
+  academicYearId Int
+  termNumber     Int
+  name           String        @db.VarChar(100)
+  startDate      DateTime      @db.Date
+  endDate        DateTime      @db.Date
+  status         term_status   @default(PLANNED)
+  academic_year  academic_year @relation(fields: [academicYearId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_term_academic_year")
+  audit_logs     term_edit_audit[]
+  createdAt      DateTime      @default(now()) @db.Timestamp(0)
+  updatedAt      DateTime      @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@unique([academicYearId, termNumber], map: "uq_academic_year_term_number")
+  @@index([academicYearId], map: "idx_term_academic_year")
+  @@index([status], map: "idx_term_status")
+  @@index([startDate], map: "idx_term_start_date")
+  @@index([endDate], map: "idx_term_end_date")
+}
+
+model term_edit_audit {
+  id              Int      @id @default(autoincrement())
+  termId          Int
+  OrgId           Int
+  updatedByUserId Int
+  oldValues       Json?
+  newValues       Json?
+  actionType      String   @db.VarChar(50)
+  changeReason    String?  @db.Text
+  term            term     @relation(fields: [termId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_term_audit_term")
+  user            user     @relation(fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_term_audit_user")
+  createdAt       DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([termId], map: "idx_term_audit_term")
+  @@index([OrgId], map: "idx_term_audit_org")
+  @@index([updatedByUserId], map: "idx_term_audit_user")
+  @@index([actionType], map: "idx_term_audit_action_type")
+  @@index([createdAt], map: "idx_term_audit_created_at")
 }

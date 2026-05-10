@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { Bell, ChevronDown, Search, UserCircle2 } from "lucide-react";
 import { useDispatch } from "react-redux";
 import { useSelector } from "react-redux";
@@ -28,6 +28,7 @@ export default function InstructorLayout({ title, subtitle, children, actions })
     ).toUpperCase(),
   );
 
+  const navigate = useNavigate();
   const displayName = authUser?.name || authUser?.Name || (isArabic ? "المعلم" : "Instructor");
   const roleLabel = String(authUser?.role || "TEACHER").toUpperCase();
   useEffect(() => {
@@ -75,7 +76,7 @@ export default function InstructorLayout({ title, subtitle, children, actions })
     : navItems.filter((item) => item.to !== "/dashboard/instructor/marks");
 
   return (
-    <main className={`admin-management-theme dashboard-page relative min-h-screen overflow-hidden px-4 py-8 ${isArabic ? "lang-ar" : "lang-en"}`}>
+    <main dir={isArabic ? "rtl" : "ltr"} className={`admin-management-theme dashboard-page relative min-h-screen overflow-hidden px-4 py-8 ${isArabic ? "lang-ar" : "lang-en"}`}>
       <header className="dashboard-topbar relative z-20 mx-auto mb-6 w-full max-w-[1800px] rounded-[28px] px-5 py-4 backdrop-blur-xl">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
@@ -126,10 +127,18 @@ export default function InstructorLayout({ title, subtitle, children, actions })
 
               {showTopUserMenu ? (
                 <div className="dashboard-menu absolute right-0 z-30 mt-2 w-56 rounded-2xl border p-2 shadow-xl">
-                  <button type="button" className="dashboard-menu-item w-full rounded-xl px-3 py-2 text-left text-sm font-medium">
+                  <button
+                    type="button"
+                    onClick={() => { setShowTopUserMenu(false); navigate('/dashboard/instructor/settings'); }}
+                    className="dashboard-menu-item w-full rounded-xl px-3 py-2 text-left text-sm font-medium"
+                  >
                     {isArabic ? "الملف الشخصي" : "Profile"}
                   </button>
-                  <button type="button" className="dashboard-menu-item w-full rounded-xl px-3 py-2 text-left text-sm font-medium">
+                  <button
+                    type="button"
+                    onClick={() => { setShowTopUserMenu(false); navigate('/dashboard/instructor/settings'); }}
+                    className="dashboard-menu-item w-full rounded-xl px-3 py-2 text-left text-sm font-medium"
+                  >
                     {isArabic ? "الإعدادات" : "Settings"}
                   </button>
                   <button

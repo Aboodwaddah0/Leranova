@@ -12,6 +12,7 @@ import InstructorSubjectsPage from "./pages/instructor/InstructorSubjectsPage";
 import InstructorLessonsPage from "./pages/instructor/InstructorLessonsPage";
 import InstructorStudentsPage from "./pages/instructor/InstructorStudentsPage";
 import InstructorMarksPage from "./pages/instructor/InstructorMarksPage";
+import InstructorSettingsPage from "./pages/instructor/InstructorSettingsPage";
 import StudentDashboardPage from "./pages/student/StudentDashboardPage";
 import StudentCoursesPage from "./pages/student/StudentCoursesPage";
 import StudentCourseDetailsPage from "./pages/student/StudentCourseDetailsPage";
@@ -35,6 +36,9 @@ import AdminOverviewPage from "./pages/admin/AdminOverviewPage";
 import AdminOrganizationsPage from "./pages/admin/AdminOrganizationsPage";
 import AdminRevenuePage from "./pages/admin/AdminRevenuePage";
 import AdminPlansPage from "./pages/admin/AdminPlansPage";
+import ParentDashboardPage from "./pages/parent/ParentDashboardPage";
+import ParentMarksPage from "./pages/parent/ParentMarksPage";
+import ParentSettingsPage from "./pages/parent/ParentSettingsPage";
 import { GooeyToaster } from "goey-toast";
 import { LEARNOVA_TOASTER_PROPS } from "./lib/notify";
 
@@ -69,6 +73,9 @@ function App() {
           <Route element={<OrganizationProtectedRoute />}>
             <Route path="/dashboard/organization" element={<OrganizationWorkspacePage />} />
           </Route>
+          <Route path="/dashboard/parent" element={<ParentDashboardPage />} />
+          <Route path="/dashboard/parent/marks" element={<ParentMarksPage />} />
+          <Route path="/dashboard/parent/settings" element={<ParentSettingsPage />} />
           <Route element={<InstructorProtectedRoute />}>
             <Route path="/dashboard/instructor" element={<InstructorDashboardPage />} />
             <Route path="/dashboard/instructor/overview" element={<InstructorDashboardPage />} />
@@ -77,6 +84,7 @@ function App() {
             <Route path="/dashboard/instructor/subjects" element={<InstructorSubjectsPage />} />
             <Route path="/dashboard/instructor/lessons" element={<InstructorLessonsPage />} />
             <Route path="/dashboard/instructor/students" element={<InstructorStudentsPage />} />
+            <Route path="/dashboard/instructor/settings" element={<InstructorSettingsPage />} />
             <Route element={<InstructorSchoolOnlyRoute />}>
               <Route path="/dashboard/instructor/marks" element={<InstructorMarksPage />} />
             </Route>

@@ -72,6 +72,10 @@ const authSlice = createSlice({
     clearPendingCheckout(state) {
       state.pendingCheckout = null;
     },
+    updateAuthUser(state, action) {
+      state.user = { ...state.user, ...action.payload };
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(state.user));
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -134,6 +138,6 @@ const authSlice = createSlice({
   },
 });
 
-export const { setAuthSession, setAuthRole, logout, clearAuthError, clearPendingCheckout } =
+export const { setAuthSession, setAuthRole, logout, clearAuthError, clearPendingCheckout, updateAuthUser } =
   authSlice.actions;
 export default authSlice.reducer;

@@ -53,7 +53,20 @@ body {
   font-family: "Inter", sans-serif;
 }
 
+html[dir="rtl"] {
+  direction: rtl;
+}
+
 html[dir="rtl"] body {
+  font-family: "Cairo", sans-serif;
+}
+
+html[dir="rtl"] h1,
+html[dir="rtl"] h2,
+html[dir="rtl"] h3,
+html[dir="rtl"] h4,
+html[dir="rtl"] h5,
+html[dir="rtl"] h6 {
   font-family: "Cairo", sans-serif;
 }
 
@@ -330,6 +343,25 @@ a {
 
 .admin-management-theme.organization-workspace-shell .organization-workspace-shell__main > :not(header.dashboard-hero) {
   position: relative;
+}
+
+/* RTL support for organization workspace shell */
+[dir="rtl"] .admin-management-theme.organization-workspace-shell .organization-workspace-shell__sidebar {
+  left: auto !important;
+  right: 0 !important;
+}
+
+[dir="rtl"] .admin-management-theme.organization-workspace-shell .organization-workspace-shell__main {
+  margin-left: 0 !important;
+  margin-right: var(--org-sidebar-width) !important;
+}
+
+[dir="rtl"] .text-left {
+  text-align: right;
+}
+
+[dir="rtl"] .text-right {
+  text-align: left;
 }
 
 @media (max-width: 1024px) {

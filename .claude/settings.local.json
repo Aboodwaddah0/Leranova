@@ -10,7 +10,16 @@
       "Bash(docker-compose restart *)",
       "Bash(curl -s -X POST \"http://localhost:5000/api/auth/user/login\" -H \"Content-Type: application/json\" -d \"{\\\\\"email\\\\\":\\\\\"sara1@knowledge.com\\\\\",\\\\\"password\\\\\":\\\\\"123456789\\\\\"}\")",
       "Bash(winpty docker *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\PC\\\\Documents\\\\Leranova_v4\" -Recurse -Filter \"*.js\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -First 30 FullName)",
+      "Bash(curl *)",
+      "Bash(python -m json.tool)",
+      "Bash(docker compose run *)",
+      "Bash(Get-ChildItem -Recurse -Path \"Learnova_frontend\\\\src\\\\pages\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object FullName)",
+      "Bash(ConvertTo-Json)",
+      "PowerShell(ls *)"
     ]
   }
 }

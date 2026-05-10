@@ -25,7 +25,7 @@ export default function LessonForm({ subjects = [], initialValues = {}, onSubmit
   return (
     <form onSubmit={handleSubmit} className="mb-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
       <h3 className="text-lg font-black text-slate-900">{isArabic ? "إضافة درس" : "Add lesson"}</h3>
-      <div className="mt-4 grid gap-3 md:grid-cols-4">
+      <div className="mt-4 grid gap-3 grid-cols-1">
         <select
           value={form.subjectId}
           onChange={(event) => setForm((current) => ({ ...current, subjectId: event.target.value }))}

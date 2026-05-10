@@ -41,7 +41,7 @@ export default function AdminLayout({ title, subtitle, children, actions }) {
   };
 
   return (
-    <main className={`admin-management-theme dashboard-page relative min-h-screen overflow-hidden px-4 py-6 ${isArabic ? "lang-ar" : "lang-en"}`}>
+    <main dir={isArabic ? "rtl" : "ltr"} className={`admin-management-theme dashboard-page relative min-h-screen overflow-hidden px-4 py-6 ${isArabic ? "lang-ar" : "lang-en"}`}>
       <QuantumMeshBackground />
 
       <div className="dashboard-topbar relative z-10 mx-auto mb-6 w-full max-w-[1800px] rounded-[28px] px-5 py-4 backdrop-blur-xl">

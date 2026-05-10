@@ -634,12 +634,23 @@ export const getAllUsers = async (orgId, orgRole, filters = {}) => {
     },
   };
 
-  // Only include student/parent data for SCHOOL orgs
+  // Include student profile for SCHOOL orgs (has AcademicStatus, etc.)
   if (normalizedOrgRole === 'SCHOOL') {
     baseSelect.student = {
       select: {
         Parent_id: true,
         Course_id: true,
+        AcademicStatus: true,
+      },
+    };
+  }
+
+  // Include academy_user.AcademicStatus for ACADEMY orgs
+  if (normalizedOrgRole === 'ACADEMY') {
+    baseSelect.academy_user = {
+      select: {
+        DOB: true,
+        AcademicStatus: true,
       },
     };
   }
@@ -668,6 +679,7 @@ export const getAllUsers = async (orgId, orgRole, filters = {}) => {
       address: user.address,
       password: decryptedPassword || '-',
       student: user.student || null,
+      status: user.student?.AcademicStatus || user.academy_user?.AcademicStatus || null,
       academy_user: user.academy_user,
     };
   });
@@ -712,6 +724,25 @@ export const updateUser = async (id, data, orgId, orgRole) => {
       address: true,
     },
   });
+
+  // Update academic status for students (school or academy)
+  const ALLOWED_STATUSES = ['ACTIVE', 'INACTIVE', 'GRADUATED', 'FILED'];
+  if (data.academicStatus !== undefined && user.role === 'STUDENT') {
+    const nextStatus = String(data.academicStatus || '').toUpperCase();
+    if (!ALLOWED_STATUSES.includes(nextStatus)) {
+      throw new Error(`Invalid academic status. Allowed values: ${ALLOWED_STATUSES.join(', ')}`);
+    }
+    // School student
+    await prisma.student.updateMany({
+      where: { Student_id: id },
+      data: { AcademicStatus: nextStatus },
+    });
+    // Academy user
+    await prisma.academy_user.updateMany({
+      where: { user_academy_id: id },
+      data: { AcademicStatus: nextStatus },
+    });
+  }
 
   return updated;
 };

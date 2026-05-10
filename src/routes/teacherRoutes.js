@@ -7,6 +7,7 @@ import {
   getTeachersController,
   getTeacherByIdController,
   updateTeacherController,
+  updateMyTeacherProfileController,
   deleteTeacherController,
   getTeacherSubjectsController,
   getTeacherLessonsController,
@@ -22,6 +23,7 @@ const router = Router();
 router.use(authMiddleware);
 
 router.get('/me', isTeacher, getMyTeacherProfileController);
+router.patch('/me', isTeacher, updateMyTeacherProfileController);
 router.get('/me/courses', isTeacher, getMyCoursesController);
 router.get('/me/subjects', isTeacher, getMySubjectsController);
 router.get('/me/lessons', isTeacher, getMyLessonsController);

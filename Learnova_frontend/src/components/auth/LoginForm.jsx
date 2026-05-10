@@ -50,11 +50,7 @@ export default function LoginForm({ t }) {
       password: formState.password,
     };
 
-    if (selectedRole === AUTH_ROLES.PARENT) {
-      payload.nationalId = formState.nationalId;
-    } else {
-      payload.email = formState.email;
-    }
+    payload.email = formState.email;
 
     const result = await dispatch(loginThunk(payload));
 
@@ -69,16 +65,16 @@ export default function LoginForm({ t }) {
     <form className="space-y-5" onSubmit={onSubmit}>
       <div className="space-y-2">
         <label className="px-1 text-xs font-bold uppercase tracking-widest text-slate-500">
-          {isParent ? t.login.nationalId : t.login.email}
+          {t.login.email}
         </label>
         <input
-          name={isParent ? "nationalId" : "email"}
-          type={isParent ? "text" : "email"}
-          value={isParent ? formState.nationalId : formState.email}
+          name="email"
+          type="email"
+          value={formState.email}
           onChange={onChange}
           required
           className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-cyan-500 focus:bg-white"
-          placeholder={isParent ? t.login.nationalIdPlaceholder : t.login.emailPlaceholder}
+          placeholder={t.login.emailPlaceholder}
         />
       </div>
 

@@ -19,9 +19,23 @@ def download_file(file_url: str, lesson_id: str, suffix: str) -> Path:
 
     with requests.get(file_url, stream=True, timeout=settings.request_timeout_seconds) as response:
         response.raise_for_status()
+
+        content_length = int(response.headers.get("Content-Length", 0))
+        if content_length > settings.max_download_bytes:
+            raise ValueError(
+                f"File size {content_length} bytes exceeds limit of {settings.max_download_bytes} bytes"
+            )
+
+        written = 0
         with file_path.open("wb") as file:
             for chunk in response.iter_content(chunk_size=1024 * 1024):
                 if chunk:
+                    written += len(chunk)
+                    if written > settings.max_download_bytes:
+                        file_path.unlink(missing_ok=True)
+                        raise ValueError(
+                            f"Download aborted: exceeded size limit of {settings.max_download_bytes} bytes"
+                        )
                     file.write(chunk)
 
     return file_path
