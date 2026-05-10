@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { CornerUpLeft, EllipsisVertical, MessageCircle, Pencil, SendHorizontal, Smile, Trash2, X } from 'lucide-react';
+import { CornerUpLeft, EllipsisVertical, MessageCircle, Paperclip, Pencil, SendHorizontal, Smile, Trash2, X, FileText, Image, Download } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { io } from 'socket.io-client';
 import StudentLayout from '../../components/student/StudentLayout';
@@ -76,6 +76,8 @@ export default function StudentChatPage() {
   const [selectedChatId, setSelectedChatId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
+  const [attachedFiles, setAttachedFiles] = useState([]);
+  const fileInputRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [socketReady, setSocketReady] = useState(false);
   const [socketFailed, setSocketFailed] = useState(false);
@@ -702,7 +704,7 @@ export default function StudentChatPage() {
   };
 
   const submitMessage = async () => {
-    if (!selectedChatId || !draft.trim() || sending) {
+    if (!selectedChatId || (!draft.trim() && attachedFiles.length === 0) || sending) {
       return;
     }
 
@@ -716,14 +718,10 @@ export default function StudentChatPage() {
         ? Number(replyToMessage.id)
         : null;
       setDraft('');
+      const filesToSend = [...attachedFiles];
+      setAttachedFiles([]);
 
-      console.info('[CHAT_UI] sending payload', {
-        chatId: selectedChatId,
-        contentLength: content.length,
-        replyToMessageId,
-      });
-
-      const message = await sendStudentChatMessage(selectedChatId, content, replyToMessageId);
+      const message = await sendStudentChatMessage(selectedChatId, content, replyToMessageId, filesToSend);
       setMessages((current) => [...current, message]);
       bumpChatPreview(selectedChatId, message, true);
       setReplyToMessage(null);
@@ -915,7 +913,35 @@ export default function StudentChatPage() {
                         {isArabic ? 'تم حذف هذه الرسالة' : 'This message was deleted'}
                       </p>
                     ) : (
-                      <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                      <>
+                        {message.content ? (
+                          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                        ) : null}
+                        {(message.attachments || []).length > 0 && (
+                          <div className={`mt-2 space-y-1.5 ${message.content ? 'pt-2 border-t border-white/20' : ''}`}>
+                            {message.attachments.map((att) => {
+                              const isImage = (att.fileType || '').startsWith('image/');
+                              return isImage ? (
+                                <a key={att.id} href={att.fileUrl} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-xl">
+                                  <img src={att.fileUrl} alt={att.fileName} className="max-h-48 w-full rounded-xl object-cover" loading="lazy" />
+                                </a>
+                              ) : (
+                                <a
+                                  key={att.id}
+                                  href={att.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition ${mine ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
+                                >
+                                  <FileText size={14} className="shrink-0" />
+                                  <span className="truncate flex-1">{att.fileName}</span>
+                                  <Download size={13} className="shrink-0 opacity-70" />
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
                     )}
                     <div className={`mt-2 flex items-center gap-2 text-[11px] ${mine ? 'text-indigo-100' : 'text-slate-500'}`}>
                       <span>{formatMessageTime(message.createdAt)}</span>
@@ -1102,6 +1128,31 @@ export default function StudentChatPage() {
           ) : null}
 
           <div className="border-t border-slate-200 bg-white px-4 py-3">
+            {attachedFiles.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {attachedFiles.map((file, idx) => {
+                  const isImage = file.type.startsWith('image/');
+                  const preview = isImage ? URL.createObjectURL(file) : null;
+                  return (
+                    <div key={idx} className="relative flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-700">
+                      {isImage && preview ? (
+                        <img src={preview} alt={file.name} className="h-8 w-8 rounded-lg object-cover" />
+                      ) : (
+                        <FileText size={14} className="shrink-0 text-indigo-500" />
+                      )}
+                      <span className="max-w-[100px] truncate">{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setAttachedFiles((prev) => prev.filter((_, i) => i !== idx))}
+                        className="ml-1 rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             {replyToMessage ? (
               <div className="mb-2 flex items-start justify-between gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
                 <div>
@@ -1119,6 +1170,32 @@ export default function StudentChatPage() {
               </div>
             ) : null}
             <div className="flex items-center gap-2">
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,application/pdf,.doc,.docx,.txt,.xlsx,.pptx,.zip"
+                className="hidden"
+                onChange={(e) => {
+                  const picked = Array.from(e.target.files || []);
+                  setAttachedFiles((prev) => {
+                    const combined = [...prev, ...picked];
+                    return combined.slice(0, 5);
+                  });
+                  e.target.value = '';
+                }}
+              />
+              {/* Paperclip button */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={Boolean(editingMessageId)}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 transition hover:bg-slate-100 disabled:opacity-40"
+                aria-label={isArabic ? 'إرفاق ملف' : 'Attach file'}
+              >
+                <Paperclip size={17} />
+              </button>
               <div className="relative" data-popup-root="true">
                 <button
                   type="button"
@@ -1173,7 +1250,7 @@ export default function StudentChatPage() {
               <button
                 type="button"
                 onClick={submitMessage}
-                disabled={!selectedChatId || !draft.trim() || sending || Boolean(editingMessageId)}
+                disabled={!selectedChatId || (!draft.trim() && attachedFiles.length === 0) || sending || Boolean(editingMessageId)}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <SendHorizontal size={16} />

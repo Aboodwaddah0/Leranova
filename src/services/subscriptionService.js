@@ -153,7 +153,7 @@ export const getOrganizationSubscription = async (organizationId) => {
     where: {
       organizationId,
       status: { notIn: ['CANCELLED', 'EXPIRED'] },
-      OR: [{ endDate: null }, { endDate: { gt: now } }],
+      endDate: { gt: now },
     },
     include,
     orderBy: { id: 'desc' },

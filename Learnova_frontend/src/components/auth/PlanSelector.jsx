@@ -1,9 +1,23 @@
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { getPlansThunk } from "../../redux/thunks/authThunks";
+import { useLanguage } from "../../utils/i18n";
+
+const FEATURE_LABELS_AR = {
+  GROUP_CHAT:    'محادثة جماعية',
+  AI_CHAT:       'مساعد ذكي',
+  NOTIFICATIONS: 'إشعارات',
+};
+
+const formatFeatureLabel = (item, isArabic) => {
+  const key = String(item || '').toUpperCase();
+  if (isArabic && FEATURE_LABELS_AR[key]) return FEATURE_LABELS_AR[key];
+  return String(item).toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+};
 
 export default function PlanSelector({ selectedPlanId, onSelect, t }) {
   const dispatch = useDispatch();
+  const { isArabic } = useLanguage();
   const { plans, loading } = useSelector((state) => state.auth);
 
   useEffect(() => {
@@ -49,7 +63,7 @@ export default function PlanSelector({ selectedPlanId, onSelect, t }) {
             <p className="mt-1 text-xl font-extrabold text-sky-700">${plan.price}</p>
             <ul className="mt-3 space-y-1 text-sm text-slate-600">
               {features.slice(0, 3).map((item, index) => (
-                <li key={`${plan.id}-${index}`}>- {String(item)}</li>
+                <li key={`${plan.id}-${index}`}>✓ {formatFeatureLabel(item, isArabic)}</li>
               ))}
             </ul>
           </button>

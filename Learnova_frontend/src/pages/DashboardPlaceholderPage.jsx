@@ -1,12 +1,28 @@
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { logout } from "../redux/slices/authSlice";
 import { useLanguage } from "../utils/i18n";
 import QuantumMeshBackground from "../components/ui/QuantumMeshBackground";
 
+const ROLE_PATHS = {
+  SCHOOL:    '/dashboard/organization',
+  ACADEMY:   '/dashboard/organization',
+  TEACHER:   '/dashboard/instructor',
+  STUDENT:   '/dashboard/student',
+  PARENT:    '/dashboard/parent',
+};
+
 export default function DashboardPlaceholderPage() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const role = useSelector((state) => state.auth.role);
   const user = useSelector((state) => state.auth.user);
+
+  useEffect(() => {
+    const path = ROLE_PATHS[String(role || '').toUpperCase()];
+    if (path) navigate(path, { replace: true });
+  }, [role, navigate]);
   const { lang, isArabic, t, toggleLang } = useLanguage();
 
   return (

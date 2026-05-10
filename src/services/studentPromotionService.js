@@ -152,7 +152,7 @@ const applyPromotionDecision = async (tx, student, decisionResult, schoolYear, o
 
   await tx.student_promotion_history.upsert({
     where: {
-      uq_student_promotion_history_school_year: {
+      Student_id_schoolYear: {
         Student_id: student.Student_id,
         schoolYear,
       },
@@ -188,6 +188,18 @@ const applyPromotionDecision = async (tx, student, decisionResult, schoolYear, o
 };
 
 export const runAnnualPromotionForOrg = async (orgId, options = {}) => {
+  // Gate: if an active academic year exists, all its terms must be CLOSED or LOCKED
+  const activeYear = await prisma.academic_year.findFirst({
+    where: { OrgId: orgId, isActive: true },
+    include: { terms: { select: { id: true, status: true } } },
+  });
+  if (activeYear && activeYear.terms.length > 0) {
+    const allClosed = activeYear.terms.every((t) => t.status === 'CLOSED' || t.status === 'LOCKED');
+    if (!allClosed) {
+      throw new AppError('All terms must be CLOSED or LOCKED before running promotion', 409);
+    }
+  }
+
   return prisma.$transaction(async (tx) => {
     await ensureSchoolOrg(tx, orgId);
 
@@ -196,7 +208,7 @@ export const runAnnualPromotionForOrg = async (orgId, options = {}) => {
 
     const existingRun = await tx.organization_promotion_run.findUnique({
       where: {
-        uq_org_promotion_run_school_year: {
+        OrgId_schoolYear: {
           OrgId: orgId,
           schoolYear,
         },
@@ -215,7 +227,7 @@ export const runAnnualPromotionForOrg = async (orgId, options = {}) => {
     const students = await tx.student.findMany({
       where: {
         OrgId: orgId,
-        AcademicStatus: { not: 'GRADUATED' },
+        AcademicStatus: { notIn: ['GRADUATED', 'FILED'] },
       },
       select: {
         Student_id: true,
@@ -249,6 +261,14 @@ export const runAnnualPromotionForOrg = async (orgId, options = {}) => {
         summary,
       },
     });
+
+    // Lock all CLOSED terms in the active academic year
+    if (activeYear) {
+      await tx.term.updateMany({
+        where: { academicYearId: activeYear.id, status: 'CLOSED' },
+        data: { status: 'LOCKED' },
+      });
+    }
 
     return {
       orgId,

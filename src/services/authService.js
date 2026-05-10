@@ -343,47 +343,41 @@ export const loginUser = async ({ email, password, role }) => {
   };
 };
 
-export const loginParent = async ({ nationalId, password }) => {
-  const normalizedNationalId = normalizeNationalId(nationalId);
+export const loginParent = async ({ email, password }) => {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
 
-  if (!normalizedNationalId || !password) {
-    throw new AppError('National ID and password are required', 400);
+  if (!normalizedEmail || !password) {
+    throw new AppError('Email and password are required', 400);
   }
 
-  const parent = await prisma.parent.findUnique({
-    where: { nationalId: normalizedNationalId },
-    include: {
-      user: true,
-    },
+  const user = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+    include: { parent: true },
   });
 
-  if (!parent?.user) {
-    throw new AppError('Invalid national ID or password', 401);
+  if (!user || user.role !== 'PARENT' || !user.parent) {
+    throw new AppError('Invalid email or password', 401);
   }
 
-  if (parent.user.role !== 'PARENT') {
-    throw new AppError('Invalid national ID or password', 401);
-  }
-
-  const isPasswordValid = await comparePassword(password, parent.user.passwordHashed);
+  const isPasswordValid = await comparePassword(password, user.passwordHashed);
   if (!isPasswordValid) {
-    throw new AppError('Invalid national ID or password', 401);
+    throw new AppError('Invalid email or password', 401);
   }
 
   const token = generateToken({
-    id: parent.user.id,
-    name: parent.user.name,
-    email: parent.user.email,
-    role: parent.user.role,
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
   });
 
   return {
     user: {
-      id: parent.user.id,
-      name: parent.user.name,
-      email: parent.user.email,
-      role: parent.user.role,
-      nationalId: parent.nationalId,
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      nationalId: user.parent.nationalId,
     },
     token,
   };
@@ -516,6 +510,23 @@ export const resetPassword = async ({ token, newPassword }) => {
   }
 
   throw new AppError('Invalid or expired reset token', 400);
+};
+
+export const getMe = async (userId) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      address: true,
+      age: true,
+      gender: true,
+    },
+  });
+  if (!user) throw new AppError('User not found', 404);
+  return user;
 };
 
 export const changePassword = async ({ userId, newPassword }) => {

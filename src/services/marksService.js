@@ -203,8 +203,6 @@ export const deleteMark = async (teacherId, markId) => {
 };
 
 export const getStudentMarks = async (studentId, filters = {}) => {
-	await ensureStudentExists(studentId);
-
 	return prisma.marks.findMany({
 		where: {
 			Student_id: studentId,
@@ -215,4 +213,23 @@ export const getStudentMarks = async (studentId, filters = {}) => {
 			id: 'desc',
 		},
 	});
+};
+
+export const getParentChildrenMarks = async (parentUserId) => {
+	const students = await prisma.student.findMany({
+		where: { Parent_id: parentUserId },
+		select: { Student_id: true, user: { select: { name: true } } },
+	});
+
+	return Promise.all(
+		students.map(async (s) => ({
+			studentId: s.Student_id,
+			studentName: s.user?.name || '',
+			marks: await prisma.marks.findMany({
+				where: { Student_id: s.Student_id },
+				include: markInclude,
+				orderBy: { id: 'desc' },
+			}),
+		}))
+	);
 };

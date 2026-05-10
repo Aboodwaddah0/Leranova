@@ -1,4 +1,5 @@
 import express from 'express';
+import multer from 'multer';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { checkFeature } from '../middlewares/checkFeature.js';
 import {
@@ -25,6 +26,11 @@ import {
 
 const router = express.Router();
 
+const chatFileUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024, files: 5 },
+});
+
 const studentOnly = (req, _res, next) => {
   if (String(req.user?.role || '').toUpperCase() !== 'STUDENT') {
     return next('route');
@@ -38,7 +44,7 @@ router.delete('/messages/:messageId', authMiddleware, studentOnly, deleteStudent
 router.patch('/messages/:messageId', authMiddleware, studentOnly, editStudentMessage);
 router.patch('/messages/:messageId/reaction', authMiddleware, studentOnly, reactStudentMessage);
 router.get('/:chatId/messages', authMiddleware, studentOnly, listStudentChatMessages);
-router.post('/:chatId/messages', authMiddleware, studentOnly, sendStudentChatMessage);
+router.post('/:chatId/messages', authMiddleware, studentOnly, chatFileUpload.array('files', 5), sendStudentChatMessage);
 router.delete('/:chatId/messages/:messageId', authMiddleware, studentOnly, softDeleteMessage);
 router.delete('/:chatId/clear', authMiddleware, studentOnly, clearChat);
 

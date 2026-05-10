@@ -5,6 +5,11 @@ export const fetchInstructorProfile = async () => {
   return data?.data || null;
 };
 
+export const updateMyInstructorProfile = async (payload) => {
+  const { data } = await api.patch("/teachers/me", payload);
+  return data?.data || null;
+};
+
 export const fetchInstructorCourses = async () => {
   const { data } = await api.get("/teachers/me/courses");
   return data?.data || [];
@@ -115,4 +120,52 @@ export const fetchLessonRagStatus = async (lessonId, baseline = 0) => {
 export const fetchInstructorLessonComments = async (lessonId) => {
   const { data } = await api.get(`/lessons/${lessonId}/comments`);
   return data?.data || [];
+};
+
+// ── Quiz management ─────────────────────────────────────────────────────────
+export const fetchLessonQuiz = async (subjectId, lessonId, lang = 'ar') => {
+  const { data } = await api.get(`/subjects/${subjectId}/lessons/${lessonId}/quiz`, { params: { lang } });
+  return data?.data ?? null;
+};
+
+export const createLessonQuiz = async (subjectId, lessonId, payload) => {
+  const { data } = await api.post(`/subjects/${subjectId}/lessons/${lessonId}/quiz`, payload);
+  return data?.data ?? null;
+};
+
+export const updateLessonQuiz = async (subjectId, lessonId, quizId, payload) => {
+  const { data } = await api.patch(`/subjects/${subjectId}/lessons/${lessonId}/quiz/${quizId}`, payload);
+  return data?.data ?? null;
+};
+
+export const deleteLessonQuiz = async (subjectId, lessonId, quizId) => {
+  await api.delete(`/subjects/${subjectId}/lessons/${lessonId}/quiz/${quizId}`);
+};
+
+export const generateLessonQuizQuestions = async (subjectId, lessonId, quizId, payload) => {
+  const { data } = await api.post(`/subjects/${subjectId}/lessons/${lessonId}/quiz/${quizId}/generate`, payload);
+  return data?.data ?? null;
+};
+
+export const addLessonQuizQuestion = async (subjectId, lessonId, quizId, payload, lang = 'ar') => {
+  const { data } = await api.post(`/subjects/${subjectId}/lessons/${lessonId}/quiz/${quizId}/questions`, { ...payload, lang });
+  return data?.data ?? null;
+};
+
+export const deleteLessonQuizQuestion = async (subjectId, lessonId, quizId, questionId) => {
+  await api.delete(`/subjects/${subjectId}/lessons/${lessonId}/quiz/${quizId}/questions/${questionId}`);
+};
+
+export const fetchStudentNotes = async (studentId) => {
+  const { data } = await api.get('/notes', { params: { studentId } });
+  return data?.data || [];
+};
+
+export const createStudentNote = async ({ studentId, title, content }) => {
+  const { data } = await api.post('/notes', { studentId, title, content });
+  return data?.data || null;
+};
+
+export const deleteStudentNote = async (noteId) => {
+  await api.delete(`/notes/${noteId}`);
 };

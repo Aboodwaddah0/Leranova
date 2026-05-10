@@ -59,7 +59,7 @@ const courseTypingSchema = Joi.object({
 });
 
 const sendStudentMessageSchema = Joi.object({
-  content: Joi.string().trim().min(1).max(5000).required(),
+  content: Joi.string().trim().max(5000).allow('', null).optional(),
   replyToMessageId: Joi.number().integer().positive().optional(),
 });
 
@@ -123,11 +123,14 @@ export const sendStudentChatMessage = async (req, res, next) => {
       return next(new AppError(error.details[0].message, 400));
     }
 
+    const files = Array.isArray(req.files) ? req.files : [];
+
     const message = await sendStudentChatTextMessage({
       chatId,
       userId: req.user.id,
-      content: value.content,
+      content: value.content ?? '',
       replyToMessageId: value.replyToMessageId ?? null,
+      files,
     });
 
     return res.status(201).json({

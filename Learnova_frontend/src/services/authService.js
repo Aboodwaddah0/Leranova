@@ -17,7 +17,7 @@ export const loginWithRole = async ({ role, email, password, nationalId }) => {
 
   if (role === AUTH_ROLES.PARENT) {
     const { data } = await api.post("/auth/parent/login", {
-      nationalId,
+      email,
       password,
     });
     return data?.data;

@@ -103,6 +103,7 @@ const serializeLesson = (lesson) => {
 		videoUrl: lesson.videoUrl || videoAttachment?.url || '',
 		isCompleted: Boolean(progress?.isCompleted),
 		attachments,
+		quiz: lesson.quiz ? { isPublished: lesson.quiz.isPublished } : null,
 	};
 };
 
@@ -226,6 +227,9 @@ export const getLessons = async (actor, subjectId) => {
 				orderBy: {
 					id: 'asc',
 				},
+			},
+			quiz: {
+				select: { isPublished: true },
 			},
 			...(scope.role === 'STUDENT'
 				? {

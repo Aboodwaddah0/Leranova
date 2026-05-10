@@ -14,6 +14,9 @@ import {
 } from "../../services/adminService";
 import { notifyError, notifyInfo, notifySuccess } from "../../lib/notify";
 
+const featureLabel = (featureKey) =>
+  String(featureKey || '').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
 export default function AdminPlansPage() {
   const dispatch = useDispatch();
   const { t, lang } = useLanguage();
@@ -62,7 +65,7 @@ export default function AdminPlansPage() {
   );
 
   const featureOptions = useMemo(
-    () => features.map((feature) => ({ value: String(feature.id), label: `${feature.featureKey} (#${feature.id})` })),
+    () => features.map((feature) => ({ value: String(feature.id), label: featureLabel(feature.featureKey) })),
     [features],
   );
 
@@ -242,7 +245,7 @@ export default function AdminPlansPage() {
                   {plan.planFeatures.map((planFeature) => (
                     <div key={`${plan.id}-${planFeature.featureId}`} className="rounded-xl border border-slate-100 p-2">
                       <div className="flex items-center justify-between gap-2 text-xs text-slate-700">
-                        <span className="font-semibold">{planFeature.feature?.featureKey || `Feature #${planFeature.featureId}`}</span>
+                        <span className="font-semibold">{planFeature.feature?.featureKey ? featureLabel(planFeature.feature.featureKey) : `Feature #${planFeature.featureId}`}</span>
                         <button type="button" onClick={() => handleRemoveFeature(plan.id, planFeature.featureId)} className="text-red-600">{t.admin.plans.remove}</button>
                       </div>
                       <div className="mt-2 flex items-center gap-2">

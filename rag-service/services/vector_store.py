@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
 import hashlib
 from qdrant_client import QdrantClient, models as qmodels
 
@@ -7,13 +8,17 @@ from utils.logger import get_logger
 
 logger = get_logger("vector-store")
 
+_client: QdrantClient | None = None
+
 
 def _get_client() -> QdrantClient:
-    if not settings.qdrant_url:
-        raise ValueError('QDRANT_URL is not configured')
-
-    api_key = settings.qdrant_api_key or None
-    return QdrantClient(url=settings.qdrant_url, api_key=api_key)
+    global _client
+    if _client is None:
+        if not settings.qdrant_url:
+            raise ValueError('QDRANT_URL is not configured')
+        api_key = settings.qdrant_api_key or None
+        _client = QdrantClient(url=settings.qdrant_url, api_key=api_key)
+    return _client
 
 
 def _ensure_collection(client: QdrantClient, vector_size: int) -> None:
@@ -22,15 +27,15 @@ def _ensure_collection(client: QdrantClient, vector_size: int) -> None:
         existing_size = info.config.params.vectors.size
         if existing_size == vector_size:
             return
-        logger.warning(
-            "[Qdrant] vector size mismatch existing=%d new=%d — recreating collection '%s'",
-            existing_size,
-            vector_size,
-            settings.qdrant_collection,
+        raise RuntimeError(
+            f"Vector size mismatch for collection '{settings.qdrant_collection}': "
+            f"existing={existing_size}, configured={vector_size}. "
+            "Set QDRANT_COLLECTION to a new name or manually delete the old collection."
         )
-        client.delete_collection(settings.qdrant_collection)
+    except RuntimeError:
+        raise
     except Exception:
-        pass  # collection does not exist yet
+        pass  # collection does not exist yet — create below
 
     client.create_collection(
         collection_name=settings.qdrant_collection,
@@ -101,6 +106,7 @@ def store_lesson_chunks(
                     "timestamp": timestamp,
                     "page": page,
                     "section": section,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
                 },
             )
         )
@@ -162,6 +168,66 @@ def retrieve_lesson_chunks(
                 'section': payload.get('section'),
                 'score': hit.score,
                 'sourceHint': source_hint,
+            }
+        )
+
+    return results
+
+
+def retrieve_chunks_multi_lesson(
+    query_vector: List[float],
+    lesson_ids: List[str],
+    limit: int = 5,
+) -> List[Dict[str, Any]]:
+    """Search across multiple lessons in a single Qdrant request using OR filter."""
+    client = _get_client()
+
+    query_filter = None
+    if lesson_ids:
+        query_filter = qmodels.Filter(
+            should=[
+                qmodels.FieldCondition(key='lessonId', match=qmodels.MatchValue(value=lid))
+                for lid in lesson_ids
+            ]
+        )
+
+    hits = client.search(
+        collection_name=settings.qdrant_collection,
+        query_vector=query_vector,
+        query_filter=query_filter,
+        limit=limit,
+        with_payload=True,
+    )
+
+    results: List[Dict[str, Any]] = []
+    for hit in hits:
+        payload = hit.payload or {}
+        source_type = payload.get('sourceType') or payload.get('source_type')
+        source_name = payload.get('sourceName') or payload.get('source_name')
+        timestamp = payload.get('timestamp')
+        page = payload.get('page')
+
+        source_hint = None
+        if source_type == 'video' and timestamp is not None:
+            source_hint = f"Source: video at {int(float(timestamp) // 60):02d}:{int(float(timestamp) % 60):02d}"
+        elif source_type == 'pdf' and page is not None:
+            source_hint = f"Source: page {page}"
+
+        results.append(
+            {
+                'text': payload.get('chunkText') or payload.get('chunk_text'),
+                'sourceType': source_type,
+                'sourceName': source_name,
+                'timestamp': timestamp,
+                'page': page,
+                'section': payload.get('section'),
+                'score': hit.score,
+                'sourceHint': source_hint,
+                'lessonId': payload.get('lessonId') or payload.get('lesson_id'),
+                'courseId': payload.get('course_id'),
+                'subjectId': payload.get('subject_id'),
+                'organizationId': payload.get('organization_id'),
+                'chunkIndex': payload.get('chunkIndex') or payload.get('chunk_index'),
             }
         )
 

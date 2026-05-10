@@ -6,6 +6,7 @@ import {
   forgotPassword,
   resetPassword,
   changePassword,
+  getMe,
 } from '../services/authService.js';
 import {
   registerOrganizationSchema,
@@ -131,6 +132,15 @@ export const resetPasswordController = async (req, res, next) => {
     });
   } catch (error) {
     return next(error);
+  }
+};
+
+export const getMeController = async (req, res, next) => {
+  try {
+    const user = await getMe(req.user.id);
+    return res.status(200).json({ message: 'User profile fetched', data: user });
+  } catch (err) {
+    next(err);
   }
 };
 

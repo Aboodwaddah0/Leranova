@@ -3,6 +3,7 @@ import {
   getTeachers,
   getTeacherByIdForRequester,
   updateTeacher,
+  updateMyTeacherProfile,
   deleteTeacher,
   getTeacherSubjects,
   getTeacherLessons,
@@ -15,6 +16,7 @@ import {
 import {
   createTeacherSchema,
   updateTeacherSchema,
+  updateMyTeacherProfileSchema,
   teacherListQuerySchema,
   teacherLessonsQuerySchema,
   teacherStudentsQuerySchema,
@@ -146,6 +148,17 @@ export const getTeachersController = async (req, res, next) => {
       total: filteredTeachers.length,
       data: filteredTeachers,
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const updateMyTeacherProfileController = async (req, res, next) => {
+  try {
+    const { error, value } = updateMyTeacherProfileSchema.validate(req.body);
+    if (error) return next(new AppError(error.details[0].message, 400));
+    const profile = await updateMyTeacherProfile(req.user.id, value);
+    return res.status(200).json({ message: 'Profile updated successfully', data: profile });
   } catch (err) {
     next(err);
   }

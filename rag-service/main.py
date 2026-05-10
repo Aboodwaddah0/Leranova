@@ -12,6 +12,8 @@ from models.schemas import (
     IngestRequest,
     IngestResponse,
     QdrantChunkCountResponse,
+    QueryRequest,
+    QueryResponse,
 )
 from services.downloader import download_file
 from services.audio_extractor import extract_audio_to_wav
@@ -19,7 +21,7 @@ from services.transcription import transcribe_audio_segments
 from services.chunking import split_into_chunk_records, split_segments_into_chunk_records
 from services.embedding import embed_chunks, embed_text
 from services.reranker import rerank
-from services.vector_store import store_lesson_chunks, retrieve_lesson_chunks, count_lesson_chunks
+from services.vector_store import store_lesson_chunks, retrieve_lesson_chunks, retrieve_chunks_multi_lesson, count_lesson_chunks
 from services.text_extractor import extract_pdf_pages, extract_docx_sections, extract_txt_sections
 from utils.logger import get_logger
 
@@ -167,8 +169,7 @@ def process_lesson_pipeline(payload: ProcessLessonRequest, course_id: int | None
         logger.info("[RAG SUCCESS] Indexed lesson_id=%s chunks=%d qdrant_count=%d", payload.lessonId, len(chunks), indexed_count)
         logger.info("Pipeline finished for lesson_id=%s with %d chunks", payload.lessonId, len(chunks))
     except Exception as error:
-        logger.error("[RAG ERROR] ingestion failed lesson_id=%s error=%s", payload.lessonId, str(error))
-        logger.exception("Pipeline failed for lesson_id=%s: %s", payload.lessonId, error)
+        logger.exception("[RAG ERROR] ingestion failed lesson_id=%s", payload.lessonId)
     finally:
         if audio_path and audio_path.exists():
             audio_path.unlink(missing_ok=True)
@@ -268,8 +269,7 @@ def process_direct_file_pipeline(
         logger.info("[RAG] chunks=%d", len(chunks))
         logger.info("[RAG SUCCESS] Indexed lesson_id=%s chunks=%d", lesson_id, len(chunks))
     except Exception as error:
-        logger.error("[RAG ERROR] ingestion failed lesson_id=%s error=%s", lesson_id, str(error))
-        logger.exception("Direct file pipeline failed for lesson_id=%s: %s", lesson_id, error)
+        logger.exception("[RAG ERROR] direct file ingestion failed lesson_id=%s", lesson_id)
     finally:
         if file_path and file_path.exists():
             file_path.unlink(missing_ok=True)
@@ -319,6 +319,30 @@ def retrieve(request: RetrieveRequest) -> RetrieveResponse:
     )
     matches = rerank(query, candidates, top_k=request.limit)
     return RetrieveResponse(matches=matches)
+
+
+@app.post("/query", response_model=QueryResponse)
+def query_lessons(request: QueryRequest) -> QueryResponse:
+    """
+    Batch semantic search across multiple lessons in a single Qdrant call.
+    Replaces the N+1 /retrieve-per-lesson pattern used by the Node.js fallback.
+    """
+    query = request.question.strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="question is required")
+
+    if not request.lesson_ids:
+        return QueryResponse(chunks=[])
+
+    query_vector = embed_text(query)
+    fetch_limit = min(request.limit * 3, 100)
+    candidates = retrieve_chunks_multi_lesson(
+        query_vector=query_vector,
+        lesson_ids=request.lesson_ids,
+        limit=fetch_limit,
+    )
+    ranked = rerank(query, candidates, top_k=request.limit)
+    return QueryResponse(chunks=ranked)
 
 
 @app.get("/qdrant/chunks/count", response_model=QdrantChunkCountResponse)

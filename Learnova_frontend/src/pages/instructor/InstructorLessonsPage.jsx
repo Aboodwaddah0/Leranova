@@ -10,6 +10,13 @@ import {
   uploadInstructorLessonAttachments,
   deleteInstructorLessonAttachment,
   fetchLessonRagStatus,
+  fetchLessonQuiz,
+  createLessonQuiz,
+  updateLessonQuiz,
+  deleteLessonQuiz,
+  generateLessonQuizQuestions,
+  addLessonQuizQuestion,
+  deleteLessonQuizQuestion,
 } from "../../services/instructorService";
 import EducationLoading from "../../components/ui/EducationLoading";
 import Modal from "../../components/ui/Modal";
@@ -46,6 +53,17 @@ export default function InstructorLessonsPage() {
   const [ragStatus, setRagStatus] = useState(null);
   const ragPollRef = useRef(null);
   const ragStartRef = useRef(null);
+
+  // ── Quiz state ──────────────────────────────────────────────────────────────
+  const [quiz, setQuiz] = useState(null);
+  const [quizLoading, setQuizLoading] = useState(false);
+  const [quizViewLang, setQuizViewLang] = useState(isArabic ? 'ar' : 'en');
+  const [quizGenerating, setQuizGenerating] = useState(false);
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [showAddQuestionModal, setShowAddQuestionModal] = useState(false);
+  const [generateForm, setGenerateForm] = useState({ numQuestions: 10, difficulty: 'MEDIUM', notes: '', lang: '' });
+  const [addQuestionForm, setAddQuestionForm] = useState({ question: '', options: ['', '', '', ''], correctAnswer: 0, explanation: '' });
+  const [expandedQuestionId, setExpandedQuestionId] = useState(null);
 
   const selectedLesson = useMemo(
     () => lessons.find((lesson) => String(lesson.id) === String(selectedLessonId)) || null,
@@ -93,8 +111,12 @@ export default function InstructorLessonsPage() {
     let cancelled = false;
 
     const loadDetails = async () => {
-      if (!selectedLessonId) { setAttachments([]); setComments([]); return; }
+      if (!selectedLessonId) { setAttachments([]); setComments([]); setQuiz(null); return; }
       setDetailsLoading(true);
+      setQuiz(null);
+
+      const lesson = lessons.find((l) => String(l.id) === String(selectedLessonId));
+      const subjectId = lesson?.subject?.id || lesson?.subjectId;
 
       try {
         const [attachmentsData, commentsData] = await Promise.all([
@@ -102,6 +124,10 @@ export default function InstructorLessonsPage() {
           fetchInstructorLessonComments(selectedLessonId),
         ]);
         if (!cancelled) { setAttachments(attachmentsData); setComments(commentsData); }
+        if (!cancelled && subjectId) {
+          const quizData = await fetchLessonQuiz(subjectId, selectedLessonId, quizViewLang).catch(() => null);
+          if (!cancelled) setQuiz(quizData);
+        }
       } catch (err) {
         if (!cancelled) setError(safeError(err));
       } finally {
@@ -245,6 +271,83 @@ export default function InstructorLessonsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // ── Quiz handlers ────────────────────────────────────────────────────────────
+  const getSubjectId = () => {
+    const lesson = lessons.find((l) => String(l.id) === String(selectedLessonId));
+    return lesson?.subject?.id || lesson?.subjectId;
+  };
+
+  const onCreateQuiz = async () => {
+    const subjectId = getSubjectId();
+    if (!subjectId || !selectedLessonId) return;
+    const title = isArabic ? `اختبار درس ${selectedLesson?.title || selectedLesson?.name || ''}` : `Quiz: ${selectedLesson?.title || selectedLesson?.name || ''}`;
+    try {
+      const created = await createLessonQuiz(subjectId, selectedLessonId, { title, difficulty: 'MEDIUM', passingScore: 70 });
+      setQuiz(created);
+    } catch (err) { setError(safeError(err)); }
+  };
+
+  const onDeleteQuiz = async () => {
+    if (!quiz) return;
+    const confirmed = window.confirm(isArabic ? 'هل تريد حذف هذا الاختبار؟' : 'Delete this quiz?');
+    if (!confirmed) return;
+    const subjectId = getSubjectId();
+    try {
+      await deleteLessonQuiz(subjectId, selectedLessonId, quiz.id);
+      setQuiz(null);
+    } catch (err) { setError(safeError(err)); }
+  };
+
+  const onTogglePublish = async () => {
+    if (!quiz) return;
+    const subjectId = getSubjectId();
+    try {
+      const updated = await updateLessonQuiz(subjectId, selectedLessonId, quiz.id, { isPublished: !quiz.isPublished });
+      setQuiz(updated);
+    } catch (err) { setError(safeError(err)); }
+  };
+
+  const onGenerateQuestions = async () => {
+    if (!quiz) return;
+    const subjectId = getSubjectId();
+    setQuizGenerating(true);
+    try {
+      const updated = await generateLessonQuizQuestions(subjectId, selectedLessonId, quiz.id, {
+        numQuestions: generateForm.numQuestions,
+        difficulty: generateForm.difficulty,
+        notes: generateForm.notes,
+        lang: generateForm.lang || (isArabic ? 'ar' : 'en'),
+      });
+      setQuiz(updated);
+      setShowGenerateModal(false);
+    } catch (err) { setError(safeError(err)); } finally { setQuizGenerating(false); }
+  };
+
+  const onDeleteQuestion = async (questionId) => {
+    if (!quiz) return;
+    const confirmed = window.confirm(isArabic ? 'هل تريد حذف هذا السؤال؟' : 'Delete this question?');
+    if (!confirmed) return;
+    const subjectId = getSubjectId();
+    try {
+      await deleteLessonQuizQuestion(subjectId, selectedLessonId, quiz.id, questionId);
+      setQuiz((prev) => prev ? { ...prev, questions: prev.questions.filter((q) => q.id !== questionId), questionCount: (prev.questionCount || 1) - 1 } : prev);
+    } catch (err) { setError(safeError(err)); }
+  };
+
+  const onAddQuestion = async () => {
+    if (!quiz) return;
+    const subjectId = getSubjectId();
+    if (!addQuestionForm.question.trim() || addQuestionForm.options.some((o) => !o.trim())) {
+      return setError(isArabic ? 'يرجى ملء السؤال والخيارات الأربعة.' : 'Please fill in the question and all 4 options.');
+    }
+    try {
+      const newQ = await addLessonQuizQuestion(subjectId, selectedLessonId, quiz.id, addQuestionForm, quizViewLang);
+      setQuiz((prev) => prev ? { ...prev, questions: [...(prev.questions || []), newQ], questionCount: (prev.questionCount || 0) + 1 } : prev);
+      setAddQuestionForm({ question: '', options: ['', '', '', ''], correctAnswer: 0, explanation: '' });
+      setShowAddQuestionModal(false);
+    } catch (err) { setError(safeError(err)); }
   };
 
   return (
@@ -397,6 +500,325 @@ export default function InstructorLessonsPage() {
               </div>
             </article>
           </div>
+
+          {/* ── Quiz Management Panel ── */}
+          {selectedLessonId ? (
+            <article className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xl">🧠</span>
+                  <h4 className="font-black text-slate-900">{isArabic ? 'الاختبار' : 'Quiz'}</h4>
+                  {quiz ? (
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${quiz.isPublished ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {quiz.isPublished ? (isArabic ? 'منشور' : 'Published') : (isArabic ? 'مسودة' : 'Draft')}
+                    </span>
+                  ) : null}
+                  {/* Language switcher */}
+                  <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white text-[11px] font-bold">
+                    {['ar', 'en'].map((l) => (
+                      <button key={l} type="button"
+                        onClick={async () => {
+                          setQuizViewLang(l);
+                          const subjectId = getSubjectId();
+                          if (subjectId && selectedLessonId) {
+                            const q = await fetchLessonQuiz(subjectId, selectedLessonId, l).catch(() => null);
+                            setQuiz(q);
+                          }
+                        }}
+                        className={`px-3 py-1 transition ${quizViewLang === l ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+                        {l === 'ar' ? 'عربي' : 'EN'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {!quiz ? (
+                  <button type="button" onClick={onCreateQuiz}
+                    className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700">
+                    {isArabic ? '+ إنشاء اختبار' : '+ Create Quiz'}
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={onTogglePublish}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${quiz.isPublished ? 'border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}>
+                      {quiz.isPublished ? (isArabic ? 'إلغاء النشر' : 'Unpublish') : (isArabic ? 'نشر' : 'Publish')}
+                    </button>
+                    <button type="button" onClick={onDeleteQuiz}
+                      className="rounded-xl border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-50">
+                      {isArabic ? 'حذف' : 'Delete'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {quiz ? (
+                <div className="space-y-4">
+                  {/* Quiz info bar */}
+                  <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600">
+                    <span>📊 {isArabic ? 'المستوى:' : 'Difficulty:'} {quiz.difficulty}</span>
+                    <span className="flex items-center gap-1.5">
+                      ✅ {isArabic ? 'درجة النجاح:' : 'Passing score:'}
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        defaultValue={quiz.passingScore}
+                        onBlur={async (e) => {
+                          const val = Math.min(100, Math.max(1, Number(e.target.value) || 70));
+                          if (val === quiz.passingScore) return;
+                          const subjectId = getSubjectId();
+                          try {
+                            const updated = await updateLessonQuiz(subjectId, selectedLessonId, quiz.id, { passingScore: val });
+                            setQuiz(updated);
+                          } catch (err) { setError(safeError(err)); }
+                        }}
+                        className="w-14 rounded-lg border border-slate-300 bg-slate-50 px-2 py-0.5 text-center text-xs font-bold text-slate-800 focus:border-indigo-400 focus:outline-none"
+                      />
+                      %
+                    </span>
+                    <span>❓ {isArabic ? 'الأسئلة:' : 'Questions:'} {(quiz.questions || []).length}</span>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => { setGenerateForm((p) => ({ ...p, lang: quizViewLang })); setShowGenerateModal(true); }} disabled={quizGenerating}
+                      className="rounded-xl bg-purple-600 px-4 py-2 text-xs font-bold text-white hover:bg-purple-700 disabled:opacity-50">
+                      {quizGenerating ? '⏳ ' : '✨ '}{isArabic ? 'توليد أسئلة بالذكاء الاصطناعي' : 'Generate with AI'}
+                    </button>
+                    <button type="button" onClick={() => setShowAddQuestionModal(true)}
+                      className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                      {isArabic ? '+ إضافة سؤال يدوياً' : '+ Add Question Manually'}
+                    </button>
+                  </div>
+
+                  {/* Questions list */}
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      {isArabic ? `الأسئلة (${(quiz.questions || []).length})` : `Questions (${(quiz.questions || []).length})`}
+                    </p>
+                  </div>
+
+                  {(quiz.questions || []).length === 0 ? (
+                    <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
+                      <p className="text-2xl mb-2">❓</p>
+                      <p className="text-sm font-semibold text-slate-500">
+                        {isArabic ? 'لا توجد أسئلة بعد' : 'No questions yet'}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {isArabic ? 'استخدم "توليد بالذكاء الاصطناعي" أو أضف يدوياً' : 'Use "Generate with AI" or add manually'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5 max-h-[45vh] overflow-auto pr-1">
+                      {quiz.questions.map((q, idx) => (
+                        <div key={q.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-indigo-200">
+                          {/* Question header */}
+                          <div role="button" tabIndex={0}
+                            onClick={() => setExpandedQuestionId(expandedQuestionId === q.id ? null : q.id)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setExpandedQuestionId(expandedQuestionId === q.id ? null : q.id); }}
+                            className="flex cursor-pointer items-start gap-3 px-4 py-3 hover:bg-slate-50">
+                            <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-xs font-black text-white mt-0.5">{idx + 1}</span>
+                            <span className="flex-1 text-sm font-semibold leading-snug text-slate-800 line-clamp-2">{q.question}</span>
+                            <div className="flex flex-shrink-0 items-center gap-2 pt-0.5">
+                              <span className="text-slate-300 text-xs">{expandedQuestionId === q.id ? '▲' : '▼'}</span>
+                              <button type="button" onClick={(e) => { e.stopPropagation(); onDeleteQuestion(q.id); }}
+                                className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-[10px] font-bold text-rose-600 transition hover:bg-rose-100">
+                                {isArabic ? 'حذف' : 'Remove'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Expanded answer view */}
+                          {expandedQuestionId === q.id ? (
+                            <div className="border-t border-slate-100 bg-slate-50 px-4 pb-4 pt-3 space-y-2">
+                              {(q.options || []).map((opt, oi) => (
+                                <div key={oi} className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs ${
+                                  oi === q.correctAnswer
+                                    ? 'bg-emerald-100 font-bold text-emerald-800 ring-1 ring-emerald-300'
+                                    : 'bg-white text-slate-600 ring-1 ring-slate-200'
+                                }`}>
+                                  <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-black ${
+                                    oi === q.correctAnswer ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'
+                                  }`}>{oi === q.correctAnswer ? '✓' : String.fromCharCode(65 + oi)}</span>
+                                  <span dir="auto">{opt}</span>
+                                  {oi === q.correctAnswer ? <span className="ml-auto text-emerald-600 text-[10px] font-bold">{isArabic ? 'الإجابة الصحيحة' : 'Correct'}</span> : null}
+                                </div>
+                              ))}
+                              {q.explanation ? (
+                                <div className="mt-1 rounded-xl bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+                                  💡 {q.explanation}
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400 text-center py-4">
+                  {isArabic ? 'لا يوجد اختبار لهذا الدرس بعد.' : 'No quiz for this lesson yet.'}
+                </p>
+              )}
+            </article>
+          ) : null}
+
+          {/* ── Generate with AI — full overlay ── */}
+          {showGenerateModal ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+              <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl">
+
+                {/* Header */}
+                <div className="bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-600 px-6 py-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/20 text-xl backdrop-blur-sm">✨</div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-purple-200">{isArabic ? 'الذكاء الاصطناعي' : 'AI-Powered'}</p>
+                        <h3 className="text-lg font-black">{isArabic ? 'توليد أسئلة الاختبار' : 'Generate Quiz Questions'}</h3>
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => setShowGenerateModal(false)}
+                      className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-white/80 hover:bg-white/20">✕</button>
+                  </div>
+                  <p className="mt-2 text-xs text-purple-200">
+                    {isArabic
+                      ? 'سيولّد الذكاء الاصطناعي أسئلة بلغة سليمة بناءً على محتوى الدرس'
+                      : 'AI will generate well-written questions based on lesson content'}
+                  </p>
+                </div>
+
+                <div className="space-y-5 px-6 py-6">
+                  {/* Language + Count row */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                        {isArabic ? 'لغة الأسئلة' : 'Language'}
+                      </label>
+                      <div className="flex overflow-hidden rounded-xl border border-slate-200">
+                        {[{ v: 'ar', label: 'العربية', flag: '🇸🇦' }, { v: 'en', label: 'English', flag: '🇺🇸' }].map(({ v, label, flag }) => {
+                          const active = (generateForm.lang || (isArabic ? 'ar' : 'en')) === v;
+                          return (
+                            <button key={v} type="button" onClick={() => setGenerateForm((p) => ({ ...p, lang: v }))}
+                              className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-bold transition ${active ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
+                              {flag} {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                        {isArabic ? 'عدد الأسئلة' : 'Questions'}
+                      </label>
+                      <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                        <button type="button" onClick={() => setGenerateForm((p) => ({ ...p, numQuestions: Math.max(3, p.numQuestions - 1) }))}
+                          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-black text-slate-600 hover:bg-slate-200">−</button>
+                        <span className="flex-1 text-center text-lg font-black text-slate-900">{generateForm.numQuestions}</span>
+                        <button type="button" onClick={() => setGenerateForm((p) => ({ ...p, numQuestions: Math.min(20, p.numQuestions + 1) }))}
+                          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-black text-slate-600 hover:bg-slate-200">+</button>
+                      </div>
+                      <p className="mt-1 text-center text-[10px] text-slate-400">3 – 20</p>
+                    </div>
+                  </div>
+
+                  {/* Difficulty cards */}
+                  <div>
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                      {isArabic ? 'مستوى الصعوبة' : 'Difficulty'}
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { v: 'EASY',   icon: '🟢', ar: 'سهل',    en: 'Easy',   desc_ar: 'تذكر وفهم',        desc_en: 'Recall & Comprehension', cls: 'border-emerald-300 bg-emerald-50 text-emerald-800', selCls: 'ring-2 ring-emerald-500' },
+                        { v: 'MEDIUM', icon: '🟡', ar: 'متوسط', en: 'Medium', desc_ar: 'تطبيق ومقارنة',    desc_en: 'Apply & Compare',        cls: 'border-amber-300   bg-amber-50   text-amber-800',   selCls: 'ring-2 ring-amber-500'   },
+                        { v: 'HARD',   icon: '🔴', ar: 'صعب',    en: 'Hard',   desc_ar: 'تحليل وتركيب',    desc_en: 'Analyse & Synthesise',   cls: 'border-rose-300    bg-rose-50    text-rose-800',    selCls: 'ring-2 ring-rose-500'    },
+                      ].map(({ v, icon, ar, en, desc_ar, desc_en, cls, selCls }) => {
+                        const active = generateForm.difficulty === v;
+                        return (
+                          <button key={v} type="button" onClick={() => setGenerateForm((p) => ({ ...p, difficulty: v }))}
+                            className={`flex flex-col items-center gap-1 rounded-2xl border-2 px-2 py-3 text-center transition ${cls} ${active ? selCls : 'opacity-60 hover:opacity-90'}`}>
+                            <span className="text-xl">{icon}</span>
+                            <span className="text-xs font-black">{isArabic ? ar : en}</span>
+                            <span className="text-[9px] font-semibold opacity-70">{isArabic ? desc_ar : desc_en}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Topic notes */}
+                  <div>
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                      {isArabic ? 'توجيه الذكاء الاصطناعي (اختياري)' : 'AI Guidance (optional)'}
+                    </label>
+                    <textarea value={generateForm.notes}
+                      onChange={(e) => setGenerateForm((p) => ({ ...p, notes: e.target.value }))}
+                      placeholder={isArabic
+                        ? 'مثال: ركّز على الفرق بين الوراثة والتغليف، وتجنب أسئلة التعريف المباشر'
+                        : 'e.g. Focus on the difference between inheritance and encapsulation, avoid simple definition questions'}
+                      rows={3}
+                      className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-purple-400 focus:bg-white focus:ring-2 focus:ring-purple-100" />
+                    <p className="mt-1 text-right text-[10px] text-slate-400">{generateForm.notes.length}/300</p>
+                  </div>
+
+                  {/* Generate button */}
+                  <button type="button" onClick={onGenerateQuestions} disabled={quizGenerating}
+                    className="relative w-full overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-purple-400/30 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">
+                    {quizGenerating ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        {isArabic ? 'جارٍ التوليد بالذكاء الاصطناعي...' : 'Generating with AI...'}
+                      </span>
+                    ) : (
+                      <span>✨ {isArabic ? `توليد ${generateForm.numQuestions} سؤال` : `Generate ${generateForm.numQuestions} Questions`}</span>
+                    )}
+                  </button>
+
+                  {quizGenerating ? (
+                    <p className="text-center text-xs text-slate-400">
+                      {isArabic ? 'قد يستغرق ذلك 15-30 ثانية...' : 'This may take 15-30 seconds…'}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {/* ── Add Question Manually Modal ── */}
+          <Modal open={showAddQuestionModal} onClose={() => setShowAddQuestionModal(false)}
+            title={isArabic ? 'إضافة سؤال يدوياً' : 'Add Question Manually'} maxWidth="max-w-lg">
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-600">{isArabic ? 'نص السؤال' : 'Question'}</label>
+                <textarea value={addQuestionForm.question} onChange={(e) => setAddQuestionForm((p) => ({ ...p, question: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm min-h-[60px]"
+                  placeholder={isArabic ? 'اكتب السؤال هنا...' : 'Enter question here...'} />
+              </div>
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input type="radio" name="correctAnswer" checked={addQuestionForm.correctAnswer === i}
+                    onChange={() => setAddQuestionForm((p) => ({ ...p, correctAnswer: i }))}
+                    className="accent-emerald-600" title={isArabic ? 'الإجابة الصحيحة' : 'Correct answer'} />
+                  <input value={addQuestionForm.options[i]}
+                    onChange={(e) => setAddQuestionForm((p) => { const opts = [...p.options]; opts[i] = e.target.value; return { ...p, options: opts }; })}
+                    placeholder={`${isArabic ? 'الخيار' : 'Option'} ${String.fromCharCode(65 + i)}`}
+                    className={`flex-1 h-9 rounded-xl border px-3 text-sm ${addQuestionForm.correctAnswer === i ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200'}`} />
+                </div>
+              ))}
+              <p className="text-[10px] text-slate-400">{isArabic ? '🔘 حدد الإجابة الصحيحة بالنقر على الدائرة' : '🔘 Select the radio button next to the correct answer'}</p>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-600">{isArabic ? 'شرح الإجابة (اختياري)' : 'Explanation (optional)'}</label>
+                <input value={addQuestionForm.explanation} onChange={(e) => setAddQuestionForm((p) => ({ ...p, explanation: e.target.value }))}
+                  className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                  placeholder={isArabic ? 'لماذا هذه الإجابة صحيحة؟' : 'Why is this answer correct?'} />
+              </div>
+              <button type="button" onClick={onAddQuestion}
+                className="w-full rounded-xl bg-indigo-600 py-2.5 text-sm font-bold text-white hover:bg-indigo-700">
+                {isArabic ? '+ إضافة السؤال' : '+ Add Question'}
+              </button>
+            </div>
+          </Modal>
         </section>
       </div>
     </InstructorLayout>

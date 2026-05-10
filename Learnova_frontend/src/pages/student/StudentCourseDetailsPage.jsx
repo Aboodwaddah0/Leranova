@@ -124,7 +124,21 @@ export default function StudentCourseDetailsPage() {
                 </div>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-lg font-black text-slate-900">{subject.name}</h3>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-lg font-black text-slate-900">{subject.name}</h3>
+                      {subject.level && (
+                        <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                          subject.level === 'BEGINNER'     ? 'bg-emerald-100 text-emerald-700' :
+                          subject.level === 'INTERMEDIATE' ? 'bg-blue-100 text-blue-700'       :
+                          subject.level === 'ADVANCED'     ? 'bg-violet-100 text-violet-700'   :
+                          'bg-rose-100 text-rose-700'
+                        }`}>
+                          {isArabic
+                            ? (subject.level === 'BEGINNER' ? 'مبتدئ' : subject.level === 'INTERMEDIATE' ? 'متوسط' : subject.level === 'ADVANCED' ? 'متقدم' : 'خبير')
+                            : subject.level.charAt(0) + subject.level.slice(1).toLowerCase()}
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-1 text-sm text-slate-500">{subject.teacher?.name || (isArabic ? 'مدرس غير محدد' : 'Unassigned teacher')}</p>
                   </div>
                   {subject.isSubscribed ? (

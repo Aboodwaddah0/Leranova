@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BarChart2, BookOpen, TrendingUp, Award, AlertCircle } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
 import EducationLoading from '../../components/ui/EducationLoading';
 import { fetchMyStudentMarks } from '../../services/studentService';
+import { fetchAcademicYears, fetchTerms } from '../../services/organizationService';
 import { useLanguage } from '../../utils/i18n';
 import { notifyError } from '../../lib/notify';
 
@@ -35,6 +36,10 @@ export default function StudentSchoolMarksPage() {
   const { isArabic } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [marks, setMarks] = useState([]);
+  const [academicYears, setAcademicYears] = useState([]);
+  const [selectedYear, setSelectedYear] = useState(null);
+  const [yearTerms, setYearTerms] = useState([]);
+  const [selectedTerm, setSelectedTerm] = useState('all'); // 'all' or termNumber
   const [expandedSubject, setExpandedSubject] = useState(null);
 
   useEffect(() => {
@@ -44,6 +49,18 @@ export default function StudentSchoolMarksPage() {
         setLoading(true);
         const data = await fetchMyStudentMarks();
         if (!cancelled) setMarks(Array.isArray(data) ? data : []);
+        try {
+          const years = await fetchAcademicYears().catch(() => []);
+          if (!cancelled) setAcademicYears(years || []);
+          const active = (years || []).find((y) => y.isActive) || years[0] || null;
+          if (active && !cancelled) {
+            setSelectedYear(active);
+            const terms = await fetchTerms(active.id).catch(() => []);
+            if (!cancelled) setYearTerms(terms || []);
+          }
+        } catch (e) {
+          // ignore term/year loading errors
+        }
       } catch (err) {
         if (!cancelled) notifyError(err?.message || (isArabic ? 'فشل تحميل الدرجات' : 'Failed to load marks'));
       } finally {
@@ -54,31 +71,28 @@ export default function StudentSchoolMarksPage() {
     return () => { cancelled = true; };
   }, [isArabic]);
 
-  // Group marks by subject
-  const bySubject = useMemo(() => {
-    const map = new Map();
-    marks.forEach((mark) => {
-      const key = mark.subject?.id ?? 'unknown';
-      if (!map.has(key)) {
-        map.set(key, {
-          id: key,
-          name: mark.subject?.name || mark.subject?.Name || (isArabic ? 'مادة غير معروفة' : 'Unknown Subject'),
-          course: mark.subject?.course?.Name || mark.subject?.course?.name || '',
-          gradeLevel: mark.subject?.course?.GradeLevel || null,
-          marks: [],
-        });
-      }
-      map.get(key).marks.push(mark);
-    });
-    return Array.from(map.values()).map((subject) => {
-      const totalWeightedScore = subject.marks.reduce((sum, m) => sum + pct(m.Numbers, m.OutOf), 0);
-      const avg = subject.marks.length > 0 ? totalWeightedScore / subject.marks.length : 0;
-      return { ...subject, avg };
-    });
-  }, [marks, isArabic]);
+  const bySubjectMap = new Map();
+  marks.forEach((mark) => {
+    const key = mark.subject?.id ?? 'unknown';
+    if (!bySubjectMap.has(key)) {
+      bySubjectMap.set(key, {
+        id: key,
+        name: mark.subject?.name || mark.subject?.Name || (isArabic ? 'مادة غير معروفة' : 'Unknown Subject'),
+        course: mark.subject?.course?.Name || mark.subject?.course?.name || '',
+        gradeLevel: mark.subject?.course?.GradeLevel || null,
+        marks: [],
+      });
+    }
+    bySubjectMap.get(key).marks.push(mark);
+  });
 
-  // Overall stats
-  const stats = useMemo(() => {
+  const bySubject = Array.from(bySubjectMap.values()).map((subject) => {
+    const totalWeightedScore = subject.marks.reduce((sum, m) => sum + pct(m.Numbers, m.OutOf), 0);
+    const avg = subject.marks.length > 0 ? totalWeightedScore / subject.marks.length : 0;
+    return { ...subject, avg };
+  });
+
+  const stats = (() => {
     if (!marks.length) return { avg: 0, passing: 0, total: 0, best: null };
     const percentages = marks.map((m) => pct(m.Numbers, m.OutOf));
     const avg = percentages.reduce((s, v) => s + v, 0) / percentages.length;
@@ -88,7 +102,7 @@ export default function StudentSchoolMarksPage() {
       return p > pct(best.Numbers, best.OutOf) ? m : best;
     }, marks[0]);
     return { avg, passing, total: marks.length, best: bestMark };
-  }, [marks]);
+  })();
 
   const overallGrade = gradeLabel(stats.avg);
 
@@ -197,8 +211,29 @@ export default function StudentSchoolMarksPage() {
                   {/* Marks table (expandable) */}
                   {isOpen ? (
                     <div className="overflow-x-auto border-t border-slate-100 px-5 pb-4 pt-3">
+                      {/* Term filter */}
+                      <div className="mb-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTerm('all')}
+                          className={`rounded-xl px-3 py-1 text-xs font-semibold ${selectedTerm === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}
+                        >
+                          {isArabic ? 'الكل' : 'All'}
+                        </button>
+                        {yearTerms.map((t) => (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => setSelectedTerm(String(t.termNumber))}
+                            className={`rounded-xl px-3 py-1 text-xs font-semibold ${String(selectedTerm) === String(t.termNumber) ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}
+                          >
+                            {t.name || `${isArabic ? 'الفصل' : 'Term'} ${t.termNumber}`}
+                          </button>
+                        ))}
+                      </div>
+
                       <table className="min-w-full text-sm">
-                        <thead>
+                        <thead className="hidden sm:table-header-group">
                           <tr className="text-xs uppercase tracking-wider text-slate-400">
                             <th className="py-2 pr-4 text-left font-semibold">{isArabic ? 'النوع' : 'Type'}</th>
                             <th className="py-2 pr-4 text-left font-semibold">{isArabic ? 'الدرجة' : 'Score'}</th>
@@ -208,21 +243,38 @@ export default function StudentSchoolMarksPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {subject.marks.map((mark) => {
+                          {subject.marks
+                            .filter((mark) => {
+                              if (selectedTerm === 'all') return true;
+                              const termNumber = Number(selectedTerm);
+                              const term = yearTerms.find((yt) => Number(yt.termNumber) === termNumber);
+                              if (!term) return true;
+                              if (!mark.time) return false;
+                              const d = new Date(mark.time);
+                              const start = term.startDate ? new Date(term.startDate) : null;
+                              const end = term.endDate ? new Date(term.endDate) : null;
+                              if (start && d < start) return false;
+                              if (end && d > end) return false;
+                              return true;
+                            })
+                            .map((mark) => {
                             const p = pct(mark.Numbers, mark.OutOf);
                             const g = gradeLabel(p);
                             const passed = p >= 50;
                             return (
                               <tr key={mark.id} className="border-t border-slate-50">
                                 <td className="py-2.5 pr-4">
+                                  <div className="block sm:hidden text-xs text-slate-400 mb-1">{isArabic ? 'النوع' : 'Type'}</div>
                                   <span className={`inline-block rounded-full border px-2 py-0.5 text-xs font-semibold ${typeColor(mark.MarkType)}`}>
                                     {mark.MarkType || (isArabic ? 'درجة' : 'Mark')}
                                   </span>
                                 </td>
                                 <td className="py-2.5 pr-4 font-bold text-slate-900">
+                                  <div className="block sm:hidden text-xs text-slate-400 mb-1">{isArabic ? 'الدرجة' : 'Score'}</div>
                                   {fmt(mark.Numbers)} <span className="font-normal text-slate-400">/ {fmt(mark.OutOf)}</span>
                                 </td>
                                 <td className="py-2.5 pr-4">
+                                  <div className="block sm:hidden text-xs text-slate-400 mb-1">{isArabic ? 'النسبة' : '%'}</div>
                                   <div className="flex items-center gap-2">
                                     <div className="h-1.5 w-16 rounded-full bg-slate-100">
                                       <div className={`h-1.5 rounded-full ${passed ? 'bg-emerald-400' : 'bg-rose-400'}`} style={{ width: `${Math.min(p, 100)}%` }} />
@@ -231,9 +283,11 @@ export default function StudentSchoolMarksPage() {
                                   </div>
                                 </td>
                                 <td className="py-2.5 pr-4">
+                                  <div className="block sm:hidden text-xs text-slate-400 mb-1">{isArabic ? 'التقدير' : 'Grade'}</div>
                                   <span className={`inline-block rounded-full border px-2 py-0.5 text-xs font-bold ${g.color}`}>{g.label}</span>
                                 </td>
                                 <td className="py-2.5 text-slate-500">
+                                  <div className="block sm:hidden text-xs text-slate-400 mb-1">{isArabic ? 'التاريخ' : 'Date'}</div>
                                   {mark.time ? new Date(mark.time).toLocaleDateString(isArabic ? 'ar-SA' : 'en-GB') : '-'}
                                 </td>
                               </tr>

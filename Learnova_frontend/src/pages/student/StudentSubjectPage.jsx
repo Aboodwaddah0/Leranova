@@ -1,16 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Clock3, CreditCard, FileText, Lock, MessageCircle, PlayCircle, SendHorizontal } from 'lucide-react';
+import { ArrowLeft, Brain, ClipboardList, Clock3, CreditCard, FileText, Lock, Map, MessageCircle, PlayCircle, SendHorizontal } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
 import AIAssistantSidebar from '../../components/student/AIAssistantSidebar';
+import Flashcards from '../../components/student/Flashcards';
+import MindMap from '../../components/student/MindMap';
+import Quiz from '../../components/student/Quiz';
 import {
   createLessonComment,
   fetchAcademyTrackSubjects,
   fetchCourseSubjects,
+  fetchLessonAiContent,
   fetchLessonComments,
   fetchStudentContext,
   fetchStudentCourseCatalog,
   fetchSubjectLessons,
+  regenerateLessonFlashcards,
+  regenerateLessonMindmap,
+  fetchStudentLessonQuiz,
+  submitStudentQuizAttempt,
   subscribeAcademyMaterial,
   updateStudentLessonProgress,
 } from '../../services/studentService';
@@ -40,6 +48,13 @@ export default function StudentSubjectPage() {
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [lessonTab, setLessonTab] = useState('attachments');
   const autoNextIntervalRef = useRef(null);
+  const [aiContent, setAiContent] = useState(null);
+  const [flashcardsLoading, setFlashcardsLoading] = useState(false);
+  const [mindmapLoading, setMindmapLoading] = useState(false);
+  const [flashcardsError, setFlashcardsError] = useState('');
+  const [mindmapError, setMindmapError] = useState('');
+  const [lessonQuiz, setLessonQuiz] = useState(null);
+  const [quizSubmitting, setQuizSubmitting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -185,6 +200,7 @@ export default function StudentSubjectPage() {
       if (remaining <= 0) {
         clearAutoNext();
         setSelectedLessonId(String(targetLessonId));
+        setLessonTab('attachments');
         return;
       }
 
@@ -277,6 +293,68 @@ export default function StudentSubjectPage() {
     }
   };
 
+  const lang = isArabic ? 'ar' : 'en';
+
+  const loadInitialAiContent = async (lessonId) => {
+    setFlashcardsLoading(true);
+    setMindmapLoading(true);
+    setFlashcardsError('');
+    setMindmapError('');
+    try {
+      const data = await fetchLessonAiContent(lessonId, lang);
+      setAiContent(data);
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || (isArabic ? 'فشل توليد المحتوى.' : 'Failed to generate content.');
+      setFlashcardsError(msg);
+      setMindmapError(msg);
+    } finally {
+      setFlashcardsLoading(false);
+      setMindmapLoading(false);
+    }
+  };
+
+  const regenFlashcards = async () => {
+    const lessonId = selectedLesson?.id;
+    if (!lessonId) return;
+    setFlashcardsLoading(true);
+    setFlashcardsError('');
+    try {
+      const data = await regenerateLessonFlashcards(lessonId, lang);
+      setAiContent((prev) => ({ ...prev, flashcards: data?.flashcards ?? [] }));
+    } catch (err) {
+      setFlashcardsError(err?.response?.data?.message || err?.message || (isArabic ? 'فشل توليد البطاقات.' : 'Failed to generate flashcards.'));
+    } finally {
+      setFlashcardsLoading(false);
+    }
+  };
+
+  const regenMindmap = async () => {
+    const lessonId = selectedLesson?.id;
+    if (!lessonId) return;
+    setMindmapLoading(true);
+    setMindmapError('');
+    try {
+      const data = await regenerateLessonMindmap(lessonId, lang);
+      setAiContent((prev) => ({ ...prev, mindmap: data?.mindmap ?? null }));
+    } catch (err) {
+      setMindmapError(err?.response?.data?.message || err?.message || (isArabic ? 'فشل توليد الخريطة.' : 'Failed to generate mind map.'));
+    } finally {
+      setMindmapLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedLesson?.id) {
+      setAiContent(null);
+      setFlashcardsError('');
+      setMindmapError('');
+      setLessonQuiz(null);
+      loadInitialAiContent(selectedLesson.id);
+      fetchStudentLessonQuiz(selectedLesson.id, lang).then(setLessonQuiz).catch(() => setLessonQuiz(null));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLesson?.id, lang]);
+
   const handleBuySubject = async () => {
     try {
       setIsPurchasing(true);
@@ -316,7 +394,21 @@ export default function StudentSubjectPage() {
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">{isArabic ? 'المادة' : 'Subject'}</p>
-            <p className="mt-2 text-sm font-semibold text-slate-900">{subject?.name || (isArabic ? 'مادة غير معروفة' : 'Unknown subject')}</p>
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-semibold text-slate-900">{subject?.name || (isArabic ? 'مادة غير معروفة' : 'Unknown subject')}</p>
+              {subject?.level && (
+                <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                  subject.level === 'BEGINNER'     ? 'bg-emerald-100 text-emerald-700' :
+                  subject.level === 'INTERMEDIATE' ? 'bg-blue-100 text-blue-700'       :
+                  subject.level === 'ADVANCED'     ? 'bg-violet-100 text-violet-700'   :
+                  'bg-rose-100 text-rose-700'
+                }`}>
+                  {isArabic
+                    ? (subject.level === 'BEGINNER' ? 'مبتدئ' : subject.level === 'INTERMEDIATE' ? 'متوسط' : subject.level === 'ADVANCED' ? 'متقدم' : 'خبير')
+                    : subject.level.charAt(0) + subject.level.slice(1).toLowerCase()}
+                </span>
+              )}
+            </div>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">{isArabic ? 'الإنجاز' : 'Completion'}</p>
@@ -404,6 +496,29 @@ export default function StudentSubjectPage() {
                 <MessageCircle size={15} /> {isArabic ? 'التعليقات' : 'Comments'}
                 <span className={`rounded-full px-2 py-0.5 text-[11px] ${lessonTab === 'comments' ? 'bg-white/20 text-white' : 'bg-white text-indigo-700'}`}>{comments.length}</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setLessonTab('flashcards')}
+                className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition ${lessonTab === 'flashcards' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+              >
+                <Brain size={15} /> {isArabic ? 'البطاقات التعليمية' : 'Flashcards'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setLessonTab('mindmap')}
+                className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition ${lessonTab === 'mindmap' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+              >
+                <Map size={15} /> {isArabic ? 'الخريطة الذهنية' : 'Mind Map'}
+              </button>
+              {lessonQuiz ? (
+                <button
+                  type="button"
+                  onClick={() => setLessonTab('quiz')}
+                  className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition ${lessonTab === 'quiz' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                >
+                  <ClipboardList size={15} /> 🧠 {isArabic ? 'الاختبار' : 'Quiz'}
+                </button>
+              ) : null}
             </div>
 
             {lessonTab === 'attachments' ? (
@@ -460,6 +575,47 @@ export default function StudentSubjectPage() {
                 </div>
               </article>
             ) : null}
+
+            {lessonTab === 'flashcards' ? (
+              <div className="mt-4">
+                <Flashcards
+                  cards={aiContent?.flashcards || []}
+                  isArabic={isArabic}
+                  onGenerate={regenFlashcards}
+                  loading={flashcardsLoading}
+                  error={flashcardsError}
+                />
+              </div>
+            ) : null}
+
+            {lessonTab === 'mindmap' ? (
+              <div className="mt-4">
+                <MindMap
+                  mindmap={aiContent?.mindmap || null}
+                  lessonTitle={selectedLesson?.title || selectedLesson?.name || ''}
+                  isArabic={isArabic}
+                  onGenerate={regenMindmap}
+                  loading={mindmapLoading}
+                  error={mindmapError}
+                />
+              </div>
+            ) : null}
+
+            {lessonTab === 'quiz' ? (
+              <div className="mt-4">
+                <Quiz
+                  quiz={lessonQuiz}
+                  isArabic={isArabic}
+                  submitting={quizSubmitting}
+                  onSubmit={async (answers) => {
+                    setQuizSubmitting(true);
+                    try {
+                      return await submitStudentQuizAttempt(selectedLesson?.id, answers, lang);
+                    } catch { return null; } finally { setQuizSubmitting(false); }
+                  }}
+                />
+              </div>
+            ) : null}
           </div>
         </section>
 
@@ -482,6 +638,7 @@ export default function StudentSubjectPage() {
                   onClick={() => {
                     clearAutoNext();
                     setSelectedLessonId(String(lesson.id));
+                    setLessonTab('attachments');
                   }}
                   className={`group flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition ${active ? 'border-indigo-300 bg-indigo-50 shadow-sm' : 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50'}`}
                 >
@@ -502,7 +659,10 @@ export default function StudentSubjectPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
-                      <p className={`truncate text-sm font-bold ${active ? 'text-indigo-700' : 'text-slate-900'}`}>{lesson.title || lesson.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className={`truncate text-sm font-bold ${active ? 'text-indigo-700' : 'text-slate-900'}`}>{lesson.title || lesson.name}</p>
+                        {lesson.quiz?.isPublished ? <span className="flex-shrink-0 text-xs" title={isArabic ? 'يحتوي على اختبار' : 'Has quiz'}>🧠</span> : null}
+                      </div>
                     </div>
                     <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
                       <Clock3 size={13} />
@@ -519,7 +679,7 @@ export default function StudentSubjectPage() {
       </div>
       ) : null}
 
-      <AIAssistantSidebar isArabic={isArabic} />
+      <AIAssistantSidebar isArabic={isArabic} lessonId={selectedLesson?.id} />
     </StudentLayout>
   );
 }

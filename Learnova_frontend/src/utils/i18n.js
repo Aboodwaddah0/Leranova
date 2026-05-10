@@ -944,17 +944,17 @@ export function useLanguage() {
     setLang(lang === LANGUAGES.EN ? LANGUAGES.AR : LANGUAGES.EN);
   };
 
+  const isArabic = lang === LANGUAGES.AR;
   const t = useMemo(() => authTranslations[lang], [lang]);
 
   useEffect(() => {
     document.documentElement.lang = lang;
-    // Keep a stable layout direction to avoid flipping tab and header positions on language switch.
-    document.documentElement.dir = "ltr";
-  }, [lang]);
+    document.documentElement.dir = isArabic ? "rtl" : "ltr";
+  }, [lang, isArabic]);
 
   return {
     lang,
-    isArabic: lang === LANGUAGES.AR,
+    isArabic,
     t,
     setLang,
     toggleLang,

@@ -40,6 +40,7 @@ const mapAcademyEnrollment = (record) => ({
   enrollmentType: 'ACADEMY',
   user_Academy_id: record.user_Academy_id,
   studentUserId: null,
+  Course_id: record.Course_id,
   user: {
     id: record.academy_user.user.id,
     name: record.academy_user.user.name,
@@ -56,6 +57,7 @@ const mapSchoolEnrollment = (record) => ({
   enrollmentType: 'SCHOOL',
   user_Academy_id: null,
   studentUserId: record.Student_id,
+  Course_id: record.Course_id,
   user: {
     id: record.user.id,
     name: record.user.name,

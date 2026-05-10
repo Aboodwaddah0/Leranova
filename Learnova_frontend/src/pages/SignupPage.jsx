@@ -41,7 +41,7 @@ export default function SignupPage() {
   };
 
   return (
-    <main className={`relative min-h-screen overflow-hidden bg-[#f7f9fb] px-4 py-8 ${isArabic ? "lang-ar" : "lang-en"}`}>
+    <main dir={isArabic ? "rtl" : "ltr"} className={`relative min-h-screen overflow-hidden bg-[#f7f9fb] px-4 py-8 ${isArabic ? "lang-ar" : "lang-en"}`}>
       <QuantumMeshBackground />
 
       <button

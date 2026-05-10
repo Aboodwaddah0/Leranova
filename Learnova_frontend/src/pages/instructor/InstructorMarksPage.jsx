@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import InstructorLayout from "../../components/instructor/InstructorLayout";
 import {
   createInstructorMark,
@@ -7,7 +7,9 @@ import {
   fetchInstructorStudents,
   fetchInstructorSubjects,
   updateInstructorMark,
+  fetchInstructorCourses,
 } from "../../services/instructorService";
+import { fetchAcademicYears, fetchTerms } from "../../services/organizationService";
 import EducationLoading from "../../components/ui/EducationLoading";
 import { useLanguage } from "../../utils/i18n";
 import { notifyError } from "../../lib/notify";
@@ -29,6 +31,13 @@ export default function InstructorMarksPage() {
   const [marks, setMarks] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [students, setStudents] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [filterSubjectId, setFilterSubjectId] = useState('');
+  const [selectedCourse, setSelectedCourse] = useState('');
+  const [academicYears, setAcademicYears] = useState([]);
+  const [selectedYear, setSelectedYear] = useState(null);
+  const [yearTerms, setYearTerms] = useState([]);
+  const [selectedTerm, setSelectedTerm] = useState('all');
   const [markModalOpen, setMarkModalOpen] = useState(false);
   const [form, setForm] = useState({
     id: null,
@@ -87,6 +96,11 @@ export default function InstructorMarksPage() {
         fetchInstructorSubjects(),
       ]);
 
+      const [coursesData, years] = await Promise.all([
+        fetchInstructorCourses().catch(() => []),
+        fetchAcademicYears().catch(() => []),
+      ]);
+
       const initialSubjectId = String(form.Subject_id || subjectsData[0]?.id || "");
       const studentsData = initialSubjectId
         ? await fetchInstructorStudents({ Subject_id: Number(initialSubjectId) })
@@ -95,12 +109,21 @@ export default function InstructorMarksPage() {
       setMarks(marksData);
       setSubjects(subjectsData);
       setStudents(studentsData);
+      setCourses(coursesData || []);
+      setAcademicYears(years || []);
+      const active = (years || []).find((y) => y.isActive) || years?.[0] || null;
+      setSelectedYear(active);
+      if (active) {
+        const terms = await fetchTerms(active.id).catch(() => []);
+        setYearTerms(terms || []);
+      }
 
       setForm((current) => ({
         ...current,
         Subject_id: current.Subject_id || initialSubjectId,
         Student_id: current.Student_id || String(studentsData[0]?.id || ""),
       }));
+      setFilterSubjectId(initialSubjectId);
     } catch (err) {
       setError(safeError(err));
     } finally {
@@ -135,6 +158,26 @@ export default function InstructorMarksPage() {
       notifyError(error);
     }
   }, [error]);
+
+  const visibleMarks = useMemo(() => {
+    return (marks || []).filter((m) => {
+      if (filterSubjectId && String(m.Subject_id) !== String(filterSubjectId)) return false;
+      if (selectedCourse && m.subject?.Course_id && String(m.subject.Course_id) !== String(selectedCourse)) return false;
+      if (selectedTerm && selectedTerm !== 'all') {
+        const termNumber = Number(selectedTerm);
+        const term = yearTerms.find((t) => Number(t.termNumber) === termNumber);
+        if (term) {
+          if (!m.time) return false;
+          const d = new Date(m.time);
+          const start = term.startDate ? new Date(term.startDate) : null;
+          const end = term.endDate ? new Date(term.endDate) : null;
+          if (start && d < start) return false;
+          if (end && d > end) return false;
+        }
+      }
+      return true;
+    });
+  }, [marks, filterSubjectId, selectedCourse, selectedTerm, yearTerms]);
 
   const refreshMarks = async () => {
     const data = await fetchInstructorMarks();
@@ -397,6 +440,58 @@ export default function InstructorMarksPage() {
         </form>
       </Modal>
 
+      <div className="mb-4 flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="space-y-1 text-xs font-semibold">
+            <div className="text-xs text-slate-500">{isArabic ? 'المادة' : 'Subject'}</div>
+            <select
+              value={filterSubjectId}
+              onChange={(e) => { setFilterSubjectId(e.target.value); onSubjectChange(e.target.value); }}
+              className="h-10 rounded-xl border border-slate-200 px-3 text-sm"
+            >
+              <option value="">{isArabic ? 'كل المواد' : 'All subjects'}</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-1 text-xs font-semibold">
+            <div className="text-xs text-slate-500">{isArabic ? 'الصف' : 'Class'}</div>
+            <select
+              value={selectedCourse}
+              onChange={(e) => setSelectedCourse(e.target.value)}
+              className="h-10 rounded-xl border border-slate-200 px-3 text-sm"
+            >
+              <option value="">{isArabic ? 'كل الصفوف' : 'All classes'}</option>
+              {courses.map((c) => (
+                <option key={c.id} value={c.id}>{c.Name || c.name || `#${c.id}`}</option>
+              ))}
+            </select>
+          </label>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedTerm('all')}
+              className={`rounded-xl px-3 py-1 text-xs font-semibold ${selectedTerm === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}
+            >
+              {isArabic ? 'الكل' : 'All'}
+            </button>
+            {yearTerms.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setSelectedTerm(String(t.termNumber))}
+                className={`rounded-xl px-3 py-1 text-xs font-semibold ${String(selectedTerm) === String(t.termNumber) ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}
+              >
+                {t.name || `${isArabic ? 'الفصل' : 'Term'} ${t.termNumber}`}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm">
         <table className="min-w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
@@ -414,7 +509,7 @@ export default function InstructorMarksPage() {
               <tr>
                 <td colSpan="6" className="px-4 py-6 text-slate-500">{isArabic ? "لا توجد علامات." : "No marks found."}</td>
               </tr>
-            ) : marks.map((mark) => (
+            ) : visibleMarks.map((mark) => (
               <tr key={mark.id} className="border-t border-slate-100">
                 <td className="px-4 py-3 font-semibold text-slate-900">{mark.student?.user?.name || "-"}</td>
                 <td className="px-4 py-3 text-slate-700">{mark.subject?.name || "-"}</td>
