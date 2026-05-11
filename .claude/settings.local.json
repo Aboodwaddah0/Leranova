@@ -24,7 +24,9 @@
       "Bash(Select-Object Name)",
       "Bash(docker compose logs *)",
       "Bash(docker compose build *)",
-      "PowerShell(docker exec learnova-rag-service *)"
+      "PowerShell(docker exec learnova-rag-service *)",
+      "Bash(Get-ChildItem -Recurse -Name)",
+      "Bash(Select-Object -First 50)"
     ]
   }
 }

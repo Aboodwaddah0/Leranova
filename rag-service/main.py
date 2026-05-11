@@ -122,6 +122,8 @@ def process_lesson_pipeline(payload: ProcessLessonRequest, course_id: int | None
     file_path: Path | None = None
     audio_path: Path | None = None
 
+    _ingestion_status[payload.lessonId] = {"status": "processing", "ts": _time.time()}
+
     try:
         source_name = _infer_source_name(payload)
         file_type = str(payload.fileType).lower()
@@ -221,6 +223,11 @@ def process_lesson(request: ProcessLessonRequest, background_tasks: BackgroundTa
     if not settings.qdrant_url:
         raise HTTPException(status_code=500, detail="QDRANT_URL is not configured")
 
+    lesson_id_str = str(request.lessonId)
+    if _ingestion_status.get(lesson_id_str, {}).get("status") == "processing":
+        logger.info("[RAG] Skipping duplicate trigger — lesson_id=%s already processing", lesson_id_str)
+        return ProcessLessonResponse(status="already_processing")
+
     background_tasks.add_task(process_lesson_pipeline, request)
     return ProcessLessonResponse(status="processing_started")
 
@@ -230,8 +237,13 @@ def ingest(request: IngestRequest, background_tasks: BackgroundTasks) -> IngestR
     if not settings.qdrant_url:
         raise HTTPException(status_code=500, detail="QDRANT_URL is not configured")
 
+    lesson_id_str = str(request.lesson_id)
+    if _ingestion_status.get(lesson_id_str, {}).get("status") == "processing":
+        logger.info("[RAG] Skipping duplicate trigger — lesson_id=%s already processing", lesson_id_str)
+        return IngestResponse(status="already_processing")
+
     payload = ProcessLessonRequest(
-        lessonId=str(request.lesson_id),
+        lessonId=lesson_id_str,
         organizationId=str(request.organization_id if request.organization_id is not None else request.course_id),
         fileUrl=request.file_url,
         fileType=request.file_type,
@@ -255,6 +267,8 @@ def process_direct_file_pipeline(
     file_content: bytes,
 ) -> None:
     file_path: Path | None = None
+
+    _ingestion_status[lesson_id] = {"status": "processing", "ts": _time.time()}
 
     try:
         logger.info(
@@ -369,14 +383,15 @@ def query_lessons(request: QueryRequest) -> QueryResponse:
         return QueryResponse(chunks=[])
 
     query_vector = embed_text(query)
-    fetch_limit = min(request.limit * 3, 100)
+    # Use vector similarity only (no cross-encoder reranker) so the batch query
+    # returns in < 2s instead of 30–40s on CPU. The /retrieve endpoint still
+    # rerankings for single-lesson precision lookups.
     candidates = retrieve_chunks_multi_lesson(
         query_vector=query_vector,
         lesson_ids=request.lesson_ids,
-        limit=fetch_limit,
+        limit=request.limit,
     )
-    ranked = rerank(query, candidates, top_k=request.limit)
-    return QueryResponse(chunks=ranked)
+    return QueryResponse(chunks=candidates)
 
 
 @app.get("/qdrant/chunks/count", response_model=QdrantChunkCountResponse)

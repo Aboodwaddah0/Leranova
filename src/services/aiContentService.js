@@ -209,7 +209,7 @@ const writeForLang = (existing, newValue, lang) => {
 const fetchRagChunks = async (lessonId, query) => {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45000);
+    const timeout = setTimeout(() => controller.abort(), 10000);
     try {
       const response = await fetch(`${RAG_SERVICE_URL}/retrieve`, {
         method: 'POST',
@@ -260,6 +260,11 @@ const autoRetriggerIngestion = async (lessonId) => {
   const key = String(lessonId);
   const last = _lastRetrigger.get(key) ?? 0;
   if (Date.now() - last < RETRIGGER_COOLDOWN_MS) return;
+
+  // Don't retrigger if RAG service is already processing this lesson
+  const ragStatus = await checkRagIngestionStatus(lessonId).catch(() => ({ status: 'unknown' }));
+  if (ragStatus.status === 'processing') return;
+
   _lastRetrigger.set(key, Date.now());
   try {
     const lesson = await prisma.lesson.findUnique({
@@ -306,6 +311,43 @@ export const gatherLessonContent = async (lessonId) => {
   });
   if (!lesson) throw new AppError('Lesson not found', 404);
 
+  // Check Qdrant and attachment count in parallel before attempting slow RAG fetch
+  const [chunkCount, attachmentCount] = await Promise.all([
+    verifyQdrantLessonChunks(lessonId).catch(() => null),
+    prisma.lesson_attachment.count({ where: { lessonId: Number(lessonId) } }),
+  ]);
+
+  if ((chunkCount === 0 || chunkCount === null) && attachmentCount > 0) {
+    const ragStatus = await checkRagIngestionStatus(lessonId);
+    console.warn('[AI-CONTENT] No chunks indexed yet', { lessonId, chunkCount, attachmentCount, ragStatus: ragStatus.status });
+    if (ragStatus.status === 'failed') {
+      throw new AppError(
+        `Lesson file indexing failed: ${ragStatus.error || 'unknown error'}. Please delete and re-upload the file.`,
+        422,
+      );
+    }
+    if (ragStatus.status === 'processing') {
+      throw new AppError(
+        'Lesson content is being indexed. Please wait a few minutes and try again.',
+        422,
+      );
+    }
+    // Status unknown/not started — retrigger and ask user to wait
+    autoRetriggerIngestion(lessonId);
+    throw new AppError(
+      'Lesson files are still being indexed. Please wait 1–2 minutes and try again.',
+      422,
+    );
+  }
+
+  if (attachmentCount === 0) {
+    throw new AppError(
+      'No lesson content found. Please upload a PDF, Word document, or video file to this lesson first.',
+      422,
+    );
+  }
+
+  // Chunks exist in Qdrant — build content from all sources
   const parts = [];
   if (lesson.name) parts.push(`Lesson title: ${lesson.name}`);
   if (lesson.Description) parts.push(lesson.Description);
@@ -318,47 +360,9 @@ export const gatherLessonContent = async (lessonId) => {
   const content = parts.join('\n\n').slice(0, 6000).trim();
 
   if (content.length < 50) {
-    // Check how many Qdrant chunks exist and how many attachments there are
-    const [chunkCount, attachmentCount] = await Promise.all([
-      verifyQdrantLessonChunks(lessonId).catch(() => 0),
-      prisma.lesson_attachment.count({ where: { lessonId: Number(lessonId) } }),
-    ]);
-
-    console.warn('[AI-CONTENT] Insufficient content', { lessonId, chunkCount, attachmentCount, contentLength: content.length });
-
-    if (attachmentCount > 0 && chunkCount > 0) {
-      // Chunks exist in Qdrant but retrieval returned empty — RAG service is still warming up
-      throw new AppError(
-        'Content retrieval service is warming up. Please try again in 30 seconds.',
-        422,
-      );
-    }
-
-    if (attachmentCount > 0 && (chunkCount === 0 || chunkCount === null)) {
-      const ragStatus = await checkRagIngestionStatus(lessonId);
-      if (ragStatus.status === 'failed') {
-        throw new AppError(
-          `Lesson file indexing failed: ${ragStatus.error || 'unknown error'}. Please delete and re-upload the file.`,
-          422,
-        );
-      }
-      // Still processing or unknown — retrigger and ask user to wait
-      autoRetriggerIngestion(lessonId);
-      throw new AppError(
-        'Lesson files are still being indexed. Please wait 1–2 minutes and try again.',
-        422,
-      );
-    }
-
-    if (attachmentCount === 0) {
-      throw new AppError(
-        'No lesson content found. Please upload a PDF, Word document, or video file to this lesson first.',
-        422,
-      );
-    }
-
+    // Chunks exist but retrieval returned empty — embedding model is still warming up
     throw new AppError(
-      'Lesson content is still processing. Please try again in a moment.',
+      'Content retrieval service is warming up. Please try again in 30 seconds.',
       422,
     );
   }
