@@ -1061,10 +1061,11 @@ const selectStageChunks = async ({
     limit: 16,
   });
 
-  const retrieved = await queryRagFallbackRetrieve({
-    question,
-    lessonIds: candidateLessonIds,
-  });
+  // Only run the per-lesson fallback when the batch query returned too few chunks.
+  // Skipping it when direct already has results saves 30–60s of reranker time on CPU.
+  const retrieved = direct.length >= MIN_CONTEXT_CHUNKS
+    ? []
+    : await queryRagFallbackRetrieve({ question, lessonIds: candidateLessonIds });
 
   const allowed = new Set(candidateLessonIds);
   const merged = rerankChunks(dedupeAndSortChunks(
