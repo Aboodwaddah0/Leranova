@@ -4,8 +4,11 @@ import {
   createLessonAttachment,
   listLessonAttachments,
   deleteLessonAttachment,
+  retriggerLessonRagIngestion,
 } from '../services/lessonAttachmentService.js';
 import { verifyQdrantLessonChunks } from '../services/rag.service.js';
+
+const RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || 'http://rag-service:8000';
 
 const parseLessonId = (req) => {
   const lessonId = Number(req.params.lessonId);
@@ -77,7 +80,14 @@ export const getLessonRagStatusController = async (req, res, next) => {
   try {
     const lessonId = parseLessonId(req);
     const baseline = Number(req.query.baseline ?? 0);
-    const chunkCount = await verifyQdrantLessonChunks(lessonId);
+
+    const [chunkCount, ragIngestionStatus] = await Promise.all([
+      verifyQdrantLessonChunks(lessonId),
+      fetch(`${RAG_SERVICE_URL}/ingest-status/${lessonId}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+    ]);
+
     const count = Number(chunkCount ?? 0);
     const ready = count > baseline;
 
@@ -86,8 +96,19 @@ export const getLessonRagStatusController = async (req, res, next) => {
       chunkCount: count,
       baseline,
       ready,
-      status: ready ? 'ready' : 'processing',
+      status: ready ? 'ready' : (ragIngestionStatus?.status === 'failed' ? 'failed' : 'processing'),
+      ingestion: ragIngestionStatus,
     });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const retriggerRagController = async (req, res, next) => {
+  try {
+    const lessonId = parseLessonId(req);
+    const result = await retriggerLessonRagIngestion({ actor: req.user, lessonId });
+    return res.status(200).json({ message: result.message, data: result });
   } catch (error) {
     return next(error);
   }

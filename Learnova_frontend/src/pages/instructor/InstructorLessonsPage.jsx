@@ -10,6 +10,7 @@ import {
   uploadInstructorLessonAttachments,
   deleteInstructorLessonAttachment,
   fetchLessonRagStatus,
+  reprocessLessonRag,
   fetchLessonQuiz,
   createLessonQuiz,
   updateLessonQuiz,
@@ -273,6 +274,18 @@ export default function InstructorLessonsPage() {
     }
   };
 
+  const onReprocessRag = async () => {
+    if (!selectedLessonId) return;
+    setRagStatus({ status: 'queued', estimatedTime: isArabic ? 'يرجى الانتظار' : 'Please wait' });
+    try {
+      await reprocessLessonRag(selectedLessonId);
+      setTimeout(() => startRagPolling(selectedLessonId, 0, true), 3000);
+    } catch (err) {
+      setRagStatus(null);
+      setError(safeError(err));
+    }
+  };
+
   // ── Quiz handlers ────────────────────────────────────────────────────────────
   const getSubjectId = () => {
     const lesson = lessons.find((l) => String(l.id) === String(selectedLessonId));
@@ -441,6 +454,16 @@ export default function InstructorLessonsPage() {
                       ? `${isArabic ? 'جاري الرفع' : 'Uploading'} ${uploadProgress}%`
                       : (isArabic ? '+ رفع ملفات (PDF، Word، فيديو، صور...)' : '+ Upload files (PDF, Word, video, images...)')}
                   </label>
+
+                  <button
+                    type="button"
+                    onClick={onReprocessRag}
+                    disabled={uploadingFiles || ragStatus?.status === 'processing' || ragStatus?.status === 'queued'}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-700 transition hover:bg-violet-100 disabled:opacity-50"
+                  >
+                    <span>🔄</span>
+                    {isArabic ? 'إعادة معالجة AI (إذا لم يعمل المساعد الذكي)' : 'Re-process for AI (if chatbot has no content)'}
+                  </button>
 
                   {ragStatus ? (
                     <div className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm ${

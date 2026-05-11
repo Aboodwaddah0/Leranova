@@ -7,6 +7,7 @@ import {
   listLessonAttachmentsController,
   deleteLessonAttachmentController,
   getLessonRagStatusController,
+  retriggerRagController,
 } from '../controllers/lessonAttachmentController.js';
 
 const router = Router({ mergeParams: true });
@@ -22,6 +23,7 @@ router.use(authMiddleware);
 
 router.get('/', listLessonAttachmentsController);
 router.get('/rag-status', getLessonRagStatusController);
+router.post('/reprocess', isTeacher, retriggerRagController);
 router.post('/', isTeacher, attachmentUpload, uploadLessonAttachmentController);
 router.delete('/:attachmentId', isTeacher, deleteLessonAttachmentController);
 

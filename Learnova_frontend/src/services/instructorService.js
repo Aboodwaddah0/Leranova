@@ -112,6 +112,11 @@ export const fetchInstructorLessonAttachments = async (lessonId) => {
   return data?.data || [];
 };
 
+export const reprocessLessonRag = async (lessonId) => {
+  const { data } = await api.post(`/lessons/${lessonId}/attachments/reprocess`);
+  return data;
+};
+
 export const fetchLessonRagStatus = async (lessonId, baseline = 0) => {
   const { data } = await api.get(`/lessons/${lessonId}/attachments/rag-status?baseline=${baseline}`);
   return data;

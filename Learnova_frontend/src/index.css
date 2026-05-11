@@ -4,6 +4,22 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes lp-float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50%       { transform: translateY(-14px) rotate(1deg); }
+}
+@keyframes lp-float-slow {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-8px); }
+}
+@keyframes lp-pulse-glow {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%       { opacity: 1;   transform: scale(1.08); }
+}
+.lp-float      { animation: lp-float      3.4s ease-in-out infinite; }
+.lp-float-slow { animation: lp-float-slow 4.8s ease-in-out infinite; }
+.lp-pulse      { animation: lp-pulse-glow 3s   ease-in-out infinite; }
+
 :root {
   --surface: #f7f9fb;
   --surface-2: #eef2f6;

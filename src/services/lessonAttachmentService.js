@@ -274,6 +274,44 @@ export const createLessonAttachment = async ({ actor, lessonId, file }) => {
   };
 };
 
+export const retriggerLessonRagIngestion = async ({ actor, lessonId }) => {
+  const scope = await resolveAttachmentScope(actor);
+  if (scope.role === 'STUDENT') {
+    throw new AppError('Students cannot trigger RAG ingestion', 403);
+  }
+
+  const lessonContext = await ensureLessonBelongsToOrganization(scope, lessonId);
+
+  const attachments = await prisma.lesson_attachment.findMany({
+    where: { lessonId },
+    orderBy: { id: 'asc' },
+  });
+
+  const ingestable = attachments.filter((a) => mapFileTypeToIngestionType(a.fileType));
+
+  if (!ingestable.length) {
+    return { triggered: 0, message: 'No ingestable attachments found for this lesson.' };
+  }
+
+  let triggered = 0;
+  for (const att of ingestable) {
+    const ingestionFileType = mapFileTypeToIngestionType(att.fileType);
+    triggerLessonRagIngestion({
+      fileUrl: att.fileUrl,
+      fileType: ingestionFileType,
+      organizationId: scope.orgId,
+      courseId: lessonContext.courseId,
+      subjectId: lessonContext.subjectId,
+      lessonId,
+    }).catch((err) => {
+      console.error('[RAG RETRIGGER ERROR]', { lessonId, attachmentId: att.id, error: err.message });
+    });
+    triggered += 1;
+  }
+
+  return { triggered, message: `RAG ingestion re-triggered for ${triggered} file(s).` };
+};
+
 export const listLessonAttachments = async ({ actor, lessonId }) => {
   const scope = await resolveAttachmentScope(actor);
   await ensureLessonBelongsToOrganization(scope, lessonId);

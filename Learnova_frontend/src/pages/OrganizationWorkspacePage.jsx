@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bell, ChevronDown, Eye, Search, UserCircle2, Trash2, Pencil } from "lucide-react";
+import { Bell, ChevronDown, ChevronRight, Eye, FolderOpen, Search, UserCircle2, Trash2, Pencil } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { logout, setAuthSession } from "../redux/slices/authSlice";
 import {
@@ -209,6 +209,7 @@ const TABS = {
   STUDENTS: "students",
   PARENTS: "parents",
   SCHOOL: "school",
+  FINANCE: "finance",
 };
 
 const AUTO_GRADE_RE = /^Auto-created grade course for level (\d+)$/i;
@@ -389,6 +390,15 @@ export default function OrganizationWorkspacePage() {
   const [subjectsByCourse, setSubjectsByCourse] = useState({});
   const [selectedCourseId, setSelectedCourseId] = useState(null);
   const [subjectsLoading, setSubjectsLoading] = useState(false);
+
+  // Drill-down navigation state
+  const [drillCourse,          setDrillCourse]          = useState(null);
+  const [drillSubject,         setDrillSubject]          = useState(null);
+  const [drillSubjects,        setDrillSubjects]         = useState([]);
+  const [drillSubjectsLoading, setDrillSubjectsLoading] = useState(false);
+  const [drillLessons,         setDrillLessons]          = useState([]);
+  const [drillLessonsLoading,  setDrillLessonsLoading]  = useState(false);
+  const [drillExpandedLesson,  setDrillExpandedLesson]  = useState(null);
   const [subjectSelectionTouched, setSubjectSelectionTouched] = useState(false);
   const [subjectsFilterInitialized, setSubjectsFilterInitialized] = useState(false);
   const [selectedTeacherId, setSelectedTeacherId] = useState("");
@@ -460,6 +470,7 @@ export default function OrganizationWorkspacePage() {
     price: "",
     isPaid: false,
     GradeLevel: "",
+    level: "",
   });
   const [courseThumbnailFile, setCourseThumbnailFile] = useState(null);
   const [courseThumbnailPreview, setCourseThumbnailPreview] = useState("");
@@ -1137,6 +1148,38 @@ export default function OrganizationWorkspacePage() {
     }
   };
 
+  const enterCourse = async (course) => {
+    setDrillCourse(course);
+    setDrillSubject(null);
+    setDrillLessons([]);
+    setDrillExpandedLesson(null);
+    setDrillSubjects([]);
+    setDrillSubjectsLoading(true);
+    try {
+      const data = await fetchCourseSubjects(course.id);
+      setDrillSubjects(data || []);
+    } catch {
+      setDrillSubjects([]);
+    } finally {
+      setDrillSubjectsLoading(false);
+    }
+  };
+
+  const enterSubject = async (subject) => {
+    setDrillSubject(subject);
+    setDrillLessons([]);
+    setDrillExpandedLesson(null);
+    setDrillLessonsLoading(true);
+    try {
+      const data = await fetchSubjectLessonsForOrg(subject.id);
+      setDrillLessons(data || []);
+    } catch {
+      setDrillLessons([]);
+    } finally {
+      setDrillLessonsLoading(false);
+    }
+  };
+
   const resetSubjectForm = () => {
     setSubjectForm({
       id: null,
@@ -1300,6 +1343,7 @@ export default function OrganizationWorkspacePage() {
       price: isAcademy && course.price != null ? String(course.price) : "",
       isPaid: isAcademy ? Boolean(course.isPaid) : false,
       GradeLevel: course.GradeLevel || course.gradeLevel || "",
+      level: course.level || "",
     });
     setCourseThumbnailFile(null);
     setCourseThumbnailPreview(course.Thumbnail || "");
@@ -1324,7 +1368,13 @@ export default function OrganizationWorkspacePage() {
       payload.append("thumbnail", courseThumbnailFile);
     }
 
-    payload.append("Thumbnail", courseForm.Thumbnail || "");
+    if (courseForm.Thumbnail) {
+      payload.append("Thumbnail", courseForm.Thumbnail);
+    }
+
+    if (!isSchool && courseForm.level) {
+      payload.append("level", courseForm.level);
+    }
 
     await handleAction(async () => {
       if (courseForm.id) {
@@ -1890,6 +1940,10 @@ export default function OrganizationWorkspacePage() {
       baseTabs.push({ id: TABS.SCHOOL, label: t.organization.tabs.schoolSettings });
     }
 
+    if (isAcademy) {
+      baseTabs.push({ id: TABS.FINANCE, label: isArabic ? "الإيرادات" : "Finance" });
+    }
+
     return baseTabs;
   }, [isSchool, isArabic, t.organization.tabs]);
 
@@ -1974,7 +2028,7 @@ export default function OrganizationWorkspacePage() {
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => { setActiveTab(tab.id); setDrillCourse(null); setDrillSubject(null); setDrillExpandedLesson(null); }}
                 className={`w-full rounded-2xl px-4 py-3 text-sm font-semibold transition-all duration-200 ${
                   activeTab === tab.id
                     ? "dashboard-sidebar-item-active"
@@ -2022,7 +2076,7 @@ export default function OrganizationWorkspacePage() {
                 <p><span className="font-semibold">{t.organization.organizationInfo.subdomain}:</span> {organizationProfile?.subdomain || "-"}</p>
                 {organizationProfile?.Phone && <p><span className="font-semibold">{t.organization.organizationInfo.phone}:</span> {organizationProfile.Phone}</p>}
                 {organizationProfile?.Address && <p><span className="font-semibold">{t.organization.organizationInfo.address}:</span> {organizationProfile.Address}</p>}
-                {organizationProfile?.Founded && <p><span className="font-semibold">Founded:</span> {String(organizationProfile.Founded).slice(0, 10)}</p>}
+                {organizationProfile?.Founded && <p><span className="font-semibold">{t.organization.organizationInfo.founded}:</span> {String(organizationProfile.Founded).slice(0, 10)}</p>}
                 {organizationProfile?.Description && <p className="mt-2 text-slate-600">{organizationProfile.Description}</p>}
               </div>
               <button
@@ -2078,31 +2132,6 @@ export default function OrganizationWorkspacePage() {
                 </div>
               </div>
 
-              {isAcademy && organizationRevenue && (
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-900 to-slate-700 p-4 text-white">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">{isArabic ? "إيرادات الأكاديمية" : "Academy Revenue"}</p>
-                      <p className="mt-2 text-3xl font-black">{formatMoney(organizationRevenue.totalRevenue)}</p>
-                      <p className="mt-1 text-sm text-slate-200">{isArabic ? "إجمالي المدفوعات من الكورسات المدفوعة" : "Total payments from paid courses"}</p>
-                    </div>
-                    <div className="grid gap-2 text-sm sm:grid-cols-3">
-                      <div className="rounded-xl bg-white/10 px-3 py-2">
-                        <p className="text-slate-300">{isArabic ? "دفعات" : "Payments"}</p>
-                        <p className="mt-1 text-xl font-black">{organizationRevenue.totalPayments}</p>
-                      </div>
-                      <div className="rounded-xl bg-white/10 px-3 py-2">
-                        <p className="text-slate-300">{isArabic ? "مدفوعة" : "Paid"}</p>
-                        <p className="mt-1 text-xl font-black">{organizationRevenue.paidCoursesCount}</p>
-                      </div>
-                      <div className="rounded-xl bg-white/10 px-3 py-2">
-                        <p className="text-slate-300">{isArabic ? "مجانية" : "Free"}</p>
-                        <p className="mt-1 text-xl font-black">{organizationRevenue.freeCoursesCount}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               <h3 className="mt-5 text-sm font-bold text-slate-900">{t.organization.organizationInfo.notesTitle}</h3>
               <div className="mb-4 space-y-1 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
@@ -2115,6 +2144,169 @@ export default function OrganizationWorkspacePage() {
                 <li>{t.organization.organizationInfo.note3}</li>
               </ul>
             </article>
+          </section>
+        )}
+
+        {/* ══════════════════════════════════════
+            FINANCE TAB (Academy only)
+            ══════════════════════════════════════ */}
+        {!loading && activeTab === TABS.FINANCE && isAcademy && (
+          <section className="space-y-5">
+            {!organizationRevenue ? (
+              <div className="flex items-center justify-center rounded-[2rem] border border-slate-200 bg-white py-20 text-center">
+                <p className="text-sm text-slate-400">{isArabic ? "جاري تحميل بيانات الإيرادات..." : "Loading revenue data..."}</p>
+              </div>
+            ) : (<>
+              {/* KPI cards */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  {
+                    label: isArabic ? "إجمالي الإيرادات" : "Total Revenue",
+                    value: formatMoney(organizationRevenue.totalRevenue),
+                    icon: "💰",
+                    color: "from-indigo-600 to-violet-600",
+                    shadow: "shadow-indigo-500/20",
+                  },
+                  {
+                    label: isArabic ? "عدد المدفوعات" : "Total Payments",
+                    value: organizationRevenue.totalPayments,
+                    icon: "💳",
+                    color: "from-sky-500 to-blue-600",
+                    shadow: "shadow-sky-500/20",
+                  },
+                  {
+                    label: isArabic ? "كورسات مدفوعة" : "Paid Courses",
+                    value: organizationRevenue.paidCoursesCount,
+                    icon: "🎓",
+                    color: "from-amber-500 to-orange-500",
+                    shadow: "shadow-amber-500/20",
+                  },
+                  {
+                    label: isArabic ? "كورسات مجانية" : "Free Courses",
+                    value: organizationRevenue.freeCoursesCount,
+                    icon: "🆓",
+                    color: "from-emerald-500 to-teal-500",
+                    shadow: "shadow-emerald-500/20",
+                  },
+                ].map((kpi) => (
+                  <div key={kpi.label} className={`rounded-[1.5rem] bg-gradient-to-br ${kpi.color} p-5 text-white shadow-lg ${kpi.shadow}`}>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/80">{kpi.label}</p>
+                      <span className="text-2xl">{kpi.icon}</span>
+                    </div>
+                    <p className="mt-3 text-3xl font-black">{kpi.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Top courses + Recent payments */}
+              <div className="grid gap-5 lg:grid-cols-2">
+
+                {/* Top courses by revenue */}
+                <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+                  <h3 className="mb-4 font-black text-slate-900">
+                    {isArabic ? "أعلى الكورسات إيرادًا" : "Top Courses by Revenue"}
+                  </h3>
+                  {(organizationRevenue.byCourse || []).length === 0 ? (
+                    <p className="py-8 text-center text-sm text-slate-400">{isArabic ? "لا توجد بيانات بعد" : "No data yet"}</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {(organizationRevenue.byCourse || []).slice(0, 6).map((c, idx) => {
+                        const total = organizationRevenue.totalRevenue || 1;
+                        const pct = Math.min(100, Math.round((Number(c.revenue) / Number(total)) * 100));
+                        return (
+                          <div key={c.courseId}>
+                            <div className="flex items-center justify-between text-sm">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-black text-indigo-700">{idx + 1}</span>
+                                <span className="truncate font-semibold text-slate-800">{c.courseName}</span>
+                              </div>
+                              <div className="flex flex-shrink-0 items-center gap-3">
+                                <span className="text-xs text-slate-500">{c.payments} {isArabic ? "دفعة" : "payments"}</span>
+                                <span className="font-black text-indigo-700">{formatMoney(c.revenue)}</span>
+                              </div>
+                            </div>
+                            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                              <div className="h-1.5 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Recent payments */}
+                <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+                  <h3 className="mb-4 font-black text-slate-900">
+                    {isArabic ? "آخر المدفوعات" : "Recent Payments"}
+                  </h3>
+                  {(organizationRevenue.recentPayments || []).length === 0 ? (
+                    <p className="py-8 text-center text-sm text-slate-400">{isArabic ? "لا توجد مدفوعات بعد" : "No payments yet"}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {(organizationRevenue.recentPayments || []).slice(0, 8).map((p) => (
+                        <div key={p.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-900">{p.student?.name || (isArabic ? "طالب" : "Student")}</p>
+                            <p className="truncate text-xs text-slate-500">{p.course?.Name || "-"}</p>
+                          </div>
+                          <div className="flex flex-shrink-0 flex-col items-end gap-0.5">
+                            <span className="font-black text-emerald-700">{formatMoney(p.amount)}</span>
+                            <span className="text-[10px] text-slate-400">
+                              {p.paidAt ? new Date(p.paidAt).toLocaleDateString(isArabic ? "ar-EG" : "en-GB") : "-"}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Course revenue breakdown (full table) */}
+              {(organizationRevenue.byCourse || []).length > 0 && (
+                <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+                  <h3 className="mb-4 font-black text-slate-900">
+                    {isArabic ? "تفاصيل الإيرادات لكل كورس" : "Revenue Breakdown by Course"}
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-200">
+                          <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "الكورس" : "Course"}</th>
+                          <th className="px-3 py-2 text-center text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "النوع" : "Type"}</th>
+                          <th className="px-3 py-2 text-center text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "السعر" : "Price"}</th>
+                          <th className="px-3 py-2 text-center text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "المدفوعات" : "Payments"}</th>
+                          <th className="px-3 py-2 text-right text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "الإيراد" : "Revenue"}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(organizationRevenue.byCourse || []).map((c) => (
+                          <tr key={c.courseId} className="border-b border-slate-100 hover:bg-slate-50 transition">
+                            <td className="px-3 py-3 font-semibold text-slate-900">{c.courseName}</td>
+                            <td className="px-3 py-3 text-center">
+                              <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${c.isPaid ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                {c.isPaid ? (isArabic ? "مدفوع" : "Paid") : (isArabic ? "مجاني" : "Free")}
+                              </span>
+                            </td>
+                            <td className="px-3 py-3 text-center text-slate-700">{c.isPaid ? formatMoney(c.price) : "—"}</td>
+                            <td className="px-3 py-3 text-center text-slate-700">{c.payments}</td>
+                            <td className="px-3 py-3 text-right font-black text-indigo-700">{formatMoney(c.revenue)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-slate-200">
+                          <td colSpan={4} className="px-3 py-3 text-right font-bold text-slate-700">{isArabic ? "الإجمالي" : "Total"}</td>
+                          <td className="px-3 py-3 text-right text-lg font-black text-indigo-700">{formatMoney(organizationRevenue.totalRevenue)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </> )}
           </section>
         )}
 
@@ -2289,6 +2481,15 @@ export default function OrganizationWorkspacePage() {
                     <input name="Name" value={courseForm.Name} onChange={setField(setCourseForm)} placeholder={t.organization.courses.name} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
                   )}
                   <textarea name="Description" value={courseForm.Description} onChange={setField(setCourseForm)} placeholder={t.organization.courses.description} className="min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2" />
+                  {!isSchool && (
+                    <select name="level" value={courseForm.level} onChange={setField(setCourseForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                      <option value="">{isArabic ? "المستوى (اختياري)" : "Level (optional)"}</option>
+                      <option value="BEGINNER">{isArabic ? "مبتدئ" : "Beginner"}</option>
+                      <option value="INTERMEDIATE">{isArabic ? "متوسط" : "Intermediate"}</option>
+                      <option value="ADVANCED">{isArabic ? "متقدم" : "Advanced"}</option>
+                      <option value="EXPERT">{isArabic ? "خبير" : "Expert"}</option>
+                    </select>
+                  )}
                   <div className="space-y-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -2309,6 +2510,28 @@ export default function OrganizationWorkspacePage() {
             )}
 
             <article className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+              {drillCourse && (
+                <div className="mb-5 flex flex-wrap items-center gap-2 text-sm">
+                  <button type="button" onClick={() => { setDrillCourse(null); setDrillSubject(null); setDrillExpandedLesson(null); }} className="font-bold text-indigo-600 hover:underline">
+                    {isSchool ? (isArabic ? "الصفوف" : "Grades") : (isArabic ? "الكورسات" : "Courses")}
+                  </button>
+                  <ChevronRight size={14} className="flex-shrink-0 text-slate-400" />
+                  {drillSubject ? (
+                    <>
+                      <button type="button" onClick={() => { setDrillSubject(null); setDrillExpandedLesson(null); }} className="font-bold text-indigo-600 hover:underline">
+                        {formatGradeName(drillCourse, isSchool, isArabic) || drillCourse.Name || drillCourse.name}
+                      </button>
+                      <ChevronRight size={14} className="flex-shrink-0 text-slate-400" />
+                      <span className="font-bold text-slate-900">{drillSubject.name}</span>
+                    </>
+                  ) : (
+                    <span className="font-bold text-slate-900">
+                      {formatGradeName(drillCourse, isSchool, isArabic) || drillCourse.Name || drillCourse.name}
+                    </span>
+                  )}
+                </div>
+              )}
+              {!drillCourse && (<>
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.22em] text-sky-700">{isSchool ? (isArabic ? "قسم الصفوف" : "Grades section") : (isArabic ? "قسم الكورسات" : "Courses section")}</p>
@@ -2385,6 +2608,18 @@ export default function OrganizationWorkspacePage() {
                   const accent = accentClasses[index % accentClasses.length];
                   const trackLabel = formatGradeName(course, isSchool, isArabic) || course.Name || course.name || "-";
                   const priceLabel = course?.isPaid ? (isArabic ? "مدفوع" : "Paid") : (isArabic ? "مجاني" : "Free");
+                  const courseLevel = course?.level || null;
+                  const LEVEL_MAP = {
+                    BEGINNER:     { en: "Beginner",     ar: "مبتدئ", cls: "bg-emerald-100 text-emerald-700" },
+                    INTERMEDIATE: { en: "Intermediate", ar: "متوسط", cls: "bg-sky-100 text-sky-700"         },
+                    ADVANCED:     { en: "Advanced",     ar: "متقدم", cls: "bg-violet-100 text-violet-700"   },
+                    EXPERT:       { en: "Expert",       ar: "خبير",  cls: "bg-rose-100 text-rose-700"       },
+                  };
+                  const levelInfo = courseLevel ? LEVEL_MAP[courseLevel] : null;
+                  const teacherName = (() => {
+                    const raw = course?.Teacher_name || course?.teacherName || course?.teacher?.name || course?.teacher?.user?.name || "";
+                    return raw && raw.toLowerCase() !== "unknown" ? raw : null;
+                  })();
 
                   return (
                     <article key={course.id} className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -2402,19 +2637,20 @@ export default function OrganizationWorkspacePage() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <h3 className="truncate text-lg font-black text-slate-900">{trackLabel}</h3>
-                            <p className="mt-1 text-sm text-slate-500">{course?.Teacher_name || course?.teacherName || course?.teacher?.name || course?.teacher?.user?.name || (isArabic ? "غير محدد" : "Unassigned")}</p>
+                            {teacherName && (
+                              <p className="mt-1 text-sm text-slate-500">{teacherName}</p>
+                            )}
                           </div>
-                          {!isSchool && (
-                            <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{priceLabel}</div>
-                          )}
                         </div>
 
                         <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">{translateCourseDescription(course.Description, isArabic) || (isArabic ? "لا يوجد وصف" : "No description")}</p>
 
                         <div className="mt-4 flex flex-wrap gap-2">
                           <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">{trackLabel}</span>
-                          {!isSchool && (
-                            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">{priceLabel}</span>
+                          {!isSchool && levelInfo && (
+                            <span className={`rounded-full px-3 py-1 text-xs font-bold ${levelInfo.cls}`}>
+                              {isArabic ? levelInfo.ar : levelInfo.en}
+                            </span>
                           )}
                         </div>
 
@@ -2426,6 +2662,15 @@ export default function OrganizationWorkspacePage() {
                             </div>
                           )}
                           <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => enterCourse(course)}
+                              className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100"
+                              title={isArabic ? "فتح الكورس" : "Open course"}
+                            >
+                              <FolderOpen size={13} />
+                              {isArabic ? "فتح" : "Open"}
+                            </button>
                             <button
                               type="button"
                               onClick={() => openCourseEditor(course)}
@@ -2468,6 +2713,140 @@ export default function OrganizationWorkspacePage() {
                   );
                 })}
               </div>
+              </>)}
+
+              {/* ── Level 2: subjects for drillCourse ── */}
+              {drillCourse && !drillSubject && (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-5">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.22em] text-indigo-700">{isArabic ? "المواد" : "Subjects"}</p>
+                      <h2 className="mt-2 text-2xl font-black text-slate-900">{formatGradeName(drillCourse, isSchool, isArabic) || drillCourse.Name || drillCourse.name}</h2>
+                    </div>
+                    <span className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-sm font-bold text-indigo-700">
+                      {drillSubjects.length} {isArabic ? "مادة" : "subject(s)"}
+                    </span>
+                  </div>
+                  {drillSubjectsLoading ? (
+                    <div className="mt-6 space-y-3">
+                      {[1, 2, 3].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl border border-slate-200 bg-slate-50" />)}
+                    </div>
+                  ) : drillSubjects.length === 0 ? (
+                    <div className="mt-6 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center">
+                      <p className="text-sm font-semibold text-slate-500">{isArabic ? "لا توجد مواد في هذا الكورس بعد." : "No subjects in this course yet."}</p>
+                    </div>
+                  ) : (
+                    <div className="mt-6 overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-slate-200">
+                            <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">#</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "المادة" : "Subject"}</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "المدرس" : "Teacher"}</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "الوصف" : "Description"}</th>
+                            <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "الإجراءات" : "Actions"}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {drillSubjects.map((subject, idx) => (
+                            <tr key={subject.id} className="border-b border-slate-200 transition hover:bg-slate-50">
+                              <td className="px-4 py-3 text-sm font-semibold text-slate-600">{idx + 1}</td>
+                              <td className="px-4 py-3 text-sm font-semibold text-slate-900">{subject.name}</td>
+                              <td className="px-4 py-3 text-sm text-slate-700">{subject?.teacher?.user?.name || "-"}</td>
+                              <td className="px-4 py-3 text-sm text-slate-600 line-clamp-2">{subject.Description || "-"}</td>
+                              <td className="px-4 py-3 text-center">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button type="button" onClick={() => enterSubject(subject)} className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100">
+                                    <FolderOpen size={13} />
+                                    {isArabic ? "عرض الدروس" : "View Lessons"}
+                                  </button>
+                                  <button type="button" onClick={() => { setSubjectForm({ id: subject.id, name: subject.name, Description: subject.Description || "", Teacher_id: subject.Teacher_id || "", isPaid: Boolean(subject.isPaid), price: subject.price ? String(subject.price) : "", level: subject.level || "" }); setSubjectModalOpen(true); }} className="rounded-lg border border-slate-300 bg-white p-2 text-slate-700 transition hover:bg-slate-50" title={isArabic ? "تعديل" : "Edit"}>
+                                    <Pencil size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ── Level 3: lessons for drillSubject ── */}
+              {drillCourse && drillSubject && (
+                <>
+                  <div className="border-b border-slate-200 pb-5">
+                    <p className="text-xs font-black uppercase tracking-[0.22em] text-indigo-700">{isArabic ? "دروس المادة" : "Lesson content"}</p>
+                    <h2 className="mt-2 text-2xl font-black text-slate-900">{drillSubject.name}</h2>
+                    {!drillLessonsLoading && (
+                      <p className="mt-1 text-sm text-slate-500">
+                        {isArabic ? `${drillLessons.length} درس مُضاف من المدرس` : `${drillLessons.length} lesson${drillLessons.length !== 1 ? "s" : ""} installed by teacher`}
+                      </p>
+                    )}
+                  </div>
+                  {drillLessonsLoading ? (
+                    <div className="mt-6 flex items-center justify-center py-12">
+                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+                    </div>
+                  ) : drillLessons.length === 0 ? (
+                    <div className="mt-6 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center">
+                      <p className="text-sm font-semibold text-slate-500">{isArabic ? "لم يقم المدرس بإضافة أي دروس لهذه المادة بعد." : "The teacher has not installed any lessons yet."}</p>
+                    </div>
+                  ) : (
+                    <div className="mt-6 space-y-3">
+                      {drillLessons.map((lesson, idx) => {
+                        const isOpen = drillExpandedLesson === lesson.id;
+                        const files = (lesson.attachments || []).filter((a) => String(a.fileType || a.type || "").toUpperCase() !== "VIDEO");
+                        const getExt = (a) => { const n = a.originalName || a.name || ""; const d = n.lastIndexOf("."); return d !== -1 ? n.slice(d + 1).toUpperCase() : (a.mimeType || "FILE").split("/").pop().toUpperCase(); };
+                        return (
+                          <div key={lesson.id} className="overflow-hidden rounded-2xl border border-slate-200">
+                            <button type="button" onClick={() => setDrillExpandedLesson(isOpen ? null : lesson.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50">
+                              <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">{idx + 1}</span>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-slate-900">{lesson.title || lesson.name || "-"}</p>
+                                {lesson.description ? <p className="mt-0.5 line-clamp-1 text-xs text-slate-400">{lesson.description}</p> : null}
+                              </div>
+                              <div className="flex flex-shrink-0 items-center gap-2">
+                                {lesson.videoUrl ? <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">{isArabic ? "فيديو" : "Video"}</span> : null}
+                                {files.length > 0 ? <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">{files.length} {isArabic ? "ملف" : "file(s)"}</span> : null}
+                                <span className="text-slate-400">{isOpen ? "▲" : "▼"}</span>
+                              </div>
+                            </button>
+                            {isOpen && (
+                              <div className="space-y-4 border-t border-slate-100 bg-slate-50 px-4 pb-4 pt-4">
+                                {lesson.videoUrl ? (
+                                  <div>
+                                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "الفيديو" : "Video"}</p>
+                                    <video controls src={lesson.videoUrl} className="w-full rounded-xl bg-slate-900" style={{ maxHeight: 320 }} />
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-slate-400">{isArabic ? "لا يوجد فيديو لهذا الدرس." : "No video for this lesson."}</p>
+                                )}
+                                {files.length > 0 && (
+                                  <div>
+                                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "المرفقات" : "Attachments"}</p>
+                                    <div className="space-y-2">
+                                      {files.map((att) => (
+                                        <a key={att.id} href={att.fileUrl || att.url} target="_blank" rel="noreferrer" download={att.originalName || att.name} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-50">
+                                          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-[10px] font-black text-indigo-600">{getExt(att)}</span>
+                                          <span className="truncate">{att.originalName || att.name || "File"}</span>
+                                          <span className="ml-auto flex-shrink-0 text-xs text-slate-400">↓</span>
+                                        </a>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
             </article>
           </section>
         )}

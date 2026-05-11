@@ -15,7 +15,13 @@ def _get_model() -> WhisperModel:
 
 def transcribe_audio_segments(audio_path: str):
     model = _get_model()
-    segments, _ = model.transcribe(audio_path, language=settings.whisper_language)
+    segments, _ = model.transcribe(
+        audio_path,
+        language=settings.whisper_language,
+        beam_size=1,               # fastest; negligible quality loss for lecture audio
+        vad_filter=True,           # skip silence — huge speedup for educational videos
+        condition_on_previous_text=False,  # prevent hallucination loops
+    )
 
     normalized = []
     for segment in segments:
