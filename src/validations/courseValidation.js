@@ -1,5 +1,7 @@
 import Joi from 'joi';
 
+const COURSE_LEVELS = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'];
+
 export const createCourseSchema = Joi.object({
   Name: Joi.string().max(255).required(),
   Description: Joi.string().allow('', null),
@@ -11,6 +13,7 @@ export const createCourseSchema = Joi.object({
   price: Joi.any().strip(),
   isPaid: Joi.any().strip(),
   GradeLevel: Joi.number().integer().min(1).max(12).allow(null),
+  level: Joi.string().valid(...COURSE_LEVELS).allow(null, '').optional(),
 });
 
 export const updateCourseSchema = Joi.object({
@@ -24,5 +27,6 @@ export const updateCourseSchema = Joi.object({
   price: Joi.any().strip(),
   isPaid: Joi.any().strip(),
   GradeLevel: Joi.number().integer().min(1).max(12).allow(null),
+  level: Joi.string().valid(...COURSE_LEVELS).allow(null, '').optional(),
 }).min(1);
 

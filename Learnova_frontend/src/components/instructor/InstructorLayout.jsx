@@ -11,7 +11,6 @@ import { useLanguage } from "../../utils/i18n";
 const navItems = [
   { to: "/dashboard/instructor/overview", labelAr: "النظرة العامة", labelEn: "Overview", end: true },
   { to: "/dashboard/instructor/courses", labelAr: "الكورسات", labelEn: "Courses" },
-  { to: "/dashboard/instructor/subjects", labelAr: "المواد", labelEn: "Subjects" },
   { to: "/dashboard/instructor/lessons", labelAr: "الدروس", labelEn: "Lessons" },
   { to: "/dashboard/instructor/students", labelAr: "الطلاب", labelEn: "Students" },
   { to: "/dashboard/instructor/marks", labelAr: "العلامات", labelEn: "Marks" },

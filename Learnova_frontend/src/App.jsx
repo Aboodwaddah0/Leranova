@@ -8,7 +8,6 @@ import StudentProtectedRoute from "./routes/StudentProtectedRoute";
 import DashboardPlaceholderPage from "./pages/DashboardPlaceholderPage";
 import InstructorDashboardPage from "./pages/InstructorDashboardPage";
 import InstructorCoursesPage from "./pages/instructor/InstructorCoursesPage";
-import InstructorSubjectsPage from "./pages/instructor/InstructorSubjectsPage";
 import InstructorLessonsPage from "./pages/instructor/InstructorLessonsPage";
 import InstructorStudentsPage from "./pages/instructor/InstructorStudentsPage";
 import InstructorMarksPage from "./pages/instructor/InstructorMarksPage";
@@ -81,8 +80,7 @@ function App() {
             <Route path="/dashboard/instructor/overview" element={<InstructorDashboardPage />} />
             <Route path="/dashboard/instructor/courses" element={<InstructorCoursesPage />} />
             
-            <Route path="/dashboard/instructor/subjects" element={<InstructorSubjectsPage />} />
-            <Route path="/dashboard/instructor/lessons" element={<InstructorLessonsPage />} />
+<Route path="/dashboard/instructor/lessons" element={<InstructorLessonsPage />} />
             <Route path="/dashboard/instructor/students" element={<InstructorStudentsPage />} />
             <Route path="/dashboard/instructor/settings" element={<InstructorSettingsPage />} />
             <Route element={<InstructorSchoolOnlyRoute />}>

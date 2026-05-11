@@ -37,11 +37,17 @@ def _ensure_collection(client: QdrantClient, vector_size: int) -> None:
     except Exception:
         pass  # collection does not exist yet — create below
 
-    client.create_collection(
-        collection_name=settings.qdrant_collection,
-        vectors_config=qmodels.VectorParams(size=vector_size, distance=qmodels.Distance.COSINE),
-    )
-    logger.info("[Qdrant] collection '%s' ready with vector_size=%d", settings.qdrant_collection, vector_size)
+    try:
+        client.create_collection(
+            collection_name=settings.qdrant_collection,
+            vectors_config=qmodels.VectorParams(size=vector_size, distance=qmodels.Distance.COSINE),
+        )
+        logger.info("[Qdrant] collection '%s' ready with vector_size=%d", settings.qdrant_collection, vector_size)
+    except Exception as e:
+        if "already exist" in str(e).lower():
+            logger.info("[Qdrant] collection '%s' already exists, skipping create", settings.qdrant_collection)
+            return
+        raise
 
 
 def _build_point_id(lesson_id: str, source_type: str, source_ref: str, chunk_index: int) -> int:

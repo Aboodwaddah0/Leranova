@@ -1,5 +1,6 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
+import { triggerLessonRagIngestion, verifyQdrantLessonChunks } from './rag.service.js';
 
 const RAG_SERVICE_URL  = process.env.RAG_SERVICE_URL  || 'http://rag-service:8000';
 const GROQ_API_URL     = process.env.GROQ_API_URL     || 'https://api.groq.com/openai/v1/chat/completions';
@@ -208,7 +209,7 @@ const writeForLang = (existing, newValue, lang) => {
 const fetchRagChunks = async (lessonId, query) => {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 45000);
     try {
       const response = await fetch(`${RAG_SERVICE_URL}/retrieve`, {
         method: 'POST',
@@ -224,6 +225,75 @@ const fetchRagChunks = async (lessonId, query) => {
     }
   } catch {
     return [];
+  }
+};
+
+/* ─── RAG ingestion status check ─────────────────────────────────────────── */
+
+const checkRagIngestionStatus = async (lessonId) => {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    try {
+      const response = await fetch(`${RAG_SERVICE_URL}/ingest-status/${lessonId}`, {
+        signal: controller.signal,
+      });
+      if (!response.ok) return { status: 'unknown' };
+      return await response.json().catch(() => ({ status: 'unknown' }));
+    } finally {
+      clearTimeout(timeout);
+    }
+  } catch {
+    return { status: 'unknown' };
+  }
+};
+
+/* ─── Helpers for attachment-based ingestion ────────────────────────────── */
+
+const FILE_TYPE_TO_INGEST = { PDF: 'pdf', DOCX: 'docx', TXT: 'txt', VIDEO: 'video' };
+
+// Throttle: only retrigger once every 3 minutes per lesson to avoid hammering the RAG service
+const _lastRetrigger = new Map();
+const RETRIGGER_COOLDOWN_MS = 3 * 60 * 1000;
+
+const autoRetriggerIngestion = async (lessonId) => {
+  const key = String(lessonId);
+  const last = _lastRetrigger.get(key) ?? 0;
+  if (Date.now() - last < RETRIGGER_COOLDOWN_MS) return;
+  _lastRetrigger.set(key, Date.now());
+  try {
+    const lesson = await prisma.lesson.findUnique({
+      where: { id: Number(lessonId) },
+      select: {
+        id: true,
+        Subject_id: true,
+        subject: { select: { id: true, Course_id: true, course: { select: { Org_id: true } } } },
+      },
+    });
+    if (!lesson?.subject) return;
+
+    const courseId  = lesson.subject.Course_id;
+    const subjectId = lesson.subject.id;
+    const orgId     = lesson.subject.course?.Org_id;
+
+    const attachments = await prisma.lesson_attachment.findMany({
+      where: { lessonId: Number(lessonId) },
+    });
+
+    for (const att of attachments) {
+      const ingestionType = FILE_TYPE_TO_INGEST[att.fileType];
+      if (!ingestionType || !att.fileUrl) continue;
+      triggerLessonRagIngestion({
+        fileUrl: att.fileUrl,
+        fileType: ingestionType,
+        organizationId: orgId,
+        courseId,
+        subjectId,
+        lessonId: Number(lessonId),
+      }).catch((err) => console.error('[AI-CONTENT] auto retrigger failed', err.message));
+    }
+  } catch (err) {
+    console.error('[AI-CONTENT] autoRetriggerIngestion error', err.message);
   }
 };
 
@@ -246,9 +316,53 @@ export const gatherLessonContent = async (lessonId) => {
   parts.push(...chunks.slice(0, 10));
 
   const content = parts.join('\n\n').slice(0, 6000).trim();
+
   if (content.length < 50) {
-    throw new AppError('Insufficient lesson content to generate AI tools.', 422);
+    // Check how many Qdrant chunks exist and how many attachments there are
+    const [chunkCount, attachmentCount] = await Promise.all([
+      verifyQdrantLessonChunks(lessonId).catch(() => 0),
+      prisma.lesson_attachment.count({ where: { lessonId: Number(lessonId) } }),
+    ]);
+
+    console.warn('[AI-CONTENT] Insufficient content', { lessonId, chunkCount, attachmentCount, contentLength: content.length });
+
+    if (attachmentCount > 0 && chunkCount > 0) {
+      // Chunks exist in Qdrant but retrieval returned empty — RAG service is still warming up
+      throw new AppError(
+        'Content retrieval service is warming up. Please try again in 30 seconds.',
+        422,
+      );
+    }
+
+    if (attachmentCount > 0 && (chunkCount === 0 || chunkCount === null)) {
+      const ragStatus = await checkRagIngestionStatus(lessonId);
+      if (ragStatus.status === 'failed') {
+        throw new AppError(
+          `Lesson file indexing failed: ${ragStatus.error || 'unknown error'}. Please delete and re-upload the file.`,
+          422,
+        );
+      }
+      // Still processing or unknown — retrigger and ask user to wait
+      autoRetriggerIngestion(lessonId);
+      throw new AppError(
+        'Lesson files are still being indexed. Please wait 1–2 minutes and try again.',
+        422,
+      );
+    }
+
+    if (attachmentCount === 0) {
+      throw new AppError(
+        'No lesson content found. Please upload a PDF, Word document, or video file to this lesson first.',
+        422,
+      );
+    }
+
+    throw new AppError(
+      'Lesson content is still processing. Please try again in a moment.',
+      422,
+    );
   }
+
   return { lesson, content };
 };
 

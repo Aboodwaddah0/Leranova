@@ -44,6 +44,7 @@ const BLOCKED_FILLER_PHRASES = [
   'في الوقت نفسه',
 ];
 
+
 const CHATBOT_SYSTEM_PROMPT = [
   'أنت مساعد تعلم ذكي في Learnova بجودة عالية.',
   'افهم العربية الفصحى والعامية الشامية (فلسطيني/أردني) والكتابة غير الدقيقة.',
@@ -733,7 +734,9 @@ const getCourseContext = async ({ orgId, courseId, subjectId, lessonId }) => {
   };
 };
 
-const queryRagDirect = async ({ question, courseId, subjectId, lessonId, organizationId, limit = 10 }) => {
+const queryRagDirect = async ({ question, candidateLessonIds = [], limit = 10 }) => {
+  if (!candidateLessonIds.length) return [];
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), RAG_QUERY_TIMEOUT_MS);
 
@@ -743,11 +746,7 @@ const queryRagDirect = async ({ question, courseId, subjectId, lessonId, organiz
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         question,
-        course_id: courseId,
-        subject_id: subjectId ?? null,
-        lesson_id: lessonId ?? null,
-        organization_id: organizationId,
-        source_types: Array.from(ALLOWED_SOURCE_TYPES),
+        lesson_ids: candidateLessonIds.map(String),
         limit,
       }),
       signal: controller.signal,
@@ -1058,10 +1057,7 @@ const selectStageChunks = async ({
 
   const direct = await queryRagDirect({
     question,
-    courseId,
-    subjectId,
-    lessonId,
-    organizationId,
+    candidateLessonIds,
     limit: 16,
   });
 

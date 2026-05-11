@@ -1,5 +1,7 @@
 from pathlib import Path
 import tempfile
+import time as _time
+import threading as _threading
 from fastapi import FastAPI, BackgroundTasks, File, Form, HTTPException, UploadFile, Query
 from urllib.parse import urlparse, unquote
 
@@ -28,6 +30,23 @@ from utils.logger import get_logger
 
 logger = get_logger("rag-service")
 app = FastAPI(title=settings.app_name)
+
+# In-memory ingestion status per lesson_id: {status, error?, chunks?, ts}
+_ingestion_status: dict[str, dict] = {}
+
+
+@app.on_event("startup")
+def preload_models() -> None:
+    """Load models in a background thread so startup is instant and requests work immediately."""
+    def _load() -> None:
+        from services.embedding import _get_model as get_embedding
+        from services.reranker import _get_model as get_reranker
+        logger.info("[Startup] Pre-loading embedding model...")
+        get_embedding()
+        logger.info("[Startup] Embedding ready. Loading reranker in background...")
+        get_reranker()
+        logger.info("[Startup] All models ready.")
+    _threading.Thread(target=_load, daemon=True).start()
 
 
 def _infer_source_name(payload: ProcessLessonRequest) -> str:
@@ -168,7 +187,17 @@ def process_lesson_pipeline(payload: ProcessLessonRequest, course_id: int | None
         logger.info("[RAG] chunks=%d", len(chunks))
         logger.info("[RAG SUCCESS] Indexed lesson_id=%s chunks=%d qdrant_count=%d", payload.lessonId, len(chunks), indexed_count)
         logger.info("Pipeline finished for lesson_id=%s with %d chunks", payload.lessonId, len(chunks))
+        _ingestion_status[payload.lessonId] = {
+            "status": "success",
+            "chunks": len(chunks),
+            "ts": _time.time(),
+        }
     except Exception as error:
+        _ingestion_status[payload.lessonId] = {
+            "status": "failed",
+            "error": str(error),
+            "ts": _time.time(),
+        }
         logger.exception("[RAG ERROR] ingestion failed lesson_id=%s", payload.lessonId)
     finally:
         if audio_path and audio_path.exists():
@@ -180,6 +209,11 @@ def process_lesson_pipeline(payload: ProcessLessonRequest, course_id: int | None
 @app.get("/health")
 def health_check() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/ingest-status/{lesson_id}")
+def get_ingest_status(lesson_id: str) -> dict:
+    return _ingestion_status.get(lesson_id, {"status": "unknown"})
 
 
 @app.post("/process-lesson", response_model=ProcessLessonResponse)

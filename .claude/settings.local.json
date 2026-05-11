@@ -19,7 +19,12 @@
       "Bash(Get-ChildItem -Recurse -Path \"Learnova_frontend\\\\src\\\\pages\" -ErrorAction SilentlyContinue)",
       "Bash(Select-Object FullName)",
       "Bash(ConvertTo-Json)",
-      "PowerShell(ls *)"
+      "PowerShell(ls *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\PC\\\\Documents\\\\Leranova_v4\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(docker compose logs *)",
+      "Bash(docker compose build *)",
+      "PowerShell(docker exec learnova-rag-service *)"
     ]
   }
 }

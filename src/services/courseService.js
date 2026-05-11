@@ -70,6 +70,7 @@ export const createCourse = async (orgId, data) => {
         Thumbnail: payload.Thumbnail ?? null,
         price: 0,
         isPaid: false,
+        level: organizationRole === 'ACADEMY' ? (payload.level || null) : null,
       },
     });
 
@@ -190,6 +191,9 @@ export const updateCourse = async (orgId, courseId, data) => {
       Thumbnail: data.Thumbnail ?? undefined,
       isPaid: false,
       price: 0,
+      ...(organizationRole === 'ACADEMY' && Object.prototype.hasOwnProperty.call(data, 'level')
+        ? { level: data.level || null }
+        : {}),
     },
   });
 
