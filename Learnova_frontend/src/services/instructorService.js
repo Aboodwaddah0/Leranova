@@ -140,6 +140,16 @@ export const generateLessonAiContentInstructor = async (lessonId, lang = 'ar') =
   return data?.data ?? null;
 };
 
+export const generateLessonFlashcardsOnly = async (lessonId, lang = 'ar') => {
+  const { data } = await api.post(`/lessons/${lessonId}/ai-content/flashcards/regenerate`, { lang });
+  return data?.data ?? null;
+};
+
+export const generateLessonMindmapOnly = async (lessonId, lang = 'ar') => {
+  const { data } = await api.post(`/lessons/${lessonId}/ai-content/mindmap/regenerate`, { lang });
+  return data?.data ?? null;
+};
+
 export const updateLessonFlashcards = async (lessonId, flashcards, lang = 'ar') => {
   const { data } = await api.put(`/lessons/${lessonId}/ai-content/flashcards`, { flashcards, lang });
   return data?.data ?? null;

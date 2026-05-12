@@ -385,12 +385,13 @@ export default function StudentLessonPage() {
 
           {/* ── Section navigation bar ── */}
           {(() => {
+            const isPublished = aiContent?.published === true;
             const navItems = [
-              { id: 'flashcards', label: isArabic ? 'البطاقات' : 'Flashcards', icon: Brain,        color: 'indigo' },
-              { id: 'mindmap',    label: isArabic ? 'الخريطة'  : 'Mind Map',   icon: Map,          color: 'purple' },
-              ...(lessonQuiz         ? [{ id: 'quiz',        label: isArabic ? 'الاختبار'  : 'Quiz',        icon: ClipboardList, color: 'amber'  }] : []),
-              { id: 'comments',   label: isArabic ? 'التعليقات' : 'Comments',  icon: MessageCircle, color: 'slate'  },
-              ...(selectedAttachment.length ? [{ id: 'attachments', label: isArabic ? 'الملفات' : 'Files', icon: FileText, color: 'blue' }] : []),
+              { id: 'flashcards', label: isArabic ? 'البطاقات' : 'Flashcards', icon: Brain,        color: 'indigo', available: isPublished && aiContent?.flashcards?.length > 0 },
+              { id: 'mindmap',    label: isArabic ? 'الخريطة'  : 'Mind Map',   icon: Map,          color: 'purple', available: isPublished && !!aiContent?.mindmap },
+              ...(lessonQuiz         ? [{ id: 'quiz',        label: isArabic ? 'الاختبار'  : 'Quiz',        icon: ClipboardList, color: 'amber',  available: true }] : []),
+              { id: 'comments',   label: isArabic ? 'التعليقات' : 'Comments',  icon: MessageCircle, color: 'slate',  available: true },
+              ...(selectedAttachment.length ? [{ id: 'attachments', label: isArabic ? 'الملفات' : 'Files', icon: FileText, color: 'blue', available: true }] : []),
             ];
             const colorMap = {
               indigo: { active: 'bg-indigo-600 text-white shadow-indigo-200', dot: 'bg-indigo-500' },
@@ -401,7 +402,7 @@ export default function StudentLessonPage() {
             };
             return (
               <div className="flex flex-wrap gap-2">
-                {navItems.map(({ id, label, icon: Icon, color }) => {
+                {navItems.map(({ id, label, icon: Icon, color, available }) => {
                   const active = activeSection === id;
                   return (
                     <button
@@ -416,8 +417,8 @@ export default function StudentLessonPage() {
                     >
                       <Icon size={15} />
                       {label}
-                      {!active && (
-                        <span className={`h-1.5 w-1.5 rounded-full ${colorMap[color].dot}`} />
+                      {available && !active && (
+                        <span className="h-2 w-2 rounded-full bg-emerald-400" title={isArabic ? 'متاح' : 'Available'} />
                       )}
                     </button>
                   );

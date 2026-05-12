@@ -581,9 +581,9 @@ export default function StudentSubjectPage() {
                 <Flashcards
                   cards={aiContent?.flashcards || []}
                   isArabic={isArabic}
-                  onGenerate={regenFlashcards}
                   loading={flashcardsLoading}
                   error={flashcardsError}
+                  published={aiContent?.published === true}
                 />
               </div>
             ) : null}
@@ -594,9 +594,9 @@ export default function StudentSubjectPage() {
                   mindmap={aiContent?.mindmap || null}
                   lessonTitle={selectedLesson?.title || selectedLesson?.name || ''}
                   isArabic={isArabic}
-                  onGenerate={regenMindmap}
                   loading={mindmapLoading}
                   error={mindmapError}
+                  published={aiContent?.published === true}
                 />
               </div>
             ) : null}

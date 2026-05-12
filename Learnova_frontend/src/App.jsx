@@ -100,8 +100,8 @@ function App() {
               <Route path="/student/courses/:courseId" element={<LegacyStudentCourseRedirect />} />
               <Route path="/courses/:courseId/subjects/:subjectId" element={<StudentSubjectPage />} />
               <Route path="/student/subjects/:subjectId" element={<Navigate to="/courses" replace />} />
-              <Route path="/lessons/:lessonId" element={<StudentLessonPage />} />
-              <Route path="/student/lessons/:lessonId" element={<LegacyStudentLessonRedirect />} />
+              <Route path="/lessons/:lessonId" element={<Navigate to="/courses" replace />} />
+              <Route path="/student/lessons/:lessonId" element={<Navigate to="/courses" replace />} />
             <Route path="/teachers" element={<StudentPageErrorBoundary><StudentTeachersPage /></StudentPageErrorBoundary>} />
             <Route path="/teachers/:teacherId" element={<StudentPageErrorBoundary><StudentTeacherProfilePage /></StudentPageErrorBoundary>} />
             <Route path="/student/chat" element={<StudentPageErrorBoundary><StudentChatPage /></StudentPageErrorBoundary>} />

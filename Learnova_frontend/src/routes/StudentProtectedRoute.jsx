@@ -10,7 +10,9 @@ export default function StudentProtectedRoute() {
     return <Navigate to="/login" replace />;
   }
 
-  if (role !== AUTH_ROLES.STUDENT) {
+  // Teachers (INSTRUCTOR) and org roles can preview student lesson pages
+  const allowedRoles = [AUTH_ROLES.STUDENT, AUTH_ROLES.INSTRUCTOR, AUTH_ROLES.ORGANIZATION];
+  if (!allowedRoles.includes(role)) {
     return <Navigate to="/dashboard" replace />;
   }
 

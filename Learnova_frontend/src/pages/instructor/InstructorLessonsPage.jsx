@@ -20,6 +20,8 @@ import {
   deleteLessonQuizQuestion,
   fetchLessonAiContentInstructor,
   generateLessonAiContentInstructor,
+  generateLessonFlashcardsOnly,
+  generateLessonMindmapOnly,
   updateLessonFlashcards,
   updateLessonMindmap,
   publishLessonAiContent,
@@ -332,6 +334,24 @@ export default function InstructorLessonsPage() {
     try {
       const d = await generateLessonAiContentInstructor(selectedLessonId, aiContentLang);
       setAiContent(d);
+    } catch (err) { setError(safeError(err)); } finally { setAiContentLoading(false); }
+  };
+
+  const onGenerateFlashcardsOnly = async () => {
+    if (!selectedLessonId) return;
+    setAiContentLoading(true);
+    try {
+      const d = await generateLessonFlashcardsOnly(selectedLessonId, aiContentLang);
+      setAiContent((prev) => ({ ...prev, ...d, flashcards: d?.flashcards ?? prev?.flashcards }));
+    } catch (err) { setError(safeError(err)); } finally { setAiContentLoading(false); }
+  };
+
+  const onGenerateMindmapOnly = async () => {
+    if (!selectedLessonId) return;
+    setAiContentLoading(true);
+    try {
+      const d = await generateLessonMindmapOnly(selectedLessonId, aiContentLang);
+      setAiContent((prev) => ({ ...prev, ...d, mindmap: d?.mindmap ?? prev?.mindmap }));
     } catch (err) { setError(safeError(err)); } finally { setAiContentLoading(false); }
   };
 
@@ -677,17 +697,14 @@ export default function InstructorLessonsPage() {
           {/* ── Flashcards & Mind Map (hidden until selected) ── */}
           {(instructorSection === 'flashcards' || instructorSection === 'mindmap') && selectedLessonId ? (
             <article className="rounded-3xl border border-slate-200 bg-slate-50 p-5 space-y-4">
-              {/* Header */}
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xl">🃏</span>
-                  <h4 className="font-black text-slate-900">{isArabic ? 'البطاقات التعليمية والخريطة الذهنية' : 'Flashcards & Mind Map'}</h4>
+              {/* Shared: language switcher + publish status */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
                   {aiContent ? (
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${aiContent.published ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                       {aiContent.published ? (isArabic ? '● منشور' : '● Published') : (isArabic ? '● مسودة' : '● Draft')}
                     </span>
                   ) : null}
-                  {/* Language switcher */}
                   <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white text-[11px] font-bold">
                     {['ar', 'en'].map((l) => (
                       <button key={l} type="button" onClick={() => setAiContentLang(l)}
@@ -697,35 +714,46 @@ export default function InstructorLessonsPage() {
                     ))}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button type="button" onClick={onGenerateAiContent} disabled={aiContentLoading}
-                    className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
-                    {aiContentLoading ? (isArabic ? 'جاري التوليد...' : 'Generating...') : (aiContent ? (isArabic ? '🔄 إعادة توليد' : '🔄 Regenerate') : (isArabic ? '✨ توليد بالذكاء الاصطناعي' : '✨ Generate with AI'))}
-                  </button>
-                  {aiContent?.flashcards?.length ? (
-                    aiContent.published ? (
-                      <button type="button" onClick={onUnpublishAiContent}
-                        className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-100">
-                        {isArabic ? 'إلغاء النشر' : 'Unpublish'}
-                      </button>
-                    ) : (
-                      <button type="button" onClick={onPublishAiContent}
-                        className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100">
-                        {isArabic ? 'نشر للطلاب' : 'Publish for Students'}
-                      </button>
-                    )
-                  ) : null}
-                </div>
+                {(aiContent?.flashcards?.length || aiContent?.mindmap) ? (
+                  aiContent.published ? (
+                    <button type="button" onClick={onUnpublishAiContent}
+                      className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-100">
+                      {isArabic ? 'إلغاء النشر' : 'Unpublish'}
+                    </button>
+                  ) : (
+                    <button type="button" onClick={onPublishAiContent}
+                      className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100">
+                      {isArabic ? 'نشر للطلاب' : 'Publish for Students'}
+                    </button>
+                  )
+                ) : null}
               </div>
 
-              {!aiContent || !aiContent.flashcards?.length ? (
-                <p className="rounded-2xl bg-white px-4 py-6 text-center text-sm text-slate-500">
-                  {isArabic ? 'لا يوجد محتوى بعد. اضغط "توليد بالذكاء الاصطناعي" لإنشاء البطاقات التعليمية والخريطة الذهنية.' : 'No content yet. Click "Generate with AI" to create flashcards and a mind map.'}
-                </p>
-              ) : (
+              {/* ── Flashcards list (shown only in flashcards section) ── */}
+              {instructorSection === 'flashcards' && (
                 <>
-                  {/* ── Flashcards list (shown only in flashcards section) ── */}
-                  {instructorSection === 'flashcards' && <div>
+                  {/* Flashcards generate button */}
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-black text-slate-900">{isArabic ? `🃏 البطاقات التعليمية${aiContent?.flashcards?.length ? ` (${aiContent.flashcards.length})` : ''}` : `🃏 Flashcards${aiContent?.flashcards?.length ? ` (${aiContent.flashcards.length})` : ''}`}</h4>
+                    <div className="flex gap-2">
+                      {aiContent?.flashcards?.length ? (
+                        <button type="button" onClick={onAddCard}
+                          className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-100">
+                          {isArabic ? '+ إضافة' : '+ Add'}
+                        </button>
+                      ) : null}
+                      <button type="button" onClick={onGenerateFlashcardsOnly} disabled={aiContentLoading}
+                        className="rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
+                        {aiContentLoading ? '...' : (aiContent?.flashcards?.length ? (isArabic ? '🔄 إعادة توليد' : '🔄 Regenerate') : (isArabic ? '✨ توليد' : '✨ Generate'))}
+                      </button>
+                    </div>
+                  </div>
+                  {!aiContent?.flashcards?.length ? (
+                    <p className="rounded-2xl bg-white px-4 py-6 text-center text-sm text-slate-500">
+                      {isArabic ? 'لا توجد بطاقات بعد. اضغط "توليد" لإنشائها.' : 'No flashcards yet. Click "Generate" to create them.'}
+                    </p>
+                  ) : (
+                  <div>
                     <div className="mb-2 flex items-center justify-between">
                       <p className="text-sm font-bold text-slate-700">{isArabic ? `البطاقات التعليمية (${aiContent.flashcards.length})` : `Flashcards (${aiContent.flashcards.length})`}</p>
                       <button type="button" onClick={onAddCard}
@@ -771,34 +799,50 @@ export default function InstructorLessonsPage() {
                         </div>
                       ))}
                     </div>
-                  </div>}
+                  </div>
+                  )}
+                </>
+              )}
 
-                  {/* ── Mind Map preview (shown only in mindmap section) ── */}
-                  {instructorSection === 'mindmap' && aiContent.mindmap ? (
-                    <div>
-                      <div className="mb-2 flex items-center justify-between">
-                        <p className="text-sm font-bold text-slate-700">{isArabic ? 'الخريطة الذهنية' : 'Mind Map'}</p>
+              {/* ── Mind Map section ── */}
+              {instructorSection === 'mindmap' && (
+                <>
+                  {/* Mindmap generate button */}
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-black text-slate-900">{isArabic ? '🗺️ الخريطة الذهنية' : '🗺️ Mind Map'}</h4>
+                    <div className="flex gap-2">
+                      {aiContent?.mindmap ? (
                         <button type="button" onClick={() => { setMindmapDraft(JSON.parse(JSON.stringify(aiContent.mindmap))); setShowMindmapEditor(true); }}
                           className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50">
                           {isArabic ? 'تعديل' : 'Edit'}
                         </button>
-                      </div>
-                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm space-y-1">
-                        <p className="font-bold text-slate-900">{aiContent.mindmap.title}</p>
-                        {(aiContent.mindmap.branches || []).slice(0, 4).map((b, i) => (
-                          <div key={i}>
-                            <p className="text-xs font-semibold text-indigo-600">▸ {b.label}</p>
-                            {(b.children || []).slice(0, 3).map((c, j) => (
-                              <p key={j} className="text-xs text-slate-500 ml-3">• {c}</p>
-                            ))}
-                          </div>
-                        ))}
-                        {(aiContent.mindmap.branches || []).length > 4 ? (
-                          <p className="text-xs text-slate-400">+{aiContent.mindmap.branches.length - 4} {isArabic ? 'أفرع أخرى' : 'more branches'}</p>
-                        ) : null}
-                      </div>
+                      ) : null}
+                      <button type="button" onClick={onGenerateMindmapOnly} disabled={aiContentLoading}
+                        className="rounded-xl bg-purple-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-purple-700 disabled:opacity-50">
+                        {aiContentLoading ? '...' : (aiContent?.mindmap ? (isArabic ? '🔄 إعادة توليد' : '🔄 Regenerate') : (isArabic ? '✨ توليد' : '✨ Generate'))}
+                      </button>
                     </div>
-                  ) : null}
+                  </div>
+                  {!aiContent?.mindmap ? (
+                    <p className="rounded-2xl bg-white px-4 py-6 text-center text-sm text-slate-500">
+                      {isArabic ? 'لا توجد خريطة بعد. اضغط "توليد" لإنشائها.' : 'No mind map yet. Click "Generate" to create it.'}
+                    </p>
+                  ) : (
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm space-y-1">
+                      <p className="font-bold text-slate-900">{aiContent.mindmap.title}</p>
+                      {(aiContent.mindmap.branches || []).slice(0, 5).map((b, i) => (
+                        <div key={i}>
+                          <p className="text-xs font-semibold text-purple-600">▸ {b.label}</p>
+                          {(b.children || []).slice(0, 3).map((c, j) => (
+                            <p key={j} className="text-xs text-slate-500 ml-3">• {c}</p>
+                          ))}
+                        </div>
+                      ))}
+                      {(aiContent.mindmap.branches || []).length > 5 ? (
+                        <p className="text-xs text-slate-400">+{aiContent.mindmap.branches.length - 5} {isArabic ? 'أفرع أخرى' : 'more branches'}</p>
+                      ) : null}
+                    </div>
+                  )}
                 </>
               )}
 

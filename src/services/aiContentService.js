@@ -471,8 +471,9 @@ export const getLessonAiContent = async (lessonId, lang = 'ar', role = 'STUDENT'
     return { flashcards: null, mindmap: null, status: 'draft', published: false };
   }
 
-  const flashcards = readForLang(cached.flashcards, lang);
-  const mindmap    = readForLang(cached.mindmap,    lang);
+  const other = lang === 'ar' ? 'en' : 'ar';
+  const flashcards = readForLang(cached.flashcards, lang) ?? readForLang(cached.flashcards, other);
+  const mindmap    = readForLang(cached.mindmap,    lang) ?? readForLang(cached.mindmap,    other);
 
   if (!flashcards && !mindmap) return null;
 
