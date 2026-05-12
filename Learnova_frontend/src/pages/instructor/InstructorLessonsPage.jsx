@@ -18,12 +18,20 @@ import {
   generateLessonQuizQuestions,
   addLessonQuizQuestion,
   deleteLessonQuizQuestion,
+  fetchLessonAiContentInstructor,
+  generateLessonAiContentInstructor,
+  updateLessonFlashcards,
+  updateLessonMindmap,
+  publishLessonAiContent,
+  unpublishLessonAiContent,
+  updateInstructorLessonMeta,
+  suggestLessonMetadata,
 } from "../../services/instructorService";
 import EducationLoading from "../../components/ui/EducationLoading";
 import Modal from "../../components/ui/Modal";
 import { useLanguage } from "../../utils/i18n";
 import { notifyError } from "../../lib/notify";
-import LessonForm from "../../components/forms/LessonForm";
+import LessonCreationWizard from "../../components/forms/LessonCreationWizard";
 import { useSelector } from "react-redux";
 import { ORG_TYPES } from "../../utils/constants";
 import { formatGradeName } from "../../utils/gradeHelpers";
@@ -65,6 +73,16 @@ export default function InstructorLessonsPage() {
   const [generateForm, setGenerateForm] = useState({ numQuestions: 10, difficulty: 'MEDIUM', notes: '', lang: '' });
   const [addQuestionForm, setAddQuestionForm] = useState({ question: '', options: ['', '', '', ''], correctAnswer: 0, explanation: '' });
   const [expandedQuestionId, setExpandedQuestionId] = useState(null);
+
+  // ── AI Content state (flashcards & mindmap) ─────────────────────────────────
+  const [aiContent, setAiContent] = useState(null);
+  const [aiContentLoading, setAiContentLoading] = useState(false);
+  const [aiContentLang, setAiContentLang] = useState(isArabic ? 'ar' : 'en');
+  const [instructorSection, setInstructorSection] = useState(null);
+  const [editingCardIdx, setEditingCardIdx] = useState(null);
+  const [editCardDraft, setEditCardDraft] = useState({ question: '', answer: '' });
+  const [showMindmapEditor, setShowMindmapEditor] = useState(false);
+  const [mindmapDraft, setMindmapDraft] = useState(null);
 
   const selectedLesson = useMemo(
     () => lessons.find((lesson) => String(lesson.id) === String(selectedLessonId)) || null,
@@ -140,7 +158,40 @@ export default function InstructorLessonsPage() {
     return () => { cancelled = true; };
   }, [selectedLessonId]);
 
+  useEffect(() => {
+    setInstructorSection(null); // Reset section nav when lesson changes
+    setAiContent(null); // Always clear stale content when lesson changes
+    if (!selectedLessonId) return;
+    let cancelled = false;
+    fetchLessonAiContentInstructor(selectedLessonId, aiContentLang)
+      .then((d) => { if (!cancelled) setAiContent(d ?? null); })
+      .catch(() => { if (!cancelled) setAiContent(null); });
+    return () => { cancelled = true; };
+  }, [selectedLessonId, aiContentLang]);
+
   useEffect(() => { if (error) notifyError(error); }, [error]);
+
+  // Step 1 of wizard: upload video → creates lesson with temp title
+  const onWizardUpload = async (subjectId, videoFile, onProgress) => {
+    const tempTitle = videoFile.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ') || 'Untitled Lesson';
+    const lesson = await createInstructorLesson({ subjectId, title: tempTitle, videoFile, onProgress });
+    if (lesson?.id) setSelectedLessonId(String(lesson.id));
+    await refreshLessons();
+    return lesson;
+  };
+
+  // Step 2 of wizard: save title + description, start RAG polling
+  const onWizardSave = async (subjectId, lessonId, { title, description }) => {
+    await updateInstructorLessonMeta(subjectId, lessonId, { title, description });
+    await refreshLessons();
+    setLessonModalOpen(false);
+    if (ragPollRef.current) { clearInterval(ragPollRef.current); ragPollRef.current = null; }
+    setRagStatus({ status: 'queued', estimatedTime: isArabic ? 'الفيديو يحتاج 3-8 دقائق' : 'Video takes 3–8 min' });
+    setTimeout(() => startRagPolling(lessonId, 0, true), 3000);
+  };
+
+  const onWizardSuggest = async (subjectId, filename, lang) =>
+    suggestLessonMetadata(subjectId, filename, lang).catch(() => null);
 
   const onCreateLesson = async (formData) => {
     setSaving(true);
@@ -274,6 +325,67 @@ export default function InstructorLessonsPage() {
     }
   };
 
+  // ── AI Content handlers ──────────────────────────────────────────────────────
+  const onGenerateAiContent = async () => {
+    if (!selectedLessonId) return;
+    setAiContentLoading(true);
+    try {
+      const d = await generateLessonAiContentInstructor(selectedLessonId, aiContentLang);
+      setAiContent(d);
+    } catch (err) { setError(safeError(err)); } finally { setAiContentLoading(false); }
+  };
+
+  const onSaveCard = async (idx) => {
+    const cards = [...(aiContent?.flashcards || [])];
+    cards[idx] = editCardDraft;
+    try {
+      const d = await updateLessonFlashcards(selectedLessonId, cards, aiContentLang);
+      setAiContent((prev) => ({ ...prev, ...d }));
+      setEditingCardIdx(null);
+    } catch (err) { setError(safeError(err)); }
+  };
+
+  const onDeleteCard = async (idx) => {
+    const cards = (aiContent?.flashcards || []).filter((_, i) => i !== idx);
+    try {
+      const d = await updateLessonFlashcards(selectedLessonId, cards, aiContentLang);
+      setAiContent((prev) => ({ ...prev, ...d }));
+    } catch (err) { setError(safeError(err)); }
+  };
+
+  const onAddCard = async () => {
+    const blank = { question: isArabic ? 'سؤال جديد' : 'New question', answer: isArabic ? 'الإجابة' : 'Answer' };
+    const cards = [...(aiContent?.flashcards || []), blank];
+    try {
+      const d = await updateLessonFlashcards(selectedLessonId, cards, aiContentLang);
+      setAiContent((prev) => ({ ...prev, ...d }));
+      setEditingCardIdx(cards.length - 1);
+      setEditCardDraft(blank);
+    } catch (err) { setError(safeError(err)); }
+  };
+
+  const onSaveMindmap = async () => {
+    try {
+      const d = await updateLessonMindmap(selectedLessonId, mindmapDraft, aiContentLang);
+      setAiContent((prev) => ({ ...prev, ...d }));
+      setShowMindmapEditor(false);
+    } catch (err) { setError(safeError(err)); }
+  };
+
+  const onPublishAiContent = async () => {
+    try {
+      const d = await publishLessonAiContent(selectedLessonId);
+      setAiContent((prev) => ({ ...prev, ...d, published: true }));
+    } catch (err) { setError(safeError(err)); }
+  };
+
+  const onUnpublishAiContent = async () => {
+    try {
+      const d = await unpublishLessonAiContent(selectedLessonId);
+      setAiContent((prev) => ({ ...prev, ...d, published: false }));
+    } catch (err) { setError(safeError(err)); }
+  };
+
   const onReprocessRag = async () => {
     if (!selectedLessonId) return;
     setRagStatus({ status: 'queued', estimatedTime: isArabic ? 'يرجى الانتظار' : 'Please wait' });
@@ -377,14 +489,19 @@ export default function InstructorLessonsPage() {
         />
       ) : null}
 
-      {/* Add Lesson Modal */}
+      {/* Add Lesson Wizard Modal */}
       <Modal
         open={lessonModalOpen}
         onClose={() => setLessonModalOpen(false)}
         title={isArabic ? "إضافة درس جديد" : "Add New Lesson"}
-        maxWidth="max-w-xl"
+        maxWidth="max-w-lg"
       >
-        <LessonForm subjects={subjects} initialValues={form} onSubmit={onCreateLesson} saving={saving} />
+        <LessonCreationWizard
+          subjects={subjects}
+          onUpload={onWizardUpload}
+          onSave={onWizardSave}
+          onSuggest={onWizardSuggest}
+        />
       </Modal>
 
       <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
@@ -434,11 +551,38 @@ export default function InstructorLessonsPage() {
         </section>
 
         <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div>
-            <h3 className="text-xl font-black text-slate-900">{selectedLesson ? (selectedLesson.title || selectedLesson.name) : (isArabic ? "اختر درسًا" : "Select a lesson")}</h3>
-            <p className="mt-1 text-sm text-slate-600">{selectedLesson?.subject?.name || "-"}</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-xl font-black text-slate-900">{selectedLesson ? (selectedLesson.title || selectedLesson.name) : (isArabic ? "اختر درسًا" : "Select a lesson")}</h3>
+              <p className="mt-1 text-sm text-slate-600">{selectedLesson?.subject?.name || "-"}</p>
+            </div>
           </div>
 
+          {/* ── Section navigation ── */}
+          {selectedLessonId ? (
+            <div className="flex flex-wrap gap-2 border-b border-slate-100 pb-3">
+              {[
+                { id: 'attachments', label: isArabic ? 'المرفقات' : 'Attachments',  badge: attachments.length || null },
+                { id: 'comments',    label: isArabic ? 'التعليقات' : 'Comments',    badge: comments.length || null },
+                { id: 'flashcards',  label: isArabic ? 'البطاقات' : 'Flashcards',   badge: aiContent?.flashcards?.length || null },
+                { id: 'mindmap',     label: isArabic ? 'الخريطة' : 'Mind Map',      badge: null },
+                { id: 'quiz',        label: isArabic ? 'الاختبار' : 'Quiz',          badge: quiz?.questionCount || null },
+              ].map(({ id, label, badge }) => {
+                const active = instructorSection === id;
+                return (
+                  <button key={id} type="button"
+                    onClick={() => setInstructorSection(active ? null : id)}
+                    className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition ${active ? 'bg-slate-900 text-white shadow' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                    {label}
+                    {badge ? <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ${active ? 'bg-white/20 text-white' : 'bg-white text-slate-700'}`}>{badge}</span> : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {/* ── Attachments (hidden until selected) ── */}
+          {instructorSection === 'attachments' && (
           <div className="grid gap-4 lg:grid-cols-2">
             <article className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-center justify-between gap-3">
@@ -502,7 +646,12 @@ export default function InstructorLessonsPage() {
                 ))}
               </div>
             </article>
+          </div>
+          )}
 
+          {/* ── Comments (hidden until selected) ── */}
+          {instructorSection === 'comments' && (
+          <div>
             <article className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-center justify-between gap-3">
                 <h4 className="font-black text-slate-900">{isArabic ? "تعليقات الطلاب" : "Student comments"}</h4>
@@ -523,9 +672,177 @@ export default function InstructorLessonsPage() {
               </div>
             </article>
           </div>
+          )}
 
-          {/* ── Quiz Management Panel ── */}
-          {selectedLessonId ? (
+          {/* ── Flashcards & Mind Map (hidden until selected) ── */}
+          {(instructorSection === 'flashcards' || instructorSection === 'mindmap') && selectedLessonId ? (
+            <article className="rounded-3xl border border-slate-200 bg-slate-50 p-5 space-y-4">
+              {/* Header */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xl">🃏</span>
+                  <h4 className="font-black text-slate-900">{isArabic ? 'البطاقات التعليمية والخريطة الذهنية' : 'Flashcards & Mind Map'}</h4>
+                  {aiContent ? (
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${aiContent.published ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {aiContent.published ? (isArabic ? '● منشور' : '● Published') : (isArabic ? '● مسودة' : '● Draft')}
+                    </span>
+                  ) : null}
+                  {/* Language switcher */}
+                  <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white text-[11px] font-bold">
+                    {['ar', 'en'].map((l) => (
+                      <button key={l} type="button" onClick={() => setAiContentLang(l)}
+                        className={`px-3 py-1 transition ${aiContentLang === l ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+                        {l === 'ar' ? 'عربي' : 'EN'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button type="button" onClick={onGenerateAiContent} disabled={aiContentLoading}
+                    className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
+                    {aiContentLoading ? (isArabic ? 'جاري التوليد...' : 'Generating...') : (aiContent ? (isArabic ? '🔄 إعادة توليد' : '🔄 Regenerate') : (isArabic ? '✨ توليد بالذكاء الاصطناعي' : '✨ Generate with AI'))}
+                  </button>
+                  {aiContent?.flashcards?.length ? (
+                    aiContent.published ? (
+                      <button type="button" onClick={onUnpublishAiContent}
+                        className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-100">
+                        {isArabic ? 'إلغاء النشر' : 'Unpublish'}
+                      </button>
+                    ) : (
+                      <button type="button" onClick={onPublishAiContent}
+                        className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100">
+                        {isArabic ? 'نشر للطلاب' : 'Publish for Students'}
+                      </button>
+                    )
+                  ) : null}
+                </div>
+              </div>
+
+              {!aiContent || !aiContent.flashcards?.length ? (
+                <p className="rounded-2xl bg-white px-4 py-6 text-center text-sm text-slate-500">
+                  {isArabic ? 'لا يوجد محتوى بعد. اضغط "توليد بالذكاء الاصطناعي" لإنشاء البطاقات التعليمية والخريطة الذهنية.' : 'No content yet. Click "Generate with AI" to create flashcards and a mind map.'}
+                </p>
+              ) : (
+                <>
+                  {/* ── Flashcards list (shown only in flashcards section) ── */}
+                  {instructorSection === 'flashcards' && <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-sm font-bold text-slate-700">{isArabic ? `البطاقات التعليمية (${aiContent.flashcards.length})` : `Flashcards (${aiContent.flashcards.length})`}</p>
+                      <button type="button" onClick={onAddCard}
+                        className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-100">
+                        {isArabic ? '+ إضافة بطاقة' : '+ Add Card'}
+                      </button>
+                    </div>
+                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                      {aiContent.flashcards.map((card, idx) => (
+                        <div key={idx} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                          {editingCardIdx === idx ? (
+                            <div className="space-y-2">
+                              <textarea value={editCardDraft.question} onChange={(e) => setEditCardDraft((p) => ({ ...p, question: e.target.value }))}
+                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400" rows={2}
+                                placeholder={isArabic ? 'السؤال' : 'Question'} />
+                              <textarea value={editCardDraft.answer} onChange={(e) => setEditCardDraft((p) => ({ ...p, answer: e.target.value }))}
+                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400" rows={2}
+                                placeholder={isArabic ? 'الإجابة' : 'Answer'} />
+                              <div className="flex gap-2">
+                                <button type="button" onClick={() => onSaveCard(idx)}
+                                  className="rounded-lg bg-indigo-600 px-3 py-1 text-xs font-bold text-white hover:bg-indigo-700">{isArabic ? 'حفظ' : 'Save'}</button>
+                                <button type="button" onClick={() => setEditingCardIdx(null)}
+                                  className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50">{isArabic ? 'إلغاء' : 'Cancel'}</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-start gap-3">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-indigo-600 mb-0.5">{isArabic ? 'س:' : 'Q:'}</p>
+                                <p className="text-sm text-slate-800">{card.question}</p>
+                                <p className="mt-1 text-xs font-bold text-emerald-600 mb-0.5">{isArabic ? 'ج:' : 'A:'}</p>
+                                <p className="text-sm text-slate-600">{card.answer}</p>
+                              </div>
+                              <div className="flex shrink-0 gap-1">
+                                <button type="button"
+                                  onClick={() => { setEditingCardIdx(idx); setEditCardDraft({ question: card.question, answer: card.answer }); }}
+                                  className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50">✎</button>
+                                <button type="button" onClick={() => onDeleteCard(idx)}
+                                  className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50">✕</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>}
+
+                  {/* ── Mind Map preview (shown only in mindmap section) ── */}
+                  {instructorSection === 'mindmap' && aiContent.mindmap ? (
+                    <div>
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-sm font-bold text-slate-700">{isArabic ? 'الخريطة الذهنية' : 'Mind Map'}</p>
+                        <button type="button" onClick={() => { setMindmapDraft(JSON.parse(JSON.stringify(aiContent.mindmap))); setShowMindmapEditor(true); }}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                          {isArabic ? 'تعديل' : 'Edit'}
+                        </button>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm space-y-1">
+                        <p className="font-bold text-slate-900">{aiContent.mindmap.title}</p>
+                        {(aiContent.mindmap.branches || []).slice(0, 4).map((b, i) => (
+                          <div key={i}>
+                            <p className="text-xs font-semibold text-indigo-600">▸ {b.label}</p>
+                            {(b.children || []).slice(0, 3).map((c, j) => (
+                              <p key={j} className="text-xs text-slate-500 ml-3">• {c}</p>
+                            ))}
+                          </div>
+                        ))}
+                        {(aiContent.mindmap.branches || []).length > 4 ? (
+                          <p className="text-xs text-slate-400">+{aiContent.mindmap.branches.length - 4} {isArabic ? 'أفرع أخرى' : 'more branches'}</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              )}
+
+              {/* Mind Map Editor Modal */}
+              {showMindmapEditor && mindmapDraft ? (
+                <Modal open onClose={() => setShowMindmapEditor(false)} title={isArabic ? 'تعديل الخريطة الذهنية' : 'Edit Mind Map'}>
+                  <div className="space-y-3 p-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">{isArabic ? 'العنوان' : 'Title'}</label>
+                      <input value={mindmapDraft.title} onChange={(e) => setMindmapDraft((p) => ({ ...p, title: e.target.value }))}
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400" />
+                    </div>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {(mindmapDraft.branches || []).map((branch, bi) => (
+                        <div key={bi} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                          <input value={branch.label}
+                            onChange={(e) => setMindmapDraft((p) => { const b = [...p.branches]; b[bi] = { ...b[bi], label: e.target.value }; return { ...p, branches: b }; })}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-bold outline-none focus:border-indigo-400"
+                            placeholder={isArabic ? 'اسم الفرع' : 'Branch label'} />
+                          <textarea value={(branch.children || []).join('\n')}
+                            onChange={(e) => setMindmapDraft((p) => { const b = [...p.branches]; b[bi] = { ...b[bi], children: e.target.value.split('\n').filter(Boolean) }; return { ...p, branches: b }; })}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-indigo-400" rows={3}
+                            placeholder={isArabic ? 'نقطة لكل سطر' : 'One point per line'} />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 justify-end pt-2">
+                      <button type="button" onClick={() => setShowMindmapEditor(false)}
+                        className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">
+                        {isArabic ? 'إلغاء' : 'Cancel'}
+                      </button>
+                      <button type="button" onClick={onSaveMindmap}
+                        className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700">
+                        {isArabic ? 'حفظ' : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+                </Modal>
+              ) : null}
+            </article>
+          ) : null}
+
+          {/* ── Quiz Management Panel (hidden until selected) ── */}
+          {instructorSection === 'quiz' && selectedLessonId ? (
             <article className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-2 flex-wrap">

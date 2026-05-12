@@ -13,6 +13,10 @@ import {
 } from '../services/lessonService.js';
 import { createLessonAttachment } from '../services/lessonAttachmentService.js';
 import AppError from '../utils/appError.js';
+import prisma from '../utils/prisma.js';
+
+const GROQ_API_URL = process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_MODEL   = process.env.GROQ_MODEL   || 'llama-3.3-70b-versatile';
 
 const normalizeLessonPayload = (body = {}) => ({
 	title: body.title,
@@ -205,6 +209,57 @@ export const deleteLessonController = async (req, res, next) => {
 		return res.status(200).json({
 			message: 'Lesson deleted successfully',
 			data: deleted,
+		});
+	} catch (error) {
+		return next(error);
+	}
+};
+
+export const suggestLessonMetadataController = async (req, res, next) => {
+	try {
+		const subjectId = parseSubjectId(req);
+		const { filename = '', lang = 'ar' } = req.body;
+
+		const subject = await prisma.subject.findUnique({
+			where: { id: subjectId },
+			select: { name: true, course: { select: { Name: true } } },
+		});
+		const subjectName = subject?.name || subject?.Name || '';
+		const courseName  = subject?.course?.Name || '';
+
+		const cleanName = filename.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ').trim();
+
+		const apiKey = process.env.GROQ_API_KEY;
+		if (!apiKey) throw new AppError('GROQ_API_KEY is not configured', 500);
+
+		const prompt = lang === 'ar'
+			? `أنت مساعد تعليمي. اقترح عنوانًا واضحًا ووصفًا مختصرًا لدرس تعليمي.\nالمادة: "${subjectName}"\nالكورس: "${courseName}"\nاسم الملف: "${cleanName}"\nأعد JSON فقط بهذا الشكل: {"title": "عنوان الدرس", "description": "وصف مختصر في جملة أو جملتين"}`
+			: `You are an educational assistant. Suggest a clear title and brief description for a lesson.\nSubject: "${subjectName}"\nCourse: "${courseName}"\nFilename: "${cleanName}"\nReturn JSON only: {"title": "Lesson title", "description": "Brief 1-2 sentence description"}`;
+
+		const response = await fetch(GROQ_API_URL, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+			body: JSON.stringify({
+				model: GROQ_MODEL,
+				temperature: 0.4,
+				max_tokens: 200,
+				messages: [{ role: 'user', content: prompt }],
+			}),
+		});
+
+		const body = await response.json();
+		const raw = body?.choices?.[0]?.message?.content?.trim() || '{}';
+		const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+		const match = cleaned.match(/\{[\s\S]*\}/);
+		let parsed = {};
+		try { parsed = match ? JSON.parse(match[0]) : {}; } catch { /* ignore */ }
+
+		return res.status(200).json({
+			success: true,
+			status: 200,
+			data: { title: String(parsed.title || ''), description: String(parsed.description || '') },
+			error: null,
+			timestamp: new Date().toISOString(),
 		});
 	} catch (error) {
 		return next(error);

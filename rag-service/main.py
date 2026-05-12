@@ -359,13 +359,13 @@ def retrieve(request: RetrieveRequest) -> RetrieveResponse:
         raise HTTPException(status_code=400, detail="query is required")
 
     query_vector = embed_text(query)
-    # Over-fetch so the cross-encoder has enough candidates to pick from
-    candidates = retrieve_lesson_chunks(
+    # Use vector similarity directly — reranker takes 30-40s on CPU and always
+    # exceeded the Node.js client timeout, causing empty results and 422 errors.
+    matches = retrieve_lesson_chunks(
         query_vector=query_vector,
         lesson_id=request.lessonId,
-        limit=request.limit * 3,
+        limit=request.limit,
     )
-    matches = rerank(query, candidates, top_k=request.limit)
     return RetrieveResponse(matches=matches)
 
 

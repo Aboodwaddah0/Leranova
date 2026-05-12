@@ -414,9 +414,34 @@ export const callGroq = async (prompt, systemPrompt) => {
 
 const extractJSON = (raw) => {
   const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-  const match = cleaned.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('No JSON found in Groq response');
-  return JSON.parse(match[0]);
+
+  // Try direct parse first
+  try { return JSON.parse(cleaned); } catch { /* fall through */ }
+
+  // Find JSON by tracking brace depth — handles trailing text after the closing }
+  const start = cleaned.indexOf('{');
+  if (start === -1) throw new Error('No JSON object found in Groq response');
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < cleaned.length; i += 1) {
+    const ch = cleaned[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') depth += 1;
+    else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        const candidate = cleaned.slice(start, i + 1);
+        try { return JSON.parse(candidate); } catch (err) {
+          throw new Error(`JSON parse failed: ${err.message}`);
+        }
+      }
+    }
+  }
+  throw new Error('Unterminated JSON object in Groq response');
 };
 
 const normaliseFlashcards = (parsed) =>
@@ -437,17 +462,29 @@ const normaliseMindmap = (parsed, fallbackTitle = '') => ({
 
 /* ─── Public API ────────────────────────────────────────────────────────── */
 
-export const getLessonAiContent = async (lessonId, lang = 'ar') => {
+export const getLessonAiContent = async (lessonId, lang = 'ar', role = 'STUDENT') => {
   const cached = await prisma.lesson_ai_content.findUnique({ where: { lessonId: Number(lessonId) } });
   if (!cached) return null;
+
+  // Students only see published content
+  if (role === 'STUDENT' && cached.status !== 'published') {
+    return { flashcards: null, mindmap: null, status: 'draft', published: false };
+  }
 
   const flashcards = readForLang(cached.flashcards, lang);
   const mindmap    = readForLang(cached.mindmap,    lang);
 
-  // If neither exists for this language, return null so the caller generates fresh
   if (!flashcards && !mindmap) return null;
 
-  return { flashcards: flashcards ?? [], mindmap: mindmap ?? null, cached: true, generatedAt: cached.updatedAt };
+  return {
+    flashcards: flashcards ?? [],
+    mindmap: mindmap ?? null,
+    status: cached.status,
+    published: cached.status === 'published',
+    publishedAt: cached.publishedAt,
+    cached: true,
+    generatedAt: cached.updatedAt,
+  };
 };
 
 export const generateLessonAiContent = async (lessonId, lang = 'ar') => {
@@ -473,6 +510,8 @@ export const generateLessonAiContent = async (lessonId, lang = 'ar') => {
   return {
     flashcards: readForLang(saved.flashcards, lang),
     mindmap:    readForLang(saved.mindmap,    lang),
+    status: saved.status,
+    published: saved.status === 'published',
     cached: false,
     generatedAt: saved.updatedAt,
   };
@@ -525,7 +564,61 @@ export const regenerateMindmapOnly = async (lessonId, lang = 'ar') => {
   return {
     flashcards: readForLang(saved.flashcards, lang),
     mindmap:    readForLang(saved.mindmap,    lang),
+    status: saved.status,
+    published: saved.status === 'published',
     cached: false,
     generatedAt: saved.updatedAt,
   };
+};
+
+export const publishAiContent = async (lessonId) => {
+  const saved = await prisma.lesson_ai_content.update({
+    where: { lessonId: Number(lessonId) },
+    data: { status: 'published', publishedAt: new Date() },
+  });
+  return { status: saved.status, publishedAt: saved.publishedAt };
+};
+
+export const unpublishAiContent = async (lessonId) => {
+  const saved = await prisma.lesson_ai_content.update({
+    where: { lessonId: Number(lessonId) },
+    data: { status: 'draft', publishedAt: null },
+  });
+  return { status: saved.status };
+};
+
+export const updateAiFlashcards = async (lessonId, lang = 'ar', flashcards) => {
+  if (!Array.isArray(flashcards)) throw new AppError('flashcards must be an array', 400);
+  const validated = flashcards
+    .map((fc) => ({ question: String(fc.question || '').trim(), answer: String(fc.answer || '').trim() }))
+    .filter((fc) => fc.question && fc.answer);
+  if (!validated.length) throw new AppError('No valid flashcards provided', 400);
+
+  const existing = await prisma.lesson_ai_content.findUnique({ where: { lessonId: Number(lessonId) } });
+  if (!existing) throw new AppError('No AI content found for this lesson. Generate first.', 404);
+
+  const newFlashcards = writeForLang(existing.flashcards, validated, lang);
+  const saved = await prisma.lesson_ai_content.update({
+    where: { lessonId: Number(lessonId) },
+    data: { flashcards: newFlashcards },
+  });
+  return { flashcards: readForLang(saved.flashcards, lang), status: saved.status };
+};
+
+export const updateAiMindmap = async (lessonId, lang = 'ar', mindmap) => {
+  if (!mindmap?.title || !Array.isArray(mindmap?.branches)) {
+    throw new AppError('mindmap must have title and branches array', 400);
+  }
+  const validated = normaliseMindmap({ mindmap });
+  if (!validated.branches.length) throw new AppError('Mind map must have at least one branch', 400);
+
+  const existing = await prisma.lesson_ai_content.findUnique({ where: { lessonId: Number(lessonId) } });
+  if (!existing) throw new AppError('No AI content found for this lesson. Generate first.', 404);
+
+  const newMindmap = writeForLang(existing.mindmap, validated, lang);
+  const saved = await prisma.lesson_ai_content.update({
+    where: { lessonId: Number(lessonId) },
+    data: { mindmap: newMindmap },
+  });
+  return { mindmap: readForLang(saved.mindmap, lang), status: saved.status };
 };
