@@ -63,22 +63,29 @@ export const deleteInstructorSubject = async (courseId, subjectId) => {
   return data?.data || null;
 };
 
-export const createInstructorLesson = async ({ subjectId, title, description, videoFile }) => {
+export const createInstructorLesson = async ({ subjectId, title, description, videoFile, onProgress }) => {
   const formData = new FormData();
   formData.append("title", title);
-  if (description) {
-    formData.append("description", description);
-  }
-  if (videoFile) {
-    formData.append("video", videoFile);
-  }
+  if (description) formData.append("description", description);
+  if (videoFile) formData.append("video", videoFile);
 
   const { data } = await api.post(`/subjects/${subjectId}/lessons`, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
+    headers: { "Content-Type": "multipart/form-data" },
+    onUploadProgress: onProgress
+      ? (e) => onProgress(Math.round((e.loaded * 100) / (e.total || 1)))
+      : undefined,
   });
 
+  return data?.data || null;
+};
+
+export const updateInstructorLessonMeta = async (subjectId, lessonId, { title, description }) => {
+  const { data } = await api.patch(`/subjects/${subjectId}/lessons/${lessonId}`, { title, description });
+  return data?.data || null;
+};
+
+export const suggestLessonMetadata = async (subjectId, filename, lang = 'ar') => {
+  const { data } = await api.post(`/subjects/${subjectId}/lessons/suggest`, { filename, lang });
   return data?.data || null;
 };
 
@@ -120,6 +127,37 @@ export const reprocessLessonRag = async (lessonId) => {
 export const fetchLessonRagStatus = async (lessonId, baseline = 0) => {
   const { data } = await api.get(`/lessons/${lessonId}/attachments/rag-status?baseline=${baseline}`);
   return data;
+};
+
+// ── AI Content (flashcards & mindmap) ────────────────────────────────────────
+export const fetchLessonAiContentInstructor = async (lessonId, lang = 'ar') => {
+  const { data } = await api.get(`/lessons/${lessonId}/ai-content`, { params: { lang } });
+  return data?.data ?? null;
+};
+
+export const generateLessonAiContentInstructor = async (lessonId, lang = 'ar') => {
+  const { data } = await api.post(`/lessons/${lessonId}/ai-content/regenerate`, { lang });
+  return data?.data ?? null;
+};
+
+export const updateLessonFlashcards = async (lessonId, flashcards, lang = 'ar') => {
+  const { data } = await api.put(`/lessons/${lessonId}/ai-content/flashcards`, { flashcards, lang });
+  return data?.data ?? null;
+};
+
+export const updateLessonMindmap = async (lessonId, mindmap, lang = 'ar') => {
+  const { data } = await api.put(`/lessons/${lessonId}/ai-content/mindmap`, { mindmap, lang });
+  return data?.data ?? null;
+};
+
+export const publishLessonAiContent = async (lessonId) => {
+  const { data } = await api.patch(`/lessons/${lessonId}/ai-content/publish`);
+  return data?.data ?? null;
+};
+
+export const unpublishLessonAiContent = async (lessonId) => {
+  const { data } = await api.patch(`/lessons/${lessonId}/ai-content/unpublish`);
+  return data?.data ?? null;
 };
 
 export const fetchInstructorLessonComments = async (lessonId) => {

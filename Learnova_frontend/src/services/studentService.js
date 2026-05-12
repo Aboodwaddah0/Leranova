@@ -1059,6 +1059,12 @@ export const regenerateLessonMindmap = async (lessonId, lang = 'ar') => {
   return response?.data?.data ?? response?.data ?? null;
 };
 
+// ── RAG status ───────────────────────────────────────────────────────────────
+export const fetchLessonRagStatus = async (lessonId, baseline = 0) => {
+  const { data } = await api.get(`/lessons/${lessonId}/attachments/rag-status?baseline=${baseline}`);
+  return data;
+};
+
 // ── Quiz ─────────────────────────────────────────────────────────────────────
 export const fetchStudentLessonQuiz = async (lessonId, lang = 'ar') => {
   const response = await api.get(`/lessons/${lessonId}/quiz`, { params: { lang } });

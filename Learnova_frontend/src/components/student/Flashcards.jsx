@@ -11,7 +11,7 @@ const PALETTE = [
   { front: 'linear-gradient(135deg,#f97316 0%,#eab308 100%)', back: 'linear-gradient(135deg,#8b5cf6 0%,#6366f1 100%)' },
 ];
 
-export default function Flashcards({ cards, isArabic, onGenerate, loading, error }) {
+export default function Flashcards({ cards, isArabic, loading, error, published }) {
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
 
@@ -27,23 +27,16 @@ export default function Flashcards({ cards, isArabic, onGenerate, loading, error
   }
 
   if (error) {
-    return (
-      <div className="space-y-3">
-        <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</p>
-        <button type="button" onClick={() => onGenerate()} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
-          {isArabic ? 'حاول مجدداً' : 'Try again'}
-        </button>
-      </div>
-    );
+    return <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</p>;
   }
 
-  if (!cards || cards.length === 0) {
+  if (!published || !cards || cards.length === 0) {
     return (
       <div className="flex flex-col items-center gap-4 py-12 text-center">
-        <p className="text-sm text-slate-500">{isArabic ? 'لا توجد بطاقات بعد.' : 'No flashcards yet.'}</p>
-        <button type="button" onClick={() => onGenerate()} className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
-          {isArabic ? 'توليد البطاقات بالذكاء الاصطناعي' : 'Generate with AI'}
-        </button>
+        <span className="text-4xl">🃏</span>
+        <p className="text-sm text-slate-500">
+          {isArabic ? 'لم ينشر المدرس البطاقات التعليمية بعد.' : "Your instructor hasn't published flashcards yet."}
+        </p>
       </div>
     );
   }
@@ -60,9 +53,6 @@ export default function Flashcards({ cards, isArabic, onGenerate, loading, error
       {/* Progress row */}
       <div className="flex w-full items-center justify-between">
         <span className="text-xs font-bold text-slate-500">{index + 1} / {total}</span>
-        <button type="button" onClick={() => onGenerate()} className="text-xs text-slate-400 hover:text-slate-600">
-          🔄 {isArabic ? 'إعادة التوليد' : 'Regenerate'}
-        </button>
       </div>
 
       {/* Progress bar */}

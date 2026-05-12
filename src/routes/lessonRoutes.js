@@ -8,6 +8,7 @@ import {
 	getLessonByIdController,
 	updateLessonController,
 	deleteLessonController,
+	suggestLessonMetadataController,
 } from '../controllers/lessonController.js';
 import { ensureLessonAccess } from '../middlewares/ensureLessonAccess.js';
 
@@ -22,6 +23,7 @@ const lessonUpload = multer({
 	},
 });
 router.get('/', getLessonsController);
+router.post('/suggest', isTeacher, suggestLessonMetadataController);
 router.get('/:lessonId', ensureLessonAccess, getLessonByIdController);
 router.post('/', isTeacher, lessonUpload.single('video'), createLessonController);
 router.patch('/:lessonId', isTeacher, lessonUpload.single('video'), updateLessonController);

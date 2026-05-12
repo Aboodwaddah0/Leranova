@@ -50,7 +50,7 @@ function buildLayout(mindmap) {
   return positions;
 }
 
-export default function MindMap({ mindmap, lessonTitle, isArabic, onGenerate, loading, error }) {
+export default function MindMap({ mindmap, lessonTitle, isArabic, loading, error, published }) {
   const [pos, setPos] = useState(() => (mindmap ? buildLayout(mindmap) : {}));
   const dragRef  = useRef(null);
   const canvasEl = useRef(null);
@@ -97,22 +97,15 @@ export default function MindMap({ mindmap, lessonTitle, isArabic, onGenerate, lo
   );
 
   if (error) return (
-    <div className="space-y-3">
-      <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</p>
-      <button type="button" onClick={() => onGenerate()}
-        className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700">
-        {isArabic ? 'حاول مجدداً' : 'Try again'}
-      </button>
-    </div>
+    <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</p>
   );
 
-  if (!mindmap) return (
+  if (!published || !mindmap) return (
     <div className="flex flex-col items-center gap-4 py-12 text-center">
-      <p className="text-sm text-slate-500">{isArabic ? 'لا توجد خريطة ذهنية بعد.' : 'No mind map yet.'}</p>
-      <button type="button" onClick={() => onGenerate()}
-        className="rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-purple-700">
-        {isArabic ? 'توليد الخريطة بالذكاء الاصطناعي' : 'Generate with AI'}
-      </button>
+      <span className="text-4xl">🗺️</span>
+      <p className="text-sm text-slate-500">
+        {isArabic ? 'لم ينشر المدرس الخريطة الذهنية بعد.' : "Your instructor hasn't published the mind map yet."}
+      </p>
     </div>
   );
 
@@ -130,10 +123,6 @@ export default function MindMap({ mindmap, lessonTitle, isArabic, onGenerate, lo
           <button type="button" onClick={resetLayout}
             className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-50">
             {isArabic ? 'إعادة الترتيب' : 'Reset'}
-          </button>
-          <button type="button" onClick={() => onGenerate()}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-50">
-            🔄 {isArabic ? 'إعادة التوليد' : 'Regenerate'}
           </button>
         </div>
       </div>

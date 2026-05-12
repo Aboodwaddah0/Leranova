@@ -212,13 +212,15 @@ model quiz_attempt {
 }
 
 model lesson_ai_content {
-  id         Int      @id @default(autoincrement())
-  lessonId   Int      @unique
-  flashcards Json
-  mindmap    Json
-  createdAt  DateTime @default(now()) @db.Timestamp(0)
-  updatedAt  DateTime @default(now()) @updatedAt @db.Timestamp(0)
-  lesson     lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_ai_content_lesson")
+  id          Int       @id @default(autoincrement())
+  lessonId    Int       @unique
+  flashcards  Json
+  mindmap     Json
+  status      String    @default("draft")
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now()) @db.Timestamp(0)
+  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamp(0)
+  lesson      lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_ai_content_lesson")
 }
 
 model lesson_attachment {
