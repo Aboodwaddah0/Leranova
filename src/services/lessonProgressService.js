@@ -1,7 +1,7 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { resolveStudentContext } from './studentExperienceService.js';
-import { awardXpSafe } from './gamificationService.js';
+import { dispatch } from './gamificationDispatcher.js';
 
 const toUpper = (value) => String(value || '').trim().toUpperCase();
 const PAID_SUBSCRIPTION_FILTER = {
@@ -96,7 +96,7 @@ export const upsertLessonProgress = async ({ studentId, lessonId, isCompleted })
   });
 
   if (isCompleted && !wasCompleted) {
-    awardXpSafe(studentId, 'LESSON_COMPLETE', 'lesson', lessonId);
+    dispatch({ studentId, event: 'lesson.completed', sourceId: lessonId });
   }
 
   return {
