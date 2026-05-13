@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BarChart3, BookOpen, CalendarDays, Flame, Sparkles, TrendingUp, Zap, Trophy, Star } from 'lucide-react';
+import { ArrowRight, BarChart3, BookOpen, CalendarDays, Flame, Sparkles, TrendingUp, Zap, Trophy, Star, Medal, Target } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
 import {
   fetchMyStudentMarks,
@@ -11,6 +11,8 @@ import {
   fetchStudentProfile,
   fetchGamificationStats,
   fetchGamificationLeaderboard,
+  fetchAchievements,
+  fetchMissions,
 } from '../../services/studentService';
 import { useLanguage } from '../../utils/i18n';
 import { calculateProgressForLessons, subscribeToProgress } from '../../utils/studentProgress';
@@ -135,6 +137,8 @@ export default function StudentDashboardPage() {
   const [gamification, setGamification] = useState({ totalXp: 0, level: 1, currentStreak: 0, longestStreak: 0 });
   const [leaderboard, setLeaderboard] = useState([]);
   const [currentStudentId, setCurrentStudentId] = useState(null);
+  const [achievements, setAchievements] = useState({ unlocked: [], locked: [], latestUnlocked: null });
+  const [missions, setMissions] = useState({ daily: [], weekly: [] });
 
   useEffect(() => subscribeToProgress(() => setProgressTick((value) => value + 1)), []);
 
@@ -144,13 +148,15 @@ export default function StudentDashboardPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const [courseData, marksData, purchaseData, profileData, gamData, lbData] = await Promise.all([
+        const [courseData, marksData, purchaseData, profileData, gamData, lbData, achData, missData] = await Promise.all([
           fetchStudentCourseCatalog(),
           fetchMyStudentMarks(),
           fetchMyStudentPurchases(),
           fetchStudentProfile(),
           fetchGamificationStats(),
           fetchGamificationLeaderboard(),
+          fetchAchievements(),
+          fetchMissions(),
         ]);
 
         if (cancelled) return;
@@ -201,6 +207,8 @@ export default function StudentDashboardPage() {
         setGamification(gamData || { totalXp: 0, level: 1, currentStreak: 0, longestStreak: 0 });
         setLeaderboard(lbData?.leaderboard || []);
         setCurrentStudentId(lbData?.currentStudentId || null);
+        setAchievements(achData || { unlocked: [], locked: [], latestUnlocked: null });
+        setMissions(missData || { daily: [], weekly: [] });
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError?.message || (isArabic ? 'فشل تحميل لوحة الطالب.' : 'Failed to load dashboard.'));
@@ -486,6 +494,83 @@ export default function StudentDashboardPage() {
                 })()}
               </ol>
             )}
+          </div>
+        </section>
+
+        <section className="grid gap-4 sm:grid-cols-2">
+          {/* Achievements card */}
+          <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-teal-50 p-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-600">{isArabic ? 'الإنجازات' : 'Achievements'}</p>
+                <p className="mt-1 text-lg font-black text-emerald-700">
+                  {achievements.unlocked.length}/11
+                  <span className="ml-1 text-sm font-semibold text-emerald-400">{isArabic ? 'مفتوحة' : 'unlocked'}</span>
+                </p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-md">
+                <Medal size={20} />
+              </div>
+            </div>
+            {achievements.latestUnlocked && (
+              <div className="mb-3 flex items-center gap-2 rounded-xl bg-emerald-100 px-3 py-2">
+                <span className="text-xs font-black text-emerald-700">{achievements.latestUnlocked.label}</span>
+                <span className="ml-auto rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-black text-white">NEW</span>
+              </div>
+            )}
+            <div className="h-2 overflow-hidden rounded-full bg-emerald-100">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all"
+                style={{ width: `${Math.round((achievements.unlocked.length / 11) * 100)}%` }}
+              />
+            </div>
+            <p className="mt-1 text-[10px] text-emerald-400">
+              {achievements.locked.length > 0
+                ? `${achievements.locked.length} ${isArabic ? 'إنجاز متبقٍّ' : 'more to unlock'}`
+                : (isArabic ? 'أتممت جميع الإنجازات!' : 'All achievements unlocked!')}
+            </p>
+          </div>
+
+          {/* Missions card */}
+          <div className="rounded-2xl border border-purple-100 bg-gradient-to-br from-purple-50 to-fuchsia-50 p-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-purple-600">{isArabic ? 'المهام' : 'Missions'}</p>
+              <Target size={16} className="text-purple-500" />
+            </div>
+            <p className="mb-1 text-[10px] font-black uppercase tracking-wider text-purple-400">{isArabic ? 'يومية' : 'Daily'}</p>
+            <div className="mb-3 space-y-2">
+              {missions.daily.map(m => (
+                <div key={m.key}>
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className={`font-semibold ${m.completed ? 'text-purple-300 line-through' : 'text-purple-700'}`}>{m.label}</span>
+                    <span className="font-black text-purple-500">{m.progress}/{m.goal} · +{m.xp}XP</span>
+                  </div>
+                  <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-purple-100">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500 transition-all"
+                      style={{ width: `${Math.min(100, Math.round((m.progress / m.goal) * 100))}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="mb-1 text-[10px] font-black uppercase tracking-wider text-purple-400">{isArabic ? 'أسبوعية' : 'Weekly'}</p>
+            <div className="space-y-2">
+              {missions.weekly.map(m => (
+                <div key={m.key}>
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className={`font-semibold ${m.completed ? 'text-purple-300 line-through' : 'text-purple-700'}`}>{m.label}</span>
+                    <span className="font-black text-purple-500">{m.progress}/{m.goal} · +{m.xp}XP</span>
+                  </div>
+                  <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-purple-100">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500 transition-all"
+                      style={{ width: `${Math.min(100, Math.round((m.progress / m.goal) * 100))}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 

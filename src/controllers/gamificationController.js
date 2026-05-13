@@ -1,4 +1,4 @@
-import { getStudentStats, getOrgLeaderboard } from '../services/gamificationService.js';
+import { getStudentStats, getOrgLeaderboard, getStudentAchievements, getStudentMissions } from '../services/gamificationService.js';
 import { resolveStudentContext } from '../services/studentExperienceService.js';
 
 export async function getStudentGamificationController(req, res, next) {
@@ -16,6 +16,26 @@ export async function getLeaderboardController(req, res, next) {
     const { userId, orgId } = await resolveStudentContext(req.user.id);
     const leaderboard = await getOrgLeaderboard(orgId);
     res.json({ success: true, status: 200, data: { leaderboard, currentStudentId: userId }, error: null, timestamp: new Date().toISOString() });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getAchievementsController(req, res, next) {
+  try {
+    const { userId } = await resolveStudentContext(req.user.id);
+    const data = await getStudentAchievements(userId);
+    res.json({ success: true, status: 200, data, error: null, timestamp: new Date().toISOString() });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getMissionsController(req, res, next) {
+  try {
+    const { userId } = await resolveStudentContext(req.user.id);
+    const data = await getStudentMissions(userId);
+    res.json({ success: true, status: 200, data, error: null, timestamp: new Date().toISOString() });
   } catch (err) {
     next(err);
   }
