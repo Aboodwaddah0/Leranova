@@ -674,6 +674,8 @@ model user {
   studentXpSummary       student_xp_summary?
   xpEvents               xp_event[]
   studentStreak          student_streak?
+  achievements           student_achievement[]
+  missionProgress        student_mission_progress[]
   createdAt              DateTime            @default(now()) @db.Timestamp(0)
   updatedAt              DateTime            @default(now()) @updatedAt @db.Timestamp(0)
 }
@@ -840,4 +842,37 @@ enum xp_event_type {
   LESSON_COMPLETE
   QUIZ_PASS
   QUIZ_PERFECT
+}
+
+enum mission_type {
+  DAILY
+  WEEKLY
+}
+
+model student_achievement {
+  id             Int      @id @default(autoincrement())
+  studentId      Int
+  achievementKey String   @db.VarChar(100)
+  xpAwarded      Int
+  unlockedAt     DateTime @default(now())
+  user           user     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, achievementKey], name: "uq_student_achievement")
+  @@index([studentId])
+}
+
+model student_mission_progress {
+  id          Int          @id @default(autoincrement())
+  studentId   Int
+  missionKey  String       @db.VarChar(100)
+  type        mission_type
+  progress    Int          @default(0)
+  goal        Int
+  completed   Boolean      @default(false)
+  periodStart DateTime
+  xpAwarded   Int          @default(0)
+  user        user         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, missionKey, periodStart], name: "uq_mission_period")
+  @@index([studentId])
 }

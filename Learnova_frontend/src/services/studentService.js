@@ -1049,6 +1049,24 @@ export async function fetchGamificationLeaderboard() {
   }
 }
 
+export async function fetchAchievements() {
+  try {
+    const response = await api.get('/student/gamification/achievements');
+    return unwrap(response, { unlocked: [], locked: [], latestUnlocked: null });
+  } catch {
+    return { unlocked: [], locked: [], latestUnlocked: null };
+  }
+}
+
+export async function fetchMissions() {
+  try {
+    const response = await api.get('/student/gamification/missions');
+    return unwrap(response, { daily: [], weekly: [] });
+  } catch {
+    return { daily: [], weekly: [] };
+  }
+}
+
 export function getFallbackStudentMarks() {
   return fallbackMarks;
 }
