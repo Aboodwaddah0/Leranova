@@ -1,6 +1,7 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { gatherLessonContent, callGroq } from './aiContentService.js';
+import { awardXpSafe } from './gamificationService.js';
 
 /* ─── Role resolution ─────────────────────────────────────────────────────── */
 
@@ -450,6 +451,13 @@ export const submitQuizAttempt = async (actor, lessonId, { answers, lang = 'ar' 
       isPassed,
     },
   });
+
+  if (isPassed) {
+    awardXpSafe(scope.userId, 'QUIZ_PASS', 'quiz', quiz.id);
+    if (score === 100) {
+      awardXpSafe(scope.userId, 'QUIZ_PERFECT', 'quiz', quiz.id);
+    }
+  }
 
   // Return full quiz with answers revealed + the attempt result
   return {

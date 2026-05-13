@@ -1,6 +1,7 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { resolveStudentContext } from './studentExperienceService.js';
+import { awardXpSafe } from './gamificationService.js';
 
 const toUpper = (value) => String(value || '').trim().toUpperCase();
 const PAID_SUBSCRIPTION_FILTER = {
@@ -71,6 +72,12 @@ const ensureStudentCanAccessLesson = async ({ studentId, lessonId }) => {
 export const upsertLessonProgress = async ({ studentId, lessonId, isCompleted }) => {
   await ensureStudentCanAccessLesson({ studentId, lessonId });
 
+  const existing = await prisma.lesson_progress.findUnique({
+    where: { studentId_lessonId: { studentId, lessonId } },
+    select: { isCompleted: true },
+  });
+  const wasCompleted = existing?.isCompleted ?? false;
+
   const progress = await prisma.lesson_progress.upsert({
     where: {
       studentId_lessonId: {
@@ -87,6 +94,10 @@ export const upsertLessonProgress = async ({ studentId, lessonId, isCompleted })
       isCompleted: Boolean(isCompleted),
     },
   });
+
+  if (isCompleted && !wasCompleted) {
+    awardXpSafe(studentId, 'LESSON_COMPLETE', 'lesson', lessonId);
+  }
 
   return {
     id: progress.id,

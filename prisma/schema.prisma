@@ -671,8 +671,44 @@ model user {
   student                student?
   teacher                teacher?
   term_audit_logs        term_edit_audit[]
+  studentXpSummary       student_xp_summary?
+  xpEvents               xp_event[]
+  studentStreak          student_streak?
   createdAt              DateTime            @default(now()) @db.Timestamp(0)
   updatedAt              DateTime            @default(now()) @updatedAt @db.Timestamp(0)
+}
+
+model student_xp_summary {
+  id        Int      @id @default(autoincrement())
+  studentId Int      @unique
+  totalXp   Int      @default(0)
+  level     Int      @default(1)
+  updatedAt DateTime @updatedAt
+  user      user     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model xp_event {
+  id         Int           @id @default(autoincrement())
+  studentId  Int
+  eventType  xp_event_type
+  xpAwarded  Int
+  sourceType String        @db.VarChar(50)
+  sourceId   Int
+  metadata   Json?
+  createdAt  DateTime      @default(now())
+  user       user          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, eventType, sourceType, sourceId], name: "uq_xp_event_source")
+  @@index([studentId], map: "idx_xp_event_student")
+}
+
+model student_streak {
+  id               Int       @id @default(autoincrement())
+  studentId        Int       @unique
+  currentStreak    Int       @default(0)
+  longestStreak    Int       @default(0)
+  lastActivityAt   DateTime?
+  user             user      @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
 
 enum chat_participants_role_in_chat {
@@ -798,4 +834,10 @@ model term_edit_audit {
   @@index([updatedByUserId], map: "idx_term_audit_user")
   @@index([actionType], map: "idx_term_audit_action_type")
   @@index([createdAt], map: "idx_term_audit_created_at")
+}
+
+enum xp_event_type {
+  LESSON_COMPLETE
+  QUIZ_PASS
+  QUIZ_PERFECT
 }
