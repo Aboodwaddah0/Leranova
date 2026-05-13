@@ -1,6 +1,7 @@
 import Joi from 'joi';
 import AppError from '../utils/appError.js';
 import { askChatbot } from '../services/chatbotService.js';
+import { dispatch } from '../services/gamificationDispatcher.js';
 
 const askSchema = Joi.object({
   question: Joi.string().trim().min(3).max(4000).required(),
@@ -34,6 +35,10 @@ export const askChatbotController = async (req, res, next) => {
       lessonId: value.lesson_id,
       history: value.history || [],
     });
+
+    if (req.user.role === 'STUDENT') {
+      dispatch({ studentId: req.user.id, event: 'chatbot.used', sourceId: null });
+    }
 
     return res.status(200).json({
       message: 'Chatbot answer generated successfully',

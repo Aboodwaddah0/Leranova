@@ -9,6 +9,10 @@ const XP_VALUES = {
   LESSON_COMPLETE: 10,
   QUIZ_PASS: 20,
   QUIZ_PERFECT: 10,
+  DAILY_LOGIN: 5,
+  FLASHCARD_SESSION: 5,
+  MINDMAP_SESSION: 3,
+  CHATBOT_SESSION: 3,
 };
 
 const ACHIEVEMENTS = {
@@ -27,14 +31,18 @@ const ACHIEVEMENTS = {
 
 const MISSIONS = {
   DAILY: [
-    { key: 'DAILY_LESSON_1', label: 'Daily Learner',  description: 'Complete 1 lesson today',        goal: 1,  eventType: 'LESSON_COMPLETE', xp: 10 },
-    { key: 'DAILY_LESSON_3', label: 'Triple Learner', description: 'Complete 3 lessons today',       goal: 3,  eventType: 'LESSON_COMPLETE', xp: 25 },
-    { key: 'DAILY_QUIZ_1',   label: 'Daily Quiz',     description: 'Pass 1 quiz today',              goal: 1,  eventType: 'QUIZ_PASS',       xp: 15 },
+    { key: 'DAILY_LESSON_1',   label: 'Daily Learner',  description: 'Complete 1 lesson today',         goal: 1, eventType: 'LESSON_COMPLETE',  xp: 10 },
+    { key: 'DAILY_LESSON_3',   label: 'Triple Learner', description: 'Complete 3 lessons today',        goal: 3, eventType: 'LESSON_COMPLETE',  xp: 25 },
+    { key: 'DAILY_QUIZ_1',     label: 'Daily Quiz',     description: 'Pass 1 quiz today',               goal: 1, eventType: 'QUIZ_PASS',        xp: 15 },
+    { key: 'DAILY_FLASHCARD_1',label: 'Flash Learner',  description: 'Use flashcards once today',       goal: 1, eventType: 'FLASHCARD_SESSION', xp: 10 },
+    { key: 'DAILY_CHATBOT_1',  label: 'AI Explorer',    description: 'Ask the AI chatbot today',        goal: 1, eventType: 'CHATBOT_SESSION',   xp: 8  },
   ],
   WEEKLY: [
-    { key: 'WEEKLY_LESSON_5',  label: 'Weekly Scholar', description: 'Complete 5 lessons this week',  goal: 5,  eventType: 'LESSON_COMPLETE', xp: 40 },
-    { key: 'WEEKLY_LESSON_10', label: 'Power Learner',  description: 'Complete 10 lessons this week', goal: 10, eventType: 'LESSON_COMPLETE', xp: 75 },
-    { key: 'WEEKLY_QUIZ_3',    label: 'Quiz Week',      description: 'Pass 3 quizzes this week',      goal: 3,  eventType: 'QUIZ_PASS',       xp: 50 },
+    { key: 'WEEKLY_LESSON_5',    label: 'Weekly Scholar',     description: 'Complete 5 lessons this week',          goal: 5,  eventType: 'LESSON_COMPLETE',  xp: 40 },
+    { key: 'WEEKLY_LESSON_10',   label: 'Power Learner',      description: 'Complete 10 lessons this week',         goal: 10, eventType: 'LESSON_COMPLETE',  xp: 75 },
+    { key: 'WEEKLY_QUIZ_3',      label: 'Quiz Week',          description: 'Pass 3 quizzes this week',              goal: 3,  eventType: 'QUIZ_PASS',        xp: 50 },
+    { key: 'WEEKLY_PERFECT_2',   label: 'Perfect Week',       description: 'Score 100% on 2 quizzes this week',     goal: 2,  eventType: 'QUIZ_PERFECT',     xp: 60 },
+    { key: 'WEEKLY_FLASHCARD_3', label: 'Card Collector',     description: 'Use flashcards on 3 lessons this week', goal: 3,  eventType: 'FLASHCARD_SESSION', xp: 30 },
   ],
 };
 
@@ -306,4 +314,127 @@ export async function getStudentMissions(studentId) {
     });
 
   return { daily: build(MISSIONS.DAILY), weekly: build(MISSIONS.WEEKLY) };
+}
+
+export async function getEngagementScore(studentId) {
+  const weekStart = _getPeriodStart('WEEKLY');
+
+  const [lessonWeek, quizWeek, flashcardWeek, chatbotWeek, streakRow, xpRow] = await Promise.all([
+    prisma.xp_event.count({ where: { studentId, eventType: 'LESSON_COMPLETE',  createdAt: { gte: weekStart } } }),
+    prisma.xp_event.count({ where: { studentId, eventType: 'QUIZ_PASS',        createdAt: { gte: weekStart } } }),
+    prisma.xp_event.count({ where: { studentId, eventType: 'FLASHCARD_SESSION', createdAt: { gte: weekStart } } }),
+    prisma.xp_event.count({ where: { studentId, eventType: 'CHATBOT_SESSION',  createdAt: { gte: weekStart } } }),
+    prisma.student_streak.findUnique({ where: { studentId }, select: { currentStreak: true } }),
+    prisma.student_xp_summary.findUnique({ where: { studentId }, select: { totalXp: true, level: true } }),
+  ]);
+
+  const streak = streakRow?.currentStreak ?? 0;
+  const streakBonus = Math.min(streak * 2, 20);
+  const raw = (lessonWeek * 10) + (quizWeek * 8) + (flashcardWeek * 4) + (chatbotWeek * 3) + streakBonus;
+  const score = Math.min(raw, 100);
+
+  return {
+    score,
+    breakdown: { lessons: lessonWeek, quizzes: quizWeek, flashcards: flashcardWeek, chatbot: chatbotWeek, streak },
+    totalXp: xpRow?.totalXp ?? 0,
+    level: xpRow?.level ?? 1,
+  };
+}
+
+function _recommendedAction(activeDailyMissions, stats) {
+  if (activeDailyMissions.length > 0) {
+    const m = activeDailyMissions[0];
+    return { type: 'mission', label: m.label, description: m.description };
+  }
+  if ((stats.currentStreak ?? 0) === 0) {
+    return { type: 'streak', label: 'Start your streak', description: 'Complete a lesson to begin your daily streak' };
+  }
+  return { type: 'lesson', label: 'Keep learning', description: 'Complete a lesson to earn XP' };
+}
+
+export async function getStudentDashboard(studentId) {
+  const [stats, missions, achievements, engagement] = await Promise.all([
+    getStudentStats(studentId),
+    getStudentMissions(studentId),
+    getStudentAchievements(studentId),
+    getEngagementScore(studentId),
+  ]);
+
+  const activeMissions = {
+    daily:  missions.daily.filter(m => !m.completed).slice(0, 3),
+    weekly: missions.weekly.filter(m => !m.completed).slice(0, 3),
+  };
+
+  return {
+    stats,
+    activeMissions,
+    recentAchievement: achievements.latestUnlocked,
+    engagement,
+    recommendedAction: _recommendedAction(activeMissions.daily, stats),
+  };
+}
+
+export async function getStreakLeaderboard(orgId, mode = 'ACADEMY', limit = 10) {
+  const scopeFilter = mode === 'SCHOOL'
+    ? { user: { student: { OrgId: orgId } } }
+    : { user: { academy_user: { OrgId: orgId } } };
+
+  const rows = await prisma.student_xp_summary.findMany({
+    where: scopeFilter,
+    select: {
+      studentId: true,
+      totalXp: true,
+      level: true,
+      user: {
+        select: {
+          name: true,
+          studentStreak: { select: { currentStreak: true, longestStreak: true } },
+        },
+      },
+    },
+  });
+
+  rows.sort((a, b) =>
+    (b.user?.studentStreak?.currentStreak ?? 0) - (a.user?.studentStreak?.currentStreak ?? 0)
+  );
+
+  return rows.slice(0, limit).map((row, i) => ({
+    rank: i + 1,
+    studentId: row.studentId,
+    name: row.user?.name || 'Student',
+    currentStreak: row.user?.studentStreak?.currentStreak ?? 0,
+    longestStreak: row.user?.studentStreak?.longestStreak ?? 0,
+    totalXp: row.totalXp,
+    level: row.level,
+  }));
+}
+
+export async function getWeeklyLeaderboard(orgId, mode = 'ACADEMY', limit = 10) {
+  const weekStart = _getPeriodStart('WEEKLY');
+  const scopeFilter = mode === 'SCHOOL'
+    ? { user: { student: { OrgId: orgId } } }
+    : { user: { academy_user: { OrgId: orgId } } };
+
+  const summaries = await prisma.student_xp_summary.findMany({
+    where: scopeFilter,
+    select: { studentId: true, level: true, user: { select: { name: true } } },
+  });
+  const studentIds = summaries.map(s => s.studentId);
+  const infoMap = new Map(summaries.map(s => [s.studentId, { name: s.user?.name || 'Student', level: s.level }]));
+
+  const weekly = await prisma.xp_event.groupBy({
+    by: ['studentId'],
+    where: { studentId: { in: studentIds }, createdAt: { gte: weekStart } },
+    _sum: { xpAwarded: true },
+    orderBy: { _sum: { xpAwarded: 'desc' } },
+    take: limit,
+  });
+
+  return weekly.map((row, i) => ({
+    rank: i + 1,
+    studentId: row.studentId,
+    name: infoMap.get(row.studentId)?.name || 'Student',
+    weeklyXp: row._sum.xpAwarded ?? 0,
+    level: infoMap.get(row.studentId)?.level ?? 1,
+  }));
 }
