@@ -77,6 +77,7 @@ async function awardXp(studentId, eventType, sourceType, sourceId, metadata) {
 }
 
 export function awardXpSafe(studentId, eventType, sourceType, sourceId, metadata) {
+  log.info('hook triggered', { studentId, eventType, sourceType, sourceId });
   awardXp(studentId, eventType, sourceType, sourceId, metadata).catch((err) =>
     log.error('awardXp failed', { studentId, eventType, sourceType, sourceId, err: err.message })
   );
