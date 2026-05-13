@@ -225,20 +225,26 @@ export async function getStudentStats(studentId) {
   };
 }
 
-export async function getOrgLeaderboard(orgId, limit = 10) {
+export async function getOrgLeaderboard(orgId, mode = 'ACADEMY', limit = 10) {
+  const scopeFilter = mode === 'SCHOOL'
+    ? { user: { student: { OrgId: orgId } } }
+    : { user: { academy_user: { OrgId: orgId } } };
+
   const rows = await prisma.student_xp_summary.findMany({
-    where: {
-      user: {
-        academy_user: { OrgId: orgId },
-      },
-    },
+    where: scopeFilter,
     orderBy: { totalXp: 'desc' },
     take: limit,
     select: {
       studentId: true,
       totalXp: true,
       level: true,
-      user: { select: { name: true } },
+      user: {
+        select: {
+          name: true,
+          studentStreak: { select: { currentStreak: true } },
+          _count: { select: { achievements: true } },
+        },
+      },
     },
   });
 
@@ -248,7 +254,24 @@ export async function getOrgLeaderboard(orgId, limit = 10) {
     name: row.user?.name || 'Student',
     totalXp: row.totalXp,
     level: row.level,
+    currentStreak: row.user?.studentStreak?.currentStreak ?? 0,
+    achievementsCount: row.user?._count?.achievements ?? 0,
   }));
+}
+
+export async function getStudentRank(studentId, orgId, mode = 'ACADEMY') {
+  const myRow = await prisma.student_xp_summary.findUnique({
+    where: { studentId },
+    select: { totalXp: true, level: true },
+  });
+  if (!myRow) return null;
+
+  const scopeFilter = mode === 'SCHOOL'
+    ? { user: { student: { OrgId: orgId } }, totalXp: { gt: myRow.totalXp } }
+    : { user: { academy_user: { OrgId: orgId } }, totalXp: { gt: myRow.totalXp } };
+
+  const ahead = await prisma.student_xp_summary.count({ where: scopeFilter });
+  return { rank: ahead + 1, totalXp: myRow.totalXp, level: myRow.level };
 }
 
 export async function getStudentAchievements(studentId) {
