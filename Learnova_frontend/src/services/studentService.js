@@ -1043,9 +1043,9 @@ export async function fetchGamificationStats() {
 export async function fetchGamificationLeaderboard() {
   try {
     const response = await api.get('/student/gamification/leaderboard');
-    return unwrap(response, { leaderboard: [], currentStudentId: null });
+    return unwrap(response, { leaderboard: [], currentStudentId: null, currentRank: null });
   } catch {
-    return { leaderboard: [], currentStudentId: null };
+    return { leaderboard: [], currentStudentId: null, currentRank: null };
   }
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BarChart3, BookOpen, CalendarDays, Flame, Sparkles, TrendingUp, Zap, Trophy, Star, Medal, Target } from 'lucide-react';
+import { ArrowRight, BookOpen, Flame, TrendingUp, Trophy, Medal, Target } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
 import {
   fetchMyStudentMarks,
@@ -56,35 +56,6 @@ const normalizeCourses = (courses = [], isArabic = false) => {
   return Array.from(unique.values());
 };
 
-const buildWeeklyActivity = (marks = []) => {
-  const formatter = new Intl.DateTimeFormat('en-US', { weekday: 'short' });
-  const buckets = [];
-  const now = new Date();
-
-  for (let offset = 6; offset >= 0; offset -= 1) {
-    const date = new Date(now);
-    date.setHours(0, 0, 0, 0);
-    date.setDate(now.getDate() - offset);
-    buckets.push({
-      key: date.toISOString().slice(0, 10),
-      label: formatter.format(date).toUpperCase(),
-      count: 0,
-    });
-  }
-
-  const byDate = new Map(buckets.map((item) => [item.key, item]));
-
-  marks.forEach((mark) => {
-    const time = new Date(mark?.time || mark?.createdAt || mark?.updatedAt || '');
-    if (Number.isNaN(time.getTime())) return;
-    const key = time.toISOString().slice(0, 10);
-    const bucket = byDate.get(key);
-    if (bucket) bucket.count += 1;
-  });
-
-  return buckets;
-};
-
 const summarizeAverageMark = (marks = []) => {
   if (!marks.length) return 0;
   const total = marks.reduce((sum, mark) => {
@@ -93,36 +64,6 @@ const summarizeAverageMark = (marks = []) => {
     return sum + (numbers / outOf) * 100;
   }, 0);
   return total / marks.length;
-};
-
-const buildWeeklyChart = (weeklyActivity = []) => {
-  const values = weeklyActivity.map((item) => Number(item.count || 0));
-  const max = Math.max(1, ...values);
-  const width = 320;
-  const height = 120;
-  const points = values.map((value, index) => {
-    const x = values.length > 1 ? (index / (values.length - 1)) * width : width / 2;
-    const y = height - (value / max) * (height - 12) - 6;
-    return { x, y, value };
-  });
-
-  if (!points.length) {
-    return { linePath: '', areaPath: '', points: [], max };
-  }
-
-  const linePath = points
-    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
-    .join(' ');
-
-  const areaPath = [
-    `M 0 ${height}`,
-    `L ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`,
-    ...points.slice(1).map((point) => `L ${point.x.toFixed(2)} ${point.y.toFixed(2)}`),
-    `L ${width} ${height}`,
-    'Z',
-  ].join(' ');
-
-  return { linePath, areaPath, points, max };
 };
 
 export default function StudentDashboardPage() {
@@ -137,6 +78,7 @@ export default function StudentDashboardPage() {
   const [gamification, setGamification] = useState({ totalXp: 0, level: 1, currentStreak: 0, longestStreak: 0 });
   const [leaderboard, setLeaderboard] = useState([]);
   const [currentStudentId, setCurrentStudentId] = useState(null);
+  const [currentRank, setCurrentRank] = useState(null);
   const [achievements, setAchievements] = useState({ unlocked: [], locked: [], latestUnlocked: null });
   const [missions, setMissions] = useState({ daily: [], weekly: [] });
 
@@ -207,6 +149,7 @@ export default function StudentDashboardPage() {
         setGamification(gamData || { totalXp: 0, level: 1, currentStreak: 0, longestStreak: 0 });
         setLeaderboard(lbData?.leaderboard || []);
         setCurrentStudentId(lbData?.currentStudentId || null);
+        setCurrentRank(lbData?.currentRank || null);
         setAchievements(achData || { unlocked: [], locked: [], latestUnlocked: null });
         setMissions(missData || { daily: [], weekly: [] });
       } catch (loadError) {
@@ -274,41 +217,19 @@ export default function StudentDashboardPage() {
     [enrolledCourses, continueIds],
   );
 
-  const weeklyActivity = useMemo(() => {
-    const actual = buildWeeklyActivity(marks);
-    const hasActivity = actual.some((item) => item.count > 0);
-    if (hasActivity) {
-      return actual;
-    }
-
-    // Demo fallback so the student can preview chart behavior when no graded activity exists yet.
-    const enrolledCount = Math.max(1, Number(enrolledCourses.length || 0));
-    const seedPattern = [1, 2, 1, 3, 2, 1, 2];
-
-    return actual.map((item, index) => ({
-      ...item,
-      count: Math.max(1, Math.round((seedPattern[index] * enrolledCount) / 2)),
-    }));
-  }, [enrolledCourses.length, marks]);
-  const weeklyChart = useMemo(() => buildWeeklyChart(weeklyActivity), [weeklyActivity]);
-  const maxWeeklyCount = Math.max(1, ...weeklyActivity.map((item) => item.count));
-
-  const paidCount = purchases.filter((purchase) => String(purchase?.status || '').toUpperCase() === 'PAID').length;
-  const weeklyActivityTotal = weeklyActivity.reduce((sum, item) => sum + item.count, 0);
-  const startedCoursesCount = continueLearning.length;
   const avgMark = summarizeAverageMark(marks);
-  const overallProgress = enrolledCourses.length
-    ? enrolledCourses.reduce((sum, course) => sum + Number(course?.progress || 0), 0) / enrolledCourses.length
-    : 0;
 
   return (
     <StudentLayout>
       <div className="space-y-8">
-        {loading ? (
-          <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-700">
-            {isArabic ? 'جاري تحميل أحدث بيانات الأكاديمية...' : 'Loading latest academy data...'}
+        {loading && (
+          <div className="flex items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50 px-5 py-4">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-300 border-t-indigo-600" />
+            <span className="text-sm font-medium text-indigo-700">
+              {isArabic ? 'جاري تحميل البيانات...' : 'Loading your dashboard...'}
+            </span>
           </div>
-        ) : null}
+        )}
 
         {error ? (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
@@ -316,189 +237,54 @@ export default function StudentDashboardPage() {
           </div>
         ) : null}
 
-        <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <div className="overflow-hidden rounded-[2rem] border border-white/70 bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-500 p-6 text-white shadow-[0_24px_65px_-35px_rgba(79,70,229,0.55)] md:p-7">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-indigo-100">{isArabic ? 'لوحة الطالب' : 'Student dashboard'} ✨</p>
-                <h2 className="mt-2 text-3xl font-black text-white">
-                  {isArabic ? 'مرحبًا' : 'Welcome'} 👋 {profile?.fullName || profile?.name || (isArabic ? 'طالب' : 'Student')}
-                </h2>
-                <p className="mt-2 text-sm leading-7 text-indigo-50">
-                  {isArabic
-                    ? `المسجلة: ${enrolledCourses.length} • المدفوعة: ${paidCount} • بدأت: ${startedCoursesCount}`
-                    : `Enrolled: ${enrolledCourses.length} • Paid: ${paidCount} • Started: ${startedCoursesCount}`}
-                </p>
-              </div>
-              <Link to="/dashboard/student/courses" className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-indigo-700 transition hover:opacity-90">
-                {isArabic ? 'إدارة الكورسات' : 'Manage courses'}
-                <ArrowRight size={14} />
-              </Link>
+        {/* XP Hero */}
+        <section className="overflow-hidden rounded-[2rem] border border-white/70 bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-500 p-6 text-white shadow-[0_24px_65px_-35px_rgba(79,70,229,0.55)] md:p-8">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-indigo-100">
+                {isArabic ? 'لوحة الطالب' : 'Student dashboard'} ✨
+              </p>
+              <h2 className="mt-1 text-3xl font-black text-white">
+                {isArabic ? 'مرحبًا' : 'Welcome back,'} {profile?.name || profile?.fullName || (isArabic ? 'طالب' : 'Student')}
+              </h2>
+              <p className="mt-1 text-sm text-indigo-100">
+                {isArabic
+                  ? `المستوى ${gamification.level} • #${currentRank?.rank ?? '—'} في مؤسستك`
+                  : `Level ${gamification.level} • Rank #${currentRank?.rank ?? '—'} in your org`}
+              </p>
             </div>
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              <SummaryChip label={isArabic ? 'متوسط الدرجات' : 'Average mark'} value={`${Math.round(avgMark)}%`} icon={TrendingUp} accent="from-emerald-300 to-cyan-300" />
-              <SummaryChip label={isArabic ? 'التقدم العام' : 'Overall progress'} value={`${Math.round(overallProgress)}%`} icon={Sparkles} accent="from-amber-300 to-pink-300" />
-              <SummaryChip label={isArabic ? 'نشاط الأسبوع' : 'Weekly activity'} value={`${weeklyActivityTotal}`} icon={Flame} accent="from-orange-300 to-red-300" />
-            </div>
+            <Link
+              to="/dashboard/student/courses"
+              className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-indigo-700 transition hover:opacity-90"
+            >
+              {isArabic ? 'إدارة الكورسات' : 'Manage courses'}
+              <ArrowRight size={14} />
+            </Link>
           </div>
 
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm md:p-7">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{isArabic ? 'شارت النشاط' : 'Activity chart'} 📈</p>
-                <h3 className="mt-2 text-xl font-black text-slate-900">{isArabic ? 'الأسبوع الحالي' : 'This week'}</h3>
-              </div>
-              <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
-                <BarChart3 size={18} />
-              </div>
+          <div className="mt-5">
+            <div className="mb-1 flex items-center justify-between text-xs text-indigo-100">
+              <span>{gamification.totalXp} XP total</span>
+              <span>{gamification.totalXp % 100}/100 {isArabic ? 'للمستوى التالي' : 'to next level'}</span>
             </div>
-
-            <div className="mt-5 rounded-[1.5rem] bg-slate-950 p-4 text-white">
-              {weeklyActivity.some((item) => item.count > 0) ? (
-                <svg viewBox="0 0 320 150" className="h-44 w-full overflow-visible">
-                  <defs>
-                    <linearGradient id="dashboard-area-gradient" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.65" />
-                      <stop offset="100%" stopColor="#ec4899" stopOpacity="0.05" />
-                    </linearGradient>
-                    <linearGradient id="dashboard-line-gradient" x1="0" x2="1" y1="0" y2="0">
-                      <stop offset="0%" stopColor="#22c55e" />
-                      <stop offset="50%" stopColor="#60a5fa" />
-                      <stop offset="100%" stopColor="#f472b6" />
-                    </linearGradient>
-                  </defs>
-                  <path d={weeklyChart.areaPath} fill="url(#dashboard-area-gradient)" />
-                  <path d={weeklyChart.linePath} fill="none" stroke="url(#dashboard-line-gradient)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-                  {weeklyChart.points.map((point, index) => (
-                    <circle key={weeklyActivity[index].key} cx={point.x} cy={point.y} r="4.5" fill="#fff" stroke="#111827" strokeWidth="2" />
-                  ))}
-                </svg>
-              ) : (
-                <div className="flex h-44 items-center justify-center rounded-[1.25rem] border border-white/10 bg-white/5 text-sm text-slate-200">
-                  {isArabic ? 'لا توجد بيانات نشاط كافية بعد.' : 'No activity data yet.'}
-                </div>
-              )}
-
-              <div className="mt-4 grid grid-cols-7 gap-2 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">
-                {weeklyActivity.map((item) => (
-                  <div key={item.key}>
-                    <div className="mb-1 h-2 rounded-full bg-white/10">
-                      <div className="h-2 rounded-full bg-white/70" style={{ width: `${Math.max(10, (item.count / maxWeeklyCount) * 100)}%` }} />
-                    </div>
-                    <div>{item.label}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <MiniStat label={isArabic ? 'أيام نشطة' : 'Active days'} value={weeklyActivity.filter((item) => item.count > 0).length} icon={CalendarDays} />
-              <MiniStat label={isArabic ? 'إجمالي النشاط' : 'Activity total'} value={weeklyActivityTotal} icon={BookOpen} />
-            </div>
-          </div>
-        </section>
-
-        <section className="grid gap-4 sm:grid-cols-3">
-          {/* XP + Level */}
-          <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-indigo-500">{isArabic ? 'المستوى والنقاط' : 'XP & Level'}</p>
-                <p className="mt-1 text-2xl font-black text-indigo-700">Lv.{gamification.level}</p>
-                <p className="text-xs font-semibold text-indigo-400">{gamification.totalXp} XP</p>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-md">
-                <Zap size={20} />
-              </div>
-            </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-indigo-100">
+            <div className="h-2.5 overflow-hidden rounded-full bg-white/20">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all"
-                style={{ width: `${Math.min(100, (gamification.totalXp % 100))}%` }}
+                className="h-full rounded-full bg-white/80"
+                style={{ width: `${Math.min(100, gamification.totalXp % 100)}%` }}
               />
             </div>
-            <p className="mt-1 text-[10px] text-indigo-400">{gamification.totalXp % 100}/100 XP {isArabic ? 'للمستوى التالي' : 'to next level'}</p>
           </div>
 
-          {/* Streak */}
-          <div className="rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-amber-50 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-orange-500">{isArabic ? 'السلسلة اليومية' : 'Daily Streak'}</p>
-                <p className="mt-1 text-2xl font-black text-orange-600">
-                  {gamification.currentStreak} {isArabic ? 'يوم' : 'days'}
-                </p>
-                <p className="text-xs font-semibold text-orange-400">
-                  {isArabic ? `الأعلى: ${gamification.longestStreak}` : `Best: ${gamification.longestStreak}`}
-                </p>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-md">
-                <Flame size={20} />
-              </div>
-            </div>
-            <div className="mt-3 flex gap-1">
-              {[...Array(7)].map((_, i) => (
-                <div
-                  key={i}
-                  className="h-2 flex-1 rounded-full"
-                  style={{ background: i < Math.min(7, gamification.currentStreak) ? '#f97316' : '#fed7aa' }}
-                />
-              ))}
-            </div>
-            <p className="mt-1 text-[10px] text-orange-400">{isArabic ? 'آخر 7 أيام' : 'Last 7 days'}</p>
-          </div>
-
-          {/* Leaderboard */}
-          <div className="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-yellow-50 p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-600">{isArabic ? 'لوحة الصدارة' : 'Leaderboard'}</p>
-              <Trophy size={16} className="text-amber-500" />
-            </div>
-            {leaderboard.length === 0 ? (
-              <p className="text-xs text-slate-400">{isArabic ? 'لا توجد بيانات بعد.' : 'No data yet.'}</p>
-            ) : (
-              <ol className="space-y-1.5">
-                {leaderboard.slice(0, 5).map((entry) => {
-                  const isMe = entry.studentId === currentStudentId;
-                  return (
-                    <li
-                      key={entry.studentId}
-                      className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-xs font-semibold"
-                      style={isMe ? { background: 'rgba(99,102,241,0.12)', color: '#4f46e5', fontWeight: 800 } : { color: '#475569' }}
-                    >
-                      <span className="w-4 shrink-0 text-center font-black text-amber-500">
-                        {entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : `#${entry.rank}`}
-                      </span>
-                      <span className="flex-1 truncate">{isMe ? (isArabic ? 'أنت' : 'You') : entry.name}</span>
-                      <span className="shrink-0 font-black">{entry.totalXp} XP</span>
-                      {isMe && <Star size={10} style={{ color: '#6366f1', flexShrink: 0 }} />}
-                    </li>
-                  );
-                })}
-                {/* Show current student if outside top 5 */}
-                {currentStudentId && !leaderboard.slice(0, 5).some((e) => e.studentId === currentStudentId) && (() => {
-                  const me = leaderboard.find((e) => e.studentId === currentStudentId);
-                  if (!me) return null;
-                  return (
-                    <>
-                      <li className="text-center text-[10px] text-slate-300">···</li>
-                      <li className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-xs font-black" style={{ background: 'rgba(99,102,241,0.12)', color: '#4f46e5' }}>
-                        <span className="w-4 shrink-0 text-center">#{me.rank}</span>
-                        <span className="flex-1 truncate">{isArabic ? 'أنت' : 'You'}</span>
-                        <span className="shrink-0">{me.totalXp} XP</span>
-                        <Star size={10} style={{ color: '#6366f1', flexShrink: 0 }} />
-                      </li>
-                    </>
-                  );
-                })()}
-              </ol>
-            )}
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <HeroStat label={isArabic ? 'الترتيب' : 'Rank'} value={currentRank ? `#${currentRank.rank}` : '—'} icon={Trophy} />
+            <HeroStat label={isArabic ? 'السلسلة' : 'Streak'} value={`${gamification.currentStreak}d`} icon={Flame} />
+            <HeroStat label={isArabic ? 'الإنجازات' : 'Achievements'} value={`${achievements.unlocked.length}/11`} icon={Medal} />
+            <HeroStat label={isArabic ? 'متوسط الدرجات' : 'Avg mark'} value={`${Math.round(avgMark)}%`} icon={TrendingUp} />
           </div>
         </section>
 
+        {/* Achievements + Missions */}
         <section className="grid gap-4 sm:grid-cols-2">
-          {/* Achievements card */}
           <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-teal-50 p-5">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
@@ -531,7 +317,6 @@ export default function StudentDashboardPage() {
             </p>
           </div>
 
-          {/* Missions card */}
           <div className="rounded-2xl border border-purple-100 bg-gradient-to-br from-purple-50 to-fuchsia-50 p-5">
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-purple-600">{isArabic ? 'المهام' : 'Missions'}</p>
@@ -574,6 +359,71 @@ export default function StudentDashboardPage() {
           </div>
         </section>
 
+        {/* Full Leaderboard */}
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                🏆 {isArabic ? 'لوحة الصدارة' : 'Leaderboard'}
+              </p>
+              <h2 className="mt-1 text-xl font-black text-slate-900">
+                {isArabic ? 'أفضل الطلاب في مؤسستك' : 'Top students in your org'}
+              </h2>
+            </div>
+            <Trophy size={18} className="text-amber-400" />
+          </div>
+
+          {leaderboard.length === 0 ? (
+            <EmptyState
+              title={isArabic ? 'لا توجد بيانات بعد' : 'No leaderboard data yet'}
+              description={isArabic ? 'أكمل درسًا أو اجتز اختبارًا لتظهر هنا.' : 'Complete a lesson or pass a quiz to appear here.'}
+            />
+          ) : (
+            <div className="space-y-1.5">
+              {leaderboard.map((entry) => {
+                const isMe = entry.studentId === currentStudentId;
+                return (
+                  <div
+                    key={entry.studentId}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${isMe ? 'border border-indigo-200 bg-indigo-50' : 'hover:bg-slate-50'}`}
+                  >
+                    <span className="w-7 shrink-0 text-center text-base font-black">
+                      {entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : <span className="text-xs text-slate-400">#{entry.rank}</span>}
+                    </span>
+                    <span className={`flex-1 truncate font-semibold ${isMe ? 'text-indigo-700' : 'text-slate-900'}`}>
+                      {isMe ? (isArabic ? 'أنت' : 'You') : entry.name}
+                    </span>
+                    <span className="hidden text-xs text-slate-500 sm:block">Lv.{entry.level}</span>
+                    <span className="flex items-center gap-0.5 text-xs text-orange-500">
+                      <Flame size={11} />
+                      {entry.currentStreak}
+                    </span>
+                    <span className="flex items-center gap-0.5 text-xs text-emerald-600">
+                      <Medal size={11} />
+                      {entry.achievementsCount}
+                    </span>
+                    <span className={`shrink-0 font-black ${isMe ? 'text-indigo-600' : 'text-slate-700'}`}>
+                      {entry.totalXp} XP
+                    </span>
+                  </div>
+                );
+              })}
+
+              {currentStudentId && currentRank && !leaderboard.some(e => e.studentId === currentStudentId) && (
+                <>
+                  <p className="py-1 text-center text-[10px] text-slate-300">···</p>
+                  <div className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-sm">
+                    <span className="w-7 shrink-0 text-center text-xs font-black text-slate-400">#{currentRank.rank}</span>
+                    <span className="flex-1 truncate font-black text-indigo-700">{isArabic ? 'أنت' : 'You'}</span>
+                    <span className="font-black text-indigo-600">{currentRank.totalXp} XP</span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* Continue Learning */}
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -584,22 +434,6 @@ export default function StudentDashboardPage() {
                   ? 'هذه القائمة تعرض فقط الكورسات التي بدأت فيها (تقدم أكبر من 0%).'
                   : 'Only started courses appear here (progress above 0%).'}
               </p>
-            </div>
-
-            <div className="w-full rounded-2xl border border-indigo-100 bg-indigo-50/55 p-3 sm:w-[330px]">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-700">{isArabic ? 'نشاط هذا الأسبوع' : 'Weekly activity'} 📈</p>
-              {weeklyActivity.some((item) => item.count > 0) ? (
-                <div className="mt-3 flex h-24 items-end gap-1.5">
-                  {weeklyActivity.map((item) => (
-                    <div key={item.key} className="flex flex-1 flex-col items-center gap-1">
-                      <div className="w-full rounded-t bg-gradient-to-t from-indigo-500 to-fuchsia-400" style={{ height: `${Math.max(10, (item.count / maxWeeklyCount) * 100)}%` }} />
-                      <span className="text-[10px] font-semibold text-slate-500">{item.label}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 text-xs text-slate-500">{isArabic ? 'لا توجد أنشطة درجات خلال هذا الأسبوع.' : 'No graded activity recorded this week.'}</p>
-              )}
             </div>
           </div>
 
@@ -621,6 +455,7 @@ export default function StudentDashboardPage() {
           )}
         </section>
 
+        {/* My Courses */}
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -695,33 +530,13 @@ function DashboardCourseCard({ course, actionLabel, actionHref, showProgress = f
   );
 }
 
-function SummaryChip({ label, value, icon: Icon, accent }) {
+function HeroStat({ label, value, icon: Icon }) {
   return (
-    <div className="rounded-2xl border border-white/20 bg-white/12 p-4 backdrop-blur">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-indigo-100">{label}</p>
-          <p className="mt-1 text-2xl font-black text-white">{value}</p>
-        </div>
-        <div className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${accent} text-slate-900`}>
-          <Icon size={18} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MiniStat({ label, value, icon: Icon }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
-          <p className="mt-1 text-lg font-black text-slate-900">{value}</p>
-        </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm">
-          <Icon size={16} />
-        </div>
+    <div className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3 backdrop-blur">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-indigo-100">{label}</p>
+      <div className="mt-1 flex items-center gap-2">
+        <Icon size={14} className="text-white/70" />
+        <p className="text-xl font-black text-white">{value}</p>
       </div>
     </div>
   );
