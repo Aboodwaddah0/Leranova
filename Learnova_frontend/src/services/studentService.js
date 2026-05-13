@@ -1031,6 +1031,24 @@ export function getFallbackStudentPurchases() {
   return fallbackPurchases;
 }
 
+export async function fetchGamificationStats() {
+  try {
+    const response = await api.get('/student/gamification/me');
+    return unwrap(response, { totalXp: 0, level: 1, currentStreak: 0, longestStreak: 0 });
+  } catch {
+    return { totalXp: 0, level: 1, currentStreak: 0, longestStreak: 0 };
+  }
+}
+
+export async function fetchGamificationLeaderboard() {
+  try {
+    const response = await api.get('/student/gamification/leaderboard');
+    return unwrap(response, { leaderboard: [], currentStudentId: null });
+  } catch {
+    return { leaderboard: [], currentStudentId: null };
+  }
+}
+
 export function getFallbackStudentMarks() {
   return fallbackMarks;
 }

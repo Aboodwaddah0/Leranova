@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BarChart3, BookOpen, CalendarDays, Flame, Sparkles, TrendingUp } from 'lucide-react';
+import { ArrowRight, BarChart3, BookOpen, CalendarDays, Flame, Sparkles, TrendingUp, Zap, Trophy, Star } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
 import {
   fetchMyStudentMarks,
@@ -9,6 +9,8 @@ import {
   fetchSubjectLessons,
   fetchStudentCourseCatalog,
   fetchStudentProfile,
+  fetchGamificationStats,
+  fetchGamificationLeaderboard,
 } from '../../services/studentService';
 import { useLanguage } from '../../utils/i18n';
 import { calculateProgressForLessons, subscribeToProgress } from '../../utils/studentProgress';
@@ -130,6 +132,9 @@ export default function StudentDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [progressTick, setProgressTick] = useState(0);
+  const [gamification, setGamification] = useState({ totalXp: 0, level: 1, currentStreak: 0, longestStreak: 0 });
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [currentStudentId, setCurrentStudentId] = useState(null);
 
   useEffect(() => subscribeToProgress(() => setProgressTick((value) => value + 1)), []);
 
@@ -139,11 +144,13 @@ export default function StudentDashboardPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const [courseData, marksData, purchaseData, profileData] = await Promise.all([
+        const [courseData, marksData, purchaseData, profileData, gamData, lbData] = await Promise.all([
           fetchStudentCourseCatalog(),
           fetchMyStudentMarks(),
           fetchMyStudentPurchases(),
           fetchStudentProfile(),
+          fetchGamificationStats(),
+          fetchGamificationLeaderboard(),
         ]);
 
         if (cancelled) return;
@@ -191,6 +198,9 @@ export default function StudentDashboardPage() {
         setMarks(safeMarks);
         setPurchases(safePurchases);
         setProfile(profileData || null);
+        setGamification(gamData || { totalXp: 0, level: 1, currentStreak: 0, longestStreak: 0 });
+        setLeaderboard(lbData?.leaderboard || []);
+        setCurrentStudentId(lbData?.currentStudentId || null);
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError?.message || (isArabic ? 'فشل تحميل لوحة الطالب.' : 'Failed to load dashboard.'));
@@ -378,6 +388,104 @@ export default function StudentDashboardPage() {
               <MiniStat label={isArabic ? 'أيام نشطة' : 'Active days'} value={weeklyActivity.filter((item) => item.count > 0).length} icon={CalendarDays} />
               <MiniStat label={isArabic ? 'إجمالي النشاط' : 'Activity total'} value={weeklyActivityTotal} icon={BookOpen} />
             </div>
+          </div>
+        </section>
+
+        <section className="grid gap-4 sm:grid-cols-3">
+          {/* XP + Level */}
+          <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-indigo-500">{isArabic ? 'المستوى والنقاط' : 'XP & Level'}</p>
+                <p className="mt-1 text-2xl font-black text-indigo-700">Lv.{gamification.level}</p>
+                <p className="text-xs font-semibold text-indigo-400">{gamification.totalXp} XP</p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-md">
+                <Zap size={20} />
+              </div>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-indigo-100">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all"
+                style={{ width: `${Math.min(100, (gamification.totalXp % 100))}%` }}
+              />
+            </div>
+            <p className="mt-1 text-[10px] text-indigo-400">{gamification.totalXp % 100}/100 XP {isArabic ? 'للمستوى التالي' : 'to next level'}</p>
+          </div>
+
+          {/* Streak */}
+          <div className="rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-amber-50 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-orange-500">{isArabic ? 'السلسلة اليومية' : 'Daily Streak'}</p>
+                <p className="mt-1 text-2xl font-black text-orange-600">
+                  {gamification.currentStreak} {isArabic ? 'يوم' : 'days'}
+                </p>
+                <p className="text-xs font-semibold text-orange-400">
+                  {isArabic ? `الأعلى: ${gamification.longestStreak}` : `Best: ${gamification.longestStreak}`}
+                </p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-md">
+                <Flame size={20} />
+              </div>
+            </div>
+            <div className="mt-3 flex gap-1">
+              {[...Array(7)].map((_, i) => (
+                <div
+                  key={i}
+                  className="h-2 flex-1 rounded-full"
+                  style={{ background: i < Math.min(7, gamification.currentStreak) ? '#f97316' : '#fed7aa' }}
+                />
+              ))}
+            </div>
+            <p className="mt-1 text-[10px] text-orange-400">{isArabic ? 'آخر 7 أيام' : 'Last 7 days'}</p>
+          </div>
+
+          {/* Leaderboard */}
+          <div className="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-yellow-50 p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-600">{isArabic ? 'لوحة الصدارة' : 'Leaderboard'}</p>
+              <Trophy size={16} className="text-amber-500" />
+            </div>
+            {leaderboard.length === 0 ? (
+              <p className="text-xs text-slate-400">{isArabic ? 'لا توجد بيانات بعد.' : 'No data yet.'}</p>
+            ) : (
+              <ol className="space-y-1.5">
+                {leaderboard.slice(0, 5).map((entry) => {
+                  const isMe = entry.studentId === currentStudentId;
+                  return (
+                    <li
+                      key={entry.studentId}
+                      className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-xs font-semibold"
+                      style={isMe ? { background: 'rgba(99,102,241,0.12)', color: '#4f46e5', fontWeight: 800 } : { color: '#475569' }}
+                    >
+                      <span className="w-4 shrink-0 text-center font-black text-amber-500">
+                        {entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : `#${entry.rank}`}
+                      </span>
+                      <span className="flex-1 truncate">{isMe ? (isArabic ? 'أنت' : 'You') : entry.name}</span>
+                      <span className="shrink-0 font-black">{entry.totalXp} XP</span>
+                      {isMe && <Star size={10} style={{ color: '#6366f1', flexShrink: 0 }} />}
+                    </li>
+                  );
+                })}
+                {/* Show current student if outside top 5 */}
+                {currentStudentId && !leaderboard.slice(0, 5).some((e) => e.studentId === currentStudentId) && (() => {
+                  const me = leaderboard.find((e) => e.studentId === currentStudentId);
+                  if (!me) return null;
+                  return (
+                    <>
+                      <li className="text-center text-[10px] text-slate-300">···</li>
+                      <li className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-xs font-black" style={{ background: 'rgba(99,102,241,0.12)', color: '#4f46e5' }}>
+                        <span className="w-4 shrink-0 text-center">#{me.rank}</span>
+                        <span className="flex-1 truncate">{isArabic ? 'أنت' : 'You'}</span>
+                        <span className="shrink-0">{me.totalXp} XP</span>
+                        <Star size={10} style={{ color: '#6366f1', flexShrink: 0 }} />
+                      </li>
+                    </>
+                  );
+                })()}
+              </ol>
+            )}
           </div>
         </section>
 

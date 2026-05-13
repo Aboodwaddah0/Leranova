@@ -22,6 +22,7 @@ import adminFeatureRoutes from './routes/adminFeatureRoutes.js';
 import schoolSettingsRoutes from './routes/schoolSettingsRoutes.js';
 import adminAnalyticsRoutes from './routes/adminAnalyticsRoutes.js';
 import studentExperienceRoutes from './routes/studentExperienceRoutes.js';
+import gamificationRoutes from './routes/gamificationRoutes.js';
 import academicYearRoutes from './routes/academicYearRoutes.js';
 import quizRoutes from './routes/quizRoutes.js';
 import noteRoutes from './routes/noteRoutes.js';
@@ -79,6 +80,7 @@ app.use('/api/school-settings', schoolSettingsRoutes);
 app.use('/api/academic-years', academicYearRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/chats', chatRoutes);
+app.use('/api/student/gamification', gamificationRoutes);
 app.use('/api/student', studentExperienceRoutes);
 
 app.use('/api/notes', noteRoutes);
