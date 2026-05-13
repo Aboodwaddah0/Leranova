@@ -6,14 +6,14 @@ const log = {
 };
 
 const EVENT_MAP = {
-  'lesson.completed': { eventType: 'LESSON_COMPLETE', sourceType: 'LESSON'    },
-  'quiz.passed':      { eventType: 'QUIZ_PASS',       sourceType: 'QUIZ'      },
-  'quiz.perfect':     { eventType: 'QUIZ_PERFECT',    sourceType: 'QUIZ'      },
-  'course.completed': { eventType: null,              sourceType: 'COURSE'    },
-  'daily.login':      { eventType: null,              sourceType: 'LOGIN'     },
-  'flashcards.used':  { eventType: null,              sourceType: 'FLASHCARD' },
-  'mindmap.opened':   { eventType: null,              sourceType: 'MINDMAP'   },
-  'chatbot.used':     { eventType: null,              sourceType: 'CHATBOT'   },
+  'lesson.completed': { eventType: 'LESSON_COMPLETE',   sourceType: 'LESSON'    },
+  'quiz.passed':      { eventType: 'QUIZ_PASS',         sourceType: 'QUIZ'      },
+  'quiz.perfect':     { eventType: 'QUIZ_PERFECT',      sourceType: 'QUIZ'      },
+  'course.completed': { eventType: null,                sourceType: 'COURSE'    },
+  'daily.login':      { eventType: 'DAILY_LOGIN',       sourceType: 'LOGIN',    dailyDedup: true },
+  'flashcards.used':  { eventType: 'FLASHCARD_SESSION', sourceType: 'FLASHCARD', dailyDedup: true },
+  'mindmap.opened':   { eventType: 'MINDMAP_SESSION',   sourceType: 'MINDMAP',  dailyDedup: true },
+  'chatbot.used':     { eventType: 'CHATBOT_SESSION',   sourceType: 'CHATBOT',  dailyDedup: true },
 };
 
 const _lastFired = new Map();
@@ -34,9 +34,15 @@ function _rateLimited(studentId, event) {
   return false;
 }
 
+function _resolveSourceId(mapping, sourceId) {
+  if (!mapping.dailyDedup) return sourceId;
+  if (sourceId != null) return sourceId;
+  return parseInt(new Date().toISOString().slice(0, 10).replace(/-/g, ''), 10);
+}
+
 /**
  * Dispatch a gamification event.
- * @param {{ studentId: number, event: string, sourceId: string|number, metadata?: object }} payload
+ * @param {{ studentId: number, event: string, sourceId?: number|null, metadata?: object }} payload
  */
 export function dispatch({ studentId, event, sourceId, metadata }) {
   const mapping = EVENT_MAP[event];
@@ -50,6 +56,7 @@ export function dispatch({ studentId, event, sourceId, metadata }) {
   }
   log.info('event', { studentId, event, sourceId });
   if (mapping.eventType) {
-    awardXpSafe(studentId, mapping.eventType, mapping.sourceType, sourceId, metadata ?? null);
+    const resolvedSourceId = _resolveSourceId(mapping, sourceId);
+    awardXpSafe(studentId, mapping.eventType, mapping.sourceType, resolvedSourceId, metadata ?? null);
   }
 }

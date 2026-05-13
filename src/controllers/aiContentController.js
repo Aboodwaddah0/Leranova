@@ -9,6 +9,7 @@ import {
   updateAiFlashcards,
   updateAiMindmap,
 } from '../services/aiContentService.js';
+import { dispatch } from '../services/gamificationDispatcher.js';
 
 const resolveLang = (req) => {
   const raw = req.query.lang || req.body?.lang || 'ar';
@@ -43,6 +44,8 @@ export const getOrGenerateLessonAiContent = async (req, res, next) => {
 
     // Students: only published content
     if (role === 'STUDENT') {
+      if (cached?.flashcards) dispatch({ studentId: req.user.id, event: 'flashcards.used', sourceId: lessonId });
+      if (cached?.mindmap)    dispatch({ studentId: req.user.id, event: 'mindmap.opened',  sourceId: lessonId });
       return ok(res, cached ?? { flashcards: null, mindmap: null, status: 'draft', published: false });
     }
 
