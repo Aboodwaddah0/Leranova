@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   ArrowRight, BookOpen, Flame, TrendingUp, Trophy, Medal, Target,
   Zap, Star, Play, ChevronRight, CheckCircle2, Lock, GraduationCap,
+  CalendarDays, Sun,
 } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
 import {
@@ -239,69 +240,116 @@ export default function StudentDashboardPage() {
           </div>
         </section>
 
-        {/* ─── Achievements + Missions ─── */}
-        <section className="grid gap-5 sm:grid-cols-2">
-
-          {/* Achievements */}
-          <div className="group relative overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-5 shadow-sm transition hover:shadow-md">
-            <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-emerald-200/30 blur-2xl" />
-            <div className="relative flex items-start justify-between gap-3">
-              <div>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-700">
-                  <Medal size={9} /> {isArabic ? 'الإنجازات' : 'Achievements'}
-                </span>
-                <p className="mt-2 text-3xl font-black text-emerald-700">{achievements.unlocked.length}<span className="text-base font-semibold text-emerald-400">/11</span></p>
-              </div>
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-200">
-                <Medal size={24} className="text-white" />
-              </div>
-            </div>
-
-            {achievements.latestUnlocked ? (
-              <div className="relative mt-3 flex items-center gap-2.5 rounded-2xl border border-emerald-200 bg-white/70 px-3.5 py-2.5 backdrop-blur">
-                <CheckCircle2 size={16} className="shrink-0 text-emerald-500" />
-                <span className="flex-1 truncate text-xs font-bold text-emerald-800">{achievements.latestUnlocked.label}</span>
-                <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white">NEW</span>
-              </div>
-            ) : (
-              <div className="relative mt-3 flex items-center gap-2 rounded-2xl bg-emerald-100/60 px-3.5 py-2.5">
-                <Lock size={12} className="text-emerald-400" />
-                <span className="text-xs font-semibold text-emerald-500">{isArabic ? 'أكمل دروسًا لفتح الإنجازات' : 'Complete lessons to unlock achievements'}</span>
-              </div>
-            )}
-
-            <div className="relative mt-4">
-              <div className="mb-1.5 flex justify-between text-[10px] font-bold text-emerald-600">
-                <span>{isArabic ? 'التقدم' : 'Progress'}</span>
-                <span>{Math.round((achievements.unlocked.length / 11) * 100)}%</span>
-              </div>
-              <div className="h-2.5 overflow-hidden rounded-full bg-emerald-100">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-400 transition-all duration-700"
-                  style={{ width: `${Math.round((achievements.unlocked.length / 11) * 100)}%` }}
-                />
-              </div>
-              <p className="mt-1.5 text-[10px] font-semibold text-emerald-400">
-                {achievements.locked.length > 0 ? `${achievements.locked.length} ${isArabic ? 'إنجاز متبقٍّ' : 'remaining'}` : (isArabic ? '🎉 أتممت جميع الإنجازات!' : '🎉 All unlocked!')}
+        {/* ─── Achievements ─── */}
+        <section className="relative overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-6 shadow-sm">
+          <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-emerald-200/25 blur-2xl" />
+          <div className="relative flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-700">
+                <Medal size={9} /> {isArabic ? 'الإنجازات' : 'Achievements'}
+              </span>
+              <p className="mt-2 text-4xl font-black text-emerald-700">
+                {achievements.unlocked.length}
+                <span className="text-lg font-semibold text-emerald-400">/11</span>
               </p>
+              <p className="text-sm font-semibold text-emerald-500">
+                {achievements.locked.length > 0
+                  ? `${achievements.locked.length} ${isArabic ? 'إنجاز متبقٍّ' : 'more to unlock'}`
+                  : (isArabic ? '🎉 أتممت جميع الإنجازات!' : '🎉 All achievements unlocked!')}
+              </p>
+            </div>
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-200">
+              <Medal size={28} className="text-white" />
             </div>
           </div>
 
-          {/* Missions */}
-          <div className="group relative overflow-hidden rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 via-purple-50 to-fuchsia-50 p-5 shadow-sm transition hover:shadow-md">
-            <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-violet-200/30 blur-2xl" />
-            <div className="relative mb-4 flex items-center justify-between">
-              <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-violet-700">
-                <Target size={9} /> {isArabic ? 'المهام' : 'Missions'}
-              </span>
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-md">
-                <Target size={14} className="text-white" />
+          {achievements.latestUnlocked ? (
+            <div className="relative mt-4 flex items-center gap-2.5 rounded-2xl border border-emerald-200 bg-white/70 px-4 py-3 backdrop-blur">
+              <CheckCircle2 size={16} className="shrink-0 text-emerald-500" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-500">{isArabic ? 'آخر إنجاز' : 'Latest unlock'}</p>
+                <p className="truncate text-sm font-black text-emerald-800">{achievements.latestUnlocked.label}</p>
+              </div>
+              <span className="rounded-full bg-emerald-500 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white shadow">NEW</span>
+            </div>
+          ) : (
+            <div className="relative mt-4 flex items-center gap-2 rounded-2xl bg-emerald-100/60 px-4 py-3">
+              <Lock size={13} className="shrink-0 text-emerald-400" />
+              <span className="text-xs font-semibold text-emerald-500">{isArabic ? 'أكمل دروسًا لفتح الإنجازات' : 'Complete lessons to unlock achievements'}</span>
+            </div>
+          )}
+
+          <div className="relative mt-5">
+            <div className="mb-1.5 flex justify-between text-[10px] font-bold text-emerald-600">
+              <span>{isArabic ? 'إجمالي التقدم' : 'Overall progress'}</span>
+              <span>{Math.round((achievements.unlocked.length / 11) * 100)}%</span>
+            </div>
+            <div className="h-3 overflow-hidden rounded-full bg-emerald-100">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-400 transition-all duration-700"
+                style={{ width: `${Math.round((achievements.unlocked.length / 11) * 100)}%` }}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* ─── Missions ─── */}
+        <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+          {/* Header */}
+          <div className="border-b border-slate-100 px-6 py-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-violet-700">
+                  <Target size={9} className="text-violet-500" />
+                  {isArabic ? 'المهام' : 'Missions'}
+                </div>
+                <h2 className="mt-1.5 text-xl font-black text-slate-900">{isArabic ? 'مهامك اليومية والأسبوعية' : 'Your daily & weekly missions'}</h2>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-md shadow-violet-200">
+                <Target size={18} className="text-white" />
               </div>
             </div>
+          </div>
 
-            <div className="relative space-y-4">
-              <MissionGroup label={isArabic ? 'يومية' : 'Daily'} missions={missions.daily} />
-              <MissionGroup label={isArabic ? 'أسبوعية' : 'Weekly'} missions={missions.weekly} />
+          <div className="space-y-6 p-6">
+            {/* Daily */}
+            <div>
+              <div className="mb-3 flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm">
+                  <Sun size={13} className="text-white" />
+                </div>
+                <span className="text-sm font-black text-slate-800">{isArabic ? 'المهام اليومية' : 'Daily Missions'}</span>
+                <span className="ml-auto rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-600">
+                  {missions.daily.filter(m => m.completed).length}/{missions.daily.length} {isArabic ? 'مكتمل' : 'done'}
+                </span>
+              </div>
+              {missions.daily.length === 0 ? (
+                <EmptyState title={isArabic ? 'لا توجد مهام يومية' : 'No daily missions'} description={isArabic ? 'ستظهر المهام اليومية هنا.' : 'Daily missions will appear here.'} icon={Sun} />
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {missions.daily.map((m, i) => <MissionCard key={m.key} mission={m} index={i} period="daily" />)}
+                </div>
+              )}
+            </div>
+
+            {/* Weekly */}
+            <div>
+              <div className="mb-3 flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 shadow-sm">
+                  <CalendarDays size={13} className="text-white" />
+                </div>
+                <span className="text-sm font-black text-slate-800">{isArabic ? 'المهام الأسبوعية' : 'Weekly Missions'}</span>
+                <span className="ml-auto rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-600">
+                  {missions.weekly.filter(m => m.completed).length}/{missions.weekly.length} {isArabic ? 'مكتمل' : 'done'}
+                </span>
+              </div>
+              {missions.weekly.length === 0 ? (
+                <EmptyState title={isArabic ? 'لا توجد مهام أسبوعية' : 'No weekly missions'} description={isArabic ? 'ستظهر المهام الأسبوعية هنا.' : 'Weekly missions will appear here.'} icon={CalendarDays} />
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {missions.weekly.map((m, i) => <MissionCard key={m.key} mission={m} index={i} period="weekly" />)}
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -460,32 +508,86 @@ function HeroStat({ label, value, icon: Icon, iconCls, bg }) {
   );
 }
 
-function MissionGroup({ label, missions }) {
-  if (!missions.length) return null;
+const MISSION_ICONS = {
+  DAILY_LESSON_1: BookOpen,
+  DAILY_LESSON_3: BookOpen,
+  DAILY_QUIZ_1: Zap,
+  WEEKLY_LESSON_5: BookOpen,
+  WEEKLY_LESSON_10: BookOpen,
+  WEEKLY_QUIZ_3: Zap,
+};
+
+const MISSION_COLORS = {
+  daily: {
+    active:    { icon: 'from-violet-500 to-fuchsia-500', border: 'border-violet-100', bg: 'bg-white', bar: 'from-violet-400 to-fuchsia-500', tag: 'bg-violet-100 text-violet-700', progress: 'text-violet-500', label: 'text-violet-900', desc: 'text-violet-400' },
+    completed: { icon: 'from-emerald-400 to-teal-500',   border: 'border-emerald-100', bg: 'bg-emerald-50/50', bar: 'from-emerald-400 to-teal-400', tag: 'bg-emerald-100 text-emerald-700', progress: 'text-emerald-500', label: 'text-emerald-700', desc: 'text-emerald-400' },
+  },
+  weekly: {
+    active:    { icon: 'from-indigo-500 to-violet-600', border: 'border-indigo-100', bg: 'bg-white', bar: 'from-indigo-400 to-violet-500', tag: 'bg-indigo-100 text-indigo-700', progress: 'text-indigo-500', label: 'text-indigo-900', desc: 'text-indigo-400' },
+    completed: { icon: 'from-emerald-400 to-teal-500',  border: 'border-emerald-100', bg: 'bg-emerald-50/50', bar: 'from-emerald-400 to-teal-400', tag: 'bg-emerald-100 text-emerald-700', progress: 'text-emerald-500', label: 'text-emerald-700', desc: 'text-emerald-400' },
+  },
+};
+
+function MissionCard({ mission: m, period }) {
+  const pct = Math.min(100, m.goal > 0 ? Math.round((m.progress / m.goal) * 100) : 0);
+  const colors = MISSION_COLORS[period][m.completed ? 'completed' : 'active'];
+  const Icon = MISSION_ICONS[m.key] || Target;
+  const circumference = 2 * Math.PI * 14;
+  const strokeDash = (pct / 100) * circumference;
+
   return (
-    <div>
-      <p className="mb-2 text-[9px] font-black uppercase tracking-[0.2em] text-violet-500">{label}</p>
-      <div className="space-y-2.5">
-        {missions.map((m) => (
-          <div key={m.key} className={`rounded-xl border px-3 py-2.5 transition ${m.completed ? 'border-emerald-100 bg-emerald-50/60' : 'border-violet-100 bg-white/60 backdrop-blur'}`}>
-            <div className="flex items-center justify-between gap-2">
-              <span className={`flex-1 truncate text-[11px] font-bold ${m.completed ? 'text-emerald-600 line-through' : 'text-violet-800'}`}>
-                {m.completed && <CheckCircle2 size={10} className="mr-1 inline text-emerald-500" />}
-                {m.label}
-              </span>
-              <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black ${m.completed ? 'bg-emerald-100 text-emerald-600' : 'bg-violet-100 text-violet-600'}`}>
-                +{m.xp}XP
-              </span>
-            </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-violet-100">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${m.completed ? 'bg-gradient-to-r from-emerald-400 to-teal-400' : 'bg-gradient-to-r from-violet-500 to-fuchsia-500'}`}
-                style={{ width: `${Math.min(100, Math.round((m.progress / m.goal) * 100))}%` }}
-              />
-            </div>
-            <p className="mt-0.5 text-[9px] font-semibold text-violet-400">{m.progress}/{m.goal}</p>
+    <div className={`relative flex flex-col gap-3 overflow-hidden rounded-2xl border ${colors.border} ${colors.bg} p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md`}>
+      {/* completed ribbon */}
+      {m.completed && (
+        <div className="absolute right-0 top-0 overflow-hidden rounded-bl-2xl rounded-tr-2xl">
+          <div className="flex items-center gap-1 bg-emerald-500 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white">
+            <CheckCircle2 size={9} /> Done
           </div>
-        ))}
+        </div>
+      )}
+
+      {/* Icon + XP row */}
+      <div className="flex items-start justify-between gap-3">
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${colors.icon} shadow-md`}>
+          <Icon size={20} className="text-white" />
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${colors.tag}`}>+{m.xp} XP</span>
+      </div>
+
+      {/* Title + description */}
+      <div>
+        <p className={`text-sm font-black leading-snug ${colors.label} ${m.completed ? 'line-through opacity-70' : ''}`}>{m.label}</p>
+        {m.description && <p className={`mt-0.5 text-[11px] font-medium leading-snug ${colors.desc}`}>{m.description}</p>}
+      </div>
+
+      {/* Progress ring + bar */}
+      <div className="flex items-center gap-3">
+        {/* SVG ring */}
+        <div className="relative shrink-0">
+          <svg className="-rotate-90" width="36" height="36" viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="14" fill="none" stroke={m.completed ? '#d1fae5' : '#ede9fe'} strokeWidth="3" />
+            <circle
+              cx="18" cy="18" r="14" fill="none"
+              stroke={m.completed ? '#34d399' : (period === 'weekly' ? '#818cf8' : '#a78bfa')}
+              strokeWidth="3" strokeLinecap="round"
+              strokeDasharray={`${strokeDash} ${circumference}`}
+            />
+          </svg>
+          <span className={`absolute inset-0 flex items-center justify-center text-[9px] font-black ${colors.progress}`}>{pct}%</span>
+        </div>
+
+        {/* Bar + numbers */}
+        <div className="flex-1">
+          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className={`h-full rounded-full bg-gradient-to-r ${colors.bar} transition-all duration-700`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <p className={`mt-1 text-[10px] font-bold ${colors.progress}`}>
+            {m.progress}/{m.goal} {period === 'daily' ? (m.key.includes('QUIZ') ? 'quizzes' : 'lessons') : (m.key.includes('QUIZ') ? 'quizzes' : 'lessons')}
+          </p>
+        </div>
       </div>
     </div>
   );
