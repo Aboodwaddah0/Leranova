@@ -97,6 +97,9 @@ export const upsertLessonProgress = async ({ studentId, lessonId, isCompleted })
 
   if (isCompleted && !wasCompleted) {
     dispatch({ studentId, event: 'lesson.completed', sourceId: lessonId });
+  } else {
+    // Any lesson interaction (even re-marking) touches the streak
+    dispatch({ studentId, event: 'lesson.viewed', sourceId: lessonId });
   }
 
   return {

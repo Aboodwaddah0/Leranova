@@ -457,6 +457,9 @@ export const submitQuizAttempt = async (actor, lessonId, { answers, lang = 'ar' 
     if (score === 100) {
       dispatch({ studentId: scope.userId, event: 'quiz.perfect', sourceId: quiz.id });
     }
+  } else {
+    // Failed attempts still count as engagement for streak
+    dispatch({ studentId: scope.userId, event: 'quiz.attempted', sourceId: quiz.id });
   }
 
   // Return full quiz with answers revealed + the attempt result
