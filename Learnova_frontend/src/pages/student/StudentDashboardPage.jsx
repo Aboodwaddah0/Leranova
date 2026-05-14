@@ -20,6 +20,7 @@ import {
   fetchMissions,
   fetchLearningProfile,
   fetchAdaptiveMissions,
+  fetchAIMentor,
 } from '../../services/studentService';
 import { useLanguage } from '../../utils/i18n';
 import { calculateProgressForLessons, subscribeToProgress } from '../../utils/studentProgress';
@@ -94,6 +95,7 @@ export default function StudentDashboardPage() {
   const [missions, setMissions] = useState({ daily: [], weekly: [] });
   const [learningProfile, setLearningProfile] = useState(null);
   const [adaptiveMissions, setAdaptiveMissions] = useState(null);
+  const [aiMentor, setAiMentor] = useState(null);
 
   useEffect(() => subscribeToProgress(() => setProgressTick((v) => v + 1)), []);
 
@@ -102,10 +104,10 @@ export default function StudentDashboardPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const [courseData, marksData, purchaseData, profileData, gamData, lbData, achData, missData, lpData, adaptMissData] = await Promise.all([
+        const [courseData, marksData, purchaseData, profileData, gamData, lbData, achData, missData, lpData, adaptMissData, mentorData] = await Promise.all([
           fetchStudentCourseCatalog(), fetchMyStudentMarks(), fetchMyStudentPurchases(),
           fetchStudentProfile(), fetchGamificationStats(), fetchGamificationLeaderboard(),
-          fetchAchievements(), fetchMissions(), fetchLearningProfile(), fetchAdaptiveMissions(),
+          fetchAchievements(), fetchMissions(), fetchLearningProfile(), fetchAdaptiveMissions(), fetchAIMentor(),
         ]);
         if (cancelled) return;
 
@@ -141,6 +143,7 @@ export default function StudentDashboardPage() {
         setMissions(missData || { daily: [], weekly: [] });
         setLearningProfile(lpData || null);
         setAdaptiveMissions(adaptMissData || null);
+        setAiMentor(mentorData || null);
       } catch (err) {
         if (!cancelled) setError(err?.message || (isArabic ? 'فشل تحميل لوحة الطالب.' : 'Failed to load dashboard.'));
       } finally {
@@ -246,6 +249,9 @@ export default function StudentDashboardPage() {
             <HeroStat label={isArabic ? 'متوسط الدرجات' : 'Avg Mark'} value={`${Math.round(avgMark)}%`} icon={TrendingUp} iconCls="text-cyan-300" bg="bg-cyan-400/15" />
           </div>
         </section>
+
+        {/* ─── AI Mentor ─── */}
+        {aiMentor && <AIMentorSection mentor={aiMentor} isArabic={isArabic} />}
 
         {/* ─── Achievements ─── */}
         <section className="relative overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-6 shadow-sm">
@@ -674,6 +680,146 @@ function TierBadge({ tier, isArabic }) {
       <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
       {isArabic ? 'المستوى:' : 'Tier:'} {tier}
     </span>
+  );
+}
+
+/* ─────────────── AI Mentor Section ─────────────── */
+
+const MENTOR_COACHING_ICONS = {
+  BRAIN:   Brain,
+  TREND:   TrendingUp,
+  FOCUS:   MapPin,
+  QUIZ:    Zap,
+  LESSON:  BookOpen,
+  TARGET:  Target,
+};
+
+const MENTOR_ACTION_ICONS = {
+  FLAME:  Flame,
+  QUIZ:   Zap,
+  BRAIN:  Brain,
+  BOOK:   BookOpen,
+  TARGET: Target,
+};
+
+const URGENCY_CONFIG = {
+  HIGH:   { border: 'border-red-200',   bg: 'from-red-50 to-rose-50',     icon: 'text-red-500',   badge: 'bg-red-500',   label: 'Urgent'  },
+  MEDIUM: { border: 'border-amber-200', bg: 'from-amber-50 to-orange-50', icon: 'text-amber-500', badge: 'bg-amber-500', label: 'Today'   },
+  LOW:    { border: 'border-indigo-200', bg: 'from-indigo-50 to-violet-50', icon: 'text-indigo-500', badge: 'bg-indigo-500', label: 'Suggested' },
+};
+
+const COACHING_TYPE_CONFIG = {
+  warning:    { border: 'border-amber-100', bg: 'bg-amber-50/70',   text: 'text-amber-800',   dot: 'bg-amber-400'   },
+  success:    { border: 'border-emerald-100', bg: 'bg-emerald-50/70', text: 'text-emerald-800', dot: 'bg-emerald-400' },
+  suggestion: { border: 'border-indigo-100', bg: 'bg-indigo-50/70',  text: 'text-indigo-800',  dot: 'bg-indigo-400'  },
+};
+
+function AIMentorSection({ mentor, isArabic }) {
+  const urgCfg   = URGENCY_CONFIG[mentor.nextBestAction?.urgency] || URGENCY_CONFIG.LOW;
+  const ActionIcon = MENTOR_ACTION_ICONS[mentor.nextBestAction?.icon] || Target;
+
+  return (
+    <section className="relative overflow-hidden rounded-[2rem] border border-violet-200/60 bg-gradient-to-br from-slate-900 via-violet-950 to-fuchsia-950 p-6 shadow-[0_24px_60px_-16px_rgba(139,92,246,0.45)] md:p-8">
+      {/* decorative orbs */}
+      <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-violet-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-16 left-1/4 h-56 w-56 rounded-full bg-fuchsia-500/10 blur-3xl" />
+
+      {/* Header */}
+      <div className="relative flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          {/* Glowing mentor badge */}
+          <div className="relative">
+            <div className="absolute inset-0 animate-ping rounded-full bg-violet-400/30" style={{ animationDuration: '2.5s' }} />
+            <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-[0_0_24px_rgba(167,139,250,0.6)]">
+              <Brain size={22} className="text-white" />
+            </div>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-violet-300">
+              {isArabic ? 'المرشد الذكي' : 'AI Mentor'}
+            </p>
+            <h2 className="text-lg font-black text-white">
+              {isArabic ? 'تحليل مخصص لك' : 'Your Coaching Report'}
+            </h2>
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+          {mentor.aiPowered ? (
+            <span className="flex items-center gap-1 rounded-full border border-violet-400/30 bg-violet-500/20 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-violet-200 backdrop-blur">
+              <Sparkles size={8} className="text-violet-300" /> Groq AI
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white/50 backdrop-blur">
+              <Brain size={8} /> Algorithmic
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Narrative */}
+      <div className="relative mt-5 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 backdrop-blur">
+        <p className="text-sm font-semibold italic leading-relaxed text-violet-100">
+          &ldquo;{mentor.narrative}&rdquo;
+        </p>
+      </div>
+
+      {/* Warning + Success highlight row */}
+      {(mentor.urgentWarning || mentor.successHighlight) && (
+        <div className="relative mt-4 grid gap-3 sm:grid-cols-2">
+          {mentor.urgentWarning && (
+            <div className="flex items-start gap-2.5 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 backdrop-blur">
+              <AlertCircle size={15} className="mt-0.5 shrink-0 text-amber-300" />
+              <p className="text-xs font-semibold leading-snug text-amber-100">{mentor.urgentWarning.message}</p>
+            </div>
+          )}
+          {mentor.successHighlight && (
+            <div className="flex items-start gap-2.5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 backdrop-blur">
+              <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald-300" />
+              <p className="text-xs font-semibold leading-snug text-emerald-100">{mentor.successHighlight.message}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Next Best Action */}
+      {mentor.nextBestAction && (
+        <div className={`relative mt-4 overflow-hidden rounded-2xl border ${urgCfg.border} bg-gradient-to-r ${urgCfg.bg} p-4`}>
+          <div className="flex items-start gap-3">
+            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${urgCfg.badge} shadow-sm`}>
+              <ActionIcon size={18} className="text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-500">
+                  {isArabic ? 'الخطوة التالية الأفضل' : 'Next Best Action'}
+                </p>
+                <span className={`rounded-full ${urgCfg.badge} px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-white`}>
+                  {urgCfg.label}
+                </span>
+              </div>
+              <p className="mt-0.5 text-sm font-black text-slate-800">{mentor.nextBestAction.action}</p>
+              <p className="mt-0.5 text-[11px] font-medium text-slate-500">{mentor.nextBestAction.reason}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Coaching points */}
+      {mentor.coachingPoints?.length > 0 && (
+        <div className="relative mt-4 grid gap-2.5 sm:grid-cols-2">
+          {mentor.coachingPoints.map((point, i) => {
+            const CoachIcon = MENTOR_COACHING_ICONS[point.icon] || Lightbulb;
+            const cfg = COACHING_TYPE_CONFIG[point.type] || COACHING_TYPE_CONFIG.suggestion;
+            return (
+              <div key={i} className={`flex items-start gap-2.5 rounded-xl border ${cfg.border} ${cfg.bg} px-3 py-2.5`}>
+                <CoachIcon size={13} className={`mt-0.5 shrink-0 ${cfg.text}`} />
+                <p className={`text-[11px] font-semibold leading-snug ${cfg.text}`}>{point.message}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
 
