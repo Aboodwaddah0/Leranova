@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowRight, BookOpen, Flame, TrendingUp, Trophy, Medal, Target,
-  Zap, Star, Play, ChevronRight, CheckCircle2, Lock, GraduationCap,
-  CalendarDays, Sun,
+  ArrowRight, ChevronRight, BookOpen, Flame, TrendingUp, Trophy, Medal, Target,
+  Zap, Star, Play, CheckCircle2, Lock, GraduationCap,
+  CalendarDays, Sun, Brain, Sparkles, BarChart3, MessageSquare,
+  Layers, AlertCircle, MapPin, Lightbulb, ChevronUp, ChevronDown, Minus,
 } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
 import {
@@ -17,6 +18,7 @@ import {
   fetchGamificationLeaderboard,
   fetchAchievements,
   fetchMissions,
+  fetchLearningProfile,
 } from '../../services/studentService';
 import { useLanguage } from '../../utils/i18n';
 import { calculateProgressForLessons, subscribeToProgress } from '../../utils/studentProgress';
@@ -89,6 +91,7 @@ export default function StudentDashboardPage() {
   const [currentRank, setCurrentRank] = useState(null);
   const [achievements, setAchievements] = useState({ unlocked: [], locked: [], latestUnlocked: null });
   const [missions, setMissions] = useState({ daily: [], weekly: [] });
+  const [learningProfile, setLearningProfile] = useState(null);
 
   useEffect(() => subscribeToProgress(() => setProgressTick((v) => v + 1)), []);
 
@@ -97,10 +100,10 @@ export default function StudentDashboardPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const [courseData, marksData, purchaseData, profileData, gamData, lbData, achData, missData] = await Promise.all([
+        const [courseData, marksData, purchaseData, profileData, gamData, lbData, achData, missData, lpData] = await Promise.all([
           fetchStudentCourseCatalog(), fetchMyStudentMarks(), fetchMyStudentPurchases(),
           fetchStudentProfile(), fetchGamificationStats(), fetchGamificationLeaderboard(),
-          fetchAchievements(), fetchMissions(),
+          fetchAchievements(), fetchMissions(), fetchLearningProfile(),
         ]);
         if (cancelled) return;
 
@@ -134,6 +137,7 @@ export default function StudentDashboardPage() {
         setCurrentRank(lbData?.currentRank || null);
         setAchievements(achData || { unlocked: [], locked: [], latestUnlocked: null });
         setMissions(missData || { daily: [], weekly: [] });
+        setLearningProfile(lpData || null);
       } catch (err) {
         if (!cancelled) setError(err?.message || (isArabic ? 'فشل تحميل لوحة الطالب.' : 'Failed to load dashboard.'));
       } finally {
@@ -292,6 +296,9 @@ export default function StudentDashboardPage() {
             </div>
           </div>
         </section>
+
+        {/* ─── AI Learning Profile ─── */}
+        {learningProfile && <AIProfileSection profile={learningProfile} isArabic={isArabic} />}
 
         {/* ─── Missions ─── */}
         <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
@@ -509,12 +516,16 @@ function HeroStat({ label, value, icon: Icon, iconCls, bg }) {
 }
 
 const MISSION_ICONS = {
-  DAILY_LESSON_1: BookOpen,
-  DAILY_LESSON_3: BookOpen,
-  DAILY_QUIZ_1: Zap,
-  WEEKLY_LESSON_5: BookOpen,
-  WEEKLY_LESSON_10: BookOpen,
-  WEEKLY_QUIZ_3: Zap,
+  DAILY_LESSON_1:    BookOpen,
+  DAILY_LESSON_3:    BookOpen,
+  DAILY_QUIZ_1:      Zap,
+  DAILY_FLASHCARD_1: Layers,
+  DAILY_CHATBOT_1:   MessageSquare,
+  WEEKLY_LESSON_5:   BookOpen,
+  WEEKLY_LESSON_10:  BookOpen,
+  WEEKLY_QUIZ_3:     Zap,
+  WEEKLY_PERFECT_2:  Star,
+  WEEKLY_FLASHCARD_3: Layers,
 };
 
 const MISSION_COLORS = {
@@ -590,6 +601,188 @@ function MissionCard({ mission: m, period }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/* ─────────────── AI Profile Section ─────────────── */
+
+const ENGAGEMENT_CONFIG = {
+  VERY_HIGH: { label: 'Very High', bar: 'from-emerald-400 to-teal-400',    pill: 'bg-emerald-100 text-emerald-700', score: 100 },
+  HIGH:      { label: 'High',      bar: 'from-indigo-400 to-violet-500',   pill: 'bg-indigo-100 text-indigo-700',  score: 75  },
+  MEDIUM:    { label: 'Medium',    bar: 'from-amber-400 to-orange-400',    pill: 'bg-amber-100 text-amber-700',    score: 45  },
+  LOW:       { label: 'Low',       bar: 'from-slate-300 to-slate-400',     pill: 'bg-slate-100 text-slate-500',    score: 15  },
+};
+
+const TREND_ICON = { IMPROVING: ChevronUp, DECLINING: ChevronDown, STABLE: Minus };
+const TREND_CLS  = { IMPROVING: 'text-emerald-500', DECLINING: 'text-red-400', STABLE: 'text-slate-400' };
+
+function ProfileStatCard({ icon: Icon, iconGradient, label, value, sub }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <div className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br ${iconGradient} shadow`}>
+        <Icon size={16} className="text-white" />
+      </div>
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">{label}</p>
+        <p className="mt-0.5 text-lg font-black text-slate-900 leading-none">{value}</p>
+        {sub && <p className="mt-0.5 text-[11px] font-semibold text-slate-400">{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+function AIProfileSection({ profile, isArabic }) {
+  const eng    = ENGAGEMENT_CONFIG[profile.engagementLevel] || ENGAGEMENT_CONFIG.MEDIUM;
+  const TrendIcon = TREND_ICON[profile.learningVelocity?.trend] || Minus;
+  const trendCls  = TREND_CLS[profile.learningVelocity?.trend] || 'text-slate-400';
+  const pct    = profile.engagementScore ?? 0;
+
+  return (
+    <section className="space-y-4">
+      {/* Header row */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-fuchsia-600 shadow-md">
+            <Brain size={18} className="text-white" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+              {isArabic ? 'ملف التعلم الذكي' : 'AI Learning Profile'}
+            </p>
+            <h2 className="text-lg font-black text-slate-900">
+              {isArabic ? 'رؤى مخصصة لك' : 'Your personalized insights'}
+            </h2>
+          </div>
+        </div>
+        <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider ${eng.pill}`}>
+          {eng.label}
+        </span>
+      </div>
+
+      {/* Engagement score bar */}
+      <div className="overflow-hidden rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles size={14} className="text-violet-500" />
+            <span className="text-sm font-black text-violet-900">
+              {isArabic ? 'مستوى التفاعل' : 'Engagement Score'}
+            </span>
+          </div>
+          <span className="text-2xl font-black text-violet-700">{pct}<span className="text-sm font-semibold text-violet-400">/100</span></span>
+        </div>
+        <div className="h-3 overflow-hidden rounded-full bg-violet-100">
+          <div
+            className={`h-full rounded-full bg-gradient-to-r ${eng.bar} shadow-[0_0_8px_rgba(139,92,246,0.3)] transition-all duration-700`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        {profile.summary && (
+          <p className="mt-3 text-sm font-medium leading-relaxed text-violet-700 italic">
+            &ldquo;{profile.summary}&rdquo;
+          </p>
+        )}
+      </div>
+
+      {/* 4 stat cards */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <ProfileStatCard
+          icon={BookOpen}
+          iconGradient="from-indigo-500 to-violet-500"
+          label={isArabic ? 'دروس هذا الأسبوع' : 'Lessons / week'}
+          value={profile.learningVelocity?.lessonsThisWeek ?? 0}
+          sub={
+            <span className={`flex items-center gap-0.5 ${trendCls}`}>
+              <TrendIcon size={10} />
+              {profile.learningVelocity?.trend?.toLowerCase()}
+            </span>
+          }
+        />
+        <ProfileStatCard
+          icon={Flame}
+          iconGradient="from-amber-400 to-orange-500"
+          label={isArabic ? 'الانتظام' : 'Consistency'}
+          value={`${profile.consistency?.consistencyScore ?? 0}`}
+          sub={`${profile.consistency?.activeDays30 ?? 0} ${isArabic ? 'يوم نشط' : 'active days'}`}
+        />
+        <ProfileStatCard
+          icon={BarChart3}
+          iconGradient="from-cyan-500 to-blue-500"
+          label={isArabic ? 'متوسط الاختبارات' : 'Quiz avg'}
+          value={`${profile.quizPerformance?.avgScore ?? 0}%`}
+          sub={`${profile.quizPerformance?.passRate ?? 0}% ${isArabic ? 'نسبة النجاح' : 'pass rate'}`}
+        />
+        <ProfileStatCard
+          icon={Brain}
+          iconGradient="from-fuchsia-500 to-pink-500"
+          label={isArabic ? 'أداة الذكاء الاصطناعي' : 'AI preference'}
+          value={profile.aiUsage?.preferredTool === 'NONE' ? '—' : (profile.aiUsage?.preferredTool ?? '—')}
+          sub={`${(profile.aiUsage?.flashcards ?? 0) + (profile.aiUsage?.chatbot ?? 0) + (profile.aiUsage?.mindmaps ?? 0)} ${isArabic ? 'جلسة' : 'sessions'}`}
+        />
+      </div>
+
+      {/* Strengths + Weaknesses */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {/* Strengths */}
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-sm">
+              <CheckCircle2 size={13} className="text-white" />
+            </div>
+            <span className="text-sm font-black text-emerald-800">{isArabic ? 'نقاط القوة' : 'Strengths'}</span>
+          </div>
+          <ul className="space-y-2">
+            {(profile.strengths || []).map((s, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm font-medium text-emerald-700">
+                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+                {s}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Focus areas + recommendations */}
+        <div className="space-y-3">
+          {/* Focus areas */}
+          {profile.focusAreas?.length > 0 && (
+            <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 shadow-sm">
+                  <MapPin size={13} className="text-white" />
+                </div>
+                <span className="text-sm font-black text-indigo-800">{isArabic ? 'مجالات التركيز' : 'Focus Areas'}</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {profile.focusAreas.map((f, i) => (
+                  <span key={i} className="rounded-full border border-indigo-200 bg-white px-3 py-1 text-xs font-bold text-indigo-700 shadow-sm">
+                    {f.name} <span className="text-indigo-400">· {f.count}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Smart Recommendation */}
+          {profile.weaknesses?.length > 0 && (
+            <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm">
+                  <Lightbulb size={13} className="text-white" />
+                </div>
+                <span className="text-sm font-black text-amber-800">{isArabic ? 'توصيات ذكية' : 'Smart Recommendations'}</span>
+              </div>
+              <ul className="space-y-1.5">
+                {(profile.weaknesses || []).slice(0, 2).map((w, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm font-medium text-amber-700">
+                    <AlertCircle size={13} className="mt-0.5 shrink-0 text-amber-400" />
+                    {w}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 

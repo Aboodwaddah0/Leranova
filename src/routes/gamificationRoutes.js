@@ -10,6 +10,7 @@ import {
   getStreakLeaderboardController,
   getWeeklyLeaderboardController,
 } from '../controllers/gamificationController.js';
+import { getLearningProfileController } from '../controllers/learningProfileController.js';
 
 const router = Router();
 
@@ -23,5 +24,6 @@ router.get('/achievements', getAchievementsController);
 router.get('/leaderboard', getLeaderboardController);
 router.get('/leaderboard/streak', getStreakLeaderboardController);
 router.get('/leaderboard/weekly', getWeeklyLeaderboardController);
+router.get('/profile', getLearningProfileController);
 
 export default router;

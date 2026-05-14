@@ -1071,6 +1071,15 @@ export function getFallbackStudentMarks() {
   return fallbackMarks;
 }
 
+export async function fetchLearningProfile() {
+  try {
+    const response = await api.get('/student/gamification/profile');
+    return unwrap(response, null);
+  } catch {
+    return null;
+  }
+}
+
 export function getFallbackLessons() {
   return fallbackLessons;
 }
