@@ -1098,6 +1098,15 @@ export async function fetchAIMentor() {
   }
 }
 
+export async function fetchActivityFeed() {
+  try {
+    const response = await api.get('/student/gamification/activity');
+    return unwrap(response, null);
+  } catch {
+    return null;
+  }
+}
+
 export function getFallbackLessons() {
   return fallbackLessons;
 }
