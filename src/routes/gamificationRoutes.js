@@ -11,6 +11,7 @@ import {
   getWeeklyLeaderboardController,
 } from '../controllers/gamificationController.js';
 import { getLearningProfileController } from '../controllers/learningProfileController.js';
+import { getAdaptiveMissionsController } from '../controllers/adaptiveMissionController.js';
 
 const router = Router();
 
@@ -25,5 +26,6 @@ router.get('/leaderboard', getLeaderboardController);
 router.get('/leaderboard/streak', getStreakLeaderboardController);
 router.get('/leaderboard/weekly', getWeeklyLeaderboardController);
 router.get('/profile', getLearningProfileController);
+router.get('/missions/adaptive', getAdaptiveMissionsController);
 
 export default router;
