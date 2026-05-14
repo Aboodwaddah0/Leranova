@@ -25,6 +25,7 @@ import {
 } from '../../services/studentService';
 import { useLanguage } from '../../utils/i18n';
 import { calculateProgressForLessons, subscribeToProgress } from '../../utils/studentProgress';
+import { sound } from '../../utils/soundHelper';
 
 const getCourseId = (course) => Number(course?.id || course?.courseId || course?.Course_id || 0);
 const getCourseName = (course, isArabic) => course?.name || course?.Name || (isArabic ? 'كورس بدون عنوان' : 'Untitled course');
@@ -104,11 +105,14 @@ export default function StudentDashboardPage() {
   const [showStreakBanner, setShowStreakBanner] = useState(false);
 
   const prevRef = useRef({ level: 0, totalXp: 0, lastAchKey: null, pollCount: 0 });
-  const streakDismissedRef = useRef(false);
+  const streakDismissedRef = useRef(sessionStorage.getItem('lnv_streak_dismissed') === '1');
+  const shownAchievementsRef = useRef(new Set(JSON.parse(sessionStorage.getItem('lnv_shown_ach') || '[]')));
 
   const dismissStreakBanner = () => {
     setShowStreakBanner(false);
     streakDismissedRef.current = true;
+    sessionStorage.setItem('lnv_streak_dismissed', '1');
+    sound.dismiss();
   };
 
   useEffect(() => subscribeToProgress(() => setProgressTick((v) => v + 1)), []);
@@ -182,26 +186,34 @@ export default function StudentDashboardPage() {
       // Level-up detection
       if (feed.level > prev.level && prev.level > 0) {
         setLevelUpModal(feed.level);
+        sound.levelUp();
       }
 
-      // New achievement (unlocked in last 2 minutes)
+      // New achievement (unlocked in last 2 minutes, shown only once per key per session)
       const freshAch = (feed.recentAchievements || []).find(
-        a => Date.now() - new Date(a.unlockedAt).getTime() < 120_000,
+        a => Date.now() - new Date(a.unlockedAt).getTime() < 120_000 && !shownAchievementsRef.current.has(a.key),
       );
-      if (freshAch && freshAch.key !== prev.lastAchKey) {
+      if (freshAch) {
         setAchievementModal(freshAch);
+        shownAchievementsRef.current.add(freshAch.key);
+        sessionStorage.setItem('lnv_shown_ach', JSON.stringify([...shownAchievementsRef.current]));
+        sound.achievement();
         prev.lastAchKey = freshAch.key;
+        setTimeout(() => setAchievementModal(null), 5000);
       }
 
       // Floating XP indicator
       if (feed.totalXp > prev.totalXp && prev.totalXp > 0) {
         const gained = feed.totalXp - prev.totalXp;
         const id = Date.now();
-        setFloatingXps(p => [...p, { id, amount: gained }]);
-        setTimeout(() => setFloatingXps(p => p.filter(x => x.id !== id)), 2200);
+        setFloatingXps(p => [...p.slice(-4), { id, amount: gained }]);
+        setTimeout(() => setFloatingXps(p => p.filter(x => x.id !== id)), 2800);
+        sound.xp();
+        // Dismiss streak banner once the student engages (XP gained = proof of activity)
+        if (streakDismissedRef.current === false) dismissStreakBanner();
       }
 
-      // Streak warning banner
+      // Streak warning banner (only if not already dismissed this session)
       if (!streakDismissedRef.current && feed.currentStreak < 3) {
         setShowStreakBanner(true);
       }
@@ -258,11 +270,14 @@ export default function StudentDashboardPage() {
     <StudentLayout>
       {/* Custom animation keyframes */}
       <style>{`
-        @keyframes floatUp {
-          0%   { opacity:0; transform:translateY(14px) scale(0.85); }
-          18%  { opacity:1; transform:translateY(0) scale(1); }
-          78%  { opacity:1; transform:translateY(-50px); }
-          100% { opacity:0; transform:translateY(-70px) scale(0.9); }
+        @keyframes slideInRight {
+          from { opacity:0; transform:translateX(28px) scale(0.92); }
+          to   { opacity:1; transform:translateX(0) scale(1); }
+        }
+        @keyframes fadeOut {
+          0%   { opacity:1; }
+          70%  { opacity:1; }
+          100% { opacity:0; transform:translateX(16px); }
         }
         @keyframes scaleIn {
           from { opacity:0; transform:scale(0.8); }
@@ -709,8 +724,8 @@ function MissionRow({ mission: m, period }) {
   const strokeDash = (pct / 100) * circumference;
 
   return (
-    <div className={`group relative flex items-center gap-3 rounded-xl border px-3 py-2.5 transition duration-200 hover:-translate-y-0.5 hover:shadow-sm
-      ${isDone ? 'border-emerald-100 bg-emerald-50/40' : 'border-slate-100 bg-white hover:border-violet-100 hover:bg-violet-50/20'}`}
+    <div className={`group relative flex items-center gap-3 rounded-xl border px-3 py-2.5 transition duration-150
+      ${isDone ? 'border-emerald-100 bg-emerald-50/40' : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-sm'}`}
     >
       {/* Recommended accent line */}
       {m.recommended && !isDone && (
@@ -1229,13 +1244,13 @@ function EmptyState({ title, description, icon: Icon }) {
 
 function FloatingXPLayer({ items }) {
   return (
-    <div className="pointer-events-none fixed right-5 top-20 z-50 flex flex-col-reverse items-end gap-2">
+    <div className="pointer-events-none fixed bottom-6 right-5 z-50 flex flex-col items-end gap-1.5">
       {items.map(item => (
         <div key={item.id}
-          className="flex items-center gap-1.5 rounded-full border border-amber-200 bg-white px-3 py-1.5 shadow-lg shadow-amber-100"
-          style={{ animation: 'floatUp 2.2s ease-out forwards' }}>
-          <Zap size={12} className="text-amber-500" />
-          <span className="text-sm font-black text-amber-700">+{item.amount} XP</span>
+          className="flex items-center gap-1.5 rounded-full border border-amber-200 bg-white px-3 py-1.5 shadow-md shadow-amber-100/80"
+          style={{ animation: 'slideInRight 0.25s ease-out, fadeOut 2.8s ease-out forwards' }}>
+          <Zap size={11} className="text-amber-500" />
+          <span className="text-xs font-black text-amber-700">+{item.amount} XP</span>
         </div>
       ))}
     </div>

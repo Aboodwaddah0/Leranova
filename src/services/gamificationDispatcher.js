@@ -1,4 +1,4 @@
-import { awardXpSafe } from './gamificationService.js';
+import { awardXpSafe, touchStreak } from './gamificationService.js';
 
 const log = {
   info: (msg, meta) => console.info('[gam:dispatch]', msg, meta ?? ''),
@@ -6,14 +6,17 @@ const log = {
 };
 
 const EVENT_MAP = {
-  'lesson.completed': { eventType: 'LESSON_COMPLETE',   sourceType: 'LESSON'    },
-  'quiz.passed':      { eventType: 'QUIZ_PASS',         sourceType: 'QUIZ'      },
-  'quiz.perfect':     { eventType: 'QUIZ_PERFECT',      sourceType: 'QUIZ'      },
-  'course.completed': { eventType: null,                sourceType: 'COURSE'    },
-  'daily.login':      { eventType: 'DAILY_LOGIN',       sourceType: 'LOGIN',    dailyDedup: true },
-  'flashcards.used':  { eventType: 'FLASHCARD_SESSION', sourceType: 'FLASHCARD', dailyDedup: true },
-  'mindmap.opened':   { eventType: 'MINDMAP_SESSION',   sourceType: 'MINDMAP',  dailyDedup: true },
-  'chatbot.used':     { eventType: 'CHATBOT_SESSION',   sourceType: 'CHATBOT',  dailyDedup: true },
+  'lesson.completed': { eventType: 'LESSON_COMPLETE',   sourceType: 'LESSON'                       },
+  'quiz.passed':      { eventType: 'QUIZ_PASS',         sourceType: 'QUIZ'                         },
+  'quiz.perfect':     { eventType: 'QUIZ_PERFECT',      sourceType: 'QUIZ'                         },
+  'course.completed': { eventType: null,                sourceType: 'COURSE'                       },
+  'daily.login':      { eventType: 'DAILY_LOGIN',       sourceType: 'LOGIN',    dailyDedup: true   },
+  'flashcards.used':  { eventType: 'FLASHCARD_SESSION', sourceType: 'FLASHCARD', dailyDedup: true  },
+  'mindmap.opened':   { eventType: 'MINDMAP_SESSION',   sourceType: 'MINDMAP',  dailyDedup: true   },
+  'chatbot.used':     { eventType: 'CHATBOT_SESSION',   sourceType: 'CHATBOT',  dailyDedup: true   },
+  // Streak-only events — no XP, just keep the streak alive
+  'lesson.viewed':    { eventType: null, sourceType: 'LESSON', streakOnly: true },
+  'quiz.attempted':   { eventType: null, sourceType: 'QUIZ',   streakOnly: true },
 };
 
 const _lastFired = new Map();
@@ -22,6 +25,8 @@ const COOLDOWNS_MS = {
   'flashcards.used': 2 *    60_000,
   'mindmap.opened':  5 *    60_000,
   'chatbot.used':    5 *    60_000,
+  'lesson.viewed':  15 *    60_000,
+  'quiz.attempted': 10 *    60_000,
 };
 
 function _rateLimited(studentId, event) {
@@ -55,6 +60,10 @@ export function dispatch({ studentId, event, sourceId, metadata }) {
     return;
   }
   log.info('event', { studentId, event, sourceId });
+  if (mapping.streakOnly) {
+    touchStreak(studentId);
+    return;
+  }
   if (mapping.eventType) {
     const resolvedSourceId = _resolveSourceId(mapping, sourceId);
     awardXpSafe(studentId, mapping.eventType, mapping.sourceType, resolvedSourceId, metadata ?? null);

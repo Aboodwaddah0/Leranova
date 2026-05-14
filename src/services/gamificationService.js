@@ -94,6 +94,14 @@ async function _updateStreak(tx, studentId) {
   });
 }
 
+export async function touchStreak(studentId) {
+  try {
+    await prisma.$transaction(async (tx) => _updateStreak(tx, studentId));
+  } catch (err) {
+    console.error('[gamification] touchStreak error', err?.message);
+  }
+}
+
 async function _updateMissions(studentId, eventType) {
   const dailyStart  = _getPeriodStart('DAILY');
   const weeklyStart = _getPeriodStart('WEEKLY');
