@@ -14,19 +14,19 @@ const EVENT_MAP = {
   'flashcards.used':  { eventType: 'FLASHCARD_SESSION', sourceType: 'FLASHCARD', dailyDedup: true  },
   'mindmap.opened':   { eventType: 'MINDMAP_SESSION',   sourceType: 'MINDMAP',  dailyDedup: true   },
   'chatbot.used':     { eventType: 'CHATBOT_SESSION',   sourceType: 'CHATBOT',  dailyDedup: true   },
-  // Streak-only events — no XP, just keep the streak alive
+  // Streak-only events — no XP, just keep the streak alive.
+  // Rate-limiting is skipped for these because _updateStreak is idempotent (same-day check in DB).
   'lesson.viewed':    { eventType: null, sourceType: 'LESSON', streakOnly: true },
   'quiz.attempted':   { eventType: null, sourceType: 'QUIZ',   streakOnly: true },
 };
 
+// XP-awarding events only — streakOnly events bypass this to keep streak updates instant.
 const _lastFired = new Map();
 const COOLDOWNS_MS = {
-  'daily.login':    23 * 3_600_000,
-  'flashcards.used': 2 *    60_000,
-  'mindmap.opened':  5 *    60_000,
-  'chatbot.used':    5 *    60_000,
-  'lesson.viewed':  15 *    60_000,
-  'quiz.attempted': 10 *    60_000,
+  'daily.login':     23 * 3_600_000,
+  'flashcards.used':  2 *    60_000,
+  'mindmap.opened':   5 *    60_000,
+  'chatbot.used':     5 *    60_000,
 };
 
 function _rateLimited(studentId, event) {
@@ -47,6 +47,8 @@ function _resolveSourceId(mapping, sourceId) {
 
 /**
  * Dispatch a gamification event.
+ * streakOnly events always call touchStreak — no rate-limiting, DB handles idempotency.
+ * XP events are rate-limited in-process; XP dedup is also enforced at DB level.
  * @param {{ studentId: number, event: string, sourceId?: number|null, metadata?: object }} payload
  */
 export function dispatch({ studentId, event, sourceId, metadata }) {
@@ -55,15 +57,20 @@ export function dispatch({ studentId, event, sourceId, metadata }) {
     log.warn('unknown event — ignored', { studentId, event });
     return;
   }
+
+  // Streak-only: always run, skip rate-limit (DB _updateStreak is idempotent)
+  if (mapping.streakOnly) {
+    log.info('streak touch', { studentId, event, sourceId });
+    touchStreak(studentId);
+    return;
+  }
+
   if (_rateLimited(studentId, event)) {
     log.info('rate-limited', { studentId, event });
     return;
   }
-  log.info('event', { studentId, event, sourceId });
-  if (mapping.streakOnly) {
-    touchStreak(studentId);
-    return;
-  }
+
+  log.info('xp event', { studentId, event, sourceId });
   if (mapping.eventType) {
     const resolvedSourceId = _resolveSourceId(mapping, sourceId);
     awardXpSafe(studentId, mapping.eventType, mapping.sourceType, resolvedSourceId, metadata ?? null);

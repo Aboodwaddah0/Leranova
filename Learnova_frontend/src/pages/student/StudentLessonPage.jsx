@@ -197,7 +197,20 @@ export default function StudentLessonPage() {
     return next ? Number(next.id) : null;
   }, [subjectLessons, currentLessonIndex]);
 
+  const videoPlayFiredRef = useRef(false);
+
+  // Reset per-lesson on lessonId change
+  useEffect(() => { videoPlayFiredRef.current = false; }, [numericLessonId]);
+
+  const onVideoPlay = () => {
+    if (videoPlayFiredRef.current) return;
+    videoPlayFiredRef.current = true;
+    // Fire lesson.viewed → touchStreak (no XP, streak-safe)
+    void updateStudentLessonProgress(numericLessonId, false).catch(() => {});
+  };
+
   const onVideoEnded = () => {
+    videoPlayFiredRef.current = true; // prevent duplicate view dispatch
     setLessonCompleted(numericLessonId, true);
     void updateStudentLessonProgress(numericLessonId, true).catch((updateError) => {
       setError(updateError?.message || (isArabic ? 'فشل تحديث تقدم الدرس.' : 'Failed to update lesson progress.'));
@@ -353,7 +366,8 @@ export default function StudentLessonPage() {
             {lesson?.videoUrl ? (
               <>
                 <video ref={videoRef} controls preload="auto" src={lesson.videoUrl}
-                  className="w-full max-h-[420px] object-cover" onEnded={onVideoEnded} />
+                  className="w-full max-h-[420px] object-cover"
+                  onPlay={onVideoPlay} onEnded={onVideoEnded} />
                 {autoNextCountdown ? (
                   <div className="border-t border-slate-800 bg-slate-900/90 px-5 py-2.5 text-xs font-semibold text-cyan-300">
                     {isArabic ? `الدرس التالي خلال ${autoNextCountdown}ث...` : `Next lesson in ${autoNextCountdown}s...`}

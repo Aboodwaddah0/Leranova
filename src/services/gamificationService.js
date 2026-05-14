@@ -78,11 +78,15 @@ async function _updateStreak(tx, studentId) {
     await tx.student_streak.create({
       data: { studentId, currentStreak: 1, longestStreak: 1, lastActivityAt: new Date(today) },
     });
+    log.info('streak created', { studentId, streak: 1 });
     return;
   }
 
   const last = row.lastActivityAt?.toISOString().slice(0, 10);
-  if (last === today) return;
+  if (last === today) {
+    log.info('streak already updated today', { studentId, streak: row.currentStreak });
+    return;
+  }
 
   const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   const newStreak = last === yesterday ? row.currentStreak + 1 : 1;
@@ -92,13 +96,15 @@ async function _updateStreak(tx, studentId) {
     where: { studentId },
     data: { currentStreak: newStreak, longestStreak: longest, lastActivityAt: new Date(today) },
   });
+  log.info('streak updated', { studentId, streak: newStreak, longest, last });
 }
 
 export async function touchStreak(studentId) {
   try {
     await prisma.$transaction(async (tx) => _updateStreak(tx, studentId));
+    log.info('streak touched', { studentId });
   } catch (err) {
-    console.error('[gamification] touchStreak error', err?.message);
+    log.error('touchStreak failed', { studentId, err: err?.message });
   }
 }
 

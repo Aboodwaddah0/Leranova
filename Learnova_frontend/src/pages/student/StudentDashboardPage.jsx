@@ -110,9 +110,11 @@ export default function StudentDashboardPage() {
 
   const dismissStreakBanner = () => {
     setShowStreakBanner(false);
-    streakDismissedRef.current = true;
-    sessionStorage.setItem('lnv_streak_dismissed', '1');
-    sound.dismiss();
+    if (!streakDismissedRef.current) {
+      streakDismissedRef.current = true;
+      sessionStorage.setItem('lnv_streak_dismissed', '1');
+      sound.dismiss();
+    }
   };
 
   useEffect(() => subscribeToProgress(() => setProgressTick((v) => v + 1)), []);
@@ -209,12 +211,13 @@ export default function StudentDashboardPage() {
         setFloatingXps(p => [...p.slice(-4), { id, amount: gained }]);
         setTimeout(() => setFloatingXps(p => p.filter(x => x.id !== id)), 2800);
         sound.xp();
-        // Dismiss streak banner once the student engages (XP gained = proof of activity)
-        if (streakDismissedRef.current === false) dismissStreakBanner();
       }
 
-      // Streak warning banner (only if not already dismissed this session)
-      if (!streakDismissedRef.current && feed.currentStreak < 3) {
+      // Streak warning banner — show only when student has NOT engaged today.
+      // Auto-dismiss the moment the backend confirms engagement (lastActivityAt === today).
+      if (feed.engagedToday) {
+        if (!streakDismissedRef.current) dismissStreakBanner();
+      } else if (!streakDismissedRef.current) {
         setShowStreakBanner(true);
       }
 
@@ -1325,18 +1328,16 @@ function LevelUpOverlay({ level, onClose }) {
 
 function StreakBanner({ streak, onDismiss }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm"
+    <div className="flex items-center gap-2.5 rounded-xl border border-amber-100 bg-amber-50/80 px-3.5 py-2.5"
       style={{ animation: 'slideDown 0.2s ease-out' }}>
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm">
-        <Flame size={15} className="text-white" />
-      </div>
-      <p className="flex-1 text-sm font-semibold text-amber-800">
+      <Flame size={13} className="shrink-0 text-amber-500" />
+      <p className="flex-1 text-xs font-semibold text-amber-700">
         {streak > 0
-          ? `Your ${streak}-day streak is at risk! Study something today to keep it alive.`
-          : 'Your streak was broken. Start fresh today — every comeback counts!'}
+          ? `${streak}-day streak at risk — engage with anything today to keep it going.`
+          : 'Streak broken. Any lesson, quiz, or AI tool will start a new one.'}
       </p>
       <button onClick={onDismiss}
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-amber-400 transition hover:bg-amber-200 hover:text-amber-700">
+        className="shrink-0 text-[10px] font-bold text-amber-400 transition hover:text-amber-600">
         ✕
       </button>
     </div>
