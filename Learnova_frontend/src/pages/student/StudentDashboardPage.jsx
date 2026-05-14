@@ -99,6 +99,7 @@ export default function StudentDashboardPage() {
   const [adaptiveMissions, setAdaptiveMissions] = useState(null);
   const [aiMentor, setAiMentor] = useState(null);
   const [activityFeed, setActivityFeed] = useState([]);
+  const [engagedToday, setEngagedToday] = useState(false);
   const [floatingXps, setFloatingXps] = useState([]);
   const [achievementModal, setAchievementModal] = useState(null);
   const [levelUpModal, setLevelUpModal] = useState(null);
@@ -124,10 +125,10 @@ export default function StudentDashboardPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const [courseData, marksData, purchaseData, profileData, gamData, lbData, achData, missData, lpData, adaptMissData, mentorData] = await Promise.all([
+        const [courseData, marksData, purchaseData, profileData, gamData, lbData, achData, missData, lpData, adaptMissData, mentorData, feedData] = await Promise.all([
           fetchStudentCourseCatalog(), fetchMyStudentMarks(), fetchMyStudentPurchases(),
           fetchStudentProfile(), fetchGamificationStats(), fetchGamificationLeaderboard(),
-          fetchAchievements(), fetchMissions(), fetchLearningProfile(), fetchAdaptiveMissions(), fetchAIMentor(),
+          fetchAchievements(), fetchMissions(), fetchLearningProfile(), fetchAdaptiveMissions(), fetchAIMentor(), fetchActivityFeed(),
         ]);
         if (cancelled) return;
 
@@ -164,6 +165,10 @@ export default function StudentDashboardPage() {
         setLearningProfile(lpData || null);
         setAdaptiveMissions(adaptMissData || null);
         setAiMentor(mentorData || null);
+        if (feedData) {
+          setActivityFeed(feedData.feed || []);
+          setEngagedToday(Boolean(feedData.engagedToday));
+        }
       } catch (err) {
         if (!cancelled) setError(err?.message || (isArabic ? 'فشل تحميل لوحة الطالب.' : 'Failed to load dashboard.'));
       } finally {
@@ -215,6 +220,7 @@ export default function StudentDashboardPage() {
 
       // Streak warning banner — show only when student has NOT engaged today.
       // Auto-dismiss the moment the backend confirms engagement (lastActivityAt === today).
+      setEngagedToday(Boolean(feed.engagedToday));
       if (feed.engagedToday) {
         if (!streakDismissedRef.current) dismissStreakBanner();
       } else if (!streakDismissedRef.current) {
@@ -370,7 +376,7 @@ export default function StudentDashboardPage() {
         </section>
 
         {/* ─── AI Mentor ─── */}
-        {aiMentor && <AIMentorSection mentor={aiMentor} isArabic={isArabic} />}
+        {aiMentor && <AIMentorSection mentor={aiMentor} isArabic={isArabic} engagedToday={engagedToday} />}
 
         {/* ─── Achievements ─── */}
         <section className="relative overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-6 shadow-sm">
@@ -835,111 +841,144 @@ const COACHING_TYPE_CONFIG = {
   suggestion: { border: 'border-indigo-100', bg: 'bg-indigo-50/70',  text: 'text-indigo-800',  dot: 'bg-indigo-400'  },
 };
 
-function AIMentorSection({ mentor, isArabic }) {
-  const urgCfg   = URGENCY_CONFIG[mentor.nextBestAction?.urgency] || URGENCY_CONFIG.LOW;
-  const ActionIcon = MENTOR_ACTION_ICONS[mentor.nextBestAction?.icon] || Target;
+const STREAK_WARN_TYPES = new Set(['STREAK_BROKEN', 'STREAK_AT_RISK']);
+const STREAK_DANGER_RE  = /fragile|protect it|study.*today|streak.*risk|every comeback|study something/i;
+
+const ENGAGED_SUCCESS = { message: "You're showing up — streak is safe and momentum is building.", type: 'ENGAGED' };
+const ENGAGED_ACTION  = { action: 'Keep exploring your courses', reason: 'You already engaged today — consistency compounds', urgency: 'LOW', icon: 'TARGET' };
+
+function _splitNarrative(text) {
+  if (!text) return [];
+  return text.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 0).slice(0, 3);
+}
+
+function AIMentorSection({ mentor, isArabic, engagedToday }) {
+  // ── Apply engagedToday overrides ────────────────────────────────────────────
+  const isStreakWarn = mentor.urgentWarning && STREAK_WARN_TYPES.has(mentor.urgentWarning.type);
+  const urgentWarning   = engagedToday && isStreakWarn ? null : mentor.urgentWarning;
+  const successHighlight = engagedToday && isStreakWarn
+    ? ENGAGED_SUCCESS
+    : mentor.successHighlight;
+
+  const rawAction = mentor.nextBestAction;
+  const isStreakAction = rawAction?.icon === 'FLAME';
+  const nextBestAction = engagedToday && isStreakAction ? ENGAGED_ACTION : rawAction;
+
+  const coachingPoints = (mentor.coachingPoints ?? []).filter(
+    p => !(engagedToday && STREAK_DANGER_RE.test(p.message)),
+  );
+  if (engagedToday && coachingPoints.length < (mentor.coachingPoints?.length ?? 0)) {
+    coachingPoints.unshift({ icon: 'TREND', type: 'success', message: "Engaged today — streak is protected and your habit is getting stronger." });
+  }
+
+  const urgCfg    = URGENCY_CONFIG[nextBestAction?.urgency] || URGENCY_CONFIG.LOW;
+  const ActionIcon = MENTOR_ACTION_ICONS[nextBestAction?.icon] || Target;
+  const narrativeParts = _splitNarrative(mentor.narrative);
 
   return (
-    <section className="relative overflow-hidden rounded-[2rem] border border-violet-200/60 bg-gradient-to-br from-slate-900 via-violet-950 to-fuchsia-950 p-6 shadow-[0_24px_60px_-16px_rgba(139,92,246,0.45)] md:p-8">
+    <section className="relative overflow-hidden rounded-[2rem] border border-violet-300/20 bg-gradient-to-br from-slate-900 via-violet-950 to-fuchsia-950 shadow-[0_20px_56px_-16px_rgba(139,92,246,0.4)]">
       {/* decorative orbs */}
-      <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-violet-500/10 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-16 left-1/4 h-56 w-56 rounded-full bg-fuchsia-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-violet-500/8 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-12 left-1/3 h-48 w-48 rounded-full bg-fuchsia-500/8 blur-3xl" />
 
-      {/* Header */}
-      <div className="relative flex items-start justify-between gap-4">
+      {/* ── Header ── */}
+      <div className="relative flex items-center justify-between gap-3 border-b border-white/8 px-5 py-4">
         <div className="flex items-center gap-3">
-          {/* Glowing mentor badge */}
-          <div className="relative">
-            <div className="absolute inset-0 animate-ping rounded-full bg-violet-400/30" style={{ animationDuration: '2.5s' }} />
-            <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-[0_0_24px_rgba(167,139,250,0.6)]">
-              <Brain size={22} className="text-white" />
+          <div className="relative shrink-0">
+            <div className="absolute inset-0 animate-ping rounded-full bg-violet-400/25" style={{ animationDuration: '2.8s' }} />
+            <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-[0_0_18px_rgba(167,139,250,0.55)]">
+              <Brain size={17} className="text-white" />
             </div>
           </div>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-violet-300">
+            <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-violet-400">
               {isArabic ? 'المرشد الذكي' : 'AI Mentor'}
             </p>
-            <h2 className="text-lg font-black text-white">
-              {isArabic ? 'تحليل مخصص لك' : 'Your Coaching Report'}
+            <h2 className="text-sm font-black leading-tight text-white">
+              {isArabic ? 'تحليل مخصص لك' : 'Your coaching report'}
             </h2>
           </div>
         </div>
-        <div className="flex flex-col items-end gap-1.5">
-          {mentor.aiPowered ? (
-            <span className="flex items-center gap-1 rounded-full border border-violet-400/30 bg-violet-500/20 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-violet-200 backdrop-blur">
-              <Sparkles size={8} className="text-violet-300" /> Groq AI
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white/50 backdrop-blur">
-              <Brain size={8} /> Algorithmic
-            </span>
-          )}
-        </div>
+        {mentor.aiPowered ? (
+          <span className="flex shrink-0 items-center gap-1 rounded-full border border-violet-400/25 bg-violet-500/15 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-violet-300">
+            <Sparkles size={7} /> Groq AI
+          </span>
+        ) : (
+          <span className="flex shrink-0 items-center gap-1 rounded-full border border-white/8 bg-white/4 px-2 py-0.5 text-[8px] font-semibold text-white/35">
+            Algorithmic
+          </span>
+        )}
       </div>
 
-      {/* Narrative */}
-      <div className="relative mt-5 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 backdrop-blur">
-        <p className="text-sm font-semibold italic leading-relaxed text-violet-100">
-          &ldquo;{mentor.narrative}&rdquo;
-        </p>
-      </div>
+      <div className="relative space-y-3 p-5">
 
-      {/* Warning + Success highlight row */}
-      {(mentor.urgentWarning || mentor.successHighlight) && (
-        <div className="relative mt-4 grid gap-3 sm:grid-cols-2">
-          {mentor.urgentWarning && (
-            <div className="flex items-start gap-2.5 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 backdrop-blur">
-              <AlertCircle size={15} className="mt-0.5 shrink-0 text-amber-300" />
-              <p className="text-xs font-semibold leading-snug text-amber-100">{mentor.urgentWarning.message}</p>
-            </div>
-          )}
-          {mentor.successHighlight && (
-            <div className="flex items-start gap-2.5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 backdrop-blur">
-              <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald-300" />
-              <p className="text-xs font-semibold leading-snug text-emerald-100">{mentor.successHighlight.message}</p>
-            </div>
-          )}
+        {/* ── Narrative ── */}
+        <div className="rounded-xl border border-white/8 bg-white/4 px-4 py-3">
+          {narrativeParts.map((sentence, i) => (
+            <p key={i} className={`text-xs font-medium leading-relaxed text-violet-100 ${i > 0 ? 'mt-1.5' : ''}`}>
+              {i === 0 ? <>&ldquo;{sentence}</> : sentence}
+              {i === narrativeParts.length - 1 ? <>&rdquo;</> : ''}
+            </p>
+          ))}
         </div>
-      )}
 
-      {/* Next Best Action */}
-      {mentor.nextBestAction && (
-        <div className={`relative mt-4 overflow-hidden rounded-2xl border ${urgCfg.border} bg-gradient-to-r ${urgCfg.bg} p-4`}>
-          <div className="flex items-start gap-3">
-            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${urgCfg.badge} shadow-sm`}>
-              <ActionIcon size={18} className="text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-500">
-                  {isArabic ? 'الخطوة التالية الأفضل' : 'Next Best Action'}
-                </p>
-                <span className={`rounded-full ${urgCfg.badge} px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-white`}>
-                  {urgCfg.label}
-                </span>
+        {/* ── Warning + Success row ── */}
+        {(urgentWarning || successHighlight) && (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {urgentWarning && (
+              <div className="flex items-start gap-2 rounded-xl border border-amber-400/25 bg-amber-400/8 px-3 py-2.5">
+                <AlertCircle size={12} className="mt-0.5 shrink-0 text-amber-300" />
+                <p className="text-[11px] font-semibold leading-snug text-amber-100">{urgentWarning.message}</p>
               </div>
-              <p className="mt-0.5 text-sm font-black text-slate-800">{mentor.nextBestAction.action}</p>
-              <p className="mt-0.5 text-[11px] font-medium text-slate-500">{mentor.nextBestAction.reason}</p>
+            )}
+            {successHighlight && (
+              <div className="flex items-start gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/8 px-3 py-2.5">
+                <CheckCircle2 size={12} className="mt-0.5 shrink-0 text-emerald-300" />
+                <p className="text-[11px] font-semibold leading-snug text-emerald-100">{successHighlight.message}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Next Best Action ── */}
+        {nextBestAction && (
+          <div className={`overflow-hidden rounded-xl border ${urgCfg.border} bg-gradient-to-r ${urgCfg.bg}`}>
+            <div className="flex items-center gap-3 px-3.5 py-3">
+              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${urgCfg.badge} shadow-sm`}>
+                <ActionIcon size={15} className="text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[8px] font-black uppercase tracking-[0.18em] text-slate-400">
+                    {isArabic ? 'الخطوة التالية' : 'Next action'}
+                  </p>
+                  <span className={`rounded-full ${urgCfg.badge} px-1.5 py-px text-[7px] font-black uppercase tracking-wider text-white`}>
+                    {urgCfg.label}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs font-black leading-tight text-slate-800">{nextBestAction.action}</p>
+                <p className="text-[10px] font-medium text-slate-500">{nextBestAction.reason}</p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Coaching points */}
-      {mentor.coachingPoints?.length > 0 && (
-        <div className="relative mt-4 grid gap-2.5 sm:grid-cols-2">
-          {mentor.coachingPoints.map((point, i) => {
-            const CoachIcon = MENTOR_COACHING_ICONS[point.icon] || Lightbulb;
-            const cfg = COACHING_TYPE_CONFIG[point.type] || COACHING_TYPE_CONFIG.suggestion;
-            return (
-              <div key={i} className={`flex items-start gap-2.5 rounded-xl border ${cfg.border} ${cfg.bg} px-3 py-2.5`}>
-                <CoachIcon size={13} className={`mt-0.5 shrink-0 ${cfg.text}`} />
-                <p className={`text-[11px] font-semibold leading-snug ${cfg.text}`}>{point.message}</p>
-              </div>
-            );
-          })}
-        </div>
-      )}
+        {/* ── Coaching points ── */}
+        {coachingPoints.length > 0 && (
+          <div className="grid gap-1.5 sm:grid-cols-2">
+            {coachingPoints.slice(0, 4).map((point, i) => {
+              const CoachIcon = MENTOR_COACHING_ICONS[point.icon] || Lightbulb;
+              const cfg = COACHING_TYPE_CONFIG[point.type] || COACHING_TYPE_CONFIG.suggestion;
+              return (
+                <div key={i} className={`flex items-start gap-2 rounded-xl border ${cfg.border} ${cfg.bg} px-2.5 py-2`}>
+                  <CoachIcon size={11} className={`mt-0.5 shrink-0 ${cfg.text}`} />
+                  <p className={`text-[10px] font-semibold leading-snug ${cfg.text}`}>{point.message}</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
