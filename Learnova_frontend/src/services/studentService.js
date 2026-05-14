@@ -1089,6 +1089,15 @@ export async function fetchAdaptiveMissions() {
   }
 }
 
+export async function fetchAIMentor() {
+  try {
+    const response = await api.get('/student/gamification/mentor');
+    return unwrap(response, null);
+  } catch {
+    return null;
+  }
+}
+
 export function getFallbackLessons() {
   return fallbackLessons;
 }
