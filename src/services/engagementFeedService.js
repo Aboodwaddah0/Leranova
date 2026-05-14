@@ -71,6 +71,10 @@ export async function getEngagementFeed(studentId) {
   const totalXp = xpRow?.totalXp ?? 0;
   const level   = xpRow?.level   ?? 1;
 
+  const today        = new Date().toISOString().slice(0, 10);
+  const lastActivity = streakRow?.lastActivityAt?.toISOString().slice(0, 10) ?? null;
+  const engagedToday = lastActivity === today;
+
   const daily  = missionStats.filter(m => m.missionKey.startsWith('DAILY_'));
   const weekly = missionStats.filter(m => m.missionKey.startsWith('WEEKLY_'));
 
@@ -79,6 +83,8 @@ export async function getEngagementFeed(studentId) {
     level,
     xpInLevel:      totalXp % 100,
     currentStreak:  streakRow?.currentStreak ?? 0,
+    engagedToday,
+    lastActivityAt: streakRow?.lastActivityAt?.toISOString() ?? null,
     feed: recentEvents.map(e => ({
       type:      e.eventType,
       label:     EVENT_LABELS[e.eventType] || e.eventType,
