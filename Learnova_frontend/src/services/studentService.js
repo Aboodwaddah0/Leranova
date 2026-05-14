@@ -1080,6 +1080,15 @@ export async function fetchLearningProfile() {
   }
 }
 
+export async function fetchAdaptiveMissions() {
+  try {
+    const response = await api.get('/student/gamification/missions/adaptive');
+    return unwrap(response, null);
+  } catch {
+    return null;
+  }
+}
+
 export function getFallbackLessons() {
   return fallbackLessons;
 }
