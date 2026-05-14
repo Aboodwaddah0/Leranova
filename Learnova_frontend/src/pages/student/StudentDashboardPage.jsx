@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight, ChevronRight, BookOpen, Flame, TrendingUp, Trophy, Medal, Target,
@@ -21,6 +21,7 @@ import {
   fetchLearningProfile,
   fetchAdaptiveMissions,
   fetchAIMentor,
+  fetchActivityFeed,
 } from '../../services/studentService';
 import { useLanguage } from '../../utils/i18n';
 import { calculateProgressForLessons, subscribeToProgress } from '../../utils/studentProgress';
@@ -96,6 +97,19 @@ export default function StudentDashboardPage() {
   const [learningProfile, setLearningProfile] = useState(null);
   const [adaptiveMissions, setAdaptiveMissions] = useState(null);
   const [aiMentor, setAiMentor] = useState(null);
+  const [activityFeed, setActivityFeed] = useState([]);
+  const [floatingXps, setFloatingXps] = useState([]);
+  const [achievementModal, setAchievementModal] = useState(null);
+  const [levelUpModal, setLevelUpModal] = useState(null);
+  const [showStreakBanner, setShowStreakBanner] = useState(false);
+
+  const prevRef = useRef({ level: 0, totalXp: 0, lastAchKey: null, pollCount: 0 });
+  const streakDismissedRef = useRef(false);
+
+  const dismissStreakBanner = () => {
+    setShowStreakBanner(false);
+    streakDismissedRef.current = true;
+  };
 
   useEffect(() => subscribeToProgress(() => setProgressTick((v) => v + 1)), []);
 
@@ -154,6 +168,65 @@ export default function StudentDashboardPage() {
     return () => { cancelled = true; };
   }, [isArabic, progressTick]);
 
+  // ── 30-second engagement polling ───────────────────────────────────────────
+  useEffect(() => {
+    let active = true;
+
+    const poll = async () => {
+      const feed = await fetchActivityFeed();
+      if (!active || !feed) return;
+
+      const prev = prevRef.current;
+      prev.pollCount += 1;
+
+      // Level-up detection
+      if (feed.level > prev.level && prev.level > 0) {
+        setLevelUpModal(feed.level);
+      }
+
+      // New achievement (unlocked in last 2 minutes)
+      const freshAch = (feed.recentAchievements || []).find(
+        a => Date.now() - new Date(a.unlockedAt).getTime() < 120_000,
+      );
+      if (freshAch && freshAch.key !== prev.lastAchKey) {
+        setAchievementModal(freshAch);
+        prev.lastAchKey = freshAch.key;
+      }
+
+      // Floating XP indicator
+      if (feed.totalXp > prev.totalXp && prev.totalXp > 0) {
+        const gained = feed.totalXp - prev.totalXp;
+        const id = Date.now();
+        setFloatingXps(p => [...p, { id, amount: gained }]);
+        setTimeout(() => setFloatingXps(p => p.filter(x => x.id !== id)), 2200);
+      }
+
+      // Streak warning banner
+      if (!streakDismissedRef.current && feed.currentStreak < 3) {
+        setShowStreakBanner(true);
+      }
+
+      // Live-update gamification header values
+      setGamification(g => ({ ...g, totalXp: feed.totalXp, level: feed.level, currentStreak: feed.currentStreak }));
+      setActivityFeed(feed.feed || []);
+
+      prevRef.current = { ...prev, level: feed.level, totalXp: feed.totalXp };
+    };
+
+    // Refresh adaptive missions every other poll (60s)
+    const pollWithMissions = async () => {
+      await poll();
+      if (prevRef.current.pollCount % 2 === 0) {
+        const am = await fetchAdaptiveMissions();
+        if (am) setAdaptiveMissions(am);
+      }
+    };
+
+    const timer   = setTimeout(pollWithMissions, 3000);
+    const interval = setInterval(pollWithMissions, 30_000);
+    return () => { active = false; clearTimeout(timer); clearInterval(interval); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!t?.student) return <div className="m-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{isArabic ? 'جاري تحميل الترجمة...' : 'Loading translations...'}</div>;
   if (!Array.isArray(enrolledCourses)) return <div className="m-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{t.student.common.noData}</div>;
 
@@ -183,7 +256,35 @@ export default function StudentDashboardPage() {
 
   return (
     <StudentLayout>
+      {/* Custom animation keyframes */}
+      <style>{`
+        @keyframes floatUp {
+          0%   { opacity:0; transform:translateY(14px) scale(0.85); }
+          18%  { opacity:1; transform:translateY(0) scale(1); }
+          78%  { opacity:1; transform:translateY(-50px); }
+          100% { opacity:0; transform:translateY(-70px) scale(0.9); }
+        }
+        @keyframes scaleIn {
+          from { opacity:0; transform:scale(0.8); }
+          to   { opacity:1; transform:scale(1); }
+        }
+        @keyframes slideDown {
+          from { opacity:0; transform:translateY(-10px); }
+          to   { opacity:1; transform:translateY(0); }
+        }
+      `}</style>
+
+      {/* ── Global overlays ── */}
+      {levelUpModal && <LevelUpOverlay level={levelUpModal} onClose={() => setLevelUpModal(null)} />}
+      {achievementModal && <AchievementModal achievement={achievementModal} onClose={() => setAchievementModal(null)} />}
+      <FloatingXPLayer items={floatingXps} />
+
       <div className="space-y-6 pb-8">
+
+        {/* Streak warning banner */}
+        {showStreakBanner && (
+          <StreakBanner streak={gamification.currentStreak} onDismiss={dismissStreakBanner} />
+        )}
 
         {/* Loading */}
         {loading && (
@@ -312,90 +413,91 @@ export default function StudentDashboardPage() {
         {/* ─── Missions ─── */}
         <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
           {/* Header */}
-          <div className="border-b border-slate-100 px-6 py-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-violet-700">
-                  <Target size={9} className="text-violet-500" />
-                  {isArabic ? 'المهام' : 'Missions'}
+          <div className="border-b border-slate-100 px-6 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-md shadow-violet-200">
+                  <Target size={16} className="text-white" />
                 </div>
-                <h2 className="mt-1.5 text-xl font-black text-slate-900">{isArabic ? 'مهامك اليومية والأسبوعية' : 'Your daily & weekly missions'}</h2>
-              </div>
-              <div className="flex items-center gap-2">
-                {adaptiveMissions && (
-                  <TierBadge tier={adaptiveMissions.tier} isArabic={isArabic} />
-                )}
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-md shadow-violet-200">
-                  <Target size={18} className="text-white" />
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                    {isArabic ? 'المهام' : 'Missions'}
+                    {adaptiveMissions && <span className="ml-1.5 text-violet-500">· AI</span>}
+                  </p>
+                  <h2 className="text-base font-black leading-tight text-slate-900">
+                    {isArabic ? 'مهامك اليومية والأسبوعية' : 'Daily & Weekly Goals'}
+                  </h2>
                 </div>
               </div>
+              {adaptiveMissions && <TierBadge tier={adaptiveMissions.tier} isArabic={isArabic} />}
             </div>
             {adaptiveMissions && (
-              <div className="mt-3 flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50/60 px-3 py-2">
-                <Brain size={13} className="shrink-0 text-violet-500" />
-                <p className="text-[11px] font-semibold text-violet-700">
+              <div className="mt-3 flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50/70 px-3 py-1.5">
+                <Sparkles size={11} className="shrink-0 text-violet-500" />
+                <p className="text-[10px] font-semibold text-violet-600">
                   {isArabic
-                    ? `مهام مخصصة لمستواك · نقاط التفاعل: ${adaptiveMissions.engagementScore}/100`
-                    : `AI-personalized for your level · Engagement: ${adaptiveMissions.engagementScore}/100`}
+                    ? `مخصص لمستواك · تفاعل ${adaptiveMissions.engagementScore}/100`
+                    : `Personalized for your level · Engagement ${adaptiveMissions.engagementScore}/100`}
                 </p>
               </div>
             )}
           </div>
 
-          <div className="space-y-6 p-6">
-            {/* Daily */}
-            <div>
-              {(() => {
-                const dailyList = adaptiveMissions?.daily ?? missions.daily;
-                return (
-                  <>
-                    <div className="mb-3 flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm">
-                        <Sun size={13} className="text-white" />
-                      </div>
-                      <span className="text-sm font-black text-slate-800">{isArabic ? 'المهام اليومية' : 'Daily Missions'}</span>
-                      <span className="ml-auto rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-600">
-                        {dailyList.filter(m => m.completed).length}/{dailyList.length} {isArabic ? 'مكتمل' : 'done'}
-                      </span>
+          {/* Two-panel layout */}
+          <div className="grid divide-y divide-slate-100 md:grid-cols-2 md:divide-x md:divide-y-0">
+            {/* Daily panel */}
+            {(() => {
+              const list = adaptiveMissions?.daily ?? missions.daily;
+              const done = list.filter(m => m.completed).length;
+              return (
+                <div className="p-5">
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm">
+                      <Sun size={11} className="text-white" />
                     </div>
-                    {dailyList.length === 0 ? (
-                      <EmptyState title={isArabic ? 'لا توجد مهام يومية' : 'No daily missions'} description={isArabic ? 'ستظهر المهام اليومية هنا.' : 'Daily missions will appear here.'} icon={Sun} />
-                    ) : (
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {dailyList.map((m, i) => <MissionCard key={m.key} mission={m} index={i} period="daily" />)}
+                    <span className="text-xs font-black text-slate-700">{isArabic ? 'يومي' : 'Daily'}</span>
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <div className="h-1.5 w-14 overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-400 transition-all duration-700"
+                          style={{ width: list.length ? `${Math.round((done / list.length) * 100)}%` : '0%' }} />
                       </div>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
+                      <span className="text-[10px] font-bold text-amber-600">{done}/{list.length}</span>
+                    </div>
+                  </div>
+                  {list.length === 0
+                    ? <EmptyState title={isArabic ? 'لا توجد مهام' : 'No missions'} description="" icon={Sun} />
+                    : <div className="space-y-2">{list.map(m => <MissionRow key={m.key} mission={m} period="daily" />)}</div>
+                  }
+                </div>
+              );
+            })()}
 
-            {/* Weekly */}
-            <div>
-              {(() => {
-                const weeklyList = adaptiveMissions?.weekly ?? missions.weekly;
-                return (
-                  <>
-                    <div className="mb-3 flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 shadow-sm">
-                        <CalendarDays size={13} className="text-white" />
-                      </div>
-                      <span className="text-sm font-black text-slate-800">{isArabic ? 'المهام الأسبوعية' : 'Weekly Missions'}</span>
-                      <span className="ml-auto rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-600">
-                        {weeklyList.filter(m => m.completed).length}/{weeklyList.length} {isArabic ? 'مكتمل' : 'done'}
-                      </span>
+            {/* Weekly panel */}
+            {(() => {
+              const list = adaptiveMissions?.weekly ?? missions.weekly;
+              const done = list.filter(m => m.completed).length;
+              return (
+                <div className="p-5">
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 shadow-sm">
+                      <CalendarDays size={11} className="text-white" />
                     </div>
-                    {weeklyList.length === 0 ? (
-                      <EmptyState title={isArabic ? 'لا توجد مهام أسبوعية' : 'No weekly missions'} description={isArabic ? 'ستظهر المهام الأسبوعية هنا.' : 'Weekly missions will appear here.'} icon={CalendarDays} />
-                    ) : (
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {weeklyList.map((m, i) => <MissionCard key={m.key} mission={m} index={i} period="weekly" />)}
+                    <span className="text-xs font-black text-slate-700">{isArabic ? 'أسبوعي' : 'Weekly'}</span>
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <div className="h-1.5 w-14 overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-full rounded-full bg-gradient-to-r from-indigo-400 to-violet-500 transition-all duration-700"
+                          style={{ width: list.length ? `${Math.round((done / list.length) * 100)}%` : '0%' }} />
                       </div>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
+                      <span className="text-[10px] font-bold text-indigo-600">{done}/{list.length}</span>
+                    </div>
+                  </div>
+                  {list.length === 0
+                    ? <EmptyState title={isArabic ? 'لا توجد مهام' : 'No missions'} description="" icon={CalendarDays} />
+                    : <div className="space-y-2">{list.map(m => <MissionRow key={m.key} mission={m} period="weekly" />)}</div>
+                  }
+                </div>
+              );
+            })()}
           </div>
         </section>
 
@@ -482,6 +584,9 @@ export default function StudentDashboardPage() {
           )}
         </section>
 
+        {/* ─── Activity Feed ─── */}
+        {activityFeed.length > 0 && <ActivityFeedSection feed={activityFeed} isArabic={isArabic} />}
+
         {/* ─── Continue Learning ─── */}
         <section>
           <SectionHeader
@@ -566,101 +671,99 @@ const MISSION_ICONS = {
   WEEKLY_FLASHCARD_3: Layers,
 };
 
-const MISSION_COLORS = {
-  daily: {
-    active:    { icon: 'from-violet-500 to-fuchsia-500', border: 'border-violet-100', bg: 'bg-white', bar: 'from-violet-400 to-fuchsia-500', tag: 'bg-violet-100 text-violet-700', progress: 'text-violet-500', label: 'text-violet-900', desc: 'text-violet-400' },
-    completed: { icon: 'from-emerald-400 to-teal-500',   border: 'border-emerald-100', bg: 'bg-emerald-50/50', bar: 'from-emerald-400 to-teal-400', tag: 'bg-emerald-100 text-emerald-700', progress: 'text-emerald-500', label: 'text-emerald-700', desc: 'text-emerald-400' },
-  },
-  weekly: {
-    active:    { icon: 'from-indigo-500 to-violet-600', border: 'border-indigo-100', bg: 'bg-white', bar: 'from-indigo-400 to-violet-500', tag: 'bg-indigo-100 text-indigo-700', progress: 'text-indigo-500', label: 'text-indigo-900', desc: 'text-indigo-400' },
-    completed: { icon: 'from-emerald-400 to-teal-500',  border: 'border-emerald-100', bg: 'bg-emerald-50/50', bar: 'from-emerald-400 to-teal-400', tag: 'bg-emerald-100 text-emerald-700', progress: 'text-emerald-500', label: 'text-emerald-700', desc: 'text-emerald-400' },
-  },
-};
+// MISSION_COLORS removed — MissionRow uses inline logic
 
 const DIFFICULTY_CONFIG = {
-  BEGINNER:     { label: 'Beginner',     cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-  MEDIUM:       { label: 'Medium',       cls: 'bg-blue-100 text-blue-700 border-blue-200'          },
-  INTERMEDIATE: { label: 'Intermediate', cls: 'bg-blue-100 text-blue-700 border-blue-200'          },
-  HARD:         { label: 'Hard',         cls: 'bg-amber-100 text-amber-700 border-amber-200'       },
-  ADVANCED:     { label: 'Advanced',     cls: 'bg-amber-100 text-amber-700 border-amber-200'       },
-  ELITE:        { label: 'Elite',        cls: 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200' },
+  BEGINNER:     { label: 'Beginner',     cls: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
+  MEDIUM:       { label: 'Medium',       cls: 'bg-blue-50 text-blue-600 border-blue-200'          },
+  INTERMEDIATE: { label: 'Intermediate', cls: 'bg-blue-50 text-blue-600 border-blue-200'          },
+  HARD:         { label: 'Hard',         cls: 'bg-amber-50 text-amber-600 border-amber-200'       },
+  ADVANCED:     { label: 'Advanced',     cls: 'bg-amber-50 text-amber-600 border-amber-200'       },
+  ELITE:        { label: 'Elite',        cls: 'bg-fuchsia-50 text-fuchsia-600 border-fuchsia-200' },
 };
 
-const UNIT_LABEL = (key) => key.includes('QUIZ') ? 'quizzes' : key.includes('FLASHCARD') || key.includes('CHATBOT') ? 'sessions' : 'lessons';
+const UNIT_LABEL = (key) =>
+  key.includes('QUIZ') ? 'quizzes' :
+  key.includes('FLASHCARD') || key.includes('CHATBOT') ? 'sessions' : 'lessons';
 
-function MissionCard({ mission: m, period }) {
-  const pct = Math.min(100, m.goal > 0 ? Math.round((m.progress / m.goal) * 100) : 0);
-  const colors = MISSION_COLORS[period][m.completed ? 'completed' : 'active'];
+function MissionRow({ mission: m, period }) {
+  const pct  = Math.min(100, m.goal > 0 ? Math.round((m.progress / m.goal) * 100) : 0);
   const Icon = MISSION_ICONS[m.key] || Target;
-  const circumference = 2 * Math.PI * 14;
-  const strokeDash = (pct / 100) * circumference;
   const diff = m.difficulty ? DIFFICULTY_CONFIG[m.difficulty] : null;
+  const isDone = m.completed;
+
+  const iconGrad = isDone
+    ? 'from-emerald-400 to-teal-500'
+    : period === 'daily'
+    ? 'from-amber-400 to-orange-500'
+    : 'from-indigo-500 to-violet-600';
+
+  const barGrad = isDone
+    ? 'from-emerald-400 to-teal-400'
+    : period === 'daily'
+    ? 'from-amber-400 to-orange-400'
+    : 'from-indigo-500 to-violet-500';
+
+  const ringStroke = isDone ? '#34d399' : period === 'daily' ? '#f59e0b' : '#818cf8';
+  const circumference = 2 * Math.PI * 11;
+  const strokeDash = (pct / 100) * circumference;
 
   return (
-    <div className={`relative flex flex-col gap-3 overflow-hidden rounded-2xl border ${colors.border} ${colors.bg} p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md`}>
-      {/* completed ribbon */}
-      {m.completed && (
-        <div className="absolute right-0 top-0 overflow-hidden rounded-bl-2xl rounded-tr-2xl">
-          <div className="flex items-center gap-1 bg-emerald-500 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white">
-            <CheckCircle2 size={9} /> Done
-          </div>
-        </div>
+    <div className={`group relative flex items-center gap-3 rounded-xl border px-3 py-2.5 transition duration-200 hover:-translate-y-0.5 hover:shadow-sm
+      ${isDone ? 'border-emerald-100 bg-emerald-50/40' : 'border-slate-100 bg-white hover:border-violet-100 hover:bg-violet-50/20'}`}
+    >
+      {/* Recommended accent line */}
+      {m.recommended && !isDone && (
+        <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full bg-gradient-to-b from-violet-500 to-fuchsia-500" />
       )}
 
-      {/* recommended badge */}
-      {m.recommended && !m.completed && (
-        <div className="absolute left-0 top-0 overflow-hidden rounded-br-2xl rounded-tl-2xl">
-          <div className="flex items-center gap-1 bg-gradient-to-r from-violet-600 to-fuchsia-600 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white">
-            <Sparkles size={8} /> AI Pick
-          </div>
-        </div>
-      )}
+      {/* Icon */}
+      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${iconGrad} shadow-sm ${isDone ? 'opacity-70' : ''}`}>
+        {isDone
+          ? <CheckCircle2 size={14} className="text-white" />
+          : <Icon size={14} className="text-white" />
+        }
+      </div>
 
-      {/* Icon + XP row */}
-      <div className={`flex items-start justify-between gap-3 ${m.recommended && !m.completed ? 'mt-5' : ''}`}>
-        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${colors.icon} shadow-md`}>
-          <Icon size={20} className="text-white" />
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${colors.tag}`}>+{m.xp} XP</span>
+      {/* Label + progress bar */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {m.recommended && !isDone && (
+            <span className="flex items-center gap-0.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-violet-600">
+              <Sparkles size={7} /> AI
+            </span>
+          )}
+          <p className={`text-xs font-black leading-none text-slate-800 ${isDone ? 'line-through opacity-50' : ''}`}>
+            {m.label}
+          </p>
           {diff && (
-            <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold ${diff.cls}`}>{diff.label}</span>
+            <span className={`rounded-full border px-1.5 py-0.5 text-[8px] font-bold ${diff.cls}`}>{diff.label}</span>
           )}
         </div>
+        {/* thin progress bar */}
+        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-100">
+          <div className={`h-full rounded-full bg-gradient-to-r ${barGrad} transition-all duration-700`}
+            style={{ width: `${pct}%` }} />
+        </div>
+        <p className={`mt-0.5 text-[10px] font-semibold ${isDone ? 'text-emerald-500' : 'text-slate-400'}`}>
+          {isDone ? '✓ Complete' : `${m.progress}/${m.goal} ${UNIT_LABEL(m.key)}`}
+        </p>
       </div>
 
-      {/* Title + description */}
-      <div>
-        <p className={`text-sm font-black leading-snug ${colors.label} ${m.completed ? 'line-through opacity-70' : ''}`}>{m.label}</p>
-        {m.description && <p className={`mt-0.5 text-[11px] font-medium leading-snug ${colors.desc}`}>{m.description}</p>}
-      </div>
-
-      {/* Progress ring + bar */}
-      <div className="flex items-center gap-3">
-        <div className="relative shrink-0">
-          <svg className="-rotate-90" width="36" height="36" viewBox="0 0 36 36">
-            <circle cx="18" cy="18" r="14" fill="none" stroke={m.completed ? '#d1fae5' : '#ede9fe'} strokeWidth="3" />
-            <circle
-              cx="18" cy="18" r="14" fill="none"
-              stroke={m.completed ? '#34d399' : (period === 'weekly' ? '#818cf8' : '#a78bfa')}
-              strokeWidth="3" strokeLinecap="round"
-              strokeDasharray={`${strokeDash} ${circumference}`}
-            />
+      {/* Mini ring + XP */}
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <div className="relative">
+          <svg className="-rotate-90" width="26" height="26" viewBox="0 0 26 26">
+            <circle cx="13" cy="13" r="11" fill="none" stroke={isDone ? '#d1fae5' : '#f1f5f9'} strokeWidth="2.5" />
+            <circle cx="13" cy="13" r="11" fill="none" stroke={ringStroke} strokeWidth="2.5"
+              strokeLinecap="round" strokeDasharray={`${strokeDash} ${circumference}`} />
           </svg>
-          <span className={`absolute inset-0 flex items-center justify-center text-[9px] font-black ${colors.progress}`}>{pct}%</span>
+          <span className="absolute inset-0 flex items-center justify-center text-[7px] font-black text-slate-500">{pct}%</span>
         </div>
-
-        <div className="flex-1">
-          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-            <div
-              className={`h-full rounded-full bg-gradient-to-r ${colors.bar} transition-all duration-700`}
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          <p className={`mt-1 text-[10px] font-bold ${colors.progress}`}>
-            {m.progress}/{m.goal} {UNIT_LABEL(m.key)}
-          </p>
-        </div>
+        <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black
+          ${isDone ? 'bg-emerald-100 text-emerald-700' : period === 'daily' ? 'bg-amber-50 text-amber-600 border border-amber-200' : 'bg-indigo-50 text-indigo-600 border border-indigo-200'}`}>
+          +{m.xp}
+        </span>
       </div>
     </div>
   );
@@ -1110,14 +1213,190 @@ function CourseCard({ course, index, actionLabel, actionHref, variant }) {
 
 function EmptyState({ title, description, icon: Icon }) {
   return (
-    <div className="flex flex-col items-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-10 text-center">
+    <div className="flex flex-col items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center">
       {Icon && (
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <Icon size={20} className="text-slate-400" />
+        <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white shadow-sm">
+          <Icon size={18} className="text-slate-400" />
         </div>
       )}
-      <p className="text-sm font-bold text-slate-700">{title}</p>
-      <p className="mt-1 max-w-xs text-xs text-slate-400">{description}</p>
+      <p className="text-xs font-bold text-slate-600">{title}</p>
+      {description && <p className="mt-0.5 max-w-xs text-[10px] text-slate-400">{description}</p>}
     </div>
+  );
+}
+
+/* ─────────────── Floating XP Layer ─────────────── */
+
+function FloatingXPLayer({ items }) {
+  return (
+    <div className="pointer-events-none fixed right-5 top-20 z-50 flex flex-col-reverse items-end gap-2">
+      {items.map(item => (
+        <div key={item.id}
+          className="flex items-center gap-1.5 rounded-full border border-amber-200 bg-white px-3 py-1.5 shadow-lg shadow-amber-100"
+          style={{ animation: 'floatUp 2.2s ease-out forwards' }}>
+          <Zap size={12} className="text-amber-500" />
+          <span className="text-sm font-black text-amber-700">+{item.amount} XP</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─────────────── Achievement Modal ─────────────── */
+
+const ACHIEVEMENT_LABELS_FE = {
+  FIRST_LESSON: 'First Step',   LESSON_10:  'Eager Learner',   LESSON_50:    'Knowledge Seeker',
+  FIRST_QUIZ:   'Quiz Taker',   QUIZ_5:     'Quiz Master',      PERFECT_QUIZ: 'Perfectionist',
+  STREAK_3:     'On a Roll',    STREAK_7:   'Week Warrior',     STREAK_30:    'Unstoppable',
+  XP_100:       'Century Club', XP_500:     'XP Hunter',
+};
+
+function AchievementModal({ achievement, onClose }) {
+  const label = achievement?.label || ACHIEVEMENT_LABELS_FE[achievement?.key] || achievement?.key || 'Achievement';
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      onClick={onClose}>
+      <div className="relative w-full max-w-xs overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 p-8 text-center text-white shadow-2xl"
+        style={{ animation: 'scaleIn 0.22s ease-out' }}
+        onClick={e => e.stopPropagation()}>
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.15),transparent_70%)]" />
+        <div className="text-5xl">🏆</div>
+        <p className="mt-3 text-[10px] font-black uppercase tracking-[0.25em] text-emerald-100">Achievement Unlocked</p>
+        <h2 className="mt-1 text-2xl font-black">{label}</h2>
+        {achievement?.xp > 0 && (
+          <p className="mt-1 text-sm font-semibold text-emerald-100">+{achievement.xp} bonus XP</p>
+        )}
+        <button onClick={onClose}
+          className="mt-6 rounded-full border border-white/30 bg-white/20 px-6 py-2.5 text-sm font-black backdrop-blur transition hover:bg-white/30">
+          Claim! 🎉
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────── Level-Up Overlay ─────────────── */
+
+function LevelUpOverlay({ level, onClose }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 4500);
+    return () => clearTimeout(t);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex cursor-pointer items-center justify-center bg-gradient-to-br from-indigo-950/95 via-violet-950/95 to-fuchsia-950/95 backdrop-blur-sm"
+      onClick={onClose}>
+      <div className="text-center text-white" style={{ animation: 'scaleIn 0.3s cubic-bezier(0.175,0.885,0.32,1.275)' }}>
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          {[...Array(12)].map((_, i) => (
+            <div key={i} className="absolute h-1.5 w-1.5 rounded-full bg-violet-400"
+              style={{ left: `${10 + i * 7}%`, top: `${20 + (i % 3) * 25}%`, opacity: 0.4 + (i % 3) * 0.2 }} />
+          ))}
+        </div>
+        <div className="text-7xl">⚡</div>
+        <p className="mt-3 text-xs font-black uppercase tracking-[0.3em] text-violet-300">Level Up!</p>
+        <p className="mt-1 text-7xl font-black tracking-tight">
+          <span className="text-3xl font-bold text-violet-300">Lv.</span>{level}
+        </p>
+        <p className="mt-3 text-base font-semibold text-violet-200">You keep getting stronger</p>
+        <p className="mt-6 animate-pulse text-xs text-violet-500">tap to continue</p>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────── Streak Warning Banner ─────────────── */
+
+function StreakBanner({ streak, onDismiss }) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm"
+      style={{ animation: 'slideDown 0.2s ease-out' }}>
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm">
+        <Flame size={15} className="text-white" />
+      </div>
+      <p className="flex-1 text-sm font-semibold text-amber-800">
+        {streak > 0
+          ? `Your ${streak}-day streak is at risk! Study something today to keep it alive.`
+          : 'Your streak was broken. Start fresh today — every comeback counts!'}
+      </p>
+      <button onClick={onDismiss}
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-amber-400 transition hover:bg-amber-200 hover:text-amber-700">
+        ✕
+      </button>
+    </div>
+  );
+}
+
+/* ─────────────── Activity Feed ─────────────── */
+
+const FEED_ICONS = {
+  LESSON_COMPLETE:   BookOpen,
+  QUIZ_PASS:         Zap,
+  QUIZ_PERFECT:      Star,
+  DAILY_LOGIN:       Sun,
+  FLASHCARD_SESSION: Layers,
+  MINDMAP_SESSION:   Brain,
+  CHATBOT_SESSION:   MessageSquare,
+};
+
+const FEED_GRADIENTS = {
+  LESSON_COMPLETE:   'from-indigo-500 to-violet-500',
+  QUIZ_PASS:         'from-amber-400 to-orange-500',
+  QUIZ_PERFECT:      'from-emerald-400 to-teal-500',
+  DAILY_LOGIN:       'from-cyan-400 to-blue-500',
+  FLASHCARD_SESSION: 'from-fuchsia-500 to-pink-500',
+  MINDMAP_SESSION:   'from-violet-500 to-purple-600',
+  CHATBOT_SESSION:   'from-blue-500 to-indigo-600',
+};
+
+function relativeTime(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60_000)       return 'just now';
+  if (diff < 3_600_000)    return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000)   return `${Math.floor(diff / 3_600_000)}h ago`;
+  return `${Math.floor(diff / 86_400_000)}d ago`;
+}
+
+function ActivityFeedSection({ feed, isArabic }) {
+  return (
+    <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+      <div className="border-b border-slate-100 px-6 py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400 to-blue-500 shadow-md shadow-cyan-100">
+            <TrendingUp size={16} className="text-white" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+              {isArabic ? 'النشاط الأخير' : 'Recent Activity'}
+            </p>
+            <h2 className="text-base font-black leading-tight text-slate-900">
+              {isArabic ? 'سجل نشاطك' : 'Your activity timeline'}
+            </h2>
+          </div>
+        </div>
+      </div>
+
+      <div className="divide-y divide-slate-50 px-5 py-1">
+        {feed.slice(0, 10).map((item, i) => {
+          const Icon = FEED_ICONS[item.type] || Zap;
+          const grad = FEED_GRADIENTS[item.type] || 'from-slate-400 to-slate-500';
+          return (
+            <div key={i} className="flex items-center gap-3 py-3">
+              <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${grad} shadow-sm`}>
+                <Icon size={12} className="text-white" />
+              </div>
+              <p className="flex-1 min-w-0 truncate text-sm font-semibold text-slate-700">{item.label}</p>
+              <div className="flex shrink-0 items-center gap-2">
+                {item.xp > 0 && (
+                  <span className="rounded-full border border-amber-100 bg-amber-50 px-2 py-0.5 text-[9px] font-black text-amber-600">+{item.xp}</span>
+                )}
+                <span className="text-[10px] font-semibold text-slate-400 tabular-nums">{relativeTime(item.createdAt)}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }

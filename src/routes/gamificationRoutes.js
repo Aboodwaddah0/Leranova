@@ -13,6 +13,7 @@ import {
 import { getLearningProfileController } from '../controllers/learningProfileController.js';
 import { getAdaptiveMissionsController } from '../controllers/adaptiveMissionController.js';
 import { getAIMentorController } from '../controllers/aiMentorController.js';
+import { getEngagementFeedController } from '../controllers/engagementFeedController.js';
 
 const router = Router();
 
@@ -29,5 +30,6 @@ router.get('/leaderboard/weekly', getWeeklyLeaderboardController);
 router.get('/profile', getLearningProfileController);
 router.get('/missions/adaptive', getAdaptiveMissionsController);
 router.get('/mentor', getAIMentorController);
+router.get('/activity', getEngagementFeedController);
 
 export default router;
