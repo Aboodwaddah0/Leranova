@@ -13,6 +13,7 @@ const navItems = [
   { to: "/dashboard/instructor/courses", labelAr: "الكورسات", labelEn: "Courses" },
   { to: "/dashboard/instructor/lessons", labelAr: "الدروس", labelEn: "Lessons" },
   { to: "/dashboard/instructor/students", labelAr: "الطلاب", labelEn: "Students" },
+  { to: "/dashboard/instructor/analytics", labelAr: "التحليلات", labelEn: "Analytics" },
   { to: "/dashboard/instructor/marks", labelAr: "العلامات", labelEn: "Marks" },
 ];
 
