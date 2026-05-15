@@ -1107,6 +1107,15 @@ export async function fetchActivityFeed() {
   }
 }
 
+export async function fetchStudentSocial() {
+  try {
+    const response = await api.get('/student/gamification/social');
+    return unwrap(response, null);
+  } catch {
+    return null;
+  }
+}
+
 export function getFallbackLessons() {
   return fallbackLessons;
 }

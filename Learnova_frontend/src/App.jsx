@@ -24,6 +24,7 @@ import StudentTeacherProfilePage from "./pages/student/StudentTeacherProfilePage
 import StudentSubjectPage from "./pages/student/StudentSubjectPage";
 import StudentLessonPage from "./pages/student/StudentLessonPage";
 import StudentProfilePage from "./pages/student/StudentProfilePage";
+import StudentSocialPage from "./pages/student/StudentSocialPage";
 import StudentPageErrorBoundary from "./components/student/StudentPageErrorBoundary";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
@@ -107,6 +108,7 @@ function App() {
             <Route path="/teachers" element={<StudentPageErrorBoundary><StudentTeachersPage /></StudentPageErrorBoundary>} />
             <Route path="/teachers/:teacherId" element={<StudentPageErrorBoundary><StudentTeacherProfilePage /></StudentPageErrorBoundary>} />
             <Route path="/student/chat" element={<StudentPageErrorBoundary><StudentChatPage /></StudentPageErrorBoundary>} />
+            <Route path="/student/social" element={<StudentPageErrorBoundary><StudentSocialPage /></StudentPageErrorBoundary>} />
             <Route path="/student/profile" element={<StudentProfilePage />} />
           </Route>
           <Route path="/dashboard/:role" element={<DashboardPlaceholderPage />} />

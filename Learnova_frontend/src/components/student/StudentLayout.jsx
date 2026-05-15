@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { Home, BookOpen, UserCircle2, LogOut, MessageCircle, Users2, BarChart2 } from 'lucide-react';
+import { Home, BookOpen, UserCircle2, LogOut, MessageCircle, Users2, BarChart2, Trophy } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
@@ -41,6 +41,12 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
       icon: BarChart2,
       match: (pathname) => pathname === '/student/marks',
     }] : []),
+    {
+      to: '/student/social',
+      label: isArabic ? 'المنافسة' : 'Competition',
+      icon: Trophy,
+      match: (pathname) => pathname === '/student/social',
+    },
     {
       to: '/student/chat',
       label: t?.student?.chat?.title || (isArabic ? 'المحادثات' : 'Chat'),
