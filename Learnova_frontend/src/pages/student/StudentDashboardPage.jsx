@@ -26,6 +26,7 @@ import {
 import { useLanguage } from '../../utils/i18n';
 import { calculateProgressForLessons, subscribeToProgress } from '../../utils/studentProgress';
 import { sound } from '../../utils/soundHelper';
+import { notifyXpGained, notifyAchievement, notifyLevelUp, notifyStreakMilestone } from '../../lib/notify';
 
 const getCourseId = (course) => Number(course?.id || course?.courseId || course?.Course_id || 0);
 const getCourseName = (course, isArabic) => course?.name || course?.Name || (isArabic ? 'كورس بدون عنوان' : 'Untitled course');
@@ -105,7 +106,7 @@ export default function StudentDashboardPage() {
   const [levelUpModal, setLevelUpModal] = useState(null);
   const [showStreakBanner, setShowStreakBanner] = useState(false);
 
-  const prevRef = useRef({ level: 0, totalXp: 0, lastAchKey: null, pollCount: 0 });
+  const prevRef = useRef({ level: 0, totalXp: 0, streak: 0, lastAchKey: null, pollCount: 0 });
   const streakDismissedRef = useRef(sessionStorage.getItem('lnv_streak_dismissed') === '1');
   const shownAchievementsRef = useRef(new Set(JSON.parse(sessionStorage.getItem('lnv_shown_ach') || '[]')));
 
@@ -194,6 +195,7 @@ export default function StudentDashboardPage() {
       if (feed.level > prev.level && prev.level > 0) {
         setLevelUpModal(feed.level);
         sound.levelUp();
+        notifyLevelUp(feed.level);
       }
 
       // New achievement (unlocked in last 2 minutes, shown only once per key per session)
@@ -205,6 +207,7 @@ export default function StudentDashboardPage() {
         shownAchievementsRef.current.add(freshAch.key);
         sessionStorage.setItem('lnv_shown_ach', JSON.stringify([...shownAchievementsRef.current]));
         sound.achievement();
+        notifyAchievement(freshAch.label || freshAch.key);
         prev.lastAchKey = freshAch.key;
         setTimeout(() => setAchievementModal(null), 5000);
       }
@@ -216,6 +219,17 @@ export default function StudentDashboardPage() {
         setFloatingXps(p => [...p.slice(-4), { id, amount: gained }]);
         setTimeout(() => setFloatingXps(p => p.filter(x => x.id !== id)), 2800);
         sound.xp();
+        notifyXpGained(gained);
+      }
+
+      // Streak milestones (3 / 7 / 30)
+      const STREAK_MILESTONES = new Set([3, 7, 30]);
+      if (
+        feed.currentStreak > prev.streak &&
+        prev.streak > 0 &&
+        STREAK_MILESTONES.has(feed.currentStreak)
+      ) {
+        notifyStreakMilestone(feed.currentStreak);
       }
 
       // Streak warning banner — show only when student has NOT engaged today.
@@ -231,7 +245,7 @@ export default function StudentDashboardPage() {
       setGamification(g => ({ ...g, totalXp: feed.totalXp, level: feed.level, currentStreak: feed.currentStreak }));
       setActivityFeed(feed.feed || []);
 
-      prevRef.current = { ...prev, level: feed.level, totalXp: feed.totalXp };
+      prevRef.current = { ...prev, level: feed.level, totalXp: feed.totalXp, streak: feed.currentStreak };
     };
 
     // Refresh adaptive missions every other poll (60s)
@@ -295,6 +309,14 @@ export default function StudentDashboardPage() {
         @keyframes slideDown {
           from { opacity:0; transform:translateY(-10px); }
           to   { opacity:1; transform:translateY(0); }
+        }
+        @keyframes floatUp {
+          0%   { opacity:0.8; transform:translateY(0) scale(1); }
+          100% { opacity:0;   transform:translateY(-60px) scale(0.5); }
+        }
+        @keyframes livePulse {
+          0%, 100% { opacity:1; }
+          50%       { opacity:0.3; }
         }
       `}</style>
 
@@ -1361,9 +1383,16 @@ function LevelUpOverlay({ level, onClose }) {
       onClick={onClose}>
       <div className="text-center text-white" style={{ animation: 'scaleIn 0.3s cubic-bezier(0.175,0.885,0.32,1.275)' }}>
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          {[...Array(12)].map((_, i) => (
-            <div key={i} className="absolute h-1.5 w-1.5 rounded-full bg-violet-400"
-              style={{ left: `${10 + i * 7}%`, top: `${20 + (i % 3) * 25}%`, opacity: 0.4 + (i % 3) * 0.2 }} />
+          {[...Array(18)].map((_, i) => (
+            <div key={i} className="absolute rounded-full"
+              style={{
+                width: `${6 + (i % 3) * 4}px`,
+                height: `${6 + (i % 3) * 4}px`,
+                left: `${5 + i * 5.2}%`,
+                top: `${40 + (i % 4) * 15}%`,
+                background: ['#a78bfa', '#f472b6', '#34d399', '#60a5fa', '#fbbf24'][i % 5],
+                animation: `floatUp ${1.2 + (i % 4) * 0.35}s ease-out ${i * 0.08}s both`,
+              }} />
           ))}
         </div>
         <div className="text-7xl">⚡</div>
@@ -1428,6 +1457,8 @@ function relativeTime(iso) {
   return `${Math.floor(diff / 86_400_000)}d ago`;
 }
 
+const isLive = (iso) => iso && Date.now() - new Date(iso).getTime() < 300_000;
+
 function ActivityFeedSection({ feed, isArabic }) {
   return (
     <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
@@ -1453,8 +1484,14 @@ function ActivityFeedSection({ feed, isArabic }) {
           const grad = FEED_GRADIENTS[item.type] || 'from-slate-400 to-slate-500';
           return (
             <div key={i} className="flex items-center gap-3 py-3">
-              <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${grad} shadow-sm`}>
-                <Icon size={12} className="text-white" />
+              <div className="relative shrink-0">
+                <div className={`flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br ${grad} shadow-sm`}>
+                  <Icon size={12} className="text-white" />
+                </div>
+                {isLive(item.createdAt) && (
+                  <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-400"
+                    style={{ animation: 'livePulse 1.8s ease-in-out infinite' }} />
+                )}
               </div>
               <p className="flex-1 min-w-0 truncate text-sm font-semibold text-slate-700">{item.label}</p>
               <div className="flex shrink-0 items-center gap-2">
