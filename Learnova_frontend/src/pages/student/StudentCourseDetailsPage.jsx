@@ -105,7 +105,7 @@ export default function StudentCourseDetailsPage() {
       {loading ? (
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="h-40 animate-pulse rounded-[1.75rem] border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/5" />
+            <div key={index} className="ln-skeleton h-40 rounded-[1.75rem]" />
           ))}
         </div>
       ) : (

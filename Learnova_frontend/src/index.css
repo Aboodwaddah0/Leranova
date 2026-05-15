@@ -4,6 +4,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── iOS safe area bottom padding ─────────────────────────────────────────── */
+.pb-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
 /* ── Premium shimmer skeleton ──────────────────────────────────────────────── */
 @keyframes ln-shimmer {
   0%   { background-position: -400px 0; }

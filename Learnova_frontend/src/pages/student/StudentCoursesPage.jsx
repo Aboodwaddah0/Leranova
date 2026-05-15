@@ -184,7 +184,7 @@ export default function StudentCoursesPage() {
       {loading ? (
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="h-48 animate-pulse rounded-[1.75rem] border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/5" />
+            <div key={index} className="ln-skeleton h-48 rounded-[1.75rem]" />
           ))}
         </div>
       ) : activeTab === 'TRACKS' && filteredTracks.length ? (

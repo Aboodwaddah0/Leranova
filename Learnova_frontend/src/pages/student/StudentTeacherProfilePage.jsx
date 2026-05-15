@@ -97,7 +97,7 @@ export default function StudentTeacherProfilePage() {
 
       {loading ? (
         <div className="space-y-6">
-          <div className="mx-auto h-[30rem] w-full max-w-4xl animate-pulse rounded-[2rem] border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/5" />
+          <div className="ln-skeleton mx-auto h-[30rem] w-full max-w-4xl rounded-[2rem]" />
         </div>
       ) : teacher ? (
         <section className="relative mx-auto w-full max-w-4xl overflow-hidden rounded-[1.9rem] border border-white/70 bg-white/95 p-8 shadow-xl shadow-indigo-500/5 backdrop-blur-xl">

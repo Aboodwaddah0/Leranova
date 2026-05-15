@@ -54,7 +54,7 @@ export default function StudentSchoolSubjectsPage() {
       {loading ? (
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="h-28 animate-pulse rounded-3xl border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/5" />
+            <div key={index} className="ln-skeleton h-28 rounded-3xl" />
           ))}
         </div>
       ) : (

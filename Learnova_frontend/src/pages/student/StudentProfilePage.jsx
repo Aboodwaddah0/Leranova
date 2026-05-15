@@ -148,7 +148,7 @@ export default function StudentProfilePage() {
   return (
     <StudentLayout>
       <div className="mb-4">
-        <Link to="/dashboard/student" className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold backdrop-blur transition hover:border-white/40 hover:bg-white/20">
+        <Link to="/dashboard/student" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:shadow">
           <ArrowLeft size={16} /> {isArabic ? 'عودة' : 'Back'}
         </Link>
       </div>
@@ -184,7 +184,7 @@ export default function StudentProfilePage() {
                 organizationType={String(organizationType || '').toUpperCase()}
               />
 
-              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
+              <section className="rounded-[1.75rem] border border-white/70 bg-white/90 p-5 shadow-xl shadow-indigo-500/5 backdrop-blur-sm">
                 <h3 className="text-sm font-extrabold uppercase tracking-[0.18em] text-slate-600">{isArabic ? 'حول هذا الملف' : 'About this profile'}</h3>
                 <p className="mt-3 text-sm leading-7 text-slate-600">
                   {isArabic
