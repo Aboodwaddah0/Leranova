@@ -37,7 +37,8 @@
       "Bash(python -c ' *)",
       "Bash(npx tsc *)",
       "Bash(findstr \"framer\\\\|motion\\\\|animate\")",
-      "Bash(findstr /i \"framer\")"
+      "Bash(findstr /i \"framer\")",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Eng Mohammad\\\\Desktop\\\\repo\\\\last-v\\\\Leranova\\\\Learnova_backend\\\\src\\\\services\" -File)"
     ]
   }
 }
