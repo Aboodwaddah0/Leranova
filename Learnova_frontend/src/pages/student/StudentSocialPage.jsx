@@ -91,7 +91,7 @@ function CountUnit({ value, label }) {
       <span className="text-2xl font-black tabular-nums leading-none text-white drop-shadow">
         {String(value).padStart(2, '0')}
       </span>
-      <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-white/60">{label}</span>
+      <span className="mt-1 text-[10px] font-bold uppercase tracking-widest text-white/60">{label}</span>
     </div>
   );
 }

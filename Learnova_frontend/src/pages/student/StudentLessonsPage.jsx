@@ -189,24 +189,12 @@ export default function StudentLessonsPage() {
         content: commentText.trim(),
       };
 
-      console.log('[LESSONS PAGE] Comment submit started', payload);
-
       const created = await createLessonComment(lessonId, payload.content);
       setCommentText("");
       const commentsData = await fetchLessonComments(lessonId);
       setComments(commentsData);
-      console.log('[LESSONS PAGE] Comment submit succeeded', {
-        lesson_id: Number(lessonId),
-        created_comment_id: created?.id || null,
-        refreshed_comments_count: Array.isArray(commentsData) ? commentsData.length : 0,
-      });
       notifySuccess(isArabic ? "تم نشر التعليق." : "Comment posted successfully.");
     } catch (err) {
-      console.error('[LESSONS PAGE] Comment submit failed', {
-        lesson_id: Number(lessonId),
-        status: err?.response?.status,
-        message: err?.response?.data?.message || err?.message,
-      });
       setError(safeError(err, isArabic));
     }
   };
@@ -254,7 +242,7 @@ export default function StudentLessonsPage() {
         <div className="space-y-6">
           <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
             <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#2379c3]">{selectedCourse?.name || t.student.lessons.noContext}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-600">{selectedCourse?.name || t.student.lessons.noContext}</p>
               <h3 className="mt-2 text-2xl font-black text-slate-900">{selectedSubject?.name || (isArabic ? "اختر مادة" : "Select a subject")}</h3>
               <p className="mt-3 text-sm leading-7 text-slate-600">
                 {selectedCourse?.description || selectedSubject?.course?.Description || t.student.lessons.lessonHint}
@@ -283,7 +271,7 @@ export default function StudentLessonsPage() {
             <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#2379c3]">{t.student.comments.title}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-600">{t.student.comments.title}</p>
                   <h3 className="mt-2 text-xl font-black text-slate-900">{t.student.comments.subtitle}</h3>
                 </div>
                 <Badge variant="subtle">{comments.length}</Badge>
@@ -294,7 +282,7 @@ export default function StudentLessonsPage() {
                   value={commentText}
                   onChange={(event) => setCommentText(event.target.value)}
                   placeholder={t.student.comments.placeholder}
-                  className="min-h-28 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-[#2379c3] focus:bg-white"
+                  className="min-h-28 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:bg-white"
                 />
                 <div className="flex justify-end">
                   <Button type="submit" size="sm" disabled={!commentText.trim()}>

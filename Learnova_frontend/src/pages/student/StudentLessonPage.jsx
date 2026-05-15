@@ -325,8 +325,6 @@ export default function StudentLessonPage() {
       content: commentText.trim(),
     };
 
-    console.log('[LESSON PAGE] Comment submit started', payload);
-
     try {
       const created = await createLessonComment(numericLessonId, payload.content);
       setCommentText('');
