@@ -31,6 +31,8 @@ function timeAgo(iso) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+const isLive = (iso) => iso && Date.now() - new Date(iso).getTime() < 300_000;
+
 // ── animation presets ─────────────────────────────────────────────────────────
 const fadeUp = {
   hidden:  { opacity: 0, y: 16 },
@@ -405,7 +407,12 @@ function SocialFeedCard({ feed }) {
                 variants={fadeUp}
                 className="flex items-start gap-3 py-2.5 -mx-2 px-2 rounded-lg hover:bg-slate-50/60 transition-colors"
               >
-                <span className="mt-0.5 shrink-0 text-base">{EVENT_ICONS[item.eventType] ?? '⚡'}</span>
+                <div className="relative mt-0.5 shrink-0">
+                  <span className="text-base">{EVENT_ICONS[item.eventType] ?? '⚡'}</span>
+                  {isLive(item.occurredAt) && (
+                    <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                  )}
+                </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-slate-700 leading-snug">
                     <span className="font-semibold text-slate-800">{item.studentName}</span>

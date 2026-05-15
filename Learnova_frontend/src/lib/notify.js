@@ -84,3 +84,44 @@ export const notifyWarning = (message, options = {}) => {
   }
   gooeyToast.warning(String(message), withLearnovaStyle("warning", options));
 };
+
+// ── Gamification event toasts ──────────────────────────────────────────────────
+
+export const notifyXpGained = (amount) => {
+  if (!amount) return;
+  gooeyToast.success(`⚡ +${amount} XP earned`, withLearnovaStyle("success", {
+    fillColor: "#fffbeb",
+    borderColor: "#fcd34d",
+    duration: 3000,
+  }));
+};
+
+export const notifyAchievement = (label) => {
+  if (!label) return;
+  gooeyToast.success(`🏆 Achievement unlocked: ${label}`, withLearnovaStyle("success", {
+    duration: 5200,
+  }));
+};
+
+export const notifyLevelUp = (level) => {
+  if (!level) return;
+  gooeyToast(`⚡ Level Up! You're now Level ${level}`, withLearnovaStyle("info", {
+    fillColor: "#f5f3ff",
+    borderColor: "#c4b5fd",
+    duration: 5500,
+  }));
+};
+
+export const notifyStreakMilestone = (days) => {
+  if (!days) return;
+  gooeyToast.warning(`🔥 ${days}-day streak! Keep the momentum going!`, withLearnovaStyle("warning", {
+    duration: 4800,
+  }));
+};
+
+export const notifyQuizPass = (score) => {
+  const msg = score === 100
+    ? "🌟 Perfect quiz score! Flawless!"
+    : `✓ Quiz passed with ${score}%`;
+  gooeyToast.success(msg, withLearnovaStyle("success", { duration: 3800 }));
+};
