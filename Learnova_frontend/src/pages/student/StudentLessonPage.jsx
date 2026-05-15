@@ -25,7 +25,7 @@ import {
   subscribeToProgress,
 } from '../../utils/studentProgress';
 import { sound } from '../../utils/soundHelper';
-import { notifyXpGained, notifyAchievement, notifyLevelUp } from '../../lib/notify';
+import { notifyXpGained, notifyAchievement, notifyLevelUp, notifyLessonComplete, notifyCommentPosted, notifyError } from '../../lib/notify';
 
 export default function StudentLessonPage() {
   const { isArabic } = useLanguage();
@@ -234,8 +234,14 @@ export default function StudentLessonPage() {
     setLessonCompleted(numericLessonId, true);
     try {
       const result = await updateStudentLessonProgress(numericLessonId, true);
-      handleReward(result?.reward);
+      const reward = result?.reward;
+      if (reward?.xpEarned > 0) {
+        handleReward(reward);
+      } else {
+        notifyLessonComplete(isArabic ? 'تم إكمال الدرس!' : 'Lesson complete!');
+      }
     } catch (updateError) {
+      sound.dismiss();
       setError(updateError?.message || (isArabic ? 'فشل تحديث تقدم الدرس.' : 'Failed to update lesson progress.'));
     }
 
@@ -325,18 +331,11 @@ export default function StudentLessonPage() {
       const created = await createLessonComment(numericLessonId, payload.content);
       setCommentText('');
       setComments((current) => [created, ...current]);
-      console.log('[LESSON PAGE] Comment submit succeeded', {
-        lesson_id: numericLessonId,
-        created_comment_id: created?.id || null,
-      });
+      notifyCommentPosted(isArabic ? 'تم نشر التعليق' : 'Comment posted!');
     } catch (submitError) {
-      console.error('[LESSON PAGE] Comment submit failed', {
-        lesson_id: numericLessonId,
-        contentLength: payload.content.length,
-        status: submitError?.response?.status,
-        message: submitError?.response?.data?.message || submitError?.message,
-      });
-      setError(submitError?.response?.data?.message || submitError?.message || (isArabic ? 'فشل نشر التعليق.' : 'Failed to post comment.'));
+      sound.dismiss();
+      const msg = submitError?.response?.data?.message || submitError?.message || (isArabic ? 'فشل نشر التعليق.' : 'Failed to post comment.');
+      notifyError(msg);
     }
   };
 
@@ -366,7 +365,7 @@ export default function StudentLessonPage() {
             </Link>
             <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-bold text-slate-600 shadow-sm">
               <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: courseProgress.total ? `${(courseProgress.completed / courseProgress.total) * 100}%` : '0%' }} />
+                <div className="ln-progress-fill h-full rounded-full bg-indigo-500" style={{ width: courseProgress.total ? `${(courseProgress.completed / courseProgress.total) * 100}%` : '0%' }} />
               </div>
               {courseProgress.completed}/{courseProgress.total} {isArabic ? 'منجز' : 'done'}
             </div>
@@ -446,10 +445,10 @@ export default function StudentLessonPage() {
                       key={id}
                       type="button"
                       onClick={() => setActiveSection(activeSection === id ? null : id)}
-                      className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold transition-all ${
+                      className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold transition-all active:scale-95 ${
                         active
                           ? `${colorMap[color].active} shadow-md`
-                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:shadow-sm'
                       }`}
                     >
                       <Icon size={15} />
@@ -541,9 +540,16 @@ export default function StudentLessonPage() {
                     setQuizSubmitting(true);
                     try {
                       const result = await submitStudentQuizAttempt(numericLessonId, answers, lang);
-                      if (result?.reward) handleReward(result.reward);
+                      const reward = result?.reward;
+                      if (reward?.xpEarned > 0) {
+                        handleReward(reward);
+                      } else if (result?.attempt?.isPassed) {
+                        sound.xp();
+                      } else if (result?.attempt?.isPassed === false) {
+                        sound.dismiss();
+                      }
                       return result;
-                    } catch { return null; } finally { setQuizSubmitting(false); }
+                    } catch { sound.dismiss(); return null; } finally { setQuizSubmitting(false); }
                   }}
                 />
               </div>
@@ -598,7 +604,7 @@ export default function StudentLessonPage() {
                     className="flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:bg-white"
                   />
                   <button onClick={onPostComment}
-                    className="flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-700">
+                    className="ln-btn-press flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-700">
                     <Send size={14} />
                     {isArabic ? 'نشر' : 'Post'}
                   </button>

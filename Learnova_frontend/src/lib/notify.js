@@ -89,39 +89,78 @@ export const notifyWarning = (message, options = {}) => {
 
 export const notifyXpGained = (amount) => {
   if (!amount) return;
-  gooeyToast.success(`⚡ +${amount} XP earned`, withLearnovaStyle("success", {
-    fillColor: "#fffbeb",
-    borderColor: "#fcd34d",
-    duration: 3000,
+  gooeyToast.success(`⚡ +${amount} XP`, withLearnovaStyle("success", {
+    fillColor: "#fefce8",
+    borderColor: "#fde68a",
+    duration: 2800,
   }));
 };
 
 export const notifyAchievement = (label) => {
   if (!label) return;
-  gooeyToast.success(`🏆 Achievement unlocked: ${label}`, withLearnovaStyle("success", {
-    duration: 5200,
+  gooeyToast.success(`🏆 Achievement Unlocked\n${label}`, withLearnovaStyle("success", {
+    fillColor: "#fefce8",
+    borderColor: "#fbbf24",
+    duration: 5500,
   }));
 };
 
 export const notifyLevelUp = (level) => {
   if (!level) return;
-  gooeyToast(`⚡ Level Up! You're now Level ${level}`, withLearnovaStyle("info", {
+  gooeyToast(`🚀 Level Up! You're now Level ${level}`, withLearnovaStyle("info", {
     fillColor: "#f5f3ff",
-    borderColor: "#c4b5fd",
-    duration: 5500,
+    borderColor: "#a78bfa",
+    duration: 6000,
   }));
 };
 
 export const notifyStreakMilestone = (days) => {
   if (!days) return;
-  gooeyToast.warning(`🔥 ${days}-day streak! Keep the momentum going!`, withLearnovaStyle("warning", {
-    duration: 4800,
+  gooeyToast.warning(`🔥 ${days}-day streak! Keep going!`, withLearnovaStyle("warning", {
+    duration: 4500,
   }));
 };
 
 export const notifyQuizPass = (score) => {
   const msg = score === 100
-    ? "🌟 Perfect quiz score! Flawless!"
-    : `✓ Quiz passed with ${score}%`;
-  gooeyToast.success(msg, withLearnovaStyle("success", { duration: 3800 }));
+    ? "🌟 Perfect score! Flawless!"
+    : `✓ Quiz passed — ${score}%`;
+  gooeyToast.success(msg, withLearnovaStyle("success", { duration: 3500 }));
+};
+
+export const notifyQuizFailed = (score) => {
+  const msg = score != null
+    ? `✗ Not passed — ${score}%. Keep practicing!`
+    : "✗ Not passed. Keep practicing!";
+  gooeyToast.error(msg, withLearnovaStyle("error", {
+    fillColor: "#fff7ed",
+    borderColor: "#fdba74",
+    duration: 4000,
+  }));
+};
+
+export const notifyLessonComplete = (label = "Lesson complete!") => {
+  gooeyToast.success(`✓ ${label}`, withLearnovaStyle("success", {
+    fillColor: "#f0fdf4",
+    borderColor: "#86efac",
+    duration: 2800,
+  }));
+};
+
+export const notifyCommentPosted = (label = "Comment posted!") => {
+  gooeyToast.success(`💬 ${label}`, withLearnovaStyle("success", {
+    duration: 2000,
+  }));
+};
+
+export const notifyProfileSaved = (label = "Profile updated!") => {
+  gooeyToast.success(`✓ ${label}`, withLearnovaStyle("success", {
+    duration: 2800,
+  }));
+};
+
+export const notifyPasswordChanged = (label = "Password updated!") => {
+  gooeyToast.success(`🔒 ${label}`, withLearnovaStyle("success", {
+    duration: 2800,
+  }));
 };

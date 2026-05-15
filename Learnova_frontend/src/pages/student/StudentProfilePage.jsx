@@ -20,6 +20,8 @@ import EditProfileModal from '../../components/student/profile/EditProfileModal'
 import ChangePasswordModal from '../../components/student/profile/ChangePasswordModal';
 import { logout } from '../../redux/slices/authSlice';
 import { useLanguage } from '../../utils/i18n';
+import { notifyProfileSaved, notifyPasswordChanged, notifyError } from '../../lib/notify';
+import { sound } from '../../utils/soundHelper';
 
 export default function StudentProfilePage() {
   const { isArabic } = useLanguage();
@@ -34,7 +36,6 @@ export default function StudentProfilePage() {
   const [courseCount, setCourseCount] = useState(0);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
   const studentMode = useMemo(() => {
@@ -100,16 +101,15 @@ export default function StudentProfilePage() {
     }
 
     setSavingProfile(true);
-    setMessage('');
-    setError('');
 
     try {
       const updated = await updateStudentProfile(patch);
       setProfile(updated);
-      setMessage(isArabic ? 'تم تحديث الملف الشخصي بنجاح.' : 'Profile updated successfully.');
+      notifyProfileSaved(isArabic ? 'تم تحديث الملف الشخصي!' : 'Profile updated!');
       setShowEditProfile(false);
     } catch (saveError) {
-      setError(saveError?.response?.data?.message || saveError?.message || (isArabic ? 'تعذر تحديث الملف الشخصي الآن.' : 'Could not update the profile right now.'));
+      sound.dismiss();
+      notifyError(saveError?.response?.data?.message || saveError?.message || (isArabic ? 'تعذر تحديث الملف الشخصي الآن.' : 'Could not update the profile right now.'));
     } finally {
       setSavingProfile(false);
     }
@@ -117,23 +117,20 @@ export default function StudentProfilePage() {
 
   const onSavePassword = async ({ newPassword, confirmPassword }) => {
     if (newPassword !== confirmPassword) {
-      setError(isArabic ? 'كلمة المرور الجديدة وتأكيدها غير متطابقين.' : 'New password and confirmation do not match.');
+      sound.dismiss();
+      notifyError(isArabic ? 'كلمة المرور الجديدة وتأكيدها غير متطابقين.' : 'New password and confirmation do not match.');
       return false;
     }
 
     setSavingPassword(true);
-    setMessage('');
-    setError('');
 
     try {
-      await changeStudentPassword({
-        newPassword,
-      });
-
-      setMessage(isArabic ? 'تم تحديث كلمة المرور بنجاح.' : 'Password updated successfully.');
+      await changeStudentPassword({ newPassword });
+      notifyPasswordChanged(isArabic ? 'تم تحديث كلمة المرور!' : 'Password updated!');
       return true;
     } catch (saveError) {
-      setError(saveError?.response?.data?.message || saveError?.message || (isArabic ? 'تعذر تحديث كلمة المرور الآن.' : 'Could not update password right now.'));
+      sound.dismiss();
+      notifyError(saveError?.response?.data?.message || saveError?.message || (isArabic ? 'تعذر تحديث كلمة المرور الآن.' : 'Could not update password right now.'));
       return false;
     } finally {
       setSavingPassword(false);
@@ -162,7 +159,6 @@ export default function StudentProfilePage() {
       ) : (
         <div className="space-y-5">
           {error ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{error}</div> : null}
-          {message ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</div> : null}
 
           <ProfileHeader profile={profile} studentMode={studentMode} />
 

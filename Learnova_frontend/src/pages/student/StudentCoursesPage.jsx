@@ -235,7 +235,7 @@ export default function StudentCoursesPage() {
                   <span className="font-semibold text-emerald-700">{course.lessonDone}</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                  <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500" style={{ width: `${course.percent}%` }} />
+                  <div className="ln-progress-fill h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500" style={{ width: `${course.percent}%` }} />
                 </div>
                 <div className="text-xs font-bold text-slate-500">{course.percent}%</div>
               </div>

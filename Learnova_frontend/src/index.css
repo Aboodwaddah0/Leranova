@@ -9,6 +9,29 @@
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
+/* ── Progress bar fill animation ──────────────────────────────────────────── */
+@keyframes ln-grow-x {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+.ln-progress-fill {
+  transform-origin: left center;
+  animation: ln-grow-x 0.75s cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation-delay: 0.2s;
+}
+[dir="rtl"] .ln-progress-fill {
+  transform-origin: right center;
+}
+
+/* ── Button press micro-feedback ───────────────────────────────────────────── */
+.ln-btn-press {
+  transition: transform 0.1s ease, opacity 0.1s ease;
+}
+.ln-btn-press:active {
+  transform: scale(0.95);
+  opacity: 0.85;
+}
+
 /* ── Premium shimmer skeleton ──────────────────────────────────────────────── */
 @keyframes ln-shimmer {
   0%   { background-position: -400px 0; }
