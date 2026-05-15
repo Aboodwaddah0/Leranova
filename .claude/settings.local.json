@@ -35,7 +35,9 @@
       "Bash(git commit -m ' *)",
       "Bash(docker compose *)",
       "Bash(python -c ' *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(findstr \"framer\\\\|motion\\\\|animate\")",
+      "Bash(findstr /i \"framer\")"
     ]
   }
 }
