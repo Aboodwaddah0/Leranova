@@ -12,6 +12,7 @@ import InstructorLessonsPage from "./pages/instructor/InstructorLessonsPage";
 import InstructorStudentsPage from "./pages/instructor/InstructorStudentsPage";
 import InstructorMarksPage from "./pages/instructor/InstructorMarksPage";
 import InstructorSettingsPage from "./pages/instructor/InstructorSettingsPage";
+import InstructorAnalyticsPage from "./pages/instructor/InstructorAnalyticsPage";
 import StudentDashboardPage from "./pages/student/StudentDashboardPage";
 import StudentCoursesPage from "./pages/student/StudentCoursesPage";
 import StudentCourseDetailsPage from "./pages/student/StudentCourseDetailsPage";
@@ -83,6 +84,7 @@ function App() {
 <Route path="/dashboard/instructor/lessons" element={<InstructorLessonsPage />} />
             <Route path="/dashboard/instructor/students" element={<InstructorStudentsPage />} />
             <Route path="/dashboard/instructor/settings" element={<InstructorSettingsPage />} />
+            <Route path="/dashboard/instructor/analytics" element={<InstructorAnalyticsPage />} />
             <Route element={<InstructorSchoolOnlyRoute />}>
               <Route path="/dashboard/instructor/marks" element={<InstructorMarksPage />} />
             </Route>
