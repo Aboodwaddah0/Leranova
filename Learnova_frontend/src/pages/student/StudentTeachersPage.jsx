@@ -83,7 +83,7 @@ export default function StudentTeachersPage() {
   return (
     <StudentLayout>
       <div className="mb-4">
-        <Link to="/dashboard/student" className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold backdrop-blur transition hover:border-white/40 hover:bg-white/20">
+        <Link to="/dashboard/student" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:shadow">
           <ArrowLeft size={16} /> {isArabic ? 'عودة' : 'Back'}
         </Link>
       </div>
@@ -94,7 +94,7 @@ export default function StudentTeachersPage() {
         </div>
       ) : null}
 
-      <section className="rounded-[1.6rem] border border-slate-200 bg-white px-5 py-4 shadow-sm">
+      <section className="rounded-[1.75rem] border border-white/70 bg-white/90 px-5 py-4 shadow-xl shadow-indigo-500/5 backdrop-blur-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-bold text-slate-700">
             {isArabic ? 'قائمة المعلمين' : 'Teachers list'}
@@ -120,7 +120,7 @@ export default function StudentTeachersPage() {
       {loading ? (
         <div className="mt-6 space-y-4">
           {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="h-[7.5rem] animate-pulse rounded-[1.25rem] border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/5" />
+            <div key={index} className="ln-skeleton h-[7.5rem] rounded-[1.25rem]" />
           ))}
         </div>
       ) : filteredTeachers.length ? (

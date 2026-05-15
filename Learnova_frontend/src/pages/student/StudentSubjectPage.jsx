@@ -373,7 +373,7 @@ export default function StudentSubjectPage() {
 
   return (
     <StudentLayout>
-      {loading ? <div className="h-64 animate-pulse rounded-[1.75rem] border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/5" /> : null}
+      {loading ? <div className="ln-skeleton h-64 rounded-[1.75rem]" /> : null}
       {error ? <div className="mb-5 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{error}</div> : null}
       <section className="rounded-[2rem] border border-white/70 bg-white/85 p-5 shadow-xl shadow-indigo-500/5 backdrop-blur-xl">
         <div className="rounded-[1.5rem] bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500 p-5 text-white">

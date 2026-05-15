@@ -158,7 +158,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
         </div>
       </aside>
 
-      <main className={`px-4 py-6 lg:px-8 ${isRtl ? 'lg:mr-64' : 'lg:ml-64'}`}>
+      <main className={`px-4 py-6 pb-24 lg:px-8 lg:pb-6 ${isRtl ? 'lg:mr-64' : 'lg:ml-64'}`}>
         <div className="mx-auto flex max-w-[1600px] gap-8">
           <div className="min-w-0 flex-1">
             {(title || subtitle || actions) ? (
@@ -185,7 +185,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
         </div>
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/60 bg-white/85 pb-safe px-2 pt-2 pb-3 backdrop-blur-xl lg:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/60 bg-white/85 pb-safe px-2 pt-2 backdrop-blur-xl lg:hidden">
         <div className="mx-auto flex max-w-md items-center justify-around">
           {navItems.slice(0, 5).map((item) => {
             const Icon = item.icon;
@@ -194,7 +194,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
               <NavLink
                 key={item.to}
                 to={item.to}
-                className={() => `flex flex-col items-center gap-0.5 rounded-xl px-2.5 py-2 text-[9px] font-bold uppercase tracking-wider transition-all
+                className={() => `flex flex-col items-center gap-0.5 rounded-xl px-2.5 py-2 text-[10px] font-bold uppercase tracking-wider transition-all
                   ${active ? 'text-indigo-600 bg-indigo-50 scale-105' : 'text-slate-400 hover:text-slate-700'}`}
               >
                 <Icon size={20} />
