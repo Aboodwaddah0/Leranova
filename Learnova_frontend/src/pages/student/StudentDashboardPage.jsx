@@ -303,18 +303,33 @@ export default function StudentDashboardPage() {
       {achievementModal && <AchievementModal achievement={achievementModal} onClose={() => setAchievementModal(null)} />}
       <FloatingXPLayer items={floatingXps} />
 
-      <div className="space-y-6 pb-8">
+      <div className="space-y-6 pb-8 ln-page-enter">
 
         {/* Streak warning banner */}
         {showStreakBanner && (
           <StreakBanner streak={gamification.currentStreak} onDismiss={dismissStreakBanner} />
         )}
 
-        {/* Loading */}
-        {loading && (
-          <div className="flex items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/80 px-5 py-3.5 backdrop-blur">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-300 border-t-indigo-600" />
-            <span className="text-sm font-semibold text-indigo-700">{isArabic ? 'جاري تحميل البيانات...' : 'Loading your dashboard...'}</span>
+        {/* ── Skeleton loading state (first load only) ── */}
+        {loading && enrolledCourses.length === 0 && (
+          <div className="space-y-4">
+            <div className="ln-skeleton h-64 rounded-[2rem]" />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[...Array(4)].map((_, i) => <div key={i} className="ln-skeleton h-20 rounded-2xl" />)}
+            </div>
+            <div className="ln-skeleton h-40 rounded-3xl" />
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="ln-skeleton h-56 rounded-3xl" />
+              <div className="ln-skeleton h-56 rounded-3xl" />
+            </div>
+          </div>
+        )}
+
+        {/* Inline loading indicator (subsequent loads / refreshes) */}
+        {loading && enrolledCourses.length > 0 && (
+          <div className="flex items-center gap-2.5 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 backdrop-blur">
+            <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-indigo-300 border-t-indigo-600 shrink-0" />
+            <span className="text-sm font-medium text-indigo-600">{isArabic ? 'جاري التحديث...' : 'Refreshing...'}</span>
           </div>
         )}
 
