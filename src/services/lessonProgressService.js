@@ -1,7 +1,7 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { resolveStudentContext } from './studentExperienceService.js';
-import { dispatch } from './gamificationDispatcher.js';
+import { dispatch, dispatchGamificationEvent } from './gamificationDispatcher.js';
 
 const toUpper = (value) => String(value || '').trim().toUpperCase();
 const PAID_SUBSCRIPTION_FILTER = {
@@ -95,10 +95,11 @@ export const upsertLessonProgress = async ({ studentId, lessonId, isCompleted })
     },
   });
 
+  let reward = null;
   if (isCompleted && !wasCompleted) {
-    dispatch({ studentId, event: 'lesson.completed', sourceId: lessonId });
+    reward = await dispatchGamificationEvent({ studentId, event: 'lesson.completed', sourceId: lessonId });
   } else {
-    // Any lesson interaction (even re-marking) touches the streak
+    // Any lesson interaction (even re-marking) touches the streak only
     dispatch({ studentId, event: 'lesson.viewed', sourceId: lessonId });
   }
 
@@ -108,6 +109,7 @@ export const upsertLessonProgress = async ({ studentId, lessonId, isCompleted })
     lessonId: progress.lessonId,
     isCompleted: Boolean(progress.isCompleted),
     updatedAt: progress.updatedAt,
+    reward,
   };
 };
 

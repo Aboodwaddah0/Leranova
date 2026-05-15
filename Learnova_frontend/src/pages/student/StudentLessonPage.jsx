@@ -24,6 +24,8 @@ import {
   setLessonCompleted,
   subscribeToProgress,
 } from '../../utils/studentProgress';
+import { sound } from '../../utils/soundHelper';
+import { notifyXpGained, notifyAchievement, notifyLevelUp } from '../../lib/notify';
 
 export default function StudentLessonPage() {
   const { isArabic } = useLanguage();
@@ -202,6 +204,24 @@ export default function StudentLessonPage() {
   // Reset per-lesson on lessonId change
   useEffect(() => { videoPlayFiredRef.current = false; }, [numericLessonId]);
 
+  function handleReward(reward) {
+    if (!reward || reward.xpEarned === 0) return;
+    if (reward.levelUp) {
+      sound.levelUp();
+      notifyLevelUp(reward.levelUp);
+      if (reward.xpEarned > 0) setTimeout(() => notifyXpGained(reward.xpEarned), 700);
+      return;
+    }
+    if (reward.achievementsUnlocked?.length > 0) {
+      sound.achievement();
+      notifyAchievement(reward.achievementsUnlocked[0].label);
+      if (reward.xpEarned > 0) setTimeout(() => notifyXpGained(reward.xpEarned), 700);
+      return;
+    }
+    sound.xp();
+    notifyXpGained(reward.xpEarned);
+  }
+
   const onVideoPlay = () => {
     if (videoPlayFiredRef.current) return;
     videoPlayFiredRef.current = true;
@@ -209,12 +229,15 @@ export default function StudentLessonPage() {
     void updateStudentLessonProgress(numericLessonId, false).catch(() => {});
   };
 
-  const onVideoEnded = () => {
+  const onVideoEnded = async () => {
     videoPlayFiredRef.current = true; // prevent duplicate view dispatch
     setLessonCompleted(numericLessonId, true);
-    void updateStudentLessonProgress(numericLessonId, true).catch((updateError) => {
+    try {
+      const result = await updateStudentLessonProgress(numericLessonId, true);
+      handleReward(result?.reward);
+    } catch (updateError) {
       setError(updateError?.message || (isArabic ? 'فشل تحديث تقدم الدرس.' : 'Failed to update lesson progress.'));
-    });
+    }
 
     if (Number.isInteger(nextLessonId) && nextLessonId > 0) {
       let remaining = 5;
@@ -516,8 +539,11 @@ export default function StudentLessonPage() {
                   submitting={quizSubmitting}
                   onSubmit={async (answers) => {
                     setQuizSubmitting(true);
-                    try { return await submitStudentQuizAttempt(numericLessonId, answers, lang); }
-                    catch { return null; } finally { setQuizSubmitting(false); }
+                    try {
+                      const result = await submitStudentQuizAttempt(numericLessonId, answers, lang);
+                      if (result?.reward) handleReward(result.reward);
+                      return result;
+                    } catch { return null; } finally { setQuizSubmitting(false); }
                   }}
                 />
               </div>
