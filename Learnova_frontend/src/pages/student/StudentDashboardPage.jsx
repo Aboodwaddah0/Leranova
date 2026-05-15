@@ -22,6 +22,7 @@ import {
   fetchAdaptiveMissions,
   fetchAIMentor,
   fetchActivityFeed,
+  fetchAdaptiveInsights,
 } from '../../services/studentService';
 import { useLanguage } from '../../utils/i18n';
 import { calculateProgressForLessons, subscribeToProgress } from '../../utils/studentProgress';
@@ -98,6 +99,7 @@ export default function StudentDashboardPage() {
   const [missions, setMissions] = useState({ daily: [], weekly: [] });
   const [learningProfile, setLearningProfile] = useState(null);
   const [adaptiveMissions, setAdaptiveMissions] = useState(null);
+  const [adaptiveInsights, setAdaptiveInsights] = useState(null);
   const [aiMentor, setAiMentor] = useState(null);
   const [activityFeed, setActivityFeed] = useState([]);
   const [engagedToday, setEngagedToday] = useState(false);
@@ -126,10 +128,10 @@ export default function StudentDashboardPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const [courseData, marksData, purchaseData, profileData, gamData, lbData, achData, missData, lpData, adaptMissData, mentorData, feedData] = await Promise.all([
+        const [courseData, marksData, purchaseData, profileData, gamData, lbData, achData, missData, lpData, adaptMissData, mentorData, feedData, insightsData] = await Promise.all([
           fetchStudentCourseCatalog(), fetchMyStudentMarks(), fetchMyStudentPurchases(),
           fetchStudentProfile(), fetchGamificationStats(), fetchGamificationLeaderboard(),
-          fetchAchievements(), fetchMissions(), fetchLearningProfile(), fetchAdaptiveMissions(), fetchAIMentor(), fetchActivityFeed(),
+          fetchAchievements(), fetchMissions(), fetchLearningProfile(), fetchAdaptiveMissions(), fetchAIMentor(), fetchActivityFeed(), fetchAdaptiveInsights(),
         ]);
         if (cancelled) return;
 
@@ -165,6 +167,7 @@ export default function StudentDashboardPage() {
         setMissions(missData || { daily: [], weekly: [] });
         setLearningProfile(lpData || null);
         setAdaptiveMissions(adaptMissData || null);
+        setAdaptiveInsights(insightsData || null);
         setAiMentor(mentorData || null);
         if (feedData) {
           setActivityFeed(feedData.feed || []);
@@ -324,6 +327,7 @@ export default function StudentDashboardPage() {
 
   const continueIds = new Set(continueLearning.map((c) => Number(c.id)));
   const myCourses = useMemo(() => enrolledCourses.filter((c) => !continueIds.has(Number(c.id))), [enrolledCourses, continueIds]);
+  const prioritySubjectId = adaptiveInsights?.nextLesson?.subjectId ?? null;
   const avgMark = summarizeAverageMark(marks);
   const xpInLevel = gamification.totalXp % 100;
 
@@ -508,6 +512,15 @@ export default function StudentDashboardPage() {
 
         {/* ─── AI Learning Profile ─── */}
         {learningProfile && <AIProfileSection profile={learningProfile} isArabic={isArabic} />}
+
+        {/* ─── Adaptive Insights ─── */}
+        {(adaptiveInsights || learningProfile) && (
+          <AdaptiveInsightsSection
+            insights={adaptiveInsights}
+            profile={learningProfile}
+            isArabic={isArabic}
+          />
+        )}
 
         {/* ─── Missions ─── */}
         <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
@@ -698,7 +711,16 @@ export default function StudentDashboardPage() {
           {continueLearning.length ? (
             <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {continueLearning.slice(0, 6).map((course, i) => (
-                <CourseCard key={course.id} course={course} index={i} actionLabel={isArabic ? 'متابعة' : 'Continue'} actionHref={`/student/courses/${course.id}`} variant="continue" />
+                <CourseCard
+                  key={course.id}
+                  course={course}
+                  index={i}
+                  actionLabel={isArabic ? 'متابعة' : 'Continue'}
+                  actionHref={`/student/courses/${course.id}`}
+                  variant="continue"
+                  priority={adaptiveInsights?.nextLesson && i === 0}
+                  priorityLabel={adaptiveInsights?.nextLesson?.subjectName}
+                />
               ))}
             </div>
           ) : (
@@ -1259,7 +1281,7 @@ function SectionHeader({ icon: Icon, iconBg, badge, title, count }) {
   );
 }
 
-function CourseCard({ course, index, actionLabel, actionHref, variant }) {
+function CourseCard({ course, index, actionLabel, actionHref, variant, priority = false, priorityLabel }) {
   const { isArabic } = useLanguage();
   const progress = Math.min(100, Math.max(0, Number(course?.progress || 0)));
   const gradient = COVER_GRADIENTS[index % COVER_GRADIENTS.length];
@@ -1269,7 +1291,7 @@ function CourseCard({ course, index, actionLabel, actionHref, variant }) {
   const strokeDash = (progress / 100) * circumference;
 
   return (
-    <article className="group flex flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-[0_16px_40px_-12px_rgba(99,51,211,0.18)]">
+    <article className={`group flex flex-col overflow-hidden rounded-3xl border bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-[0_16px_40px_-12px_rgba(99,51,211,0.18)] ${priority ? 'border-indigo-300 ring-2 ring-indigo-200/60 shadow-indigo-100' : 'border-slate-200'}`}>
       {/* Banner */}
       <div className={`relative h-32 bg-gradient-to-br ${gradient} flex items-center justify-center overflow-hidden`}>
         {course.cover ? (
@@ -1284,6 +1306,11 @@ function CourseCard({ course, index, actionLabel, actionHref, variant }) {
         <span className="absolute left-3 top-3 rounded-full border border-white/20 bg-white/20 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-white backdrop-blur-sm">
           {course.category}
         </span>
+        {priority && (
+          <span className="absolute bottom-3 left-3 flex items-center gap-1 rounded-full bg-indigo-600 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow">
+            <Sparkles size={8} /> {isArabic ? 'أولوية' : 'Priority'}
+          </span>
+        )}
 
         {/* progress ring (continue) or start icon */}
         {isContinue ? (
@@ -1462,6 +1489,158 @@ function StreakBanner({ streak, onDismiss }) {
         ✕
       </button>
     </div>
+  );
+}
+
+/* ─────────────── Adaptive Insights Section ─────────────── */
+
+const SUGGESTION_CONFIG = {
+  WEAK_SUBJECT: { icon: BarChart3,     cls: 'text-red-500',    bg: 'bg-red-50    border-red-100'    },
+  VELOCITY:     { icon: TrendingUp,    cls: 'text-amber-500',  bg: 'bg-amber-50  border-amber-100'  },
+  AI_TOOL:      { icon: Sparkles,      cls: 'text-violet-500', bg: 'bg-violet-50 border-violet-100' },
+  STREAK:       { icon: Flame,         cls: 'text-orange-500', bg: 'bg-orange-50 border-orange-100' },
+  MOMENTUM:     { icon: Star,          cls: 'text-indigo-500', bg: 'bg-indigo-50 border-indigo-100' },
+};
+
+const MOMENTUM_GRADIENT = (score) =>
+  score >= 70 ? 'from-emerald-400 to-teal-400'
+  : score >= 40 ? 'from-amber-400 to-orange-400'
+  : 'from-red-400 to-rose-500';
+
+const MOMENTUM_LABEL = (score, trend) => {
+  if (score >= 70) return trend === 'IMPROVING' ? 'Strong & rising' : 'Strong';
+  if (score >= 40) return trend === 'DECLINING' ? 'Declining' : 'Building';
+  return 'Low — take action';
+};
+
+function MomentumGauge({ score, trend, isArabic }) {
+  const grad = MOMENTUM_GRADIENT(score);
+  const label = MOMENTUM_LABEL(score, trend);
+  const TrendIcon = TREND_ICON[trend] || Minus;
+  const trendCls  = TREND_CLS[trend] || 'text-slate-400';
+
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 shadow-sm">
+            <TrendingUp size={13} className="text-white" />
+          </div>
+          <span className="text-sm font-black text-slate-800">
+            {isArabic ? 'زخم التعلم' : 'Learning Momentum'}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <TrendIcon size={12} className={trendCls} />
+          <span className={`text-[10px] font-bold ${trendCls}`}>{label}</span>
+        </div>
+      </div>
+      <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+        <div
+          className={`h-full rounded-full bg-gradient-to-r ${grad} shadow-sm transition-all duration-700`}
+          style={{ width: `${score}%` }}
+        />
+      </div>
+      <div className="mt-1.5 flex items-center justify-between">
+        <span className="text-[10px] font-semibold text-slate-400">0</span>
+        <span className="text-sm font-black text-slate-800">{score}<span className="text-xs font-semibold text-slate-400">/100</span></span>
+        <span className="text-[10px] font-semibold text-slate-400">100</span>
+      </div>
+    </div>
+  );
+}
+
+function WeakSubjectList({ subjects, isArabic }) {
+  if (!subjects || subjects.length === 0) return null;
+  return (
+    <div className="rounded-2xl border border-red-100 bg-red-50/60 p-4 shadow-sm">
+      <div className="mb-3 flex items-center gap-2">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-red-400 to-rose-500 shadow-sm">
+          <AlertCircle size={13} className="text-white" />
+        </div>
+        <span className="text-sm font-black text-red-800">
+          {isArabic ? 'مواد تحتاج تحسين' : 'Needs Improvement'}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {subjects.map((s) => (
+          <div key={s.subjectId} className="flex items-center gap-2.5">
+            <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />
+            <span className="flex-1 truncate text-xs font-semibold text-red-700">{s.subjectName}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${
+              s.avgScore < 50 ? 'bg-red-500 text-white' : 'bg-amber-100 text-amber-700'
+            }`}>
+              {s.avgScore}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AdaptiveInsightsSection({ insights, profile, isArabic }) {
+  const momentumScore = insights?.momentumScore ?? (profile ? Math.max(0, Math.min(100, Math.round(
+    (profile.engagementScore ?? 0) * 0.5 + (profile.consistency?.consistencyScore ?? 0) * 0.35
+  ))) : null);
+
+  const momentumTrend = insights?.momentumTrend ?? profile?.learningVelocity?.trend ?? 'STABLE';
+  const suggestions   = insights?.studySuggestions ?? [];
+  const weakSubjects  = insights?.weakSubjects ?? [];
+
+  if (momentumScore === null && suggestions.length === 0 && weakSubjects.length === 0) return null;
+
+  return (
+    <section className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-indigo-600 shadow-md">
+          <Zap size={18} className="text-white" />
+        </div>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+            {isArabic ? 'رؤى التكيف' : 'Adaptive Insights'}
+            <span className="ml-1.5 text-indigo-500">· AI</span>
+          </p>
+          <h2 className="text-lg font-black text-slate-900">
+            {isArabic ? 'بياناتك تتحدث' : 'Your data, personalized'}
+          </h2>
+        </div>
+      </div>
+
+      {/* Momentum + Weak subjects */}
+      <div className={`grid gap-3 ${weakSubjects.length > 0 ? 'sm:grid-cols-2' : ''}`}>
+        {momentumScore !== null && (
+          <MomentumGauge score={momentumScore} trend={momentumTrend} isArabic={isArabic} />
+        )}
+        {weakSubjects.length > 0 && (
+          <WeakSubjectList subjects={weakSubjects} isArabic={isArabic} />
+        )}
+      </div>
+
+      {/* Study suggestions */}
+      {suggestions.length > 0 && (
+        <div className={`grid gap-2 ${suggestions.length >= 2 ? 'sm:grid-cols-2' : ''} ${suggestions.length === 3 ? 'lg:grid-cols-3' : ''}`}>
+          {suggestions.map((s, i) => {
+            const cfg = SUGGESTION_CONFIG[s.type] || SUGGESTION_CONFIG.MOMENTUM;
+            const SugIcon = cfg.icon;
+            return (
+              <div key={i} className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 ${cfg.bg}`}>
+                <SugIcon size={13} className={`mt-0.5 shrink-0 ${cfg.cls}`} />
+                <div className="flex-1 min-w-0">
+                  <p className={`text-[10px] font-bold uppercase tracking-wider ${cfg.cls}`}>
+                    {s.priority === 'HIGH' ? (isArabic ? 'عالي الأولوية' : 'High Priority')
+                      : s.priority === 'MEDIUM' ? (isArabic ? 'مقترح' : 'Suggested')
+                      : (isArabic ? 'اختياري' : 'Optional')}
+                  </p>
+                  <p className="mt-0.5 text-xs font-semibold leading-snug text-slate-700">{s.text}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
 

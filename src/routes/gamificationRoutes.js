@@ -15,6 +15,7 @@ import { getAdaptiveMissionsController } from '../controllers/adaptiveMissionCon
 import { getAIMentorController } from '../controllers/aiMentorController.js';
 import { getEngagementFeedController } from '../controllers/engagementFeedController.js';
 import { getSocialController } from '../controllers/socialController.js';
+import { getAdaptiveInsightsController } from '../controllers/adaptiveInsightsController.js';
 
 const router = Router();
 
@@ -33,5 +34,6 @@ router.get('/missions/adaptive', getAdaptiveMissionsController);
 router.get('/mentor', getAIMentorController);
 router.get('/activity', getEngagementFeedController);
 router.get('/social', getSocialController);
+router.get('/insights', getAdaptiveInsightsController);
 
 export default router;
