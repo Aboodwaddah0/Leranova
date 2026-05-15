@@ -457,11 +457,6 @@ export default function StudentChatPage() {
       return;
     }
 
-    console.info('[CHAT_UI] selected reply message', {
-      chatId: selectedChatId,
-      messageId: message.id,
-      senderId: message.senderId,
-    });
     setReplyToMessage(message || null);
 
     // Messenger-like behavior: jump directly to composer and focus cursor.
@@ -773,7 +768,7 @@ export default function StudentChatPage() {
         </div>
       ) : null}
 
-      <div className={`grid h-[calc(100vh-118px)] min-h-0 gap-4 overflow-hidden rounded-[1.5rem] border border-white/70 bg-white/80 p-3 shadow-xl shadow-indigo-500/5 backdrop-blur-xl transition ${editingMessageId ? 'ring-2 ring-indigo-400' : ''} md:grid-cols-[320px_1fr]`}>
+      <div className={`grid h-[calc(100vh-188px)] min-h-0 gap-4 overflow-hidden rounded-[1.5rem] border border-white/70 bg-white/80 p-3 shadow-xl shadow-indigo-500/5 backdrop-blur-xl transition lg:h-[calc(100vh-118px)] ${editingMessageId ? 'ring-2 ring-indigo-400' : ''} md:grid-cols-[320px_1fr]`}>
         <aside className="flex min-h-0 flex-col rounded-3xl border border-slate-200 bg-slate-50/80 p-3">
           <div className="mb-3 flex items-center gap-2 px-2 text-sm font-bold text-slate-700">
             <MessageCircle size={16} className="text-indigo-600" />
@@ -894,8 +889,8 @@ export default function StudentChatPage() {
                       </p>
                     ) : null}
                     {!message.isDeleted && message.replyTo ? (
-                      <div className="mb-[6px] rounded-[8px] border-l-[3px] border-[#6c5ce7] bg-[#f1f3f5] px-[10px] py-[6px] text-[12px] text-[#555]">
-                        <p className="mb-0.5 inline-flex items-center gap-1 text-[11px] font-bold text-[#4b4b4b]">
+                      <div className="mb-[6px] rounded-lg border-l-[3px] border-indigo-400 bg-slate-100 px-3 py-1.5 text-xs text-slate-600">
+                        <p className="mb-0.5 inline-flex items-center gap-1 text-[11px] font-bold text-slate-700">
                           <CornerUpLeft size={12} />
                           {mine
                             ? `${isArabic ? 'أنت رديت على' : 'You replied to'} ${message.replyTo.senderName || (isArabic ? 'عضو' : 'Member')}`

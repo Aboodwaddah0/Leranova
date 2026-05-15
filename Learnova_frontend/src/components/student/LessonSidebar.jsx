@@ -12,7 +12,7 @@ export default function LessonSidebar({
   return (
     <aside className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <div>
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#2379c3]">{isArabic ? "مسار التعلم" : "Learning path"}</p>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-600">{isArabic ? "مسار التعلم" : "Learning path"}</p>
         <h3 className="mt-2 text-xl font-black text-slate-900">{isArabic ? "اختر السياق" : "Choose a context"}</h3>
       </div>
 
@@ -21,7 +21,7 @@ export default function LessonSidebar({
         <select
           value={selectedCourseId}
           onChange={(event) => onCourseChange(event.target.value)}
-          className="h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-[#2379c3]"
+          className="h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-indigo-500"
         >
           <option value="">{isArabic ? "اختر الكورس" : "Select course"}</option>
           {courses.map((course) => (
@@ -37,7 +37,7 @@ export default function LessonSidebar({
         <select
           value={selectedSubjectId}
           onChange={(event) => onSubjectChange(event.target.value)}
-          className="h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-[#2379c3]"
+          className="h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-indigo-500"
         >
           <option value="">{isArabic ? "اختر المادة" : "Select subject"}</option>
           {subjects.map((subject) => (
