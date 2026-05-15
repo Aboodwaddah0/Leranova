@@ -170,6 +170,42 @@ export default function StudentDashboardPage() {
           setActivityFeed(feedData.feed || []);
           setEngagedToday(Boolean(feedData.engagedToday));
         }
+
+        // ── Calibrate prevRef + detect cross-page XP gains ──────────────────
+        // prevRef starts at 0, which causes `prev.totalXp > 0` to fail on the
+        // first poll.  Seed it with real values so any XP gained while the
+        // dashboard was unmounted (the student was on the lesson page) is
+        // detected the moment they navigate back here.
+        const currentXp    = gamData?.totalXp    || 0;
+        const currentLevel = gamData?.level       || 1;
+        const currentStrk  = gamData?.currentStreak || 0;
+
+        const storedXp    = Number(sessionStorage.getItem('lnv_last_xp')    || '0');
+        const storedLevel = Number(sessionStorage.getItem('lnv_last_level') || '0');
+
+        if (storedXp > 0 && currentXp > storedXp) {
+          const gained = currentXp - storedXp;
+          const id = Date.now();
+          setFloatingXps(p => [...p.slice(-4), { id, amount: gained }]);
+          setTimeout(() => setFloatingXps(p => p.filter(x => x.id !== id)), 2800);
+          sound.xp();
+          notifyXpGained(gained);
+        }
+        if (storedLevel > 0 && currentLevel > storedLevel) {
+          setLevelUpModal(currentLevel);
+          sound.levelUp();
+          notifyLevelUp(currentLevel);
+        }
+
+        sessionStorage.setItem('lnv_last_xp',    String(currentXp));
+        sessionStorage.setItem('lnv_last_level',  String(currentLevel));
+
+        prevRef.current = {
+          ...prevRef.current,
+          totalXp: currentXp,
+          level:   currentLevel,
+          streak:  currentStrk,
+        };
       } catch (err) {
         if (!cancelled) setError(err?.message || (isArabic ? 'فشل تحميل لوحة الطالب.' : 'Failed to load dashboard.'));
       } finally {
@@ -246,6 +282,8 @@ export default function StudentDashboardPage() {
       setActivityFeed(feed.feed || []);
 
       prevRef.current = { ...prev, level: feed.level, totalXp: feed.totalXp, streak: feed.currentStreak };
+      sessionStorage.setItem('lnv_last_xp',   String(feed.totalXp));
+      sessionStorage.setItem('lnv_last_level', String(feed.level));
     };
 
     // Refresh adaptive missions every other poll (60s)
