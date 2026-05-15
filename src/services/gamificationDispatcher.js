@@ -1,4 +1,4 @@
-import { awardXpSafe, touchStreak } from './gamificationService.js';
+import { awardXpSafe, awardXpReturning, touchStreak } from './gamificationService.js';
 
 const log = {
   info: (msg, meta) => console.info('[gam:dispatch]', msg, meta ?? ''),
@@ -51,6 +51,92 @@ function _resolveSourceId(mapping, sourceId) {
  * XP events are rate-limited in-process; XP dedup is also enforced at DB level.
  * @param {{ studentId: number, event: string, sourceId?: number|null, metadata?: object }} payload
  */
+const EMPTY_REWARD = { xpEarned: 0, streakUpdated: false, achievementsUnlocked: [], levelUp: null, toastMessage: null, sound: null };
+
+function _buildReward(result, event) {
+  if (!result || result.xpAwarded === 0) return EMPTY_REWARD;
+  const levelUp = (result.levelAfter > result.levelBefore) ? result.levelAfter : null;
+  const achievementsUnlocked = result.newAchievements ?? [];
+  let toastMessage, sound;
+  if (levelUp) {
+    toastMessage = `Level Up! You're now Level ${levelUp}`;
+    sound = 'levelUp';
+  } else if (achievementsUnlocked.length > 0) {
+    toastMessage = `Achievement Unlocked: ${achievementsUnlocked[0].label}`;
+    sound = 'achievement';
+  } else {
+    toastMessage = `+${result.xpAwarded} XP earned`;
+    sound = 'xp';
+  }
+  return { xpEarned: result.xpAwarded, streakUpdated: result.streakUpdated, achievementsUnlocked, levelUp, toastMessage, sound };
+}
+
+/**
+ * Awaitable dispatcher — awards XP synchronously and returns a normalized
+ * reward payload `{ xpEarned, streakUpdated, achievementsUnlocked, levelUp, toastMessage, sound }`.
+ * Use this when the caller needs to surface rewards to the frontend.
+ */
+export async function dispatchGamificationEvent({ studentId, event, sourceId, metadata }) {
+  const mapping = EVENT_MAP[event];
+  if (!mapping) {
+    log.warn('unknown event — ignored (sync)', { studentId, event });
+    return EMPTY_REWARD;
+  }
+
+  if (mapping.streakOnly) {
+    touchStreak(studentId);
+    return EMPTY_REWARD;
+  }
+
+  if (!mapping.eventType) {
+    touchStreak(studentId);
+    return EMPTY_REWARD;
+  }
+
+  if (_rateLimited(studentId, event)) {
+    log.info('rate-limited (sync)', { studentId, event });
+    return EMPTY_REWARD;
+  }
+
+  log.info('xp event (sync)', { studentId, event, sourceId });
+  const resolvedSourceId = _resolveSourceId(mapping, sourceId);
+  const result = await awardXpReturning(studentId, mapping.eventType, mapping.sourceType, resolvedSourceId, metadata ?? null);
+  return _buildReward(result, event);
+}
+
+/**
+ * Merge two reward payloads into one, taking the highest-priority sound/toast.
+ */
+export function mergeRewards(r1, r2) {
+  if (!r1) return r2 ?? EMPTY_REWARD;
+  if (!r2) return r1;
+  const xpEarned = (r1.xpEarned || 0) + (r2.xpEarned || 0);
+  const achievementsUnlocked = [...(r1.achievementsUnlocked || []), ...(r2.achievementsUnlocked || [])];
+  const levelUp = r2.levelUp ?? r1.levelUp;
+  let toastMessage, sound;
+  if (levelUp) {
+    toastMessage = `Level Up! You're now Level ${levelUp}`;
+    sound = 'levelUp';
+  } else if (achievementsUnlocked.length > 0) {
+    toastMessage = `Achievement Unlocked: ${achievementsUnlocked[0].label}`;
+    sound = 'achievement';
+  } else if (xpEarned > 0) {
+    toastMessage = `+${xpEarned} XP earned`;
+    sound = 'xp';
+  } else {
+    toastMessage = null;
+    sound = null;
+  }
+  return {
+    xpEarned,
+    streakUpdated: r1.streakUpdated || r2.streakUpdated,
+    achievementsUnlocked,
+    levelUp,
+    toastMessage,
+    sound,
+  };
+}
+
 export function dispatch({ studentId, event, sourceId, metadata }) {
   const mapping = EVENT_MAP[event];
   if (!mapping) {

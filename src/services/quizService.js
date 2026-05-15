@@ -1,7 +1,7 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { gatherLessonContent, callGroq } from './aiContentService.js';
-import { dispatch } from './gamificationDispatcher.js';
+import { dispatch, dispatchGamificationEvent, mergeRewards } from './gamificationDispatcher.js';
 
 /* ─── Role resolution ─────────────────────────────────────────────────────── */
 
@@ -452,17 +452,19 @@ export const submitQuizAttempt = async (actor, lessonId, { answers, lang = 'ar' 
     },
   });
 
+  let reward = null;
   if (isPassed) {
-    dispatch({ studentId: scope.userId, event: 'quiz.passed',  sourceId: quiz.id });
+    reward = await dispatchGamificationEvent({ studentId: scope.userId, event: 'quiz.passed', sourceId: quiz.id });
     if (score === 100) {
-      dispatch({ studentId: scope.userId, event: 'quiz.perfect', sourceId: quiz.id });
+      const perfectReward = await dispatchGamificationEvent({ studentId: scope.userId, event: 'quiz.perfect', sourceId: quiz.id });
+      reward = mergeRewards(reward, perfectReward);
     }
   } else {
     // Failed attempts still count as engagement for streak
     dispatch({ studentId: scope.userId, event: 'quiz.attempted', sourceId: quiz.id });
   }
 
-  // Return full quiz with answers revealed + the attempt result
+  // Return full quiz with answers revealed + attempt result + reward payload
   return {
     attempt: { id: attempt.id, answers, score, isPassed, createdAt: attempt.createdAt },
     questions: quiz.questions.map((q) => ({
@@ -473,5 +475,6 @@ export const submitQuizAttempt = async (actor, lessonId, { answers, lang = 'ar' 
       explanation: q.explanation,
       orderIndex: q.orderIndex,
     })),
+    reward,
   };
 };

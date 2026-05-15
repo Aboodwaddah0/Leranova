@@ -234,6 +234,105 @@ export function awardXpSafe(studentId, eventType, sourceType, sourceId, metadata
   );
 }
 
+async function _runAchievementCheckReturning(studentId) {
+  const [lessonCount, quizCount, perfectCount, xpRow, streakRow, existing] = await Promise.all([
+    prisma.xp_event.count({ where: { studentId, eventType: 'LESSON_COMPLETE' } }),
+    prisma.xp_event.count({ where: { studentId, eventType: 'QUIZ_PASS' } }),
+    prisma.xp_event.count({ where: { studentId, eventType: 'QUIZ_PERFECT' } }),
+    prisma.student_xp_summary.findUnique({ where: { studentId }, select: { totalXp: true } }),
+    prisma.student_streak.findUnique({ where: { studentId }, select: { longestStreak: true } }),
+    prisma.student_achievement.findMany({ where: { studentId }, select: { achievementKey: true } }),
+  ]);
+
+  const unlocked = new Set(existing.map(r => r.achievementKey));
+  const totalXp  = xpRow?.totalXp ?? 0;
+  const longest  = streakRow?.longestStreak ?? 0;
+  const newlyUnlocked = [];
+
+  const candidates = [
+    [lessonCount >= 1,  'FIRST_LESSON'],
+    [lessonCount >= 10, 'LESSON_10'],
+    [lessonCount >= 50, 'LESSON_50'],
+    [quizCount >= 1,   'FIRST_QUIZ'],
+    [quizCount >= 5,   'QUIZ_5'],
+    [perfectCount >= 1, 'PERFECT_QUIZ'],
+    [longest >= 3,      'STREAK_3'],
+    [longest >= 7,      'STREAK_7'],
+    [longest >= 30,     'STREAK_30'],
+    [totalXp >= 100,    'XP_100'],
+    [totalXp >= 500,    'XP_500'],
+  ];
+
+  for (const [condition, key] of candidates) {
+    if (!condition || unlocked.has(key)) continue;
+    const a = ACHIEVEMENTS[key];
+    try {
+      await prisma.student_achievement.create({
+        data: { studentId, achievementKey: key, xpAwarded: a.xp },
+      });
+      await _awardBonusXp(studentId, a.xp);
+      newlyUnlocked.push({ key, label: a.label, xp: a.xp });
+      log.info('achievement unlocked (returning)', { studentId, key, xp: a.xp });
+    } catch {
+      // Unique constraint — already unlocked between the findMany and now
+    }
+  }
+  return newlyUnlocked;
+}
+
+export async function awardXpReturning(studentId, eventType, sourceType, sourceId, metadata) {
+  const EMPTY = { xpAwarded: 0, levelBefore: null, levelAfter: null, streakUpdated: false, newStreak: 0, newAchievements: [] };
+  const xp = XP_VALUES[eventType] ?? 0;
+  if (!xp) return EMPTY;
+
+  const existing = await prisma.xp_event.findFirst({
+    where: { studentId, eventType, sourceType, sourceId },
+    select: { id: true },
+  });
+  if (existing) return EMPTY;
+
+  const [xpSummary, streakRow] = await Promise.all([
+    prisma.student_xp_summary.findUnique({ where: { studentId }, select: { totalXp: true, level: true } }),
+    prisma.student_streak.findUnique({ where: { studentId }, select: { currentStreak: true, longestStreak: true, lastActivityAt: true } }),
+  ]);
+
+  const levelBefore = xpSummary?.level ?? 1;
+  const today = new Date().toISOString().slice(0, 10);
+  const lastActive = streakRow?.lastActivityAt?.toISOString().slice(0, 10);
+  const streakUpdated = lastActive !== today;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.xp_event.create({
+      data: { studentId, eventType, xpAwarded: xp, sourceType, sourceId, ...(metadata != null ? { metadata } : {}) },
+    });
+    const updated = await tx.student_xp_summary.upsert({
+      where: { studentId },
+      create: { studentId, totalXp: xp, level: computeLevel(xp) },
+      update: { totalXp: { increment: xp } },
+    });
+    const newLevel = computeLevel(updated.totalXp);
+    if (newLevel !== updated.level) {
+      await tx.student_xp_summary.update({ where: { studentId }, data: { level: newLevel } });
+    }
+    await _updateStreak(tx, studentId);
+  });
+
+  triggerMissionProgress(studentId, eventType);
+
+  const newAchievements = await _runAchievementCheckReturning(studentId);
+
+  const xpAfter = await prisma.student_xp_summary.findUnique({ where: { studentId }, select: { level: true } });
+  const levelAfter = xpAfter?.level ?? 1;
+
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const newStreak = streakUpdated
+    ? (lastActive === yesterday ? (streakRow?.currentStreak ?? 0) + 1 : 1)
+    : (streakRow?.currentStreak ?? 1);
+
+  log.info('awardXpReturning', { studentId, eventType, xp, levelBefore, levelAfter, streakUpdated, newAchievements: newAchievements.length });
+  return { xpAwarded: xp, levelBefore, levelAfter, streakUpdated, newStreak, newAchievements };
+}
+
 export async function getStudentStats(studentId) {
   const [xp, streak] = await Promise.all([
     prisma.student_xp_summary.findUnique({ where: { studentId } }),
