@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { Home, BookOpen, UserCircle2, LogOut, MessageCircle, Users2, BarChart2 } from 'lucide-react';
+import { Home, BookOpen, UserCircle2, LogOut, MessageCircle, Users2, BarChart2, Trophy } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
@@ -41,6 +41,12 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
       icon: BarChart2,
       match: (pathname) => pathname === '/student/marks',
     }] : []),
+    {
+      to: '/student/social',
+      label: isArabic ? 'المنافسة' : 'Competition',
+      icon: Trophy,
+      match: (pathname) => pathname === '/student/social',
+    },
     {
       to: '/student/chat',
       label: t?.student?.chat?.title || (isArabic ? 'المحادثات' : 'Chat'),
@@ -152,7 +158,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
         </div>
       </aside>
 
-      <main className={`px-4 py-6 lg:px-8 ${isRtl ? 'lg:mr-64' : 'lg:ml-64'}`}>
+      <main className={`px-4 py-6 pb-24 lg:px-8 lg:pb-6 ${isRtl ? 'lg:mr-64' : 'lg:ml-64'}`}>
         <div className="mx-auto flex max-w-[1600px] gap-8">
           <div className="min-w-0 flex-1">
             {(title || subtitle || actions) ? (
@@ -179,19 +185,20 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
         </div>
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/60 bg-white/80 px-4 py-3 backdrop-blur-xl lg:hidden">
-        <div className="mx-auto flex max-w-xl items-center justify-around gap-2">
-          {navItems.slice(0, 4).map((item) => {
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/60 bg-white/85 pb-safe px-2 pt-2 backdrop-blur-xl lg:hidden">
+        <div className="mx-auto flex max-w-md items-center justify-around">
+          {navItems.slice(0, 5).map((item) => {
             const Icon = item.icon;
             const active = activeNavItem?.to === item.to;
             return (
               <NavLink
                 key={item.to}
                 to={item.to}
-                className={() => `flex flex-col items-center gap-1 rounded-2xl px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] transition ${active ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400'}`}
+                className={() => `flex flex-col items-center gap-0.5 rounded-xl px-2.5 py-2 text-[10px] font-bold uppercase tracking-wider transition-all
+                  ${active ? 'text-indigo-600 bg-indigo-50 scale-105' : 'text-slate-400 hover:text-slate-700'}`}
               >
-                <Icon size={18} />
-                {item.label}
+                <Icon size={20} />
+                <span className="mt-0.5 max-w-[56px] truncate text-center">{item.label}</span>
               </NavLink>
             );
           })}

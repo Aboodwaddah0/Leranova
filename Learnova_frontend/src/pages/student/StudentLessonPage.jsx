@@ -24,6 +24,8 @@ import {
   setLessonCompleted,
   subscribeToProgress,
 } from '../../utils/studentProgress';
+import { sound } from '../../utils/soundHelper';
+import { notifyXpGained, notifyAchievement, notifyLevelUp, notifyLessonComplete, notifyCommentPosted, notifyError } from '../../lib/notify';
 
 export default function StudentLessonPage() {
   const { isArabic } = useLanguage();
@@ -197,11 +199,51 @@ export default function StudentLessonPage() {
     return next ? Number(next.id) : null;
   }, [subjectLessons, currentLessonIndex]);
 
-  const onVideoEnded = () => {
+  const videoPlayFiredRef = useRef(false);
+
+  // Reset per-lesson on lessonId change
+  useEffect(() => { videoPlayFiredRef.current = false; }, [numericLessonId]);
+
+  function handleReward(reward) {
+    if (!reward || reward.xpEarned === 0) return;
+    if (reward.levelUp) {
+      sound.levelUp();
+      notifyLevelUp(reward.levelUp);
+      if (reward.xpEarned > 0) setTimeout(() => notifyXpGained(reward.xpEarned), 700);
+      return;
+    }
+    if (reward.achievementsUnlocked?.length > 0) {
+      sound.achievement();
+      notifyAchievement(reward.achievementsUnlocked[0].label);
+      if (reward.xpEarned > 0) setTimeout(() => notifyXpGained(reward.xpEarned), 700);
+      return;
+    }
+    sound.xp();
+    notifyXpGained(reward.xpEarned);
+  }
+
+  const onVideoPlay = () => {
+    if (videoPlayFiredRef.current) return;
+    videoPlayFiredRef.current = true;
+    // Fire lesson.viewed → touchStreak (no XP, streak-safe)
+    void updateStudentLessonProgress(numericLessonId, false).catch(() => {});
+  };
+
+  const onVideoEnded = async () => {
+    videoPlayFiredRef.current = true; // prevent duplicate view dispatch
     setLessonCompleted(numericLessonId, true);
-    void updateStudentLessonProgress(numericLessonId, true).catch((updateError) => {
+    try {
+      const result = await updateStudentLessonProgress(numericLessonId, true);
+      const reward = result?.reward;
+      if (reward?.xpEarned > 0) {
+        handleReward(reward);
+      } else {
+        notifyLessonComplete(isArabic ? 'تم إكمال الدرس!' : 'Lesson complete!');
+      }
+    } catch (updateError) {
+      sound.dismiss();
       setError(updateError?.message || (isArabic ? 'فشل تحديث تقدم الدرس.' : 'Failed to update lesson progress.'));
-    });
+    }
 
     if (Number.isInteger(nextLessonId) && nextLessonId > 0) {
       let remaining = 5;
@@ -283,24 +325,15 @@ export default function StudentLessonPage() {
       content: commentText.trim(),
     };
 
-    console.log('[LESSON PAGE] Comment submit started', payload);
-
     try {
       const created = await createLessonComment(numericLessonId, payload.content);
       setCommentText('');
       setComments((current) => [created, ...current]);
-      console.log('[LESSON PAGE] Comment submit succeeded', {
-        lesson_id: numericLessonId,
-        created_comment_id: created?.id || null,
-      });
+      notifyCommentPosted(isArabic ? 'تم نشر التعليق' : 'Comment posted!');
     } catch (submitError) {
-      console.error('[LESSON PAGE] Comment submit failed', {
-        lesson_id: numericLessonId,
-        contentLength: payload.content.length,
-        status: submitError?.response?.status,
-        message: submitError?.response?.data?.message || submitError?.message,
-      });
-      setError(submitError?.response?.data?.message || submitError?.message || (isArabic ? 'فشل نشر التعليق.' : 'Failed to post comment.'));
+      sound.dismiss();
+      const msg = submitError?.response?.data?.message || submitError?.message || (isArabic ? 'فشل نشر التعليق.' : 'Failed to post comment.');
+      notifyError(msg);
     }
   };
 
@@ -330,7 +363,7 @@ export default function StudentLessonPage() {
             </Link>
             <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-bold text-slate-600 shadow-sm">
               <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: courseProgress.total ? `${(courseProgress.completed / courseProgress.total) * 100}%` : '0%' }} />
+                <div className="ln-progress-fill h-full rounded-full bg-indigo-500" style={{ width: courseProgress.total ? `${(courseProgress.completed / courseProgress.total) * 100}%` : '0%' }} />
               </div>
               {courseProgress.completed}/{courseProgress.total} {isArabic ? 'منجز' : 'done'}
             </div>
@@ -353,7 +386,8 @@ export default function StudentLessonPage() {
             {lesson?.videoUrl ? (
               <>
                 <video ref={videoRef} controls preload="auto" src={lesson.videoUrl}
-                  className="w-full max-h-[420px] object-cover" onEnded={onVideoEnded} />
+                  className="w-full max-h-[420px] object-cover"
+                  onPlay={onVideoPlay} onEnded={onVideoEnded} />
                 {autoNextCountdown ? (
                   <div className="border-t border-slate-800 bg-slate-900/90 px-5 py-2.5 text-xs font-semibold text-cyan-300">
                     {isArabic ? `الدرس التالي خلال ${autoNextCountdown}ث...` : `Next lesson in ${autoNextCountdown}s...`}
@@ -409,10 +443,10 @@ export default function StudentLessonPage() {
                       key={id}
                       type="button"
                       onClick={() => setActiveSection(activeSection === id ? null : id)}
-                      className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold transition-all ${
+                      className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold transition-all active:scale-95 ${
                         active
                           ? `${colorMap[color].active} shadow-md`
-                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:shadow-sm'
                       }`}
                     >
                       <Icon size={15} />
@@ -502,8 +536,18 @@ export default function StudentLessonPage() {
                   submitting={quizSubmitting}
                   onSubmit={async (answers) => {
                     setQuizSubmitting(true);
-                    try { return await submitStudentQuizAttempt(numericLessonId, answers, lang); }
-                    catch { return null; } finally { setQuizSubmitting(false); }
+                    try {
+                      const result = await submitStudentQuizAttempt(numericLessonId, answers, lang);
+                      const reward = result?.reward;
+                      if (reward?.xpEarned > 0) {
+                        handleReward(reward);
+                      } else if (result?.attempt?.isPassed) {
+                        sound.xp();
+                      } else if (result?.attempt?.isPassed === false) {
+                        sound.dismiss();
+                      }
+                      return result;
+                    } catch { sound.dismiss(); return null; } finally { setQuizSubmitting(false); }
                   }}
                 />
               </div>
@@ -558,7 +602,7 @@ export default function StudentLessonPage() {
                     className="flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:bg-white"
                   />
                   <button onClick={onPostComment}
-                    className="flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-700">
+                    className="ln-btn-press flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-700">
                     <Send size={14} />
                     {isArabic ? 'نشر' : 'Post'}
                   </button>

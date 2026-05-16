@@ -448,7 +448,6 @@ export async function verifyAcademyCheckoutSession(sessionId) {
 export async function fetchMyStudentMarks() {
   try {
     const response = await api.get('/marks/me');
-    console.log('Marks API:', response);
     const payload = unwrap(response, []);
     const normalized = ensureArray(payload);
     if (!Array.isArray(normalized)) {
@@ -465,7 +464,6 @@ export async function fetchMyStudentMarks() {
 export async function fetchMyStudentPurchases() {
   try {
     const response = await api.get('/payment/student/purchases');
-    console.log('Purchases API:', response);
     const payload = unwrap(response, []);
     const normalized = ensureArray(payload);
     if (!Array.isArray(normalized)) {
@@ -552,12 +550,6 @@ export async function fetchSubjectLessons(subjectId) {
   try {
     const response = await api.get(`/subjects/${subjectId}/lessons`);
     const data = unwrap(response, []);
-    console.log('[LESSONS][FRONTEND] GET /subjects/:subjectId/lessons', {
-      subjectId: Number(subjectId),
-      status: response?.status,
-      total: Array.isArray(data) ? data.length : 0,
-      progress: response?.data?.progress || null,
-    });
 
     if (Array.isArray(data) && data.length) {
       return data.map(toNormalizedLesson);
@@ -650,20 +642,9 @@ export async function fetchLessonDetails(lessonId) {
 
 export async function fetchLessonComments(lessonId) {
   try {
-    console.log('[COMMENTS] Fetch request', {
-      endpoint: `/lessons/${lessonId}/comments`,
-      method: 'GET',
-      baseUrl: api.defaults.baseURL,
-      hasAuthHeader: Boolean(window?.localStorage?.getItem(STORAGE_KEYS.TOKEN)),
-      lesson_id: Number(lessonId),
-    });
     const response = await api.get(`/lessons/${lessonId}/comments`);
     const data = unwrap(response, []);
     if (Array.isArray(data)) {
-      console.log('[COMMENTS] Fetch response', {
-        status: response?.status,
-        count: data.length,
-      });
       return data;
     }
     console.error('[COMMENTS] Fetch invalid response shape', { data });
@@ -698,31 +679,8 @@ export async function createLessonComment(lessonId, input) {
   const requestBody = { content: content.trim() };
 
   try {
-    console.log('[COMMENTS] Submit request', {
-      endpoint: `/lessons/${lessonIdNumber}/comments`,
-      method: 'POST',
-      baseUrl: api.defaults.baseURL,
-      headers: {
-        hasContentType: Boolean(api.defaults?.headers?.['Content-Type'] || api.defaults?.headers?.common?.['Content-Type']),
-        hasAuthHeader: Boolean(window?.localStorage?.getItem(STORAGE_KEYS.TOKEN)),
-      },
-      payload: {
-        lesson_id: lessonIdNumber,
-        user_id: userId,
-        content: requestBody.content,
-      },
-      requestBody,
-    });
-
     const response = await api.post(`/lessons/${lessonIdNumber}/comments`, requestBody);
     const created = unwrap(response, null);
-
-    console.log('[COMMENTS] Submit response', {
-      status: response?.status,
-      createdCommentId: created?.id || null,
-      createdLessonId: created?.lessonId || null,
-      createdUserId: created?.userId || null,
-    });
 
     if (!created?.id) {
       throw new Error('Comment was not created on server. Missing comment id in response.');
@@ -1031,8 +989,98 @@ export function getFallbackStudentPurchases() {
   return fallbackPurchases;
 }
 
+export async function fetchGamificationStats() {
+  try {
+    const response = await api.get('/student/gamification/me');
+    return unwrap(response, { totalXp: 0, level: 1, currentStreak: 0, longestStreak: 0 });
+  } catch {
+    return { totalXp: 0, level: 1, currentStreak: 0, longestStreak: 0 };
+  }
+}
+
+export async function fetchGamificationLeaderboard() {
+  try {
+    const response = await api.get('/student/gamification/leaderboard');
+    return unwrap(response, { leaderboard: [], currentStudentId: null, currentRank: null });
+  } catch {
+    return { leaderboard: [], currentStudentId: null, currentRank: null };
+  }
+}
+
+export async function fetchAchievements() {
+  try {
+    const response = await api.get('/student/gamification/achievements');
+    return unwrap(response, { unlocked: [], locked: [], latestUnlocked: null });
+  } catch {
+    return { unlocked: [], locked: [], latestUnlocked: null };
+  }
+}
+
+export async function fetchMissions() {
+  try {
+    const response = await api.get('/student/gamification/missions');
+    return unwrap(response, { daily: [], weekly: [] });
+  } catch {
+    return { daily: [], weekly: [] };
+  }
+}
+
 export function getFallbackStudentMarks() {
   return fallbackMarks;
+}
+
+export async function fetchLearningProfile() {
+  try {
+    const response = await api.get('/student/gamification/profile');
+    return unwrap(response, null);
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchAdaptiveMissions() {
+  try {
+    const response = await api.get('/student/gamification/missions/adaptive');
+    return unwrap(response, null);
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchAIMentor() {
+  try {
+    const response = await api.get('/student/gamification/mentor');
+    return unwrap(response, null);
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchAdaptiveInsights() {
+  try {
+    const response = await api.get('/student/gamification/insights');
+    return unwrap(response, null);
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchActivityFeed() {
+  try {
+    const response = await api.get('/student/gamification/activity');
+    return unwrap(response, null);
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchStudentSocial() {
+  try {
+    const response = await api.get('/student/gamification/social');
+    return unwrap(response, null);
+  } catch {
+    return null;
+  }
 }
 
 export function getFallbackLessons() {

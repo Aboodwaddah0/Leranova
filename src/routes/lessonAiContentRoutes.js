@@ -10,25 +10,33 @@ import {
   unpublishAiContentController,
   updateFlashcardsController,
   updateMindmapController,
+  deleteFlashcardsController,
+  deleteMindmapController,
+  generatePowerSlidesController,
+  deletePowerSlidesController,
+  generateScenePlanController,
 } from '../controllers/aiContentController.js';
 
 const router = Router({ mergeParams: true });
 
 router.use(authMiddleware);
 
-// Any authenticated user with lesson access (GET returns draft-aware response based on role)
 router.get('/', ensureLessonAccess, getOrGenerateLessonAiContent);
 
-// Teacher-only: generation
 router.post('/regenerate',            ensureLessonAccess, regenerateLessonAiContent);
 router.post('/flashcards/regenerate', ensureLessonAccess, regenerateFlashcardsController);
 router.post('/mindmap/regenerate',    ensureLessonAccess, regenerateMindmapController);
 
-// Teacher-only: edit
-router.put('/flashcards', ensureLessonAccess, updateFlashcardsController);
-router.put('/mindmap',    ensureLessonAccess, updateMindmapController);
+router.put('/flashcards',    ensureLessonAccess, updateFlashcardsController);
+router.put('/mindmap',       ensureLessonAccess, updateMindmapController);
+router.delete('/flashcards', ensureLessonAccess, deleteFlashcardsController);
+router.delete('/mindmap',    ensureLessonAccess, deleteMindmapController);
 
-// Teacher-only: publish workflow
+router.post('/slides/generate',        ensureLessonAccess, generatePowerSlidesController);
+router.delete('/slides',               ensureLessonAccess, deletePowerSlidesController);
+
+router.post('/scenes/plan', ensureLessonAccess, generateScenePlanController);
+
 router.patch('/publish',   ensureLessonAccess, publishAiContentController);
 router.patch('/unpublish', ensureLessonAccess, unpublishAiContentController);
 

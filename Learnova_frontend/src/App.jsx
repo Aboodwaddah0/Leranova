@@ -12,6 +12,7 @@ import InstructorLessonsPage from "./pages/instructor/InstructorLessonsPage";
 import InstructorStudentsPage from "./pages/instructor/InstructorStudentsPage";
 import InstructorMarksPage from "./pages/instructor/InstructorMarksPage";
 import InstructorSettingsPage from "./pages/instructor/InstructorSettingsPage";
+import InstructorAnalyticsPage from "./pages/instructor/InstructorAnalyticsPage";
 import StudentDashboardPage from "./pages/student/StudentDashboardPage";
 import StudentCoursesPage from "./pages/student/StudentCoursesPage";
 import StudentCourseDetailsPage from "./pages/student/StudentCourseDetailsPage";
@@ -23,6 +24,7 @@ import StudentTeacherProfilePage from "./pages/student/StudentTeacherProfilePage
 import StudentSubjectPage from "./pages/student/StudentSubjectPage";
 import StudentLessonPage from "./pages/student/StudentLessonPage";
 import StudentProfilePage from "./pages/student/StudentProfilePage";
+import StudentSocialPage from "./pages/student/StudentSocialPage";
 import StudentPageErrorBoundary from "./components/student/StudentPageErrorBoundary";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
@@ -83,6 +85,7 @@ function App() {
 <Route path="/dashboard/instructor/lessons" element={<InstructorLessonsPage />} />
             <Route path="/dashboard/instructor/students" element={<InstructorStudentsPage />} />
             <Route path="/dashboard/instructor/settings" element={<InstructorSettingsPage />} />
+            <Route path="/dashboard/instructor/analytics" element={<InstructorAnalyticsPage />} />
             <Route element={<InstructorSchoolOnlyRoute />}>
               <Route path="/dashboard/instructor/marks" element={<InstructorMarksPage />} />
             </Route>
@@ -105,6 +108,7 @@ function App() {
             <Route path="/teachers" element={<StudentPageErrorBoundary><StudentTeachersPage /></StudentPageErrorBoundary>} />
             <Route path="/teachers/:teacherId" element={<StudentPageErrorBoundary><StudentTeacherProfilePage /></StudentPageErrorBoundary>} />
             <Route path="/student/chat" element={<StudentPageErrorBoundary><StudentChatPage /></StudentPageErrorBoundary>} />
+            <Route path="/student/social" element={<StudentPageErrorBoundary><StudentSocialPage /></StudentPageErrorBoundary>} />
             <Route path="/student/profile" element={<StudentProfilePage />} />
           </Route>
           <Route path="/dashboard/:role" element={<DashboardPlaceholderPage />} />
