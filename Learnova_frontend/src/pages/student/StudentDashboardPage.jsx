@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import {
   ArrowRight, ChevronRight, BookOpen, Flame, TrendingUp, Trophy, Medal, Target,
   Zap, Star, Play, CheckCircle2, Lock, GraduationCap,
@@ -84,6 +85,9 @@ const summarizeAverageMark = (marks = []) => {
 
 export default function StudentDashboardPage() {
   const { t, isArabic } = useLanguage();
+  const authUser = useSelector((state) => state.auth.user);
+  const _orgType = String(authUser?.organizationType || authUser?.organization?.Role || '').toUpperCase();
+  const isSchoolStudent = _orgType === 'SCHOOL' || (_orgType !== 'ACADEMY' && !authUser?.academyUser);
   const [enrolledCourses, setEnrolledCourses] = useState([]);
   const [marks, setMarks] = useState([]);
   const [profile, setProfile] = useState(null);
@@ -422,13 +426,15 @@ export default function StudentDashboardPage() {
                   : `Level ${gamification.level} · Rank #${currentRank?.rank ?? '—'} in your org`}
               </p>
             </div>
-            <Link
-              to="/dashboard/student/courses"
-              className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-indigo-700 shadow-lg transition hover:shadow-indigo-200 hover:scale-[1.02]"
-            >
-              {isArabic ? 'الكورسات' : 'My Courses'}
-              <ArrowRight size={14} />
-            </Link>
+            {!isSchoolStudent && (
+              <Link
+                to="/dashboard/student/courses"
+                className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-indigo-700 shadow-lg transition hover:shadow-indigo-200 hover:scale-[1.02]"
+              >
+                {isArabic ? 'الكورسات' : 'My Courses'}
+                <ArrowRight size={14} />
+              </Link>
+            )}
           </div>
 
           {/* XP bar */}
