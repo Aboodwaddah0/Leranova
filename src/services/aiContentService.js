@@ -372,7 +372,7 @@ export const gatherLessonContent = async (lessonId) => {
 
 /* ─── Call Groq ─────────────────────────────────────────────────────────── */
 
-export const callGroq = async (prompt, systemPrompt) => {
+export const callGroq = async (prompt, systemPrompt, model = GROQ_MODEL, maxTokens = 3000) => {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new AppError('GROQ_API_KEY is not configured', 500);
 
@@ -385,9 +385,9 @@ export const callGroq = async (prompt, systemPrompt) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: GROQ_MODEL,
+        model,
         temperature: 0.2,
-        max_tokens: 3000,
+        max_tokens: maxTokens,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user',   content: prompt },
@@ -418,30 +418,65 @@ const extractJSON = (raw) => {
   // Try direct parse first
   try { return JSON.parse(cleaned); } catch { /* fall through */ }
 
-  // Find JSON by tracking brace depth — handles trailing text after the closing }
-  const start = cleaned.indexOf('{');
-  if (start === -1) throw new Error('No JSON object found in Groq response');
-  let depth = 0;
-  let inString = false;
-  let escape = false;
-  for (let i = start; i < cleaned.length; i += 1) {
+  // Find the earliest { or [ — whichever comes first
+  const objStart = cleaned.indexOf('{');
+  const arrStart = cleaned.indexOf('[');
+  const start = objStart === -1 ? arrStart
+              : arrStart === -1 ? objStart
+              : Math.min(objStart, arrStart);
+  if (start === -1) throw new Error('No JSON found in response');
+
+  const open  = cleaned[start];
+  const close = open === '[' ? ']' : '}';
+  let depth = 0, inString = false, escape = false;
+
+  for (let i = start; i < cleaned.length; i++) {
     const ch = cleaned[i];
-    if (escape) { escape = false; continue; }
-    if (ch === '\\' && inString) { escape = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
-    if (inString) continue;
-    if (ch === '{') depth += 1;
-    else if (ch === '}') {
-      depth -= 1;
+    if (escape)                      { escape = false; continue; }
+    if (ch === '\\' && inString)     { escape = true;  continue; }
+    if (ch === '"')                  { inString = !inString; continue; }
+    if (inString)                    continue;
+    if (ch === open)                 depth++;
+    else if (ch === close)           {
+      depth--;
       if (depth === 0) {
-        const candidate = cleaned.slice(start, i + 1);
-        try { return JSON.parse(candidate); } catch (err) {
-          throw new Error(`JSON parse failed: ${err.message}`);
-        }
+        try { return JSON.parse(cleaned.slice(start, i + 1)); } catch { break; }
       }
     }
   }
-  throw new Error('Unterminated JSON object in Groq response');
+
+  // Truncated response — extract every complete top-level object from the fragment
+  const partial = cleaned.slice(start);
+
+  if (open === '[') {
+    // Walk the array content and collect each fully-closed {} item
+    const items = [];
+    let d = 0, inStr = false, esc = false, itemStart = -1;
+    for (let i = 1; i < partial.length; i++) {
+      const c = partial[i];
+      if (esc)                   { esc = false; continue; }
+      if (c === '\\' && inStr)   { esc = true;  continue; }
+      if (c === '"')             { inStr = !inStr; continue; }
+      if (inStr)                 continue;
+      if (c === '{') { if (d === 0) itemStart = i; d++; }
+      else if (c === '}') {
+        d--;
+        if (d === 0 && itemStart !== -1) {
+          items.push(partial.slice(itemStart, i + 1));
+          itemStart = -1;
+        }
+      }
+    }
+    if (items.length > 0) {
+      try { return JSON.parse('[' + items.join(',') + ']'); } catch { /* fall through */ }
+    }
+  } else {
+    // Single truncated object — just close it
+    try { return JSON.parse(partial + '}'); } catch { /* fall through */ }
+  }
+
+  console.error('[extractJSON] Could not parse — raw snippet:', raw.slice(0, 300));
+  throw new Error('Could not extract valid JSON from response');
 };
 
 const normaliseFlashcards = (parsed) =>
@@ -472,14 +507,16 @@ export const getLessonAiContent = async (lessonId, lang = 'ar', role = 'STUDENT'
   }
 
   const other = lang === 'ar' ? 'en' : 'ar';
-  const flashcards = readForLang(cached.flashcards, lang) ?? readForLang(cached.flashcards, other);
-  const mindmap    = readForLang(cached.mindmap,    lang) ?? readForLang(cached.mindmap,    other);
+  const flashcards  = readForLang(cached.flashcards,  lang) ?? readForLang(cached.flashcards,  other);
+  const mindmap     = readForLang(cached.mindmap,     lang) ?? readForLang(cached.mindmap,     other);
+  const powerSlides = readForLang(cached.powerSlides, lang) ?? readForLang(cached.powerSlides, other);
 
-  if (!flashcards && !mindmap) return null;
+  if (!flashcards && !mindmap && !powerSlides) return null;
 
   return {
-    flashcards: flashcards ?? [],
-    mindmap: mindmap ?? null,
+    flashcards:  flashcards  ?? [],
+    mindmap:     mindmap     ?? null,
+    powerSlides: powerSlides ?? null,
     status: cached.status,
     published: cached.status === 'published',
     publishedAt: cached.publishedAt,
@@ -493,7 +530,7 @@ export const generateLessonAiContent = async (lessonId, lang = 'ar') => {
   const p = PROMPTS[lang] ?? PROMPTS.ar;
   const s = SYS[lang]    ?? SYS.ar;
 
-  const raw    = await callGroq(p.combined(lesson.name, content), s.combined);
+  const raw    = await callGroq(p.combined(lesson.name, content), s.combined, 'llama-3.1-8b-instant');
   const parsed = extractJSON(raw);
   const flashcards = normaliseFlashcards(parsed);
   const mindmap    = normaliseMindmap(parsed, lesson.name);
@@ -518,12 +555,15 @@ export const generateLessonAiContent = async (lessonId, lang = 'ar') => {
   };
 };
 
-export const regenerateFlashcardsOnly = async (lessonId, lang = 'ar') => {
+export const regenerateFlashcardsOnly = async (lessonId, lang = 'ar', topic = '') => {
   const { lesson, content } = await gatherLessonContent(lessonId);
   const p = PROMPTS[lang] ?? PROMPTS.ar;
   const s = SYS[lang]    ?? SYS.ar;
 
-  const raw    = await callGroq(p.flashcards(lesson.name, content), s.flashcards);
+  const focusNote = topic?.trim()
+    ? (lang === 'ar' ? `\n\nملاحظة مهمة: ركّز بشكل خاص على الموضوع التالي: ${topic.trim()}` : `\n\nImportant: Focus specifically on the following topic: ${topic.trim()}`)
+    : '';
+  const raw    = await callGroq(p.flashcards(lesson.name, content) + focusNote, s.flashcards, 'llama-3.1-8b-instant');
   const parsed = extractJSON(raw);
   const flashcards = normaliseFlashcards(parsed);
 
@@ -544,12 +584,15 @@ export const regenerateFlashcardsOnly = async (lessonId, lang = 'ar') => {
   };
 };
 
-export const regenerateMindmapOnly = async (lessonId, lang = 'ar') => {
+export const regenerateMindmapOnly = async (lessonId, lang = 'ar', topic = '') => {
   const { lesson, content } = await gatherLessonContent(lessonId);
   const p = PROMPTS[lang] ?? PROMPTS.ar;
   const s = SYS[lang]    ?? SYS.ar;
 
-  const raw    = await callGroq(p.mindmap(lesson.name, content), s.mindmap);
+  const focusNote = topic?.trim()
+    ? (lang === 'ar' ? `\n\nملاحظة مهمة: ركّز بشكل خاص على الموضوع التالي: ${topic.trim()}` : `\n\nImportant: Focus specifically on the following topic: ${topic.trim()}`)
+    : '';
+  const raw    = await callGroq(p.mindmap(lesson.name, content) + focusNote, s.mindmap, 'llama-3.1-8b-instant');
   const parsed = extractJSON(raw);
   const mindmap = normaliseMindmap(parsed, lesson.name);
 
@@ -623,3 +666,236 @@ export const updateAiMindmap = async (lessonId, lang = 'ar', mindmap) => {
   });
   return { mindmap: readForLang(saved.mindmap, lang), status: saved.status };
 };
+
+export const deleteAiFlashcards = async (lessonId) => {
+  const existing = await prisma.lesson_ai_content.findUnique({ where: { lessonId: Number(lessonId) } });
+  if (!existing) throw new AppError('No AI content found for this lesson', 404);
+  await prisma.lesson_ai_content.update({
+    where: { lessonId: Number(lessonId) },
+    data: { flashcards: null },
+  });
+};
+
+export const deleteAiMindmap = async (lessonId) => {
+  const existing = await prisma.lesson_ai_content.findUnique({ where: { lessonId: Number(lessonId) } });
+  if (!existing) throw new AppError('No AI content found for this lesson', 404);
+  await prisma.lesson_ai_content.update({
+    where: { lessonId: Number(lessonId) },
+    data: { mindmap: null },
+  });
+};
+
+/* ─── Power Slides ───────────────────────────────────────────────────────── */
+
+const _SLIDES_SYS_AR = 'أنت مصمم عروض تقديمية. أخرج JSON فقط — لا نص، لا شرح، لا ```json، فقط JSON خام يبدأ بـ [ أو {. اختر نوع الشريحة المناسب: comparison للمقارنة، timeline للتسلسل، process للخطوات، hierarchy للهياكل، chart للبيانات، content للشرح. لا تضف معلومات خارج النص. عربية فصحى، بدون تعريب صوتي.';
+const _SLIDES_SYS_EN = 'You are a presentation designer. Output raw JSON only — no text, no explanation, no ```json fences, just raw JSON starting with [ or {. CRITICAL: all slide text must be in English even if source is Arabic — translate it. Pick the best type per idea: comparison, timeline, process, hierarchy, chart, or content.';
+
+const _buildSlidesPrompt = (title, content, numSlides, lang, topic) => {
+  const focusNote = topic?.trim()
+    ? (lang === 'ar'
+        ? `\n\nملاحظة مهمة: ركّز بشكل خاص على: ${topic.trim()}`
+        : `\n\nImportant: Focus specifically on: ${topic.trim()}`)
+    : '';
+
+  if (lang === 'ar') {
+    return `أنشئ عرضاً تقديمياً تعليمياً من ${numSlides} شريحة بالضبط لدرس: "${title}".
+
+أعد JSON صالح.
+
+أنواع الشرائح — اختر الأنسب لكل فكرة:
+
+"title"   → الشريحة الأولى فقط
+{ "id":1, "type":"title", "title":"...", "subtitle":"..." }
+
+"content" → شرح عام ومفاهيم
+{ "id":2, "type":"content", "title":"...", "bullets":["...","..."], "notes":"..." }
+
+"comparison" → مقارنة مفهومين أو خيارين
+{ "type":"comparison", "title":"A مقابل B", "left":{"label":"A","points":["...","..."]}, "right":{"label":"B","points":["...","..."]}, "notes":"..." }
+
+"timeline" → تسلسل زمني أو مراحل
+{ "type":"timeline", "title":"...", "steps":[{"year":"2001","label":"الحدث","description":"وصف"}], "notes":"..." }
+
+"process" → خطوات أو إجراء (3-5 خطوات)
+{ "type":"process", "title":"...", "steps":["الخطوة 1","الخطوة 2","الخطوة 3"], "notes":"..." }
+
+"hierarchy" → هيكل تنظيمي أو تصنيف
+{ "type":"hierarchy", "title":"...", "root":"العنصر الجذر", "children":[{"label":"فرع","children":["عنصر 1","عنصر 2"]}], "notes":"..." }
+
+"chart" → بيانات كمية وإحصاءات
+{ "type":"chart", "title":"...", "chartType":"bar", "labels":["تسمية 1","تسمية 2"], "values":[10,25], "notes":"..." }
+
+"summary" → الشريحة الأخيرة فقط
+{ "type":"summary", "title":"الخلاصة", "bullets":["...","..."], "notes":"..." }
+
+قواعد:
+- الشريحة الأولى دائماً "title"، الأخيرة دائماً "summary"
+- اختر النوع الأنسب للمحتوى بدلاً من "content" دائماً
+- notes: جملة أو جملتان للمحاضر
+- عدد الشرائح بالضبط: ${numSlides}
+${focusNote}
+
+محتوى الدرس:
+${content}`.trim();
+  }
+
+  return `LANGUAGE REQUIREMENT: Write every word of the JSON output in English — translate Arabic content if needed. Do not output a single Arabic character.
+
+Create a professional educational presentation of exactly ${numSlides} slides for the lesson: "${title}".
+
+Return valid JSON.
+
+Available slide types — pick the best fit for each idea:
+
+"title"   → first slide only
+{ "id":1, "type":"title", "title":"...", "subtitle":"..." }
+
+"content" → general explanation with bullet points
+{ "type":"content", "title":"...", "bullets":["...","..."], "notes":"..." }
+
+"comparison" → contrast two concepts/approaches
+{ "type":"comparison", "title":"A vs B", "left":{"label":"A","points":["...","..."]}, "right":{"label":"B","points":["...","..."]}, "notes":"..." }
+
+"timeline" → chronological sequence or historical events
+{ "type":"timeline", "title":"...", "steps":[{"year":"2001","label":"Event","description":"brief desc"}], "notes":"..." }
+
+"process" → step-by-step procedure (3-5 steps)
+{ "type":"process", "title":"...", "steps":["Step 1","Step 2","Step 3"], "notes":"..." }
+
+"hierarchy" → organizational or categorical tree structure
+{ "type":"hierarchy", "title":"...", "root":"Root", "children":[{"label":"Branch","children":["item 1","item 2"]}], "notes":"..." }
+
+"chart" → quantitative data or statistics
+{ "type":"chart", "title":"...", "chartType":"bar", "labels":["Label 1","Label 2"], "values":[10,25], "notes":"..." }
+
+"summary" → last slide only
+{ "type":"summary", "title":"Key Takeaways", "bullets":["...","..."], "notes":"..." }
+
+Rules:
+- First slide always "title", last slide always "summary"
+- Choose the most appropriate type instead of defaulting to "content"
+- notes: 1-2 sentences for the instructor
+- Total slides: exactly ${numSlides}
+${focusNote}
+
+Lesson content:
+${content}`.trim();
+};
+
+export const generatePowerSlides = async (lessonId, lang = 'ar', numSlides = 10, theme = 'blue', topic = '') => {
+  const { lesson, content } = await gatherLessonContent(lessonId);
+  // Cap content to keep total request under the 6000 TPM limit of llama-3.1-8b-instant
+  const prompt       = _buildSlidesPrompt(lesson.name, content.slice(0, 2000), numSlides, lang, topic);
+  const systemPrompt = lang === 'ar' ? _SLIDES_SYS_AR : _SLIDES_SYS_EN;
+
+  let raw, parsed;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    raw = await callGroq(prompt, systemPrompt, 'llama-3.1-8b-instant', 3500);
+    try {
+      parsed = extractJSON(raw);
+      break;
+    } catch (e) {
+      if (attempt === 1) {
+        console.error('[SLIDES] JSON parse failed after retry — raw:', raw?.slice(0, 400));
+        throw new AppError('AI returned invalid slide structure', 502);
+      }
+      console.warn('[SLIDES] JSON parse failed on attempt 1, retrying...', e.message);
+    }
+  }
+
+  // Model sometimes returns a bare array instead of {title, slides:[]}
+  const result = Array.isArray(parsed)
+    ? { title: lesson.name, slides: parsed }
+    : parsed;
+
+  if (!result?.slides || !Array.isArray(result.slides) || result.slides.length === 0) {
+    console.error('[SLIDES] Invalid structure — raw response:', raw?.slice(0, 500));
+    throw new AppError('AI returned invalid slide structure', 502);
+  }
+
+  const VALID_TYPES = ['title','content','summary','comparison','timeline','process','hierarchy','chart'];
+  const normalizeSlide = (s, i) => {
+    const base = {
+      id:          s.id ?? i + 1,
+      type:        VALID_TYPES.includes(s.type) ? s.type : 'content',
+      title:       String(s.title || '').trim(),
+      notes:       String(s.notes || '').trim(),
+    };
+    switch (base.type) {
+      case 'title':
+        return { ...base, subtitle: String(s.subtitle || '').trim() };
+      case 'content':
+      case 'summary':
+        return { ...base, bullets: Array.isArray(s.bullets) ? s.bullets.map(b => String(b).trim()).filter(Boolean) : [] };
+      case 'comparison':
+        return { ...base,
+          left:  { label: String(s.left?.label  || '').trim(), points: (s.left?.points  || []).map(String).filter(Boolean) },
+          right: { label: String(s.right?.label || '').trim(), points: (s.right?.points || []).map(String).filter(Boolean) },
+        };
+      case 'timeline':
+        return { ...base, steps: (s.steps || []).map(st => ({ year: String(st.year || ''), label: String(st.label || ''), description: String(st.description || '') })) };
+      case 'process':
+        return { ...base, steps: (s.steps || []).map(String).filter(Boolean) };
+      case 'hierarchy':
+        return { ...base, root: String(s.root || '').trim(), children: (s.children || []).map(c => ({ label: String(c.label || '').trim(), children: (c.children || []).map(String).filter(Boolean) })) };
+      case 'chart':
+        return { ...base, chartType: ['bar','pie','line'].includes(s.chartType) ? s.chartType : 'bar', labels: (s.labels || []).map(String), values: (s.values || []).map(Number) };
+      default:
+        return { ...base, bullets: [] };
+    }
+  };
+
+  const slides = {
+    title:  result.title || lesson.name,
+    theme,
+    slides: result.slides.map(normalizeSlide),
+  };
+
+  const existing       = await prisma.lesson_ai_content.findUnique({ where: { lessonId: Number(lessonId) } });
+  const newPowerSlides = writeForLang(existing?.powerSlides, slides, lang);
+
+  const saved = await prisma.lesson_ai_content.upsert({
+    where:  { lessonId: Number(lessonId) },
+    create: { lessonId: Number(lessonId), flashcards: existing?.flashcards ?? {}, mindmap: existing?.mindmap ?? {}, powerSlides: newPowerSlides },
+    update: { powerSlides: newPowerSlides },
+  });
+
+  return {
+    powerSlides: readForLang(saved.powerSlides, lang),
+    cached: false,
+    generatedAt: saved.updatedAt,
+  };
+};
+
+export const deletePowerSlides = async (lessonId) => {
+  const existing = await prisma.lesson_ai_content.findUnique({ where: { lessonId: Number(lessonId) } });
+  if (!existing) throw new AppError('No AI content found for this lesson', 404);
+  await prisma.lesson_ai_content.update({
+    where: { lessonId: Number(lessonId) },
+    data:  { powerSlides: null },
+  });
+};
+
+
+/* ─── Scene Plan (animated video via RAG service) ───────────────────────── */
+
+export const generateScenePlan = async (lessonId, lang = 'ar', fmt = 'explainer', focus = '', visualStyle = 'dark', interactive = false) => {
+  const lesson = await prisma.lesson.findUnique({ where: { id: Number(lessonId) } });
+  if (!lesson) throw new AppError('Lesson not found', 404);
+
+  const ragUrl = process.env.RAG_SERVICE_URL || 'http://rag-service:8000';
+  const resp = await fetch(`${ragUrl}/plan-scenes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lesson_id: String(lessonId), lang, fmt, focus, visual_style: visualStyle, interactive }),
+    signal: AbortSignal.timeout(45_000),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new AppError(err.detail || 'Scene plan generation failed', resp.status === 422 ? 422 : 502);
+  }
+
+  return resp.json();
+};
+

@@ -7,6 +7,7 @@ import {
 } from './cloudinary.service.js';
 import { triggerLessonRagIngestion } from './rag.service.js';
 import { resolveStudentContext } from './studentExperienceService.js';
+import { normalizeUploadedFilename } from '../utils/filenameEncoding.js';
 
 const toRole = (value) => String(value || '').trim().toUpperCase();
 
@@ -103,20 +104,23 @@ const toJsonSafeSize = (value) => {
 };
 
 const serializeAttachment = (attachment, context = {}) => {
+  const originalName = normalizeUploadedFilename(attachment.originalName);
+  const fileUrl = attachment.fileUrl;
+
   return {
     id: attachment.id,
     lessonId: attachment.lessonId,
     subjectId: context.subjectId ?? null,
     courseId: context.courseId ?? null,
-    fileUrl: attachment.fileUrl,
+    fileUrl,
     filePublicId: attachment.filePublicId,
     fileResourceType: attachment.fileResourceType,
-    url: attachment.fileUrl,
+    url: fileUrl,
     public_id: attachment.filePublicId,
     resource_type: attachment.fileResourceType,
     mimeType: attachment.mimeType,
-    originalName: attachment.originalName,
-    name: attachment.originalName,
+    originalName,
+    name: originalName,
     fileType: attachment.fileType,
     type: String(attachment.fileType || '').toLowerCase(),
     sizeBytes: toJsonSafeSize(attachment.sizeBytes),
@@ -207,8 +211,14 @@ export const createLessonAttachment = async ({ actor, lessonId, file }) => {
     fileType: ingestionFileType || String(fileType).toLowerCase(),
   });
 
+  // Documents must be uploaded as 'raw' so Cloudinary serves them as direct
+  // file downloads. Using 'auto' classifies PDFs as 'image', and accessing
+  // them as PDF then requires authentication (a paid Cloudinary feature).
+  const isDocument = ['PDF', 'DOCX', 'TXT'].includes(fileType);
+  const cloudinaryResourceType = isDocument ? 'raw' : 'auto';
+
   const uploaded = await uploadAttachment(file.buffer, {
-    resource_type: 'auto',
+    resource_type: cloudinaryResourceType,
     public_id: cloudinaryPublicId,
     unique_filename: false,
     overwrite: false,
@@ -221,7 +231,7 @@ export const createLessonAttachment = async ({ actor, lessonId, file }) => {
       filePublicId: uploaded.filePublicId,
       fileResourceType: uploaded.fileResourceType,
       mimeType,
-      originalName: file.originalname || null,
+      originalName: normalizeUploadedFilename(file.originalname),
       fileType,
       sizeBytes: typeof file.size === 'number' ? BigInt(file.size) : null,
     },

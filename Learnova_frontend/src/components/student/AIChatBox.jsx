@@ -76,7 +76,7 @@ export default function AIChatBox({ isArabic, courseId, subjectId, lessonId, lab
     <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#2379c3]">{heading.title || (isArabic ? "المساعد الذكي" : "AI tutor")}</p>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-600">{heading.title || (isArabic ? "المساعد الذكي" : "AI tutor")}</p>
           <h3 className="mt-2 text-xl font-black text-slate-900">{heading.subtitle || (isArabic ? "اسأل Learnova" : "Ask Learnova")}</h3>
         </div>
         <div className="rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-500">
@@ -89,7 +89,7 @@ export default function AIChatBox({ isArabic, courseId, subjectId, lessonId, lab
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
           placeholder={heading.placeholder || (isArabic ? "اكتب سؤالك..." : "Type your question...")}
-          className="min-h-28 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-[#2379c3] focus:bg-white"
+          className="min-h-28 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:bg-white"
         />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-slate-500">
@@ -114,10 +114,10 @@ export default function AIChatBox({ isArabic, courseId, subjectId, lessonId, lab
           messages.map((message, index) => (
             <article
               key={`${message.role}-${index}`}
-              className={`rounded-3xl border px-5 py-4 ${message.role === "assistant" ? "border-[#2379c3]/20 bg-[#eff6fd]" : "border-slate-200 bg-white"}`}
+              className={`rounded-3xl border px-5 py-4 ${message.role === "assistant" ? "border-indigo-200 bg-indigo-50/60" : "border-slate-200 bg-white"}`}
             >
               <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#2379c3]">
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-600">
                   {message.role === "assistant"
                     ? heading.answer || (isArabic ? "الإجابة" : "Answer")
                     : isArabic

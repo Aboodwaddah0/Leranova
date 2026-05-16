@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import PptxGenJS from "pptxgenjs";
+import PPTX_TEMPLATES from "../../utils/pptxTemplates";
+import { makeHelpers } from "../../utils/pptxTemplates/helpers";
 import InstructorLayout from "../../components/instructor/InstructorLayout";
 import {
   createInstructorLesson,
@@ -24,10 +27,15 @@ import {
   generateLessonMindmapOnly,
   updateLessonFlashcards,
   updateLessonMindmap,
+  deleteLessonFlashcards,
+  deleteLessonMindmap,
+  generateLessonPowerSlides,
+  deleteLessonPowerSlides,
   publishLessonAiContent,
   unpublishLessonAiContent,
   updateInstructorLessonMeta,
   suggestLessonMetadata,
+  suggestLessonMetadataFromContent,
 } from "../../services/instructorService";
 import EducationLoading from "../../components/ui/EducationLoading";
 import Modal from "../../components/ui/Modal";
@@ -39,6 +47,188 @@ import { ORG_TYPES } from "../../utils/constants";
 import { formatGradeName } from "../../utils/gradeHelpers";
 
 const safeError = (error) => error?.response?.data?.message || error?.message || "Request failed";
+
+const TEMPLATE_PREVIEWS = {
+  minimalist: {
+    bg: '#FFFFFF',
+    accent: '#2563EB',
+    text: '#1E293B',
+    layout: 'minimalist',
+  },
+  darkExec: {
+    bg: '#0F172A',
+    accent: '#38BDF8',
+    text: '#E2E8F0',
+    layout: 'darkExec',
+  },
+  splitScreen: {
+    bg: '#FFFFFF',
+    accent: '#F97316',
+    text: '#1E293B',
+    layout: 'splitScreen',
+  },
+  geometric: {
+    bg: '#FAFAFA',
+    accent: '#7C3AED',
+    text: '#1E293B',
+    layout: 'geometric',
+  },
+  gradientModern: {
+    bg: '#1B2B4B',
+    accent: '#60A5FA',
+    text: '#FFFFFF',
+    layout: 'gradientModern',
+  },
+  dashboard: {
+    bg: '#F8FAFC',
+    accent: '#3B82F6',
+    text: '#1E293B',
+    layout: 'dashboard',
+  },
+  diagonal: {
+    bg: '#FFFFFF',
+    accent: '#C8A951',
+    text: '#1E293B',
+    layout: 'diagonal',
+  },
+  fullBleed: {
+    bg: '#1A1A2E',
+    accent: '#F97316',
+    text: '#FFFFFF',
+    layout: 'fullBleed',
+  },
+  magazine: {
+    bg: '#FFFFFF',
+    accent: '#E11D48',
+    text: '#1E293B',
+    layout: 'magazine',
+  },
+  timelineJourney: {
+    bg: '#F0F9FF',
+    accent: '#0284C7',
+    text: '#1E293B',
+    layout: 'timelineJourney',
+  },
+};
+
+const buildTemplatePreviewSvg = (templateKey) => {
+  const spec = TEMPLATE_PREVIEWS[templateKey] || TEMPLATE_PREVIEWS.minimalist;
+  const svg = (() => {
+    switch (spec.layout) {
+      case 'darkExec':
+        return `
+          <rect width="100%" height="100%" rx="18" fill="${spec.bg}"/>
+          <rect x="0" y="0" width="100%" height="12" rx="18" fill="${spec.accent}"/>
+          <rect x="14" y="24" width="54" height="8" rx="4" fill="#ffffff" opacity="0.9"/>
+          <rect x="14" y="40" width="92" height="10" rx="5" fill="#ffffff" opacity="0.2"/>
+          <rect x="14" y="58" width="72" height="10" rx="5" fill="#ffffff" opacity="0.15"/>
+          <rect x="14" y="76" width="82" height="10" rx="5" fill="#ffffff" opacity="0.12"/>
+          <rect x="84" y="26" width="86" height="64" rx="10" fill="#0B1220" stroke="${spec.accent}" stroke-width="2"/>
+        `;
+      case 'splitScreen':
+        return `
+          <rect width="100%" height="100%" rx="18" fill="${spec.bg}"/>
+          <rect x="0" y="0" width="52%" height="100%" rx="18" fill="#1B3A5C"/>
+          <rect x="52%" y="0" width="48%" height="100%" rx="18" fill="#FFFFFF"/>
+          <circle cx="32" cy="36" r="18" fill="${spec.accent}" opacity="0.85"/>
+          <rect x="104" y="28" width="66" height="10" rx="5" fill="#1B3A5C"/>
+          <rect x="104" y="46" width="48" height="8" rx="4" fill="#1B3A5C" opacity="0.45"/>
+          <rect x="104" y="60" width="58" height="8" rx="4" fill="#1B3A5C" opacity="0.35"/>
+        `;
+      case 'geometric':
+        return `
+          <rect width="100%" height="100%" rx="18" fill="${spec.bg}"/>
+          <circle cx="170" cy="18" r="44" fill="${spec.accent}" opacity="0.18"/>
+          <circle cx="18" cy="164" r="34" fill="${spec.accent}" opacity="0.12"/>
+          <rect x="18" y="18" width="70" height="18" rx="9" fill="${spec.accent}"/>
+          <rect x="18" y="52" width="126" height="10" rx="5" fill="${spec.text}" opacity="0.2"/>
+          <rect x="18" y="70" width="108" height="10" rx="5" fill="${spec.text}" opacity="0.16"/>
+          <rect x="114" y="26" width="60" height="76" rx="14" fill="${spec.accent}" opacity="0.16" stroke="${spec.accent}" stroke-width="2"/>
+        `;
+      case 'gradientModern':
+        return `
+          <defs>
+            <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0%" stop-color="#2563EB" stop-opacity="0.95"/>
+              <stop offset="100%" stop-color="#1E40AF" stop-opacity="0.9"/>
+            </linearGradient>
+          </defs>
+          <rect width="100%" height="100%" rx="18" fill="url(#g)"/>
+          <rect x="14" y="18" width="86" height="8" rx="4" fill="#FFFFFF" opacity="0.85"/>
+          <rect x="14" y="36" width="122" height="10" rx="5" fill="#FFFFFF" opacity="0.22"/>
+          <rect x="14" y="54" width="92" height="10" rx="5" fill="#FFFFFF" opacity="0.18"/>
+          <rect x="104" y="18" width="66" height="90" rx="14" fill="#FFFFFF" opacity="0.12" stroke="#FFFFFF" stroke-opacity="0.18"/>
+        `;
+      case 'dashboard':
+        return `
+          <rect width="100%" height="100%" rx="18" fill="${spec.bg}"/>
+          <rect x="0" y="0" width="100%" height="24" rx="18" fill="#1E293B"/>
+          <rect x="14" y="34" width="70" height="24" rx="8" fill="${spec.accent}" opacity="0.9"/>
+          <rect x="14" y="66" width="58" height="18" rx="6" fill="#E2E8F0"/>
+          <rect x="82" y="34" width="90" height="52" rx="12" fill="#FFFFFF" stroke="#CBD5E1"/>
+          <rect x="86" y="40" width="38" height="8" rx="4" fill="${spec.accent}"/>
+          <rect x="86" y="56" width="62" height="6" rx="3" fill="#CBD5E1"/>
+          <rect x="86" y="68" width="50" height="6" rx="3" fill="#CBD5E1"/>
+        `;
+      case 'diagonal':
+        return `
+          <rect width="100%" height="100%" rx="18" fill="${spec.bg}"/>
+          <polygon points="0,122 122,0 176,0 176,48 58,166 0,166" fill="#1B2B4B"/>
+          <polygon points="0,150 150,0 176,0 176,20 20,166 0,166" fill="${spec.accent}" opacity="0.55"/>
+          <rect x="18" y="20" width="60" height="10" rx="5" fill="#FFFFFF" opacity="0.9"/>
+          <rect x="18" y="40" width="94" height="8" rx="4" fill="#FFFFFF" opacity="0.2"/>
+          <rect x="18" y="56" width="76" height="8" rx="4" fill="#FFFFFF" opacity="0.15"/>
+        `;
+      case 'fullBleed':
+        return `
+          <defs>
+            <linearGradient id="fb" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0%" stop-color="#1A1A2E"/>
+              <stop offset="100%" stop-color="#0F172A"/>
+            </linearGradient>
+          </defs>
+          <rect width="100%" height="100%" rx="18" fill="url(#fb)"/>
+          <rect x="0" y="0" width="100%" height="60%" rx="18" fill="#F97316" opacity="0.18"/>
+          <rect x="14" y="102" width="110" height="8" rx="4" fill="#FFFFFF" opacity="0.92"/>
+          <rect x="14" y="118" width="72" height="8" rx="4" fill="#FFFFFF" opacity="0.45"/>
+        `;
+      case 'magazine':
+        return `
+          <rect width="100%" height="100%" rx="18" fill="${spec.bg}"/>
+          <rect x="0" y="0" width="100%" height="26" rx="18" fill="${spec.accent}"/>
+          <rect x="16" y="36" width="82" height="9" rx="4" fill="${spec.accent}"/>
+          <rect x="16" y="54" width="66" height="7" rx="3" fill="#64748B" opacity="0.35"/>
+          <rect x="16" y="68" width="52" height="7" rx="3" fill="#64748B" opacity="0.28"/>
+          <rect x="104" y="36" width="56" height="84" rx="12" fill="#FCE7F3" stroke="${spec.accent}" stroke-width="2"/>
+        `;
+      case 'timelineJourney':
+        return `
+          <rect width="100%" height="100%" rx="18" fill="${spec.bg}"/>
+          <rect x="0" y="92" width="100%" height="18" rx="9" fill="${spec.accent}" opacity="0.22"/>
+          <circle cx="30" cy="101" r="8" fill="${spec.accent}"/>
+          <circle cx="84" cy="101" r="8" fill="#CBD5E1"/>
+          <circle cx="138" cy="101" r="8" fill="#CBD5E1"/>
+          <rect x="16" y="20" width="92" height="10" rx="5" fill="${spec.text}" opacity="0.22"/>
+          <rect x="16" y="40" width="120" height="8" rx="4" fill="${spec.text}" opacity="0.16"/>
+          <rect x="118" y="18" width="40" height="56" rx="12" fill="#FFFFFF" stroke="${spec.accent}" stroke-width="2"/>
+        `;
+      default:
+        return `
+          <rect width="100%" height="100%" rx="18" fill="${spec.bg}"/>
+          <rect x="0" y="0" width="100%" height="14" rx="18" fill="${spec.accent}"/>
+          <rect x="16" y="28" width="82" height="10" rx="5" fill="${spec.text}" opacity="0.22"/>
+          <rect x="16" y="46" width="116" height="8" rx="4" fill="${spec.text}" opacity="0.16"/>
+          <rect x="16" y="62" width="92" height="8" rx="4" fill="${spec.text}" opacity="0.12"/>
+        `;
+    }
+  })();
+
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 176 128" preserveAspectRatio="none">
+      ${svg}
+    </svg>
+  `)}`;
+};
 
 export default function InstructorLessonsPage() {
   const { isArabic } = useLanguage();
@@ -80,11 +270,22 @@ export default function InstructorLessonsPage() {
   const [aiContent, setAiContent] = useState(null);
   const [aiContentLoading, setAiContentLoading] = useState(false);
   const [aiContentLang, setAiContentLang] = useState(isArabic ? 'ar' : 'en');
+  const [aiGenTopic, setAiGenTopic] = useState('');
+  const [aiGenLang, setAiGenLang] = useState(isArabic ? 'ar' : 'en');
+  const [showAiGenModal, setShowAiGenModal] = useState(false);
+  const [aiGenType, setAiGenType] = useState('flashcards');
+  const [slidesGenerating, setSlidesGenerating] = useState(false);
+  const [showSlidesModal, setShowSlidesModal] = useState(false);
+  const [slidesForm, setSlidesForm] = useState({ lang: isArabic ? 'ar' : 'en', numSlides: 10, theme: 'minimalist', topic: '' });
   const [instructorSection, setInstructorSection] = useState(null);
   const [editingCardIdx, setEditingCardIdx] = useState(null);
   const [editCardDraft, setEditCardDraft] = useState({ question: '', answer: '' });
   const [showMindmapEditor, setShowMindmapEditor] = useState(false);
   const [mindmapDraft, setMindmapDraft] = useState(null);
+
+  // ── Suggest from content state ───────────────────────────────────────────────
+  const [suggestingMeta, setSuggestingMeta] = useState(false);
+  const [suggestMetaLang, setSuggestMetaLang] = useState(isArabic ? 'ar' : 'en');
 
   const selectedLesson = useMemo(
     () => lessons.find((lesson) => String(lesson.id) === String(selectedLessonId)) || null,
@@ -161,8 +362,8 @@ export default function InstructorLessonsPage() {
   }, [selectedLessonId]);
 
   useEffect(() => {
-    setInstructorSection(null); // Reset section nav when lesson changes
-    setAiContent(null); // Always clear stale content when lesson changes
+    setInstructorSection(null);
+    setAiContent(null);
     if (!selectedLessonId) return;
     let cancelled = false;
     fetchLessonAiContentInstructor(selectedLessonId, aiContentLang)
@@ -192,8 +393,8 @@ export default function InstructorLessonsPage() {
     setTimeout(() => startRagPolling(lessonId, 0, true), 3000);
   };
 
-  const onWizardSuggest = async (subjectId, filename, lang) =>
-    suggestLessonMetadata(subjectId, filename, lang).catch(() => null);
+  const onWizardSuggest = async (subjectId, filename, lang, hint) =>
+    suggestLessonMetadata(subjectId, filename, lang, hint).catch(() => null);
 
   const onCreateLesson = async (formData) => {
     setSaving(true);
@@ -337,21 +538,25 @@ export default function InstructorLessonsPage() {
     } catch (err) { setError(safeError(err)); } finally { setAiContentLoading(false); }
   };
 
-  const onGenerateFlashcardsOnly = async () => {
-    if (!selectedLessonId) return;
-    setAiContentLoading(true);
-    try {
-      const d = await generateLessonFlashcardsOnly(selectedLessonId, aiContentLang);
-      setAiContent((prev) => ({ ...prev, ...d, flashcards: d?.flashcards ?? prev?.flashcards }));
-    } catch (err) { setError(safeError(err)); } finally { setAiContentLoading(false); }
+  const onOpenAiGenModal = (type) => {
+    setAiGenType(type);
+    setAiGenTopic('');
+    setAiGenLang(isArabic ? 'ar' : 'en');
+    setShowAiGenModal(true);
   };
 
-  const onGenerateMindmapOnly = async () => {
+  const onConfirmAiGen = async () => {
     if (!selectedLessonId) return;
+    setShowAiGenModal(false);
     setAiContentLoading(true);
     try {
-      const d = await generateLessonMindmapOnly(selectedLessonId, aiContentLang);
-      setAiContent((prev) => ({ ...prev, ...d, mindmap: d?.mindmap ?? prev?.mindmap }));
+      if (aiGenType === 'flashcards') {
+        const d = await generateLessonFlashcardsOnly(selectedLessonId, aiGenLang, aiGenTopic);
+        setAiContent((prev) => ({ ...prev, ...d, flashcards: d?.flashcards ?? prev?.flashcards }));
+      } else {
+        const d = await generateLessonMindmapOnly(selectedLessonId, aiGenLang, aiGenTopic);
+        setAiContent((prev) => ({ ...prev, ...d, mindmap: d?.mindmap ?? prev?.mindmap }));
+      }
     } catch (err) { setError(safeError(err)); } finally { setAiContentLoading(false); }
   };
 
@@ -392,6 +597,62 @@ export default function InstructorLessonsPage() {
     } catch (err) { setError(safeError(err)); }
   };
 
+  const onDeleteFlashcards = async () => {
+    if (!window.confirm(isArabic ? 'هل تريد حذف جميع البطاقات التعليمية؟' : 'Delete all flashcards?')) return;
+    try {
+      await deleteLessonFlashcards(selectedLessonId);
+      setAiContent((prev) => ({ ...prev, flashcards: null }));
+    } catch (err) { setError(safeError(err)); }
+  };
+
+  const onDeleteMindmap = async () => {
+    if (!window.confirm(isArabic ? 'هل تريد حذف الخريطة الذهنية؟' : 'Delete the mind map?')) return;
+    try {
+      await deleteLessonMindmap(selectedLessonId);
+      setAiContent((prev) => ({ ...prev, mindmap: null }));
+    } catch (err) { setError(safeError(err)); }
+  };
+
+  const onGeneratePowerSlides = async () => {
+    if (!selectedLessonId) return;
+    setShowSlidesModal(false);
+    setSlidesGenerating(true);
+    try {
+      const d = await generateLessonPowerSlides(selectedLessonId, slidesForm);
+      setAiContent((prev) => ({ ...prev, powerSlides: d?.powerSlides ?? null }));
+    } catch (err) { setError(safeError(err)); } finally { setSlidesGenerating(false); }
+  };
+
+  const onDeletePowerSlides = async () => {
+    if (!window.confirm(isArabic ? 'هل تريد حذف الشرائح؟' : 'Delete the slides?')) return;
+    try {
+      await deleteLessonPowerSlides(selectedLessonId);
+      setAiContent((prev) => ({ ...prev, powerSlides: null }));
+    } catch (err) { setError(safeError(err)); }
+  };
+
+  const onDownloadPptx = async () => {
+    const slides = aiContent?.powerSlides;
+    if (!slides?.slides?.length) return;
+
+    const pptx = new PptxGenJS();
+    pptx.layout = 'LAYOUT_WIDE';
+    const W = 13.33, H = 7.5, total = slides.slides.length;
+    const isRTL = slidesForm.lang === 'ar';
+    const al = isRTL ? 'right' : 'left';
+    const ctx = { pptx, W, H, total, isRTL, al, ...makeHelpers({ pptx, W, H, isRTL, al }) };
+
+    const tplKey = slides.theme in PPTX_TEMPLATES ? slides.theme : 'minimalist';
+    slides.slides.forEach((slide, idx) => {
+      const s = pptx.addSlide();
+      PPTX_TEMPLATES[tplKey](s, slide, idx, ctx);
+
+    });
+
+    const filename = `${(slides.title || 'slides').replace(/[^a-zA-Z0-9؀-ۿ\s]/g, '').trim().slice(0, 40)}.pptx`;
+    await pptx.writeFile({ fileName: filename });
+  };
+
   const onPublishAiContent = async () => {
     try {
       const d = await publishLessonAiContent(selectedLessonId);
@@ -404,6 +665,31 @@ export default function InstructorLessonsPage() {
       const d = await unpublishLessonAiContent(selectedLessonId);
       setAiContent((prev) => ({ ...prev, ...d, published: false }));
     } catch (err) { setError(safeError(err)); }
+  };
+
+  const onSuggestFromContent = async () => {
+    if (!selectedLessonId || suggestingMeta) return;
+    const lesson = lessons.find((l) => String(l.id) === String(selectedLessonId));
+    const subjectId = lesson?.subject?.id || lesson?.subjectId;
+    if (!subjectId) return;
+    setSuggestingMeta(true);
+    try {
+      const suggestion = await suggestLessonMetadataFromContent(subjectId, selectedLessonId, suggestMetaLang);
+      if (!suggestion?.title && !suggestion?.description) return;
+      const confirmed = window.confirm(
+        isArabic
+          ? `تطبيق الاقتراح المبني على محتوى الفيديو؟\n\nالعنوان: ${suggestion.title}\nالوصف: ${suggestion.description}`
+          : `Apply suggestion based on video content?\n\nTitle: ${suggestion.title}\nDescription: ${suggestion.description}`
+      );
+      if (confirmed) {
+        await updateInstructorLessonMeta(subjectId, selectedLessonId, {
+          title: suggestion.title || '',
+          description: suggestion.description || '',
+        });
+        await refreshLessons();
+      }
+    } catch (err) { setError(safeError(err)); }
+    finally { setSuggestingMeta(false); }
   };
 
   const onReprocessRag = async () => {
@@ -576,17 +862,41 @@ export default function InstructorLessonsPage() {
               <h3 className="text-xl font-black text-slate-900">{selectedLesson ? (selectedLesson.title || selectedLesson.name) : (isArabic ? "اختر درسًا" : "Select a lesson")}</h3>
               <p className="mt-1 text-sm text-slate-600">{selectedLesson?.subject?.name || "-"}</p>
             </div>
+            {/* Suggest title & description from actual video content (available after RAG indexing) */}
+            {selectedLessonId && attachments.length > 0 ? (
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex overflow-hidden rounded-lg border border-slate-200 text-[11px] font-bold">
+                  {['ar', 'en'].map((l) => (
+                    <button key={l} type="button"
+                      onClick={() => setSuggestMetaLang(l)}
+                      className={`px-2.5 py-1.5 transition ${suggestMetaLang === l ? 'bg-indigo-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>
+                      {l === 'ar' ? 'عربي' : 'EN'}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={onSuggestFromContent}
+                  disabled={suggestingMeta}
+                  title={isArabic ? 'اقتراح عنوان ووصف بناءً على محتوى الفيديو الفعلي' : 'Suggest title & description from actual video content'}
+                  className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 whitespace-nowrap"
+                >
+                  {suggestingMeta ? '⏳' : '✨'} {isArabic ? 'اقتراح من المحتوى' : 'Suggest from Content'}
+                </button>
+              </div>
+            ) : null}
           </div>
 
           {/* ── Section navigation ── */}
           {selectedLessonId ? (
             <div className="flex flex-wrap gap-2 border-b border-slate-100 pb-3">
               {[
-                { id: 'attachments', label: isArabic ? 'المرفقات' : 'Attachments',  badge: attachments.length || null },
-                { id: 'comments',    label: isArabic ? 'التعليقات' : 'Comments',    badge: comments.length || null },
-                { id: 'flashcards',  label: isArabic ? 'البطاقات' : 'Flashcards',   badge: aiContent?.flashcards?.length || null },
-                { id: 'mindmap',     label: isArabic ? 'الخريطة' : 'Mind Map',      badge: null },
-                { id: 'quiz',        label: isArabic ? 'الاختبار' : 'Quiz',          badge: quiz?.questionCount || null },
+                { id: 'attachments',    label: isArabic ? 'المرفقات' : 'Attachments',     badge: attachments.length || null },
+                { id: 'comments',       label: isArabic ? 'التعليقات' : 'Comments',       badge: comments.length || null },
+                { id: 'flashcards',     label: isArabic ? 'البطاقات' : 'Flashcards',      badge: aiContent?.flashcards?.length || null },
+                { id: 'mindmap',        label: isArabic ? 'الخريطة' : 'Mind Map',         badge: null },
+                { id: 'quiz',           label: isArabic ? 'الاختبار' : 'Quiz',             badge: quiz?.questionCount || null },
+                { id: 'slides',         label: isArabic ? 'الشرائح' : 'Slides',            badge: aiContent?.powerSlides?.slides?.length || null },
               ].map(({ id, label, badge }) => {
                 const active = instructorSection === id;
                 return (
@@ -697,7 +1007,7 @@ export default function InstructorLessonsPage() {
           {/* ── Flashcards & Mind Map (hidden until selected) ── */}
           {(instructorSection === 'flashcards' || instructorSection === 'mindmap') && selectedLessonId ? (
             <article className="rounded-3xl border border-slate-200 bg-slate-50 p-5 space-y-4">
-              {/* Shared: language switcher + publish status */}
+              {/* Shared: publish status */}
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   {aiContent ? (
@@ -705,14 +1015,6 @@ export default function InstructorLessonsPage() {
                       {aiContent.published ? (isArabic ? '● منشور' : '● Published') : (isArabic ? '● مسودة' : '● Draft')}
                     </span>
                   ) : null}
-                  <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white text-[11px] font-bold">
-                    {['ar', 'en'].map((l) => (
-                      <button key={l} type="button" onClick={() => setAiContentLang(l)}
-                        className={`px-3 py-1 transition ${aiContentLang === l ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
-                        {l === 'ar' ? 'عربي' : 'EN'}
-                      </button>
-                    ))}
-                  </div>
                 </div>
                 {(aiContent?.flashcards?.length || aiContent?.mindmap) ? (
                   aiContent.published ? (
@@ -737,12 +1039,18 @@ export default function InstructorLessonsPage() {
                     <h4 className="font-black text-slate-900">{isArabic ? `🃏 البطاقات التعليمية${aiContent?.flashcards?.length ? ` (${aiContent.flashcards.length})` : ''}` : `🃏 Flashcards${aiContent?.flashcards?.length ? ` (${aiContent.flashcards.length})` : ''}`}</h4>
                     <div className="flex gap-2">
                       {aiContent?.flashcards?.length ? (
-                        <button type="button" onClick={onAddCard}
-                          className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-100">
-                          {isArabic ? '+ إضافة' : '+ Add'}
-                        </button>
+                        <>
+                          <button type="button" onClick={onAddCard}
+                            className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-100">
+                            {isArabic ? '+ إضافة' : '+ Add'}
+                          </button>
+                          <button type="button" onClick={onDeleteFlashcards}
+                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-1 text-xs font-bold text-red-600 hover:bg-red-100">
+                            {isArabic ? '🗑 حذف' : '🗑 Delete'}
+                          </button>
+                        </>
                       ) : null}
-                      <button type="button" onClick={onGenerateFlashcardsOnly} disabled={aiContentLoading}
+                      <button type="button" onClick={() => onOpenAiGenModal('flashcards')} disabled={aiContentLoading}
                         className="rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
                         {aiContentLoading ? '...' : (aiContent?.flashcards?.length ? (isArabic ? '🔄 إعادة توليد' : '🔄 Regenerate') : (isArabic ? '✨ توليد' : '✨ Generate'))}
                       </button>
@@ -812,12 +1120,18 @@ export default function InstructorLessonsPage() {
                     <h4 className="font-black text-slate-900">{isArabic ? '🗺️ الخريطة الذهنية' : '🗺️ Mind Map'}</h4>
                     <div className="flex gap-2">
                       {aiContent?.mindmap ? (
-                        <button type="button" onClick={() => { setMindmapDraft(JSON.parse(JSON.stringify(aiContent.mindmap))); setShowMindmapEditor(true); }}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50">
-                          {isArabic ? 'تعديل' : 'Edit'}
-                        </button>
+                        <>
+                          <button type="button" onClick={() => { setMindmapDraft(JSON.parse(JSON.stringify(aiContent.mindmap))); setShowMindmapEditor(true); }}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                            {isArabic ? 'تعديل' : 'Edit'}
+                          </button>
+                          <button type="button" onClick={onDeleteMindmap}
+                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-1 text-xs font-bold text-red-600 hover:bg-red-100">
+                            {isArabic ? '🗑 حذف' : '🗑 Delete'}
+                          </button>
+                        </>
                       ) : null}
-                      <button type="button" onClick={onGenerateMindmapOnly} disabled={aiContentLoading}
+                      <button type="button" onClick={() => onOpenAiGenModal('mindmap')} disabled={aiContentLoading}
                         className="rounded-xl bg-purple-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-purple-700 disabled:opacity-50">
                         {aiContentLoading ? '...' : (aiContent?.mindmap ? (isArabic ? '🔄 إعادة توليد' : '🔄 Regenerate') : (isArabic ? '✨ توليد' : '✨ Generate'))}
                       </button>
@@ -844,6 +1158,84 @@ export default function InstructorLessonsPage() {
                     </div>
                   )}
                 </>
+              )}
+
+              {/* AI Generation Options Modal */}
+              {showAiGenModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+                  <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl">
+
+                    {/* Header */}
+                    <div className="bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-600 px-6 py-6 text-white">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/20 text-xl backdrop-blur-sm">✨</div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-purple-200">{isArabic ? 'الذكاء الاصطناعي' : 'AI-Powered'}</p>
+                            <h3 className="text-lg font-black">
+                              {aiGenType === 'flashcards'
+                                ? (isArabic ? 'توليد البطاقات التعليمية' : 'Generate Flashcards')
+                                : (isArabic ? 'توليد الخريطة الذهنية' : 'Generate Mind Map')}
+                            </h3>
+                          </div>
+                        </div>
+                        <button type="button" onClick={() => setShowAiGenModal(false)}
+                          className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-white/80 hover:bg-white/20">✕</button>
+                      </div>
+                      <p className="mt-2 text-xs text-purple-200">
+                        {isArabic
+                          ? 'سيولّد الذكاء الاصطناعي المحتوى بناءً على محتوى الدرس'
+                          : 'AI will generate content based on the lesson material'}
+                      </p>
+                    </div>
+
+                    <div className="space-y-5 px-6 py-6">
+                      {/* Language */}
+                      <div>
+                        <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                          {isArabic ? 'لغة التوليد' : 'Language'}
+                        </label>
+                        <div className="flex overflow-hidden rounded-xl border border-slate-200">
+                          {[{ v: 'ar', flag: '🇸🇦', label: 'العربية' }, { v: 'en', flag: '🇺🇸', label: 'English' }].map(({ v, flag, label }) => {
+                            const active = aiGenLang === v;
+                            return (
+                              <button key={v} type="button" onClick={() => setAiGenLang(v)}
+                                className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-bold transition ${active ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
+                                {flag} {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Topic guidance */}
+                      <div>
+                        <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                          {isArabic ? 'توجيه الذكاء الاصطناعي (اختياري)' : 'AI Guidance (optional)'}
+                        </label>
+                        <textarea
+                          value={aiGenTopic}
+                          onChange={(e) => setAiGenTopic(e.target.value.slice(0, 300))}
+                          placeholder={isArabic
+                            ? 'مثال: ركّز على الوراثة والتغليف، وتجنب المفاهيم العامة'
+                            : 'e.g. Focus on inheritance and encapsulation, avoid general concepts'}
+                          rows={3}
+                          autoFocus
+                          className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-purple-400 focus:bg-white focus:ring-2 focus:ring-purple-100"
+                        />
+                        <p className="mt-1 text-right text-[10px] text-slate-400">{aiGenTopic.length}/300</p>
+                      </div>
+
+                      {/* Generate button */}
+                      <button type="button" onClick={onConfirmAiGen}
+                        className="relative w-full overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-purple-400/30 transition hover:opacity-90">
+                        ✨ {isArabic
+                          ? (aiGenType === 'flashcards' ? 'توليد البطاقات' : 'توليد الخريطة')
+                          : (aiGenType === 'flashcards' ? 'Generate Flashcards' : 'Generate Mind Map')}
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
 
               {/* Mind Map Editor Modal */}
@@ -897,23 +1289,6 @@ export default function InstructorLessonsPage() {
                       {quiz.isPublished ? (isArabic ? 'منشور' : 'Published') : (isArabic ? 'مسودة' : 'Draft')}
                     </span>
                   ) : null}
-                  {/* Language switcher */}
-                  <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white text-[11px] font-bold">
-                    {['ar', 'en'].map((l) => (
-                      <button key={l} type="button"
-                        onClick={async () => {
-                          setQuizViewLang(l);
-                          const subjectId = getSubjectId();
-                          if (subjectId && selectedLessonId) {
-                            const q = await fetchLessonQuiz(subjectId, selectedLessonId, l).catch(() => null);
-                            setQuiz(q);
-                          }
-                        }}
-                        className={`px-3 py-1 transition ${quizViewLang === l ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
-                        {l === 'ar' ? 'عربي' : 'EN'}
-                      </button>
-                    ))}
-                  </div>
                 </div>
                 {!quiz ? (
                   <button type="button" onClick={onCreateQuiz}
@@ -1046,6 +1421,243 @@ export default function InstructorLessonsPage() {
               )}
             </article>
           ) : null}
+
+          {/* ── Slides Panel ── */}
+          {instructorSection === 'slides' && selectedLessonId ? (
+            <article className="rounded-3xl border border-slate-200 bg-slate-50 p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="font-black text-slate-900">{isArabic ? `📊 الشرائح التقديمية${aiContent?.powerSlides?.slides?.length ? ` (${aiContent.powerSlides.slides.length})` : ''}` : `📊 Presentation Slides${aiContent?.powerSlides?.slides?.length ? ` (${aiContent.powerSlides.slides.length})` : ''}`}</h4>
+                <div className="flex gap-2">
+                  {aiContent?.powerSlides?.slides?.length ? (
+                    <>
+                      <button type="button" onClick={onDownloadPptx}
+                        className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 shadow-sm">
+                        ⬇ {isArabic ? 'تحميل PPTX' : 'Download PPTX'}
+                      </button>
+                      <button type="button" onClick={onDeletePowerSlides}
+                        className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-100">
+                        {isArabic ? '🗑 حذف' : '🗑 Delete'}
+                      </button>
+                    </>
+                  ) : null}
+                  <button type="button" onClick={() => { setSlidesForm(f => ({ ...f, lang: isArabic ? 'ar' : 'en', topic: '' })); setShowSlidesModal(true); }} disabled={slidesGenerating}
+                    className="rounded-xl bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700 disabled:opacity-50">
+                    {slidesGenerating ? (isArabic ? '⏳ جارٍ التوليد...' : '⏳ Generating...') : (aiContent?.powerSlides?.slides?.length ? (isArabic ? '🔄 إعادة توليد' : '🔄 Regenerate') : (isArabic ? '✨ توليد' : '✨ Generate'))}
+                  </button>
+                </div>
+              </div>
+
+              {!aiContent?.powerSlides?.slides?.length ? (
+                <div className="rounded-2xl bg-white px-4 py-10 text-center space-y-2">
+                  <p className="text-3xl">📊</p>
+                  <p className="text-sm font-bold text-slate-700">{isArabic ? 'لا توجد شرائح بعد' : 'No slides yet'}</p>
+                  <p className="text-xs text-slate-400">{isArabic ? 'اضغط "توليد" لإنشاء عرض تقديمي احترافي من محتوى الدرس' : 'Click "Generate" to create a professional presentation from lesson content'}</p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+                  {aiContent.powerSlides.slides.map((slide, idx) => {
+                    const THEME_PREVIEW = {
+                      minimalist:     { header: '#2563EB', accent: '#2563EB', bg: '#FFFFFF',  text: '#FFFFFF' },
+                      darkExec:       { header: '#1E293B', accent: '#38BDF8', bg: '#0F172A',  text: '#38BDF8' },
+                      splitScreen:    { header: '#1B3A5C', accent: '#F97316', bg: '#FFFFFF',  text: '#FFFFFF' },
+                      geometric:      { header: '#7C3AED', accent: '#7C3AED', bg: '#FAFAFA',  text: '#FFFFFF' },
+                      gradientModern: { header: '#1B2B4B', accent: '#60A5FA', bg: '#1B2B4B',  text: '#60A5FA' },
+                      dashboard:      { header: '#1E293B', accent: '#3B82F6', bg: '#F8FAFC',  text: '#FFFFFF' },
+                      diagonal:       { header: '#1B2B4B', accent: '#C8A951', bg: '#FFFFFF',  text: '#FFFFFF' },
+                      fullBleed:      { header: '#000000', accent: '#F97316', bg: '#1A1A2E',  text: '#F97316' },
+                      magazine:       { header: '#E11D48', accent: '#E11D48', bg: '#FFFFFF',  text: '#FFFFFF' },
+                      timelineJourney:{ header: '#0284C7', accent: '#0284C7', bg: '#F0F9FF',  text: '#FFFFFF' },
+                      // legacy
+                      corporate: { header: '#1B2B4B', accent: '#C8A951', bg: '#F4F6FB', text: '#FFFFFF' },
+                      minimal:   { header: '#7C3AED', accent: '#7C3AED', bg: '#FAFAFA', text: '#FFFFFF' },
+                    };
+                    const colors = THEME_PREVIEW[aiContent.powerSlides.theme] ?? THEME_PREVIEW.corporate;
+                    return (
+                      <div key={idx} className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm" style={{ background: colors.bg }}>
+                        <div className="px-4 py-2.5 flex items-center gap-2" style={{ background: colors.header }}>
+                          <span className="text-[10px] font-black opacity-60" style={{ color: colors.text }}>{idx + 1}</span>
+                          <span className="text-xs font-bold truncate" style={{ color: colors.text }}>{slide.title}</span>
+                          {['title','summary','comparison','timeline','process','hierarchy','code','chart'].includes(slide.type) && (
+                            <span className="ml-auto rounded-full bg-white/20 px-2 py-0.5 text-[9px] font-bold uppercase" style={{ color: colors.text }}>
+                              {{ title: isArabic?'عنوان':'TITLE', summary: isArabic?'خلاصة':'SUMMARY', comparison: isArabic?'مقارنة':'COMPARE', timeline: isArabic?'جدول زمني':'TIMELINE', process: isArabic?'خطوات':'PROCESS', hierarchy: isArabic?'هيكل':'TREE', code: 'CODE', chart: isArabic?'رسم بياني':'CHART' }[slide.type]}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex gap-3 px-4 py-3">
+                          <div className="flex-1 min-w-0 space-y-1">
+                            {/* title */}
+                            {slide.type === 'title' && slide.subtitle && <p className="text-sm italic" style={{ color: colors.accent }}>{slide.subtitle}</p>}
+                            {/* content / summary */}
+                            {(slide.type === 'content' || slide.type === 'summary') && (slide.bullets || []).map((b, bi) => (
+                              <div key={bi} className="flex items-start gap-1.5">
+                                <span className="mt-0.5 text-[8px] shrink-0" style={{ color: colors.accent }}>{slide.type === 'summary' ? '✓' : '▸'}</span>
+                                <span className="text-xs text-slate-600">{b}</span>
+                              </div>
+                            ))}
+                            {/* comparison */}
+                            {slide.type === 'comparison' && (
+                              <div className="grid grid-cols-2 gap-2">
+                                <div><p className="text-[10px] font-bold mb-0.5" style={{ color: colors.accent }}>{slide.left?.label}</p>{(slide.left?.points || []).slice(0, 2).map((p, i) => <p key={i} className="text-[9px] text-slate-500">▸ {p}</p>)}</div>
+                                <div><p className="text-[10px] font-bold mb-0.5" style={{ color: colors.accent }}>{slide.right?.label}</p>{(slide.right?.points || []).slice(0, 2).map((p, i) => <p key={i} className="text-[9px] text-slate-500">▸ {p}</p>)}</div>
+                              </div>
+                            )}
+                            {/* timeline */}
+                            {slide.type === 'timeline' && (
+                              <div className="flex gap-2 overflow-x-auto py-0.5">
+                                {(slide.steps || []).slice(0, 5).map((st, i) => (
+                                  <div key={i} className="text-center shrink-0 min-w-[52px]">
+                                    <p className="text-[9px] font-bold" style={{ color: colors.accent }}>{st.year}</p>
+                                    <p className="text-[9px] text-slate-600">{st.label}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {/* process */}
+                            {slide.type === 'process' && (
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {(slide.steps || []).slice(0, 5).map((st, i) => (
+                                  <span key={i} className="flex items-center gap-0.5">
+                                    <span className="rounded px-1.5 py-0.5 text-[9px] font-bold text-white" style={{ background: colors.accent }}>{st}</span>
+                                    {i < (slide.steps?.length ?? 0) - 1 && <span className="text-[10px]" style={{ color: colors.accent }}>→</span>}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {/* hierarchy */}
+                            {slide.type === 'hierarchy' && (
+                              <div className="text-center space-y-1">
+                                <span className="inline-block rounded px-2 py-0.5 text-[9px] font-bold text-white" style={{ background: colors.accent }}>{slide.root}</span>
+                                <div className="flex gap-1 justify-center flex-wrap">{(slide.children || []).slice(0, 4).map((c, i) => <span key={i} className="rounded border px-1.5 py-0.5 text-[9px]" style={{ borderColor: colors.accent, color: colors.accent }}>{c.label}</span>)}</div>
+                              </div>
+                            )}
+                            {/* code */}
+                            {slide.type === 'code' && (
+                              <div className="rounded bg-slate-900 px-2 py-1.5">
+                                <p className="text-[9px] font-mono font-bold" style={{ color: colors.accent }}>{slide.language}</p>
+                                <p className="text-[9px] font-mono text-emerald-400 truncate">{(slide.code || '').split('\n')[0]}</p>
+                              </div>
+                            )}
+                            {/* chart */}
+                            {slide.type === 'chart' && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">📊</span>
+                                <div><p className="text-[9px] font-bold capitalize" style={{ color: colors.accent }}>{slide.chartType} chart</p><p className="text-[9px] text-slate-500 truncate">{(slide.labels || []).join(' · ')}</p></div>
+                              </div>
+                            )}
+                            {slide.notes && <p className="text-[10px] italic text-slate-400 border-t border-slate-100 pt-1.5 mt-1">📝 {slide.notes}</p>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </article>
+          ) : null}
+
+          {/* ── Slides Generation Modal ── */}
+          {showSlidesModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+              <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl">
+                <div className="bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-600 px-6 py-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/20 text-xl backdrop-blur-sm">📊</div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-purple-200">{isArabic ? 'الذكاء الاصطناعي' : 'AI-Powered'}</p>
+                        <h3 className="text-lg font-black">{isArabic ? 'توليد الشرائح التقديمية' : 'Generate Presentation Slides'}</h3>
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => setShowSlidesModal(false)}
+                      className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-white/80 hover:bg-white/20">✕</button>
+                  </div>
+                  <p className="mt-2 text-xs text-purple-200">
+                    {isArabic ? 'سيولّد الذكاء الاصطناعي عرضاً تقديمياً احترافياً بناءً على محتوى الدرس' : 'AI will generate a professional presentation based on lesson content'}
+                  </p>
+                </div>
+
+                <div className="space-y-5 px-6 py-6">
+                  {/* Language */}
+                  <div>
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? 'لغة الشرائح' : 'Language'}</label>
+                    <div className="flex overflow-hidden rounded-xl border border-slate-200">
+                      {[{ v: 'ar', flag: '🇸🇦', label: 'العربية' }, { v: 'en', flag: '🇺🇸', label: 'English' }].map(({ v, flag, label }) => (
+                        <button key={v} type="button" onClick={() => setSlidesForm(f => ({ ...f, lang: v }))}
+                          className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-bold transition ${slidesForm.lang === v ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
+                          {flag} {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Slide count row */}
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? 'عدد الشرائح' : 'Slide Count'}</label>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {[5, 10, 15].map(n => (
+                          <button key={n} type="button" onClick={() => setSlidesForm(f => ({ ...f, numSlides: n }))}
+                            className={`rounded-xl py-2.5 text-sm font-black transition border-2 ${slidesForm.numSlides === n ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? 'القالب' : 'Template'}</label>
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-5 md:gap-2">
+                        {[
+                          { v:'minimalist',     c1:'#FFFFFF', c2:'#2563EB', label: isArabic?'بسيط':'Minimalist' },
+                          { v:'darkExec',       c1:'#0F172A', c2:'#38BDF8', label: isArabic?'تنفيذي':'Dark Exec' },
+                          { v:'splitScreen',    c1:'#1B3A5C', c2:'#F97316', label: isArabic?'مقسوم':'Split' },
+                          { v:'geometric',      c1:'#FAFAFA', c2:'#7C3AED', label: isArabic?'هندسي':'Geometric' },
+                          { v:'gradientModern', c1:'#1B2B4B', c2:'#60A5FA', label: isArabic?'تدرجي':'Gradient' },
+                          { v:'dashboard',      c1:'#1E293B', c2:'#3B82F6', label: isArabic?'لوحة':'Dashboard' },
+                          { v:'diagonal',       c1:'#1B2B4B', c2:'#C8A951', label: isArabic?'قطري':'Diagonal' },
+                          { v:'fullBleed',      c1:'#1A1A2E', c2:'#F97316', label: isArabic?'صورة كاملة':'Full Bleed' },
+                          { v:'magazine',       c1:'#E11D48', c2:'#FFFFFF', label: isArabic?'مجلة':'Magazine' },
+                          { v:'timelineJourney',c1:'#F0F9FF', c2:'#0284C7', label: isArabic?'رحلة':'Timeline' },
+                        ].map(({ v, label }) => (
+                          <button key={v} type="button" onClick={() => setSlidesForm(f => ({ ...f, theme: v }))}
+                            className={`overflow-hidden rounded-2xl border-2 p-1.5 text-left transition ${slidesForm.theme === v ? 'border-indigo-500 bg-indigo-50 shadow-sm shadow-indigo-500/10' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}`}>
+                            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                              <img
+                                src={buildTemplatePreviewSvg(v)}
+                                alt={label}
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                              />
+                              {slidesForm.theme === v ? (
+                                <div className="absolute inset-0 ring-2 ring-inset ring-indigo-500/80" />
+                              ) : null}
+                            </div>
+                            <span className="mt-1.5 block truncate px-0.5 text-center text-[10px] font-bold leading-tight text-slate-700">{label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Topic */}
+                  <div>
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? 'توجيه الذكاء الاصطناعي (اختياري)' : 'AI Guidance (optional)'}</label>
+                    <textarea value={slidesForm.topic}
+                      onChange={(e) => setSlidesForm(f => ({ ...f, topic: e.target.value.slice(0, 300) }))}
+                      placeholder={isArabic ? 'مثال: ركّز على الوراثة والتغليف، وابدأ بمقدمة عن البرمجة الكائنية' : 'e.g. Focus on inheritance and encapsulation, start with OOP introduction'}
+                      rows={3}
+                      className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-purple-400 focus:bg-white focus:ring-2 focus:ring-purple-100" />
+                    <p className="mt-1 text-right text-[10px] text-slate-400">{slidesForm.topic.length}/300</p>
+                  </div>
+
+                  {/* Generate button */}
+                  <button type="button" onClick={onGeneratePowerSlides}
+                    className="relative w-full overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-purple-400/30 transition hover:opacity-90">
+                    ✨ {isArabic ? `توليد ${slidesForm.numSlides} شريحة` : `Generate ${slidesForm.numSlides} Slides`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ── Generate with AI — full overlay ── */}
           {showGenerateModal ? (
@@ -1203,6 +1815,7 @@ export default function InstructorLessonsPage() {
               </button>
             </div>
           </Modal>
+
         </section>
       </div>
     </InstructorLayout>

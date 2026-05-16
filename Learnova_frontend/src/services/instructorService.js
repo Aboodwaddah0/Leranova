@@ -209,6 +209,11 @@ export const deleteLessonQuizQuestion = async (subjectId, lessonId, quizId, ques
   await api.delete(`/subjects/${subjectId}/lessons/${lessonId}/quiz/${quizId}/questions/${questionId}`);
 };
 
+export const fetchInstructorAnalytics = async () => {
+  const { data } = await api.get('/teachers/me/analytics');
+  return data?.data || null;
+};
+
 export const fetchStudentNotes = async (studentId) => {
   const { data } = await api.get('/notes', { params: { studentId } });
   return data?.data || [];

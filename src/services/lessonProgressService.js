@@ -1,6 +1,7 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { resolveStudentContext } from './studentExperienceService.js';
+import { dispatch, dispatchGamificationEvent } from './gamificationDispatcher.js';
 
 const toUpper = (value) => String(value || '').trim().toUpperCase();
 const PAID_SUBSCRIPTION_FILTER = {
@@ -71,6 +72,12 @@ const ensureStudentCanAccessLesson = async ({ studentId, lessonId }) => {
 export const upsertLessonProgress = async ({ studentId, lessonId, isCompleted }) => {
   await ensureStudentCanAccessLesson({ studentId, lessonId });
 
+  const existing = await prisma.lesson_progress.findUnique({
+    where: { studentId_lessonId: { studentId, lessonId } },
+    select: { isCompleted: true },
+  });
+  const wasCompleted = existing?.isCompleted ?? false;
+
   const progress = await prisma.lesson_progress.upsert({
     where: {
       studentId_lessonId: {
@@ -88,12 +95,21 @@ export const upsertLessonProgress = async ({ studentId, lessonId, isCompleted })
     },
   });
 
+  let reward = null;
+  if (isCompleted && !wasCompleted) {
+    reward = await dispatchGamificationEvent({ studentId, event: 'lesson.completed', sourceId: lessonId });
+  } else {
+    // Any lesson interaction (even re-marking) touches the streak only
+    dispatch({ studentId, event: 'lesson.viewed', sourceId: lessonId });
+  }
+
   return {
     id: progress.id,
     studentId: progress.studentId,
     lessonId: progress.lessonId,
     isCompleted: Boolean(progress.isCompleted),
     updatedAt: progress.updatedAt,
+    reward,
   };
 };
 

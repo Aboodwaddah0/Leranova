@@ -20,6 +20,8 @@ import EditProfileModal from '../../components/student/profile/EditProfileModal'
 import ChangePasswordModal from '../../components/student/profile/ChangePasswordModal';
 import { logout } from '../../redux/slices/authSlice';
 import { useLanguage } from '../../utils/i18n';
+import { notifyProfileSaved, notifyPasswordChanged, notifyError } from '../../lib/notify';
+import { sound } from '../../utils/soundHelper';
 
 export default function StudentProfilePage() {
   const { isArabic } = useLanguage();
@@ -34,7 +36,6 @@ export default function StudentProfilePage() {
   const [courseCount, setCourseCount] = useState(0);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
   const studentMode = useMemo(() => {
@@ -100,16 +101,15 @@ export default function StudentProfilePage() {
     }
 
     setSavingProfile(true);
-    setMessage('');
-    setError('');
 
     try {
       const updated = await updateStudentProfile(patch);
       setProfile(updated);
-      setMessage(isArabic ? 'تم تحديث الملف الشخصي بنجاح.' : 'Profile updated successfully.');
+      notifyProfileSaved(isArabic ? 'تم تحديث الملف الشخصي!' : 'Profile updated!');
       setShowEditProfile(false);
     } catch (saveError) {
-      setError(saveError?.response?.data?.message || saveError?.message || (isArabic ? 'تعذر تحديث الملف الشخصي الآن.' : 'Could not update the profile right now.'));
+      sound.dismiss();
+      notifyError(saveError?.response?.data?.message || saveError?.message || (isArabic ? 'تعذر تحديث الملف الشخصي الآن.' : 'Could not update the profile right now.'));
     } finally {
       setSavingProfile(false);
     }
@@ -117,23 +117,20 @@ export default function StudentProfilePage() {
 
   const onSavePassword = async ({ newPassword, confirmPassword }) => {
     if (newPassword !== confirmPassword) {
-      setError(isArabic ? 'كلمة المرور الجديدة وتأكيدها غير متطابقين.' : 'New password and confirmation do not match.');
+      sound.dismiss();
+      notifyError(isArabic ? 'كلمة المرور الجديدة وتأكيدها غير متطابقين.' : 'New password and confirmation do not match.');
       return false;
     }
 
     setSavingPassword(true);
-    setMessage('');
-    setError('');
 
     try {
-      await changeStudentPassword({
-        newPassword,
-      });
-
-      setMessage(isArabic ? 'تم تحديث كلمة المرور بنجاح.' : 'Password updated successfully.');
+      await changeStudentPassword({ newPassword });
+      notifyPasswordChanged(isArabic ? 'تم تحديث كلمة المرور!' : 'Password updated!');
       return true;
     } catch (saveError) {
-      setError(saveError?.response?.data?.message || saveError?.message || (isArabic ? 'تعذر تحديث كلمة المرور الآن.' : 'Could not update password right now.'));
+      sound.dismiss();
+      notifyError(saveError?.response?.data?.message || saveError?.message || (isArabic ? 'تعذر تحديث كلمة المرور الآن.' : 'Could not update password right now.'));
       return false;
     } finally {
       setSavingPassword(false);
@@ -148,7 +145,7 @@ export default function StudentProfilePage() {
   return (
     <StudentLayout>
       <div className="mb-4">
-        <Link to="/dashboard/student" className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold backdrop-blur transition hover:border-white/40 hover:bg-white/20">
+        <Link to="/dashboard/student" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:shadow">
           <ArrowLeft size={16} /> {isArabic ? 'عودة' : 'Back'}
         </Link>
       </div>
@@ -162,7 +159,6 @@ export default function StudentProfilePage() {
       ) : (
         <div className="space-y-5">
           {error ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{error}</div> : null}
-          {message ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</div> : null}
 
           <ProfileHeader profile={profile} studentMode={studentMode} />
 
@@ -184,7 +180,7 @@ export default function StudentProfilePage() {
                 organizationType={String(organizationType || '').toUpperCase()}
               />
 
-              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
+              <section className="rounded-[1.75rem] border border-white/70 bg-white/90 p-5 shadow-xl shadow-indigo-500/5 backdrop-blur-sm">
                 <h3 className="text-sm font-extrabold uppercase tracking-[0.18em] text-slate-600">{isArabic ? 'حول هذا الملف' : 'About this profile'}</h3>
                 <p className="mt-3 text-sm leading-7 text-slate-600">
                   {isArabic

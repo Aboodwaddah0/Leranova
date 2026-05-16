@@ -11,7 +11,6 @@ export default function LessonCreationWizard({
   onSuggest,       // async (subjectId, filename, lang) => { title, description }
 }) {
   const { isArabic } = useLanguage();
-  const lang = isArabic ? 'ar' : 'en';
   const fileInputRef = useRef(null);
   const dropRef = useRef(null);
 
@@ -24,6 +23,8 @@ export default function LessonCreationWizard({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [suggesting, setSuggesting] = useState(false);
+  const [suggestLang, setSuggestLang] = useState(isArabic ? 'ar' : 'en');
+  const [lessonHint, setLessonHint] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
@@ -49,9 +50,9 @@ export default function LessonCreationWizard({
     try {
       const lesson = await onUpload(subjectId, videoFile, (p) => setUploadProgress(p));
       setCreatedLesson(lesson);
-      // Pre-fill title from filename
-      const cleanName = videoFile.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ');
-      setTitle(cleanName);
+      setTitle('');
+      setDescription('');
+      setLessonHint('');
       setStep(1);
     } catch (err) {
       setError(err?.response?.data?.message || err?.message || (isArabic ? 'فشل الرفع.' : 'Upload failed.'));
@@ -63,8 +64,10 @@ export default function LessonCreationWizard({
   const handleSuggest = async () => {
     if (!subjectId || !videoFile) return;
     setSuggesting(true);
+    setTitle('');
+    setDescription('');
     try {
-      const suggestion = await onSuggest(subjectId, videoFile.name, lang);
+      const suggestion = await onSuggest(subjectId, videoFile.name, suggestLang, lessonHint);
       if (suggestion?.title) setTitle(suggestion.title);
       if (suggestion?.description) setDescription(suggestion.description);
     } catch { /* silent */ } finally { setSuggesting(false); }
@@ -204,18 +207,59 @@ export default function LessonCreationWizard({
             <p className="text-xs font-semibold text-emerald-700">{videoFile?.name}</p>
           </div>
 
-          {/* AI suggest button */}
-          <button
-            type="button"
-            onClick={handleSuggest}
-            disabled={suggesting}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 py-2.5 text-sm font-bold text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-50"
-          >
-            <Sparkles size={15} className={suggesting ? 'animate-pulse' : ''} />
-            {suggesting
-              ? (isArabic ? 'جاري التوليد...' : 'Generating...')
-              : (isArabic ? '✨ اقتراح عنوان ووصف بالذكاء الاصطناعي' : '✨ AI Suggest Title & Description')}
-          </button>
+          {/* Optional lesson hint for quick suggest */}
+          <div>
+            <label className="mb-1.5 block text-xs font-bold text-slate-600">
+              {isArabic ? 'عم تتحدث هذه المحاضرة؟ (اختياري — يحسّن الاقتراح)' : 'What is this lesson about? (optional — improves suggestion)'}
+            </label>
+            <input
+              value={lessonHint}
+              onChange={(e) => setLessonHint(e.target.value.slice(0, 200))}
+              placeholder={isArabic ? 'مثال: الوراثة والتغليف في البرمجة الكائنية' : 'e.g. inheritance and polymorphism in OOP'}
+              className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-indigo-400"
+              dir={isArabic ? 'rtl' : 'ltr'}
+            />
+          </div>
+
+          {/* AI suggest — language picker + button */}
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-3 space-y-2.5">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-indigo-400">
+              {isArabic ? '✨ اقتراح بالذكاء الاصطناعي' : '✨ AI Suggest'}
+            </p>
+            {/* Language picker */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-indigo-700 shrink-0">
+                {isArabic ? 'لغة الاقتراح:' : 'Language:'}
+              </span>
+              <div className="flex overflow-hidden rounded-xl border border-indigo-200 bg-white text-xs font-bold">
+                {[
+                  { v: 'ar', label: '🇸🇦 عربي' },
+                  { v: 'en', label: '🇺🇸 English' },
+                ].map(({ v, label }) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setSuggestLang(v)}
+                    className={`px-3 py-1.5 transition ${suggestLang === v ? 'bg-indigo-600 text-white' : 'text-indigo-600 hover:bg-indigo-50'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Suggest button */}
+            <button
+              type="button"
+              onClick={handleSuggest}
+              disabled={suggesting}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+            >
+              <Sparkles size={15} className={suggesting ? 'animate-pulse' : ''} />
+              {suggesting
+                ? (isArabic ? 'جاري التوليد...' : 'Generating...')
+                : (isArabic ? 'اقتراح عنوان ووصف' : 'Suggest Title & Description')}
+            </button>
+          </div>
 
           {/* Title */}
           <div>

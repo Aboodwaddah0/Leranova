@@ -184,7 +184,7 @@ export default function StudentCoursesPage() {
       {loading ? (
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="h-48 animate-pulse rounded-[1.75rem] border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/5" />
+            <div key={index} className="ln-skeleton h-48 rounded-[1.75rem]" />
           ))}
         </div>
       ) : activeTab === 'TRACKS' && filteredTracks.length ? (
@@ -235,7 +235,7 @@ export default function StudentCoursesPage() {
                   <span className="font-semibold text-emerald-700">{course.lessonDone}</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                  <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500" style={{ width: `${course.percent}%` }} />
+                  <div className="ln-progress-fill h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500" style={{ width: `${course.percent}%` }} />
                 </div>
                 <div className="text-xs font-bold text-slate-500">{course.percent}%</div>
               </div>

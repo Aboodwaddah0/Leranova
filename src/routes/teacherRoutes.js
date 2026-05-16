@@ -17,6 +17,7 @@ import {
   getMyLessonsController,
   getMyStudentsController,
 } from '../controllers/teacherController.js';
+import { getInstructorAnalyticsController } from '../controllers/instructorAnalyticsController.js';
 
 const router = Router();
 
@@ -28,6 +29,7 @@ router.get('/me/courses', isTeacher, getMyCoursesController);
 router.get('/me/subjects', isTeacher, getMySubjectsController);
 router.get('/me/lessons', isTeacher, getMyLessonsController);
 router.get('/me/students', isTeacher, getMyStudentsController);
+router.get('/me/analytics', isTeacher, getInstructorAnalyticsController);
 
 router.get('/', getTeachersController);
 router.get('/:id', getTeacherByIdController);

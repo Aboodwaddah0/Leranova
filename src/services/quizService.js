@@ -1,6 +1,7 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { gatherLessonContent, callGroq } from './aiContentService.js';
+import { dispatch, dispatchGamificationEvent, mergeRewards } from './gamificationDispatcher.js';
 
 /* ─── Role resolution ─────────────────────────────────────────────────────── */
 
@@ -328,7 +329,7 @@ export const generateQuizQuestions = async (actor, quizId, { numQuestions = 10, 
   const { lesson, content } = await gatherLessonContent(quiz.lessonId);
   const prompt = buildQuizPrompt(lesson.name, content, { numQuestions: num, difficulty: diff, notes, lang: l });
   const systemPrompt = l === 'en' ? SYS_EN : SYS_AR;
-  const raw = await callGroq(prompt, systemPrompt);
+  const raw = await callGroq(prompt, systemPrompt, 'llama-3.1-8b-instant');
 
   const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
   const match = cleaned.match(/\{[\s\S]*\}/);
@@ -451,7 +452,19 @@ export const submitQuizAttempt = async (actor, lessonId, { answers, lang = 'ar' 
     },
   });
 
-  // Return full quiz with answers revealed + the attempt result
+  let reward = null;
+  if (isPassed) {
+    reward = await dispatchGamificationEvent({ studentId: scope.userId, event: 'quiz.passed', sourceId: quiz.id });
+    if (score === 100) {
+      const perfectReward = await dispatchGamificationEvent({ studentId: scope.userId, event: 'quiz.perfect', sourceId: quiz.id });
+      reward = mergeRewards(reward, perfectReward);
+    }
+  } else {
+    // Failed attempts still count as engagement for streak
+    dispatch({ studentId: scope.userId, event: 'quiz.attempted', sourceId: quiz.id });
+  }
+
+  // Return full quiz with answers revealed + attempt result + reward payload
   return {
     attempt: { id: attempt.id, answers, score, isPassed, createdAt: attempt.createdAt },
     questions: quiz.questions.map((q) => ({
@@ -462,5 +475,6 @@ export const submitQuizAttempt = async (actor, lessonId, { answers, lang = 'ar' 
       explanation: q.explanation,
       orderIndex: q.orderIndex,
     })),
+    reward,
   };
 };

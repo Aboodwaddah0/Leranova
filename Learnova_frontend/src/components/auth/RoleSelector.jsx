@@ -4,43 +4,50 @@ import { setAuthRole, clearAuthError } from "../../redux/slices/authSlice";
 import { AUTH_ROLES } from "../../utils/constants";
 
 export default function RoleSelector({ t }) {
-  const dispatch = useDispatch();
-  const selectedRole = useSelector((state) => state.ui.selectedRole);
+  const dispatch     = useDispatch();
+  const selectedRole = useSelector((s) => s.ui.selectedRole);
 
   const options = [
-    { value: AUTH_ROLES.STUDENT, label: t.roles.student },
-    { value: AUTH_ROLES.PARENT, label: t.roles.parent },
-    { value: AUTH_ROLES.INSTRUCTOR, label: t.roles.instructor },
-    { value: AUTH_ROLES.ORGANIZATION, label: t.roles.organization },
+    { value: AUTH_ROLES.STUDENT,      label: t.roles.student      },
+    { value: AUTH_ROLES.PARENT,       label: t.roles.parent        },
+    { value: AUTH_ROLES.INSTRUCTOR,   label: t.roles.instructor    },
+    { value: AUTH_ROLES.ORGANIZATION, label: t.roles.organization  },
   ];
 
-  const onChange = (event) => {
-    const role = event.target.value;
+  const onChange = (role) => {
     dispatch(setSelectedRole(role));
     dispatch(setAuthRole(role));
     dispatch(clearAuthError());
   };
 
   return (
-    <div className="space-y-2">
-      <label
-        htmlFor="role"
-        className="px-1 text-xs font-bold uppercase tracking-widest text-slate-500"
-      >
-        {t.login.roleLabel}
-      </label>
-      <select
-        id="role"
-        value={selectedRole}
-        onChange={onChange}
-        className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 font-medium text-slate-700 outline-none transition focus:border-cyan-500"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+    <div>
+      <label className="auth-label">{t.login.roleLabel}</label>
+      <div className="grid grid-cols-2 gap-2">
+        {options.map((opt) => {
+          const active = selectedRole === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange(opt.value)}
+              className="rounded-2xl border px-4 py-2.5 text-sm font-bold transition"
+              style={active ? {
+                background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
+                borderColor: "transparent",
+                color: "#fff",
+                boxShadow: "0 4px 14px rgba(99,102,241,.35)",
+              } : {
+                background: "#f8fafc",
+                borderColor: "#e2e8f0",
+                color: "#475569",
+              }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

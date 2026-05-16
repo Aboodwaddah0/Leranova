@@ -2,6 +2,7 @@ import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { deleteUploadedFile } from './cloudinary.service.js';
 import { resolveStudentContext } from './studentExperienceService.js';
+import { normalizeUploadedFilename } from '../utils/filenameEncoding.js';
 
 const toRole = (value) => String(value || '').trim().toUpperCase();
 const PAID_SUBSCRIPTION_FILTER = {
@@ -79,8 +80,8 @@ const serializeAttachment = (attachment) => ({
 	fileResourceType: attachment.fileResourceType,
 	resource_type: attachment.fileResourceType,
 	mimeType: attachment.mimeType,
-	originalName: attachment.originalName,
-	name: attachment.originalName,
+	originalName: normalizeUploadedFilename(attachment.originalName),
+	name: normalizeUploadedFilename(attachment.originalName),
 	fileType: attachment.fileType,
 	type: String(attachment.fileType || '').toLowerCase(),
 	sizeBytes: toJsonSafeSize(attachment.sizeBytes),

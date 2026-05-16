@@ -109,10 +109,10 @@ export default function StudentSubjectsPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {subjects.length ? (
           subjects.map((subject) => (
-            <article key={subject.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <article key={subject.id} className="rounded-[1.75rem] border border-white/70 bg-white/90 p-5 shadow-xl shadow-indigo-500/5 backdrop-blur-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#2379c3]">{t.student.subjects.title}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-600">{t.student.subjects.title}</p>
                   <h3 className="mt-2 text-xl font-black text-slate-900">{subject.name}</h3>
                 </div>
                 <Badge variant="subtle">
@@ -129,7 +129,7 @@ export default function StudentSubjectsPage() {
             </article>
           ))
         ) : (
-          <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-10 text-sm text-slate-500 shadow-sm">
+          <div className="col-span-full rounded-[1.75rem] border border-dashed border-slate-300 bg-white/90 px-6 py-12 text-center text-sm text-slate-500 shadow-sm">
             {t.student.subjects.noSubjects}
           </div>
         )}

@@ -26,7 +26,20 @@
       "Bash(docker compose build *)",
       "PowerShell(docker exec learnova-rag-service *)",
       "Bash(Get-ChildItem -Recurse -Name)",
-      "Bash(Select-Object -First 50)"
+      "Bash(Select-Object -First 50)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Eng Mohammad\\\\Desktop\\\\repo\\\\last-v\\\\Leranova\\\\src\" -Directory)",
+      "Bash(Select-Object -ExpandProperty Name)",
+      "Bash(git -C \"C:\\\\Users\\\\Eng Mohammad\\\\Desktop\\\\repo\\\\last-v\\\\Leranova\" add src/services/gamificationDispatcher.js src/services/lessonProgressService.js src/services/quizService.js)",
+      "Bash(git -C 'C:\\\\Users\\\\Eng Mohammad\\\\Desktop\\\\repo\\\\last-v\\\\Leranova' commit -m ' *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(docker compose *)",
+      "Bash(python -c ' *)",
+      "Bash(npx tsc *)",
+      "Bash(findstr \"framer\\\\|motion\\\\|animate\")",
+      "Bash(findstr /i \"framer\")",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Eng Mohammad\\\\Desktop\\\\repo\\\\last-v\\\\Leranova\\\\Learnova_backend\\\\src\\\\services\" -File)",
+      "Bash(git push *)"
     ]
   }
 }

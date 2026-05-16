@@ -18,6 +18,7 @@ import {
   changePasswordSchema,
 } from '../validations/authValidation.js';
 import AppError from '../utils/appError.js';
+import { dispatch } from '../services/gamificationDispatcher.js';
 
 export const register = async (req, res, next) => {
   try {
@@ -70,6 +71,10 @@ export const loginUserController = async (req, res, next) => {
     }
 
     const result = await loginUser(value);
+
+    if (result.user?.role === 'STUDENT') {
+      dispatch({ studentId: result.user.id, event: 'daily.login', sourceId: null });
+    }
 
     return res.status(200).json({
       message: 'Login successful',

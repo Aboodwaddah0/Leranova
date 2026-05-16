@@ -11,253 +11,174 @@ const initialState = {
   Founded: "",
   Address: "",
   Description: "",
-  classRanges: [
-    {
-      startGradeLevel: 1,
-      endGradeLevel: 5,
-    },
-  ],
+  classRanges: [{ startGradeLevel: 1, endGradeLevel: 5 }],
 };
-
-
 
 export default function OrgSignupForm({ selectedPlanId, onSubmit, loading, t }) {
   const [formState, setFormState] = useState(initialState);
-  const [error, setError] = useState("");
+  const [error, setError]         = useState("");
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-
-    setFormState((prev) => ({
-      ...prev,
-      [name]: name === "subdomain" ? value.toLowerCase() : value,
-    }));
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormState((prev) => ({ ...prev, [name]: name === "subdomain" ? value.toLowerCase() : value }));
   };
 
   const handleClassRangeChange = (index, field, value) => {
     setFormState((prev) => {
-      const updatedRanges = [...prev.classRanges];
-      updatedRanges[index] = {
-        ...updatedRanges[index],
-        [field]: Number(value),
-      };
-      return { ...prev, classRanges: updatedRanges };
+      const updated = [...prev.classRanges];
+      updated[index] = { ...updated[index], [field]: Number(value) };
+      return { ...prev, classRanges: updated };
     });
   };
 
-  const addClassRange = () => {
-    setFormState((prev) => ({
-      ...prev,
-      classRanges: [
-        ...prev.classRanges,
-        {
-          startGradeLevel: 1,
-          endGradeLevel: 5,
-        },
-      ],
-    }));
-  };
+  const addClassRange = () =>
+    setFormState((prev) => ({ ...prev, classRanges: [...prev.classRanges, { startGradeLevel: 1, endGradeLevel: 5 }] }));
 
-  const removeClassRange = (index) => {
-    setFormState((prev) => ({
-      ...prev,
-      classRanges: prev.classRanges.filter((_, i) => i !== index),
-    }));
-  };
+  const removeClassRange = (index) =>
+    setFormState((prev) => ({ ...prev, classRanges: prev.classRanges.filter((_, i) => i !== index) }));
 
-  const submit = (event) => {
-    event.preventDefault();
-
+  const submit = (e) => {
+    e.preventDefault();
     try {
       const normalizedPlanId = selectedPlanId ? Number(selectedPlanId) : undefined;
       const classRanges = formState.Role === ORG_TYPES.SCHOOL ? formState.classRanges : [];
-
       if (formState.Role === ORG_TYPES.SCHOOL && classRanges.length === 0) {
         throw new Error("Please enter at least one class range for a school account.");
       }
-
       setError("");
-
-      const payload = {
-        Name: formState.Name,
-        subdomain: formState.subdomain,
-        Email: formState.Email,
-        password: formState.password,
-        Role: formState.Role,
-        Phone: formState.Phone,
-        Address: formState.Address || null,
-        Founded: formState.Founded || null,
+      onSubmit({
+        Name:        formState.Name,
+        subdomain:   formState.subdomain,
+        Email:       formState.Email,
+        password:    formState.password,
+        Role:        formState.Role,
+        Phone:       formState.Phone,
+        Address:     formState.Address || null,
+        Founded:     formState.Founded || null,
         Description: formState.Description || null,
+        PhoneNumber: formState.Phone,
         ...(normalizedPlanId ? { planId: normalizedPlanId } : {}),
         ...(formState.Role === ORG_TYPES.SCHOOL ? { classRanges } : {}),
-        PhoneNumber: formState.Phone,
-      };
-
-      console.log("🚀 Sending payload:", payload);
-      console.log("📌 Role:", formState.Role);
-      console.log("📌 ORG_TYPES.SCHOOL:", ORG_TYPES.SCHOOL);
-      console.log("📌 Will send classRanges?", formState.Role === ORG_TYPES.SCHOOL);
-
-      onSubmit(payload);
-    } catch (submitError) {
-      setError(submitError.message || "Invalid class ranges");
+      });
+    } catch (err) {
+      setError(err.message || "Invalid class ranges");
     }
   };
 
+  /* Shared classes for this form's inputs */
+  const inp = "auth-input";
+  const sel = "auth-select";
+
   return (
-    <form className="space-y-4" onSubmit={submit}>
-      <div className="grid gap-4 md:grid-cols-2">
-        <input
-          className="h-11 rounded-xl border border-slate-200 px-4"
-          name="Name"
-          placeholder={t.signup.fields.name}
-          value={formState.Name}
-          onChange={handleChange}
-          required
-        />
-        <input
-          className="h-11 rounded-xl border border-slate-200 px-4"
-          name="subdomain"
-          placeholder={t.signup.fields.subdomain}
-          value={formState.subdomain}
-          onChange={handleChange}
-          pattern="[a-z0-9-]+"
-          required
-        />
-        <input
-          className="h-11 rounded-xl border border-slate-200 px-4"
-          type="email"
-          name="Email"
-          placeholder={t.signup.fields.email}
-          value={formState.Email}
-          onChange={handleChange}
-          required
-        />
-        <input
-          className="h-11 rounded-xl border border-slate-200 px-4"
-          type="password"
-          name="password"
-          placeholder={t.signup.fields.password}
-          value={formState.password}
-          minLength={6}
-          onChange={handleChange}
-          required
-        />
-        <select
-          className="h-11 rounded-xl border border-slate-200 px-4"
-          name="Role"
-          value={formState.Role}
-          onChange={handleChange}
-        >
-          <option value={ORG_TYPES.ACADEMY}>{t.signup.fields.roleAcademy}</option>
-          <option value={ORG_TYPES.SCHOOL}>{t.signup.fields.roleSchool}</option>
-        </select>
-        <input
-          className="h-11 rounded-xl border border-slate-200 px-4"
-          name="Phone"
-          placeholder={t.signup.fields.phone}
-          value={formState.Phone}
-          onChange={handleChange}
-        />
-        <input
-          className="h-11 rounded-xl border border-slate-200 px-4"
-          type="date"
-          name="Founded"
-          aria-label={t.signup.fields.founded}
-          value={formState.Founded}
-          onChange={handleChange}
-        />
-        <input
-          className="h-11 rounded-xl border border-slate-200 px-4"
-          name="Address"
-          placeholder={t.signup.fields.address}
-          value={formState.Address}
-          onChange={handleChange}
-        />
+    <form className="space-y-5" onSubmit={submit}>
+      {/* Grid fields */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="auth-label">{t.signup.fields.name}</label>
+          <input className={inp} name="Name" placeholder={t.signup.fields.name} value={formState.Name} onChange={handleChange} required />
+        </div>
+        <div>
+          <label className="auth-label">{t.signup.fields.subdomain}</label>
+          <input className={inp} name="subdomain" placeholder={t.signup.fields.subdomain} value={formState.subdomain} onChange={handleChange} pattern="[a-z0-9-]+" required />
+        </div>
+        <div>
+          <label className="auth-label">{t.signup.fields.email}</label>
+          <input className={inp} type="email" name="Email" placeholder={t.signup.fields.email} value={formState.Email} onChange={handleChange} required />
+        </div>
+        <div>
+          <label className="auth-label">{t.signup.fields.password}</label>
+          <input className={inp} type="password" name="password" placeholder={t.signup.fields.password} value={formState.password} minLength={6} onChange={handleChange} required />
+        </div>
+        <div>
+          <label className="auth-label">{t.signup.fields.roleAcademy} / {t.signup.fields.roleSchool}</label>
+          <div style={{ position: "relative" }}>
+            <select className={sel} name="Role" value={formState.Role} onChange={handleChange}>
+              <option value={ORG_TYPES.ACADEMY}>{t.signup.fields.roleAcademy}</option>
+              <option value={ORG_TYPES.SCHOOL}>{t.signup.fields.roleSchool}</option>
+            </select>
+            <svg style={{ position:"absolute", top:"50%", insetInlineEnd:14, transform:"translateY(-50%)", pointerEvents:"none", color:"#94a3b8" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+        </div>
+        <div>
+          <label className="auth-label">{t.signup.fields.phone}</label>
+          <input className={inp} name="Phone" placeholder={t.signup.fields.phone} value={formState.Phone} onChange={handleChange} />
+        </div>
+        <div>
+          <label className="auth-label">{t.signup.fields.founded}</label>
+          <input className={inp} type="date" name="Founded" value={formState.Founded} onChange={handleChange} />
+        </div>
+        <div>
+          <label className="auth-label">{t.signup.fields.address}</label>
+          <input className={inp} name="Address" placeholder={t.signup.fields.address} value={formState.Address} onChange={handleChange} />
+        </div>
       </div>
 
+      {/* School class ranges */}
       {formState.Role === ORG_TYPES.SCHOOL && (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <div className="rounded-[18px] border border-indigo-100 bg-indigo-50/50 p-5">
           <div className="mb-4 flex items-center justify-between">
-            <label className="block text-sm font-semibold text-slate-700">
-              Class ranges / نطاقات الصفوف
-            </label>
-            <button
-              type="button"
-              onClick={addClassRange}
-              className="rounded-lg bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800"
-            >
-              + Add Range
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-indigo-700">
+                Class Ranges / نطاقات الصفوف
+              </p>
+              <p className="mt-1 text-xs text-slate-500">Define the grade levels your school covers.</p>
+            </div>
+            <button type="button" onClick={addClassRange}
+              className="rounded-xl px-4 py-2 text-xs font-black text-white transition hover:-translate-y-0.5"
+              style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 4px 12px rgba(99,102,241,.3)" }}>
+              + Add
             </button>
           </div>
           <div className="space-y-3">
             {formState.classRanges.map((range, index) => (
-              <div key={index} className="flex items-end gap-2">
+              <div key={index} className="flex items-end gap-3">
                 <div className="flex-1">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    From / من
-                  </label>
-                  <select
-                    className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
-                    value={range.startGradeLevel}
-                    onChange={(e) => handleClassRangeChange(index, "startGradeLevel", e.target.value)}
-                  >
-                    {[...Array(12)].map((_, i) => (
-                      <option key={i + 1} value={i + 1}>
-                        Grade {i + 1}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="auth-label">From / من</label>
+                  <div style={{ position:"relative" }}>
+                    <select className={sel} value={range.startGradeLevel} onChange={(e) => handleClassRangeChange(index, "startGradeLevel", e.target.value)}>
+                      {[...Array(12)].map((_, i) => <option key={i+1} value={i+1}>Grade {i+1}</option>)}
+                    </select>
+                    <svg style={{ position:"absolute", top:"50%", insetInlineEnd:14, transform:"translateY(-50%)", pointerEvents:"none", color:"#94a3b8" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </div>
                 </div>
                 <div className="flex-1">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    To / إلى
-                  </label>
-                  <select
-                    className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
-                    value={range.endGradeLevel}
-                    onChange={(e) => handleClassRangeChange(index, "endGradeLevel", e.target.value)}
-                  >
-                    {[...Array(12)].map((_, i) => (
-                      <option key={i + 1} value={i + 1}>
-                        Grade {i + 1}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="auth-label">To / إلى</label>
+                  <div style={{ position:"relative" }}>
+                    <select className={sel} value={range.endGradeLevel} onChange={(e) => handleClassRangeChange(index, "endGradeLevel", e.target.value)}>
+                      {[...Array(12)].map((_, i) => <option key={i+1} value={i+1}>Grade {i+1}</option>)}
+                    </select>
+                    <svg style={{ position:"absolute", top:"50%", insetInlineEnd:14, transform:"translateY(-50%)", pointerEvents:"none", color:"#94a3b8" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </div>
                 </div>
                 {formState.classRanges.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeClassRange(index)}
-                    className="mb-1 rounded-lg bg-rose-100 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-200"
-                  >
+                  <button type="button" onClick={() => removeClassRange(index)}
+                    className="mb-0.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-bold text-rose-600 transition hover:bg-rose-100">
                     Remove
                   </button>
                 )}
               </div>
             ))}
           </div>
-          <p className="mt-3 text-xs text-slate-500">
-            Define grade ranges for your school organization.
-          </p>
         </div>
       )}
 
-      <textarea
-        className="min-h-24 w-full rounded-xl border border-slate-200 px-4 py-3"
-        name="Description"
-        placeholder={t.signup.fields.description}
-        value={formState.Description}
-        onChange={handleChange}
-      />
+      {/* Description */}
+      <div>
+        <label className="auth-label">{t.signup.fields.description}</label>
+        <textarea
+          className="auth-textarea" name="Description"
+          placeholder={t.signup.fields.description}
+          value={formState.Description} onChange={handleChange}
+        />
+      </div>
 
-      {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
+      {error && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+          {error}
+        </div>
+      )}
 
-      <button
-        type="submit"
-        disabled={loading}
-        className="h-11 w-full rounded-xl bg-gradient-to-r from-sky-700 to-blue-500 font-semibold text-white disabled:opacity-60"
-      >
+      <button type="submit" disabled={loading} className="auth-btn-primary">
         {loading ? t.signup.creating : t.signup.createAndPay}
       </button>
     </form>
