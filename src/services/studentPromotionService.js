@@ -11,7 +11,7 @@ const evaluateStudentDecision = async (tx, student, settings) => {
     return { decision: 'PENDING', finalPercentage: null, reason: 'Student is not assigned to a course' };
   }
 
-  const subjects = await tx.subject.findMany({
+  const subjects = await tx.course.findMany({
     where: { Course_id: student.Course_id },
     select: { id: true },
   });

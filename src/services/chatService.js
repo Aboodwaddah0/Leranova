@@ -255,7 +255,7 @@ const resolveOrganizationId = async (tokenUser, userId) => {
 
 const resolveSubjectIdForCourse = async ({ courseId, subjectId }) => {
   if (subjectId) {
-    const subject = await prisma.subject.findFirst({
+    const subject = await prisma.course.findFirst({
       where: { id: subjectId, Course_id: courseId },
       select: { id: true },
     });
@@ -267,7 +267,7 @@ const resolveSubjectIdForCourse = async ({ courseId, subjectId }) => {
     return subject.id;
   }
 
-  const firstSubject = await prisma.subject.findFirst({
+  const firstSubject = await prisma.course.findFirst({
     where: { Course_id: courseId },
     select: { id: true },
     orderBy: { id: 'asc' },
@@ -281,7 +281,7 @@ const resolveSubjectIdForCourse = async ({ courseId, subjectId }) => {
 };
 
 const getCourseById = async (courseId) => {
-  const course = await prisma.course.findFirst({
+  const course = await prisma.track.findFirst({
     where: { id: courseId },
     select: {
       id: true,
@@ -355,7 +355,7 @@ const resolveCourseEnrollment = async ({ courseId, userId, tokenUser }) => {
       throw new AppError('You are not assigned to this course', 403);
     }
 
-    const assignedSubject = await prisma.subject.findFirst({
+    const assignedSubject = await prisma.course.findFirst({
       where: {
         Course_id: courseId,
         Teacher_id: userId,
@@ -464,7 +464,7 @@ export const findOrCreateUserCourseChat = async ({
       created_by: userId,
       type: 'PRIVATE',
       title: chatTitle,
-      subject: {
+      course: {
         is: {
           Course_id: courseId,
         },
@@ -490,7 +490,7 @@ export const findOrCreateUserCourseChat = async ({
         created_by: userId,
         type: 'PRIVATE',
         title: chatTitle,
-        subject: {
+        course: {
           is: {
             Course_id: courseId,
           },
@@ -1076,7 +1076,7 @@ export const deleteCourseChatMessage = async ({ messageId, userId, tokenUser }) 
       },
       chats: {
         include: {
-          course: {
+          track: {
             select: {
               id: true,
               Org_id: true,
@@ -1093,7 +1093,7 @@ export const deleteCourseChatMessage = async ({ messageId, userId, tokenUser }) 
   }
 
   const role = String(tokenUser?.role || '').trim().toUpperCase();
-  const courseOrgId = message.chats.course?.Org_id ?? message.chats.organization_id;
+  const courseOrgId = message.chats.track?.Org_id ?? message.chats.organization_id;
   const isOwner = message.sender_user_id === userId;
 
   let canDelete = isOwner;
@@ -1258,12 +1258,12 @@ const resolveStudentChatMode = async (userId) => {
         },
         select: {
           Subject_id: true,
-          subject: {
+          course: {
             select: {
               id: true,
               name: true,
               Course_id: true,
-              course: {
+              track: {
                 select: {
                   id: true,
                   Name: true,
@@ -1296,7 +1296,7 @@ const resolveStudentChatMode = async (userId) => {
           Role: true,
         },
       },
-      course: {
+      track: {
         select: {
           id: true,
           Name: true,
@@ -1314,7 +1314,7 @@ const resolveStudentChatMode = async (userId) => {
       className: schoolProfile.GradeLevel !== null && schoolProfile.GradeLevel !== undefined
         ? `Class Chat (Grade ${schoolProfile.GradeLevel})`
         : 'Class Chat',
-      courseName: schoolProfile.course?.Name || null,
+      courseName: schoolProfile.track?.Name || null,
     };
   }
 
@@ -1485,7 +1485,7 @@ export const listChatsForStudent = async ({ userId }) => {
 
   if (context.mode === 'ACADEMY') {
     const subjectIds = context.subscriptions
-      .map((row) => row.subject?.id)
+      .map((row) => row.course?.id)
       .filter((id) => Number.isFinite(Number(id)));
 
     const chats = subjectIds.length

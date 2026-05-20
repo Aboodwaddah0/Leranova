@@ -14,13 +14,13 @@ const markInclude = {
 			},
 		},
 	},
-	subject: {
+	course: {
 		select: {
 			id: true,
 			name: true,
 			Course_id: true,
 			Teacher_id: true,
-			course: {
+			track: {
 				select: {
 					id: true,
 					Name: true,
@@ -34,7 +34,7 @@ const markInclude = {
 };
 
 const ensureTeacherOwnsSubject = async (teacherId, subjectId) => {
-	const subject = await prisma.subject.findFirst({
+	const subject = await prisma.course.findFirst({
 		where: {
 			id: subjectId,
 			Teacher_id: teacherId,
@@ -43,7 +43,7 @@ const ensureTeacherOwnsSubject = async (teacherId, subjectId) => {
 			id: true,
 			Teacher_id: true,
 			Course_id: true,
-			course: {
+			track: {
 				select: {
 					Org_id: true,
 				},
@@ -58,11 +58,20 @@ const ensureTeacherOwnsSubject = async (teacherId, subjectId) => {
 	return subject;
 };
 
+const serializeMark = (mark) => {
+	if (!mark) return mark;
+	const { course, ...rest } = mark;
+	return {
+		...rest,
+		subject: course ? { ...course, course: course.track ?? null } : null,
+	};
+};
+
 const ensureStudentEligibleForSubject = async (studentId, subject) => {
 	const student = await prisma.student.findFirst({
 		where: {
 			Student_id: studentId,
-			OrgId: subject.course.Org_id,
+			OrgId: subject.track.Org_id,
 			OR: [
 				{
 					Course_id: subject.Course_id,
@@ -111,7 +120,7 @@ const getTeacherMarkOrThrow = async (teacherId, markId) => {
 	const mark = await prisma.marks.findFirst({
 		where: {
 			id: markId,
-			subject: {
+			course: {
 				Teacher_id: teacherId,
 			},
 		},
@@ -125,6 +134,26 @@ const getTeacherMarkOrThrow = async (teacherId, markId) => {
 	return mark;
 };
 
+const assertWeightBudget = async (studentId, subjectId, addingPct, excludeMarkId = null) => {
+	if (!addingPct && addingPct !== 0) return; // no weight provided — skip
+	const agg = await prisma.marks.aggregate({
+		where: {
+			Student_id: studentId,
+			Subject_id: subjectId,
+			...(excludeMarkId ? { id: { not: excludeMarkId } } : {}),
+		},
+		_sum: { ExamPercentage: true },
+	});
+	const used = Number(agg._sum.ExamPercentage || 0);
+	const total = used + Number(addingPct);
+	if (total > 100) {
+		throw new AppError(
+			`Total assessment weight would reach ${total.toFixed(1)}% (current: ${used.toFixed(1)}%, adding: ${Number(addingPct).toFixed(1)}%). Maximum allowed is 100%.`,
+			400,
+		);
+	}
+};
+
 export const createMark = async (teacherId, data) => {
 	const subject = await ensureTeacherOwnsSubject(teacherId, data.Subject_id);
 	await ensureStudentExists(data.Student_id);
@@ -134,7 +163,9 @@ export const createMark = async (teacherId, data) => {
 		throw new AppError('Numbers cannot be greater than OutOf', 400);
 	}
 
-	return prisma.marks.create({
+	await assertWeightBudget(data.Student_id, data.Subject_id, data.ExamPercentage);
+
+	const mark = await prisma.marks.create({
 		data: {
 			Student_id: data.Student_id,
 			Subject_id: data.Subject_id,
@@ -146,14 +177,15 @@ export const createMark = async (teacherId, data) => {
 		},
 		include: markInclude,
 	});
+	return serializeMark(mark);
 };
 
 export const getMarks = async (teacherId, filters = {}) => {
-	return prisma.marks.findMany({
+	const marks = await prisma.marks.findMany({
 		where: {
 			...(filters.Student_id ? { Student_id: filters.Student_id } : {}),
 			...(filters.Subject_id ? { Subject_id: filters.Subject_id } : {}),
-			subject: {
+			course: {
 				Teacher_id: teacherId,
 			},
 		},
@@ -162,10 +194,11 @@ export const getMarks = async (teacherId, filters = {}) => {
 			id: 'desc',
 		},
 	});
+	return marks.map(serializeMark);
 };
 
 export const getMarkById = async (teacherId, markId) => {
-	return getTeacherMarkOrThrow(teacherId, markId);
+	return serializeMark(await getTeacherMarkOrThrow(teacherId, markId));
 };
 
 export const updateMark = async (teacherId, markId, data) => {
@@ -177,7 +210,10 @@ export const updateMark = async (teacherId, markId, data) => {
 		throw new AppError('Numbers cannot be greater than OutOf', 400);
 	}
 
-	return prisma.marks.update({
+	const newPct = data.ExamPercentage ?? existingMark.ExamPercentage;
+	await assertWeightBudget(existingMark.Student_id, existingMark.Subject_id, newPct, markId);
+
+	const updated = await prisma.marks.update({
 		where: { id: markId },
 		data: {
 			Numbers: data.Numbers ?? undefined,
@@ -190,6 +226,7 @@ export const updateMark = async (teacherId, markId, data) => {
 		},
 		include: markInclude,
 	});
+	return serializeMark(updated);
 };
 
 export const deleteMark = async (teacherId, markId) => {
@@ -203,7 +240,7 @@ export const deleteMark = async (teacherId, markId) => {
 };
 
 export const getStudentMarks = async (studentId, filters = {}) => {
-	return prisma.marks.findMany({
+	const marks = await prisma.marks.findMany({
 		where: {
 			Student_id: studentId,
 			...(filters.Subject_id ? { Subject_id: filters.Subject_id } : {}),
@@ -213,6 +250,7 @@ export const getStudentMarks = async (studentId, filters = {}) => {
 			id: 'desc',
 		},
 	});
+	return marks.map(serializeMark);
 };
 
 export const getParentChildrenMarks = async (parentUserId) => {
@@ -222,14 +260,74 @@ export const getParentChildrenMarks = async (parentUserId) => {
 	});
 
 	return Promise.all(
-		students.map(async (s) => ({
-			studentId: s.Student_id,
-			studentName: s.user?.name || '',
-			marks: await prisma.marks.findMany({
+		students.map(async (s) => {
+			const rawMarks = await prisma.marks.findMany({
 				where: { Student_id: s.Student_id },
 				include: markInclude,
 				orderBy: { id: 'desc' },
-			}),
-		}))
+			});
+			return {
+				studentId: s.Student_id,
+				studentName: s.user?.name || '',
+				marks: rawMarks.map(serializeMark),
+			};
+		})
 	);
+};
+
+// ── Organisation-level marks (school/academy admin view) ──────────────────────
+
+const orgMarkInclude = {
+	student: { include: { user: { select: { id: true, name: true, email: true } } } },
+	course: {
+		select: {
+			id: true, name: true, Course_id: true, Teacher_id: true,
+			teacher: { include: { user: { select: { id: true, name: true } } } },
+			track: { select: { id: true, Name: true, GradeLevel: true } },
+		},
+	},
+};
+
+export const getOrgMarks = async (orgId, filters = {}) => {
+	const { subjectId, gradeLevel, studentName, dateFrom, dateTo, markType } = filters;
+
+	// Build the where clause scoped to this org via the subject → track relation
+	const where = {
+		course: {
+			track: { Org_id: Number(orgId) },
+			...(subjectId ? { id: Number(subjectId) } : {}),
+			...(gradeLevel ? { track: { Org_id: Number(orgId), GradeLevel: Number(gradeLevel) } } : {}),
+		},
+		...(markType ? { MarkType: markType } : {}),
+		...((dateFrom || dateTo) ? {
+			time: {
+				...(dateFrom ? { gte: new Date(dateFrom) } : {}),
+				...(dateTo   ? { lte: new Date(dateTo)   } : {}),
+			},
+		} : {}),
+		...(studentName ? {
+			student: {
+				user: { name: { contains: studentName } },
+			},
+		} : {}),
+	};
+
+	const marks = await prisma.marks.findMany({
+		where,
+		include: orgMarkInclude,
+		orderBy: [{ time: 'desc' }, { id: 'desc' }],
+		take: 500,
+	});
+
+	return marks.map((m) => {
+		const { course, ...rest } = m;
+		return {
+			...rest,
+			subject: course ? {
+				...course,
+				teacher: course.teacher ?? null,
+				course: course.track ?? null,
+			} : null,
+		};
+	});
 };

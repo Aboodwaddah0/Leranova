@@ -1,7 +1,7 @@
 import Joi from 'joi';
 
 const organizationRoleValues = ['ACADEMY', 'SCHOOL'];
-const organizationStatusValues = ['PENDING', 'APPROVED', 'REJECTED'];
+const organizationStatusValues = ['PENDING', 'EMAIL_VERIFIED', 'APPROVED', 'REJECTED'];
 const subdomainPattern = /^[a-z0-9-]+$/;
 const classRangeSchema = Joi.object({
 	startGradeLevel: Joi.number().integer().min(1).max(12).required(),
@@ -40,6 +40,7 @@ export const updateOrganizationSchema = Joi.object({
 	Role: Joi.string().valid(...organizationRoleValues, 'Academy', 'School'),
 	classRanges: Joi.array().items(classRangeSchema),
 	status: Joi.string().valid(...organizationStatusValues),
+	rejectionReason: Joi.string().max(1000).allow('', null).optional(),
 }).min(1);
 
 export const updateOwnOrganizationSchema = Joi.object({

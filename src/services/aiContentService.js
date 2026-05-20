@@ -272,14 +272,14 @@ const autoRetriggerIngestion = async (lessonId) => {
       select: {
         id: true,
         Subject_id: true,
-        subject: { select: { id: true, Course_id: true, course: { select: { Org_id: true } } } },
+        course: { select: { id: true, Course_id: true, track: { select: { Org_id: true } } } },
       },
     });
-    if (!lesson?.subject) return;
+    if (!lesson?.course) return;
 
-    const courseId  = lesson.subject.Course_id;
-    const subjectId = lesson.subject.id;
-    const orgId     = lesson.subject.course?.Org_id;
+    const courseId  = lesson.course.Course_id;
+    const subjectId = lesson.course.id;
+    const orgId     = lesson.course.track?.Org_id;
 
     const attachments = await prisma.lesson_attachment.findMany({
       where: { lessonId: Number(lessonId) },
@@ -372,13 +372,9 @@ export const gatherLessonContent = async (lessonId) => {
 
 /* ─── Call Groq ─────────────────────────────────────────────────────────── */
 
-export const callGroq = async (prompt, systemPrompt, model = GROQ_MODEL, maxTokens = 3000) => {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) throw new AppError('GROQ_API_KEY is not configured', 500);
-
+const doGroqFetch = async (apiKey, model, maxTokens, systemPrompt, prompt) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), GROQ_TIMEOUT_MS);
-
   let response;
   try {
     response = await fetch(GROQ_API_URL, {
@@ -397,6 +393,21 @@ export const callGroq = async (prompt, systemPrompt, model = GROQ_MODEL, maxToke
     });
   } finally {
     clearTimeout(timeout);
+  }
+  return response;
+};
+
+export const callGroq = async (prompt, systemPrompt, model = GROQ_MODEL, maxTokens = 3000) => {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new AppError('GROQ_API_KEY is not configured', 500);
+
+  // Retry once on rate-limit (429) with the suggested retry-after delay (capped at 30s)
+  let response = await doGroqFetch(apiKey, model, maxTokens, systemPrompt, prompt);
+
+  if (response.status === 429) {
+    const retryAfter = Math.min(Number(response.headers.get('retry-after') || 25), 30);
+    await new Promise((r) => setTimeout(r, retryAfter * 1000));
+    response = await doGroqFetch(apiKey, model, maxTokens, systemPrompt, prompt);
   }
 
   if (!response.ok) {
@@ -897,5 +908,89 @@ export const generateScenePlan = async (lessonId, lang = 'ar', fmt = 'explainer'
   }
 
   return resp.json();
+};
+
+// ── Mixed-type quiz prompt ────────────────────────────────────────────────────
+
+export const buildMixedQuizPrompt = (lessonTitle, content, { numMCQ, numTrueFalse, numShortAnswer, difficulty, notes, lang }) => {
+  const sections = [];
+
+  if (numMCQ > 0) sections.push(lang === 'ar'
+    ? `${numMCQ} أسئلة اختيار من متعدد (multipleChoice): لكل سؤال خيارات: أربعة خيارات ونسبة الإجابة الصحيحة correctAnswer (0-3).`
+    : `${numMCQ} multiple-choice questions (multipleChoice): each with exactly 4 options and correctAnswer index (0-3).`);
+
+  if (numTrueFalse > 0) sections.push(lang === 'ar'
+    ? `${numTrueFalse} أسئلة صح/خطأ (trueFalse): لكل سؤال correctAnswer: 0 (صح) أو 1 (خطأ).`
+    : `${numTrueFalse} true/false questions (trueFalse): each with correctAnswer: 0 (True) or 1 (False).`);
+
+  if (numShortAnswer > 0) sections.push(lang === 'ar'
+    ? `${numShortAnswer} أسئلة إجابة قصيرة (shortAnswer): لكل سؤال expectedAnswer: الإجابة النموذجية المرجعية (جملة أو جملتان).`
+    : `${numShortAnswer} short-answer questions (shortAnswer): each with expectedAnswer: the reference answer (1-2 sentences).`);
+
+  const diffGuide = lang === 'ar'
+    ? ({ EASY: 'تذكر وفهم مباشر', MEDIUM: 'تطبيق ومقارنة', HARD: 'تحليل وتركيب' }[difficulty] || 'متنوع')
+    : ({ EASY: 'recall & comprehension', MEDIUM: 'application & comparison', HARD: 'analysis & synthesis' }[difficulty] || 'mixed');
+
+  const structure = `{
+  "multipleChoice": [{ "question": "...", "options": ["A","B","C","D"], "correctAnswer": 0, "explanation": "..." }],
+  "trueFalse":      [{ "question": "...", "correctAnswer": 0, "explanation": "..." }],
+  "shortAnswer":    [{ "question": "...", "expectedAnswer": "...", "explanation": "..." }]
+}`;
+
+  if (lang === 'ar') return `
+⚠️ قواعد صارمة: اكتب بعربية فصحى سليمة فقط. ممنوع التعريب الصوتي.
+أنشئ الأسئلة التالية بناءً على محتوى الدرس:
+${sections.join('\n')}
+المستوى: ${difficulty} — ${diffGuide}
+${notes ? `توجيه إضافي: ${notes}` : ''}
+
+أعد JSON صالح فقط بهذا الشكل:
+${structure}
+
+ملاحظات: explanation اختياري لكن مفيد. كل نوع يُعاد كمصفوفة حتى لو كانت فارغة [].
+عنوان الدرس: ${lessonTitle}
+المحتوى:
+${content}`.trim();
+
+  return `
+⚠️ Write all text in English only.
+Generate the following questions based on the lesson content:
+${sections.join('\n')}
+Difficulty: ${difficulty} — ${diffGuide}
+${notes ? `Additional guidance: ${notes}` : ''}
+
+Return valid JSON only in this exact structure:
+${structure}
+
+Notes: explanation is optional but helpful. Return each type as an array even if empty [].
+Lesson title: ${lessonTitle}
+Content:
+${content}`.trim();
+};
+
+// ── Short-answer AI grader ────────────────────────────────────────────────────
+const GRADE_SYS = `You are a strict but fair quiz grader. Respond ONLY with valid JSON — no markdown, no explanation outside the JSON object.`;
+
+export const gradeShortAnswer = async (question, expectedAnswer, studentAnswer, lang = 'ar') => {
+  if (!studentAnswer || !String(studentAnswer).trim()) {
+    return { correct: false, feedback: lang === 'ar' ? 'لم تُقدَّم إجابة.' : 'No answer provided.' };
+  }
+
+  const prompt = lang === 'ar'
+    ? `السؤال: ${question}\nالإجابة النموذجية: ${expectedAnswer}\nإجابة الطالب: ${studentAnswer}\n\nهل الإجابة صحيحة مفاهيمياً؟ تقبّل الصياغات المختلفة طالما المعنى صحيح. أجب بـ JSON فقط:\n{"correct": true|false, "feedback": "جملة أو جملتان باللغة العربية تشرح للطالب سبب الصواب أو الخطأ"}`
+    : `Question: ${question}\nExpected answer: ${expectedAnswer}\nStudent answer: ${studentAnswer}\n\nIs the student's answer conceptually correct? Accept different phrasing as long as the meaning is right. Reply with JSON only:\n{"correct": true|false, "feedback": "One or two sentences in English explaining why the answer is correct or incorrect"}`;
+
+  try {
+    const raw = await callGroq(prompt, GRADE_SYS, 'llama-3.1-8b-instant', 200);
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('no JSON');
+    const parsed = JSON.parse(match[0]);
+    return {
+      correct: Boolean(parsed.correct),
+      feedback: String(parsed.feedback || ''),
+    };
+  } catch {
+    return { correct: false, feedback: lang === 'ar' ? 'تعذّر تقييم الإجابة تلقائياً.' : 'Could not auto-grade this answer.' };
+  }
 };
 

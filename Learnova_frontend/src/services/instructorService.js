@@ -89,6 +89,11 @@ export const suggestLessonMetadata = async (subjectId, filename, lang = 'ar') =>
   return data?.data || null;
 };
 
+export const suggestLessonMetadataFromContent = async (subjectId, lessonId, lang = 'ar') => {
+  const { data } = await api.post(`/subjects/${subjectId}/lessons/${lessonId}/suggest-from-content`, { lang });
+  return data?.data ?? null;
+};
+
 export const deleteInstructorLesson = async (subjectId, lessonId) => {
   const { data } = await api.delete(`/subjects/${subjectId}/lessons/${lessonId}`);
   return data?.data || null;
@@ -140,13 +145,13 @@ export const generateLessonAiContentInstructor = async (lessonId, lang = 'ar') =
   return data?.data ?? null;
 };
 
-export const generateLessonFlashcardsOnly = async (lessonId, lang = 'ar') => {
-  const { data } = await api.post(`/lessons/${lessonId}/ai-content/flashcards/regenerate`, { lang });
+export const generateLessonFlashcardsOnly = async (lessonId, lang = 'ar', topic = '') => {
+  const { data } = await api.post(`/lessons/${lessonId}/ai-content/flashcards/regenerate`, { lang, topic });
   return data?.data ?? null;
 };
 
-export const generateLessonMindmapOnly = async (lessonId, lang = 'ar') => {
-  const { data } = await api.post(`/lessons/${lessonId}/ai-content/mindmap/regenerate`, { lang });
+export const generateLessonMindmapOnly = async (lessonId, lang = 'ar', topic = '') => {
+  const { data } = await api.post(`/lessons/${lessonId}/ai-content/mindmap/regenerate`, { lang, topic });
   return data?.data ?? null;
 };
 
@@ -158,6 +163,23 @@ export const updateLessonFlashcards = async (lessonId, flashcards, lang = 'ar') 
 export const updateLessonMindmap = async (lessonId, mindmap, lang = 'ar') => {
   const { data } = await api.put(`/lessons/${lessonId}/ai-content/mindmap`, { mindmap, lang });
   return data?.data ?? null;
+};
+
+export const deleteLessonFlashcards = async (lessonId) => {
+  await api.delete(`/lessons/${lessonId}/ai-content/flashcards`);
+};
+
+export const generateLessonPowerSlides = async (lessonId, { lang = 'ar', numSlides = 10, theme = 'blue', topic = '' } = {}) => {
+  const { data } = await api.post(`/lessons/${lessonId}/ai-content/slides/generate`, { lang, numSlides, theme, topic });
+  return data?.data ?? null;
+};
+
+export const deleteLessonPowerSlides = async (lessonId) => {
+  await api.delete(`/lessons/${lessonId}/ai-content/slides`);
+};
+
+export const deleteLessonMindmap = async (lessonId) => {
+  await api.delete(`/lessons/${lessonId}/ai-content/mindmap`);
 };
 
 export const publishLessonAiContent = async (lessonId) => {

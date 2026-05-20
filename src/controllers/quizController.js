@@ -60,15 +60,16 @@ export const deleteQuizController = async (req, res, next) => {
 
 export const generateQuestionsController = async (req, res, next) => {
   try {
-    const { numQuestions, difficulty, notes, lang } = req.body;
-    const data = await generateQuizQuestions(req.user, quizId(req), { numQuestions, difficulty, notes, lang });
+    const { numQuestions, numMCQ, numTrueFalse, numShortAnswer, difficulty, notes, lang } = req.body;
+    const data = await generateQuizQuestions(req.user, quizId(req), { numQuestions, numMCQ, numTrueFalse, numShortAnswer, difficulty, notes, lang });
     return ok(res, data);
   } catch (err) { next(err); }
 };
 
 export const addQuestionController = async (req, res, next) => {
   try {
-    const data = await addQuestion(req.user, quizId(req), { ...req.body, lang: resolveLang(req) });
+    const { type, expectedAnswer, ...rest } = req.body;
+    const data = await addQuestion(req.user, quizId(req), { ...rest, type, expectedAnswer, lang: resolveLang(req) });
     return ok(res, data, 201);
   } catch (err) { next(err); }
 };

@@ -125,11 +125,11 @@ export async function getInstructorAnalytics(teacherId) {
 
   // Step 1: Teacher's courses + subjects (2 parallel queries)
   const [teacherCourses, teacherSubjects] = await Promise.all([
-    prisma.course.findMany({
+    prisma.track.findMany({
       where:  { Teacher_id: teacherId },
       select: { id: true, Name: true },
     }),
-    prisma.subject.findMany({
+    prisma.course.findMany({
       where:  { Teacher_id: teacherId },
       select: { id: true, name: true, Course_id: true, lesson: { select: { id: true } } },
     }),

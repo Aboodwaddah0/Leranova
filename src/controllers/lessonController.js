@@ -14,6 +14,7 @@ import {
 import { createLessonAttachment } from '../services/lessonAttachmentService.js';
 import { gatherLessonContent } from '../services/aiContentService.js';
 import AppError from '../utils/appError.js';
+import { groqFetchWithRetry } from '../utils/groqClient.js';
 import prisma from '../utils/prisma.js';
 
 const GROQ_API_URL = process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
@@ -221,12 +222,12 @@ export const suggestLessonMetadataController = async (req, res, next) => {
 		const subjectId = parseSubjectId(req);
 		const { filename = '', lang = 'ar', hint = '' } = req.body;
 
-		const subject = await prisma.subject.findUnique({
+		const subject = await prisma.course.findUnique({
 			where: { id: subjectId },
-			select: { name: true, course: { select: { Name: true } } },
+			select: { name: true, track: { select: { Name: true } } },
 		});
 		const subjectName = subject?.name || subject?.Name || '';
-		const courseName  = subject?.course?.Name || '';
+		const courseName  = subject?.track?.Name || '';
 
 		const cleanName = filename.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ').trim();
 
@@ -263,7 +264,7 @@ Course: "${courseName}"
 Video filename: "${cleanName}"${hintLineEn}${avoidEn}
 Return JSON only: {"title": "Lesson title", "description": "Brief 1-2 sentence description"}`;
 
-		const response = await fetch(GROQ_API_URL, {
+		const response = await groqFetchWithRetry(GROQ_API_URL, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
 			body: JSON.stringify({
@@ -272,7 +273,7 @@ Return JSON only: {"title": "Lesson title", "description": "Brief 1-2 sentence d
 				max_tokens: 200,
 				messages: [{ role: 'user', content: prompt }],
 			}),
-		});
+		}, { retries: 3, baseDelay: 500 });
 
 		const body = await response.json();
 		const raw = body?.choices?.[0]?.message?.content?.trim() || '{}';
@@ -311,7 +312,7 @@ export const suggestFromContentController = async (req, res, next) => {
 			? `أنت مساعد تعليمي. بناءً على محتوى هذا الدرس فقط، اقترح عنوانًا واضحًا ودقيقًا ووصفًا مختصرًا يعكس الموضوع الفعلي للدرس.\nأعد JSON فقط بهذا الشكل: {"title": "عنوان الدرس", "description": "وصف في جملة أو جملتين"}\n\nمحتوى الدرس:\n${content}`
 			: `You are an educational assistant. Based ONLY on this lesson content, suggest a clear, accurate title and brief description that reflects what the lesson is actually about.\nReturn JSON only: {"title": "Lesson title", "description": "1-2 sentence description"}\n\nLesson content:\n${content}`;
 
-		const response = await fetch(GROQ_API_URL, {
+		const response = await groqFetchWithRetry(GROQ_API_URL, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
 			body: JSON.stringify({
@@ -320,7 +321,7 @@ export const suggestFromContentController = async (req, res, next) => {
 				max_tokens: 200,
 				messages: [{ role: 'user', content: prompt }],
 			}),
-		});
+		}, { retries: 3, baseDelay: 500 });
 
 		const body2   = await response.json();
 		const raw2    = body2?.choices?.[0]?.message?.content?.trim() || '{}';

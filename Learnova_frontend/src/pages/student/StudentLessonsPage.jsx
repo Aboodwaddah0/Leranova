@@ -56,13 +56,16 @@ const buildCoursesFromMarks = (marks = []) => {
   return Array.from(grouped.values());
 };
 
-const buildCoursesFromPurchases = (purchases = []) => purchases.map((purchase) => ({
-  id: purchase.course?.id,
-  name: purchase.course?.Name || purchase.course?.name || `#${purchase.course?.id}`,
-  description: purchase.course?.Description || purchase.course?.description || "",
-  status: purchase.status,
-  source: "purchase",
-})).filter((course) => course.id);
+const buildCoursesFromPurchases = (purchases = []) => purchases.map((purchase) => {
+  const trk = purchase.track || purchase.course;
+  return {
+    id: trk?.id,
+    name: trk?.Name || trk?.name || `#${trk?.id}`,
+    description: trk?.Description || trk?.description || "",
+    status: purchase.status,
+    source: "purchase",
+  };
+}).filter((course) => course.id);
 
 const buildSubjects = (marks = []) => {
   const grouped = new Map();

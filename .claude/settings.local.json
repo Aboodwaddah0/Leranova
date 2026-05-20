@@ -39,7 +39,8 @@
       "Bash(findstr \"framer\\\\|motion\\\\|animate\")",
       "Bash(findstr /i \"framer\")",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Eng Mohammad\\\\Desktop\\\\repo\\\\last-v\\\\Leranova\\\\Learnova_backend\\\\src\\\\services\" -File)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\PC\\\\Documents\\\\Leranova_v4\\\\Learnova_frontend\\\\src\\\\pages\\\\instructor\" -File)"
     ]
   }
 }

@@ -8,7 +8,6 @@ import StudentProtectedRoute from "./routes/StudentProtectedRoute";
 import DashboardPlaceholderPage from "./pages/DashboardPlaceholderPage";
 import InstructorDashboardPage from "./pages/InstructorDashboardPage";
 import InstructorCoursesPage from "./pages/instructor/InstructorCoursesPage";
-import InstructorLessonsPage from "./pages/instructor/InstructorLessonsPage";
 import InstructorStudentsPage from "./pages/instructor/InstructorStudentsPage";
 import InstructorMarksPage from "./pages/instructor/InstructorMarksPage";
 import InstructorSettingsPage from "./pages/instructor/InstructorSettingsPage";
@@ -40,6 +39,8 @@ import AdminPlansPage from "./pages/admin/AdminPlansPage";
 import ParentDashboardPage from "./pages/parent/ParentDashboardPage";
 import ParentMarksPage from "./pages/parent/ParentMarksPage";
 import ParentSettingsPage from "./pages/parent/ParentSettingsPage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
+import ForceChangePasswordPage from "./pages/ForceChangePasswordPage";
 import { GooeyToaster } from "goey-toast";
 import { LEARNOVA_TOASTER_PROPS } from "./lib/notify";
 
@@ -66,10 +67,12 @@ function App() {
         <Route path="/subscription/success" element={<PaymentSuccessPage />} />
         <Route path="/payment/cancel" element={<Navigate to="/signup" replace />} />
         <Route path="/subscription/cancel" element={<Navigate to="/signup" replace />} />
+        <Route path="/verify-email/:token" element={<VerifyEmailPage />} />
 
         <Route path="/admin/login" element={<AdminLoginPage />} />
 
         <Route element={<ProtectedRoute />}>
+          <Route path="/change-password" element={<ForceChangePasswordPage />} />
           <Route path="/dashboard" element={<DashboardPlaceholderPage />} />
           <Route element={<OrganizationProtectedRoute />}>
             <Route path="/dashboard/organization" element={<OrganizationWorkspacePage />} />
@@ -81,8 +84,6 @@ function App() {
             <Route path="/dashboard/instructor" element={<InstructorDashboardPage />} />
             <Route path="/dashboard/instructor/overview" element={<InstructorDashboardPage />} />
             <Route path="/dashboard/instructor/courses" element={<InstructorCoursesPage />} />
-            
-<Route path="/dashboard/instructor/lessons" element={<InstructorLessonsPage />} />
             <Route path="/dashboard/instructor/students" element={<InstructorStudentsPage />} />
             <Route path="/dashboard/instructor/settings" element={<InstructorSettingsPage />} />
             <Route path="/dashboard/instructor/analytics" element={<InstructorAnalyticsPage />} />

@@ -8,6 +8,7 @@ import {
 	resetPasswordController,
 	changePasswordController,
 	getMeController,
+	verifyOrgEmailController,
 } from '../controllers/authController.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { loginAdminController } from '../controllers/adminAuthController.js';
@@ -19,6 +20,7 @@ router.get('/me', authMiddleware, getMeController);
 // Traditional registration and login
 router.post('/organization/register', register);
 router.post('/organization/login', login);
+router.get('/organization/verify-email/:token', verifyOrgEmailController);
 router.post('/user/login', loginUserController);
 router.post('/parent/login', loginParentController);
 router.post('/admin/login', loginAdminController);

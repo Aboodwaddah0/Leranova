@@ -37,7 +37,7 @@ async function _aggregate(studentId) {
     }),
     prisma.lesson_progress.findMany({
       where: { studentId, isCompleted: true },
-      select: { lesson: { select: { subject: { select: { name: true } } } } },
+      select: { lesson: { select: { course: { select: { name: true } } } } },
     }),
     prisma.student_achievement.count({ where: { studentId } }),
   ]);
@@ -99,7 +99,7 @@ function _compute({ events30, xpRow, streakRow, attempts, completedLessons, achi
   // Focus areas (top 3 subjects by completed lesson count)
   const subjectCounts = {};
   for (const lp of completedLessons) {
-    const name = lp.lesson?.subject?.name;
+    const name = lp.lesson?.course?.name;
     if (name) subjectCounts[name] = (subjectCounts[name] || 0) + 1;
   }
   const focusAreas = Object.entries(subjectCounts)

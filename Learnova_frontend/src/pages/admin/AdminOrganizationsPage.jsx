@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { setOrganizationFilters, clearAdminState } from "../../redux/slices/adminSlice";
@@ -7,21 +7,31 @@ import { fetchDashboardMetricsThunk, fetchOrganizationsThunk } from "../../redux
 import { updateAdminOrganization } from "../../services/adminService";
 import { useLanguage } from "../../utils/i18n";
 import { notifyError } from "../../lib/notify";
+import Pagination from "../../components/ui/Pagination";
+
+const PAGE_SIZE = 10;
 
 export default function AdminOrganizationsPage() {
   const dispatch = useDispatch();
-  const { t } = useLanguage();
+  const { t, isArabic } = useLanguage();
   const { organizations, organizationFilters, loading, error } = useSelector((state) => state.admin);
+  const [rejectModal, setRejectModal] = useState({ open: false, orgId: null, reason: "" });
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     dispatch(fetchOrganizationsThunk(organizationFilters));
   }, [dispatch, organizationFilters]);
 
   useEffect(() => {
-    if (error) {
-      notifyError(error);
-    }
+    if (error) notifyError(error);
   }, [error]);
+
+  useEffect(() => { setPage(1); }, [organizationFilters]);
+
+  const pagedOrgs = useMemo(
+    () => organizations.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [organizations, page],
+  );
 
   const handleRefresh = async () => {
     await dispatch(fetchOrganizationsThunk(organizationFilters));
@@ -33,13 +43,29 @@ export default function AdminOrganizationsPage() {
     dispatch(logout());
   };
 
-  const handleStatusChange = async (organizationId, status) => {
-    await updateAdminOrganization(organizationId, { status });
+  const handleApprove = async (organizationId) => {
+    await updateAdminOrganization(organizationId, { status: "APPROVED" });
     await handleRefresh();
   };
 
-  const filters = useMemo(() => organizationFilters, [organizationFilters]);
+  const handleRejectClick = (organizationId) => {
+    setRejectModal({ open: true, orgId: organizationId, reason: "" });
+  };
 
+  const handleRejectConfirm = async () => {
+    await updateAdminOrganization(rejectModal.orgId, {
+      status: "REJECTED",
+      rejectionReason: rejectModal.reason || null,
+    });
+    setRejectModal({ open: false, orgId: null, reason: "" });
+    await handleRefresh();
+  };
+
+  const handleRejectCancel = () => {
+    setRejectModal({ open: false, orgId: null, reason: "" });
+  };
+
+  const filters = useMemo(() => organizationFilters, [organizationFilters]);
   const statusLabel = (status) => t.admin.organizations.statusValues?.[status] || status;
 
   return (
@@ -65,6 +91,7 @@ export default function AdminOrganizationsPage() {
           >
             <option value="">{t.admin.organizations.all}</option>
             <option value="PENDING">{statusLabel("PENDING")}</option>
+            <option value="EMAIL_VERIFIED">{statusLabel("EMAIL_VERIFIED")}</option>
             <option value="APPROVED">{statusLabel("APPROVED")}</option>
             <option value="REJECTED">{statusLabel("REJECTED")}</option>
           </select>
@@ -103,7 +130,7 @@ export default function AdminOrganizationsPage() {
                     {t.admin.organizations.empty}
                   </td>
                 </tr>
-              ) : organizations.map((organization) => (
+              ) : pagedOrgs.map((organization) => (
                 <tr key={organization.id} className="border-t border-slate-100 align-top">
                   <td className="py-3 pr-4 font-semibold text-slate-900">{organization.Name}</td>
                   <td className="py-3 pr-4 text-slate-600">{organization.Email}</td>
@@ -113,15 +140,17 @@ export default function AdminOrganizationsPage() {
                   <td className="py-3 pr-4 text-slate-600">{organization.Role}</td>
                   <td className="py-3 pr-4 text-slate-600">{new Date(organization.createdAt).toLocaleDateString()}</td>
                   <td className="py-3 pr-4">
-                    {organization.status === "PENDING" ? (
+                    {organization.status === "EMAIL_VERIFIED" ? (
                       <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={() => handleStatusChange(organization.id, "APPROVED")} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white">
+                        <button type="button" onClick={() => handleApprove(organization.id)} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white">
                           {t.admin.organizations.approve}
                         </button>
-                        <button type="button" onClick={() => handleStatusChange(organization.id, "REJECTED")} className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white">
+                        <button type="button" onClick={() => handleRejectClick(organization.id)} className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white">
                           {t.admin.organizations.reject}
                         </button>
                       </div>
+                    ) : organization.status === "PENDING" ? (
+                      <span className="text-xs text-slate-400">{t.admin.organizations.awaitingEmailVerification}</span>
                     ) : (
                       <span className="text-xs text-slate-400">{t.admin.common.noActions}</span>
                     )}
@@ -131,7 +160,37 @@ export default function AdminOrganizationsPage() {
             </tbody>
           </table>
         </div>
+        <div className="mt-3">
+          <Pagination page={page} totalPages={Math.ceil(organizations.length / PAGE_SIZE)} totalItems={organizations.length} pageSize={PAGE_SIZE} onPageChange={setPage} isArabic={isArabic} />
+        </div>
       </section>
+
+      {rejectModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" dir={isArabic ? "rtl" : "ltr"}>
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-xl">
+            <h3 className="mb-4 text-base font-black text-slate-900">{t.admin.organizations.rejectTitle}</h3>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
+              {t.admin.organizations.rejectReasonLabel}
+            </label>
+            <textarea
+              className="mb-4 h-24 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm resize-none focus:outline-none focus:border-indigo-300"
+              placeholder={t.admin.organizations.rejectReasonPlaceholder}
+              value={rejectModal.reason}
+              onChange={(e) => setRejectModal((prev) => ({ ...prev, reason: e.target.value }))}
+            />
+            <div className="flex gap-3 justify-end">
+              <button type="button" onClick={handleRejectCancel}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300">
+                {t.admin.organizations.rejectCancel}
+              </button>
+              <button type="button" onClick={handleRejectConfirm}
+                className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">
+                {t.admin.organizations.rejectConfirm}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }

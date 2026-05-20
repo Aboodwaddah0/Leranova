@@ -262,8 +262,9 @@ export default function InstructorLessonsPage() {
   const [quizGenerating, setQuizGenerating] = useState(false);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [showAddQuestionModal, setShowAddQuestionModal] = useState(false);
-  const [generateForm, setGenerateForm] = useState({ numQuestions: 10, difficulty: 'MEDIUM', notes: '', lang: '' });
-  const [addQuestionForm, setAddQuestionForm] = useState({ question: '', options: ['', '', '', ''], correctAnswer: 0, explanation: '' });
+  
+  const [generateForm, setGenerateForm] = useState({ numMCQ: 5, numTrueFalse: 3, numShortAnswer: 2, difficulty: 'MEDIUM', notes: '', lang: '' });
+  const [addQuestionForm, setAddQuestionForm] = useState({ type: 'MULTIPLE_CHOICE', question: '', options: ['', '', '', ''], correctAnswer: 0, expectedAnswer: '', explanation: '' });
   const [expandedQuestionId, setExpandedQuestionId] = useState(null);
 
   // ── AI Content state (flashcards & mindmap) ─────────────────────────────────
@@ -338,7 +339,7 @@ export default function InstructorLessonsPage() {
       setQuiz(null);
 
       const lesson = lessons.find((l) => String(l.id) === String(selectedLessonId));
-      const subjectId = lesson?.subject?.id || lesson?.subjectId;
+      const subjectId = lesson?.course?.id || lesson?.Subject_id || lesson?.subject?.id || lesson?.subjectId;
 
       try {
         const [attachmentsData, commentsData] = await Promise.all([
@@ -507,7 +508,7 @@ export default function InstructorLessonsPage() {
   };
 
   const onDeleteLesson = async (lesson) => {
-    const subjectId = lesson.subject?.id || lesson.subjectId || lesson.Subject_id;
+    const subjectId = lesson.course?.id || lesson.subjectId || lesson.Subject_id;
     const confirmed = window.confirm(
       isArabic
         ? `هل تريد حذف الدرس "${lesson.title || lesson.name}"؟`
@@ -707,7 +708,7 @@ export default function InstructorLessonsPage() {
   // ── Quiz handlers ────────────────────────────────────────────────────────────
   const getSubjectId = () => {
     const lesson = lessons.find((l) => String(l.id) === String(selectedLessonId));
-    return lesson?.subject?.id || lesson?.subjectId;
+    return lesson?.course?.id || lesson?.Subject_id || lesson?.subject?.id || lesson?.subjectId;
   };
 
   const onCreateQuiz = async () => {
@@ -717,6 +718,9 @@ export default function InstructorLessonsPage() {
     try {
       const created = await createLessonQuiz(subjectId, selectedLessonId, { title, difficulty: 'MEDIUM', passingScore: 70 });
       setQuiz(created);
+      // open quiz panel and show generate modal so instructor can add questions
+      setInstructorSection('quiz');
+      setShowGenerateModal(true);
     } catch (err) { setError(safeError(err)); }
   };
 
@@ -745,11 +749,15 @@ export default function InstructorLessonsPage() {
     const subjectId = getSubjectId();
     setQuizGenerating(true);
     try {
+      const totalQs = generateForm.numMCQ + generateForm.numTrueFalse + generateForm.numShortAnswer;
+      if (totalQs < 1) { setError(isArabic ? 'يجب أن يكون إجمالي الأسئلة على الأقل 1.' : 'Total questions must be at least 1.'); return; }
       const updated = await generateLessonQuizQuestions(subjectId, selectedLessonId, quiz.id, {
-        numQuestions: generateForm.numQuestions,
-        difficulty: generateForm.difficulty,
-        notes: generateForm.notes,
-        lang: generateForm.lang || (isArabic ? 'ar' : 'en'),
+        numMCQ:          generateForm.numMCQ,
+        numTrueFalse:    generateForm.numTrueFalse,
+        numShortAnswer:  generateForm.numShortAnswer,
+        difficulty:      generateForm.difficulty,
+        notes:           generateForm.notes,
+        lang:            generateForm.lang || (isArabic ? 'ar' : 'en'),
       });
       setQuiz(updated);
       setShowGenerateModal(false);
@@ -770,13 +778,23 @@ export default function InstructorLessonsPage() {
   const onAddQuestion = async () => {
     if (!quiz) return;
     const subjectId = getSubjectId();
-    if (!addQuestionForm.question.trim() || addQuestionForm.options.some((o) => !o.trim())) {
-      return setError(isArabic ? 'يرجى ملء السؤال والخيارات الأربعة.' : 'Please fill in the question and all 4 options.');
+    const qType = addQuestionForm.type || 'MULTIPLE_CHOICE';
+
+    if (!addQuestionForm.question.trim()) {
+      return setError(isArabic ? 'يرجى كتابة نص السؤال.' : 'Please enter the question text.');
     }
+    if (qType === 'MULTIPLE_CHOICE' && addQuestionForm.options.some((o) => !o.trim())) {
+      return setError(isArabic ? 'يرجى ملء الخيارات الأربعة.' : 'Please fill in all 4 options.');
+    }
+    if (qType === 'SHORT_ANSWER' && !addQuestionForm.expectedAnswer.trim()) {
+      return setError(isArabic ? 'يرجى كتابة الإجابة النموذجية.' : 'Please provide the expected answer.');
+    }
+
     try {
-      const newQ = await addLessonQuizQuestion(subjectId, selectedLessonId, quiz.id, addQuestionForm, quizViewLang);
+      const payload = { ...addQuestionForm, type: qType };
+      const newQ = await addLessonQuizQuestion(subjectId, selectedLessonId, quiz.id, payload, quizViewLang);
       setQuiz((prev) => prev ? { ...prev, questions: [...(prev.questions || []), newQ], questionCount: (prev.questionCount || 0) + 1 } : prev);
-      setAddQuestionForm({ question: '', options: ['', '', '', ''], correctAnswer: 0, explanation: '' });
+      setAddQuestionForm({ type: 'MULTIPLE_CHOICE', question: '', options: ['', '', '', ''], correctAnswer: 0, expectedAnswer: '', explanation: '' });
       setShowAddQuestionModal(false);
     } catch (err) { setError(safeError(err)); }
   };
@@ -837,7 +855,7 @@ export default function InstructorLessonsPage() {
                   <button type="button" onClick={() => setSelectedLessonId(String(lesson.id))} className="w-full text-left">
                     <p className="text-sm font-bold text-slate-900">{lesson.title || lesson.name}</p>
                     <p className="mt-1 text-xs text-slate-500">
-                      {lesson.subject?.name} • {formatGradeName(lesson.subject?.course, isSchool, isArabic) || lesson.subject?.course?.Name || ""}
+                      {lesson.course?.name} • {formatGradeName(lesson.course?.track, isSchool, isArabic) || lesson.course?.track?.Name || ""}
                     </p>
                   </button>
                   <div className="mt-3 flex justify-end">
@@ -860,7 +878,7 @@ export default function InstructorLessonsPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 className="text-xl font-black text-slate-900">{selectedLesson ? (selectedLesson.title || selectedLesson.name) : (isArabic ? "اختر درسًا" : "Select a lesson")}</h3>
-              <p className="mt-1 text-sm text-slate-600">{selectedLesson?.subject?.name || "-"}</p>
+              <p className="mt-1 text-sm text-slate-600">{selectedLesson?.course?.name || "-"}</p>
             </div>
             {/* Suggest title & description from actual video content (available after RAG indexing) */}
             {selectedLessonId && attachments.length > 0 ? (
@@ -911,6 +929,7 @@ export default function InstructorLessonsPage() {
             </div>
           ) : null}
 
+          
           {/* ── Attachments (hidden until selected) ── */}
           {instructorSection === 'attachments' && (
           <div className="grid gap-4 lg:grid-cols-2">
@@ -1378,6 +1397,10 @@ export default function InstructorLessonsPage() {
                             <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-xs font-black text-white mt-0.5">{idx + 1}</span>
                             <span className="flex-1 text-sm font-semibold leading-snug text-slate-800 line-clamp-2">{q.question}</span>
                             <div className="flex flex-shrink-0 items-center gap-2 pt-0.5">
+                              {/* Type badge */}
+                              {(!q.type || q.type === 'MULTIPLE_CHOICE') && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black text-slate-500">MCQ</span>}
+                              {q.type === 'TRUE_FALSE'   && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[9px] font-black text-blue-600">T/F</span>}
+                              {q.type === 'SHORT_ANSWER' && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-black text-violet-600">{isArabic ? 'قصير' : 'Short'}</span>}
                               <span className="text-slate-300 text-xs">{expandedQuestionId === q.id ? '▲' : '▼'}</span>
                               <button type="button" onClick={(e) => { e.stopPropagation(); onDeleteQuestion(q.id); }}
                                 className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-[10px] font-bold text-rose-600 transition hover:bg-rose-100">
@@ -1389,7 +1412,8 @@ export default function InstructorLessonsPage() {
                           {/* Expanded answer view */}
                           {expandedQuestionId === q.id ? (
                             <div className="border-t border-slate-100 bg-slate-50 px-4 pb-4 pt-3 space-y-2">
-                              {(q.options || []).map((opt, oi) => (
+                              {/* MCQ options */}
+                              {(!q.type || q.type === 'MULTIPLE_CHOICE') && (q.options || []).map((opt, oi) => (
                                 <div key={oi} className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs ${
                                   oi === q.correctAnswer
                                     ? 'bg-emerald-100 font-bold text-emerald-800 ring-1 ring-emerald-300'
@@ -1402,6 +1426,23 @@ export default function InstructorLessonsPage() {
                                   {oi === q.correctAnswer ? <span className="ml-auto text-emerald-600 text-[10px] font-bold">{isArabic ? 'الإجابة الصحيحة' : 'Correct'}</span> : null}
                                 </div>
                               ))}
+                              {/* TRUE_FALSE */}
+                              {q.type === 'TRUE_FALSE' && (
+                                <div className="flex gap-2">
+                                  {['True', 'False'].map((label, oi) => (
+                                    <div key={oi} className={`flex-1 rounded-xl px-3 py-2 text-center text-xs font-bold ${oi === q.correctAnswer ? 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-300' : 'bg-white text-slate-500 ring-1 ring-slate-200'}`}>
+                                      {oi === q.correctAnswer ? '✓ ' : ''}{isArabic ? (oi === 0 ? 'صح' : 'خطأ') : label}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {/* SHORT_ANSWER expected answer */}
+                              {q.type === 'SHORT_ANSWER' && (
+                                <div className="rounded-xl bg-violet-50 px-3 py-2 text-xs text-violet-700">
+                                  <span className="font-bold">✨ {isArabic ? 'الإجابة النموذجية:' : 'Expected answer:'}</span>
+                                  <p className="mt-0.5">{q.expectedAnswer || '—'}</p>
+                                </div>
+                              )}
                               {q.explanation ? (
                                 <div className="mt-1 rounded-xl bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
                                   💡 {q.explanation}
@@ -1685,37 +1726,56 @@ export default function InstructorLessonsPage() {
                 </div>
 
                 <div className="space-y-5 px-6 py-6">
-                  {/* Language + Count row */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
-                        {isArabic ? 'لغة الأسئلة' : 'Language'}
-                      </label>
-                      <div className="flex overflow-hidden rounded-xl border border-slate-200">
-                        {[{ v: 'ar', label: 'العربية', flag: '🇸🇦' }, { v: 'en', label: 'English', flag: '🇺🇸' }].map(({ v, label, flag }) => {
-                          const active = (generateForm.lang || (isArabic ? 'ar' : 'en')) === v;
-                          return (
-                            <button key={v} type="button" onClick={() => setGenerateForm((p) => ({ ...p, lang: v }))}
-                              className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-bold transition ${active ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
-                              {flag} {label}
-                            </button>
-                          );
-                        })}
-                      </div>
+                  {/* Language */}
+                  <div>
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                      {isArabic ? 'لغة الأسئلة' : 'Language'}
+                    </label>
+                    <div className="flex overflow-hidden rounded-xl border border-slate-200">
+                      {[{ v: 'ar', label: 'العربية', flag: '🇸🇦' }, { v: 'en', label: 'English', flag: '🇺🇸' }].map(({ v, label, flag }) => {
+                        const active = (generateForm.lang || (isArabic ? 'ar' : 'en')) === v;
+                        return (
+                          <button key={v} type="button" onClick={() => setGenerateForm((p) => ({ ...p, lang: v }))}
+                            className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-bold transition ${active ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
+                            {flag} {label}
+                          </button>
+                        );
+                      })}
                     </div>
+                  </div>
 
-                    <div>
-                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
-                        {isArabic ? 'عدد الأسئلة' : 'Questions'}
-                      </label>
-                      <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                        <button type="button" onClick={() => setGenerateForm((p) => ({ ...p, numQuestions: Math.max(3, p.numQuestions - 1) }))}
-                          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-black text-slate-600 hover:bg-slate-200">−</button>
-                        <span className="flex-1 text-center text-lg font-black text-slate-900">{generateForm.numQuestions}</span>
-                        <button type="button" onClick={() => setGenerateForm((p) => ({ ...p, numQuestions: Math.min(20, p.numQuestions + 1) }))}
-                          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-black text-slate-600 hover:bg-slate-200">+</button>
-                      </div>
-                      <p className="mt-1 text-center text-[10px] text-slate-400">3 – 20</p>
+                  {/* Question type counters */}
+                  <div>
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                      {isArabic ? 'عدد الأسئلة حسب النوع' : 'Questions by type'}
+                    </label>
+                    <div className="space-y-2">
+                      {[
+                        { key: 'numMCQ',         label: isArabic ? 'اختيار متعدد' : 'Multiple Choice', color: 'bg-slate-700',   badge: 'MCQ' },
+                        { key: 'numTrueFalse',    label: isArabic ? 'صح / خطأ'     : 'True / False',    color: 'bg-blue-600',   badge: 'T/F' },
+                        { key: 'numShortAnswer',  label: isArabic ? 'إجابة قصيرة'  : 'Short Answer',   color: 'bg-violet-600', badge: 'Short' },
+                      ].map(({ key, label, color, badge }) => (
+                        <div key={key} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                          <span className={`rounded-full px-2 py-0.5 text-[9px] font-black text-white ${color}`}>{badge}</span>
+                          <span className="flex-1 text-xs font-semibold text-slate-700">{label}</span>
+                          <div className="flex items-center gap-2">
+                            <button type="button"
+                              onClick={() => setGenerateForm((p) => ({ ...p, [key]: Math.max(0, p[key] - 1) }))}
+                              className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-sm font-black text-slate-600 hover:bg-slate-200">−</button>
+                            <span className="w-6 text-center text-base font-black text-slate-900">{generateForm[key]}</span>
+                            <button type="button"
+                              onClick={() => setGenerateForm((p) => ({ ...p, [key]: Math.min(15, p[key] + 1) }))}
+                              className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-sm font-black text-slate-600 hover:bg-slate-200">+</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Total */}
+                    <div className="mt-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+                      <span className="text-xs font-bold text-slate-500">{isArabic ? 'الإجمالي' : 'Total'}</span>
+                      <span className={`text-sm font-black ${generateForm.numMCQ + generateForm.numTrueFalse + generateForm.numShortAnswer === 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+                        {generateForm.numMCQ + generateForm.numTrueFalse + generateForm.numShortAnswer} {isArabic ? 'سؤال' : 'questions'}
+                      </span>
                     </div>
                   </div>
 
@@ -1767,7 +1827,7 @@ export default function InstructorLessonsPage() {
                         {isArabic ? 'جارٍ التوليد بالذكاء الاصطناعي...' : 'Generating with AI...'}
                       </span>
                     ) : (
-                      <span>✨ {isArabic ? `توليد ${generateForm.numQuestions} سؤال` : `Generate ${generateForm.numQuestions} Questions`}</span>
+                      <span>✨ {isArabic ? `توليد ${generateForm.numMCQ + generateForm.numTrueFalse + generateForm.numShortAnswer} سؤال` : `Generate ${generateForm.numMCQ + generateForm.numTrueFalse + generateForm.numShortAnswer} Questions`}</span>
                     )}
                   </button>
 
@@ -1785,30 +1845,87 @@ export default function InstructorLessonsPage() {
           <Modal open={showAddQuestionModal} onClose={() => setShowAddQuestionModal(false)}
             title={isArabic ? 'إضافة سؤال يدوياً' : 'Add Question Manually'} maxWidth="max-w-lg">
             <div className="space-y-3">
+
+              {/* Question type selector */}
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-slate-600">{isArabic ? 'نوع السؤال' : 'Question type'}</label>
+                <div className="flex overflow-hidden rounded-xl border border-slate-200">
+                  {[
+                    { value: 'MULTIPLE_CHOICE', label: isArabic ? 'اختيار متعدد' : 'Multiple Choice', color: 'bg-slate-700' },
+                    { value: 'TRUE_FALSE',       label: isArabic ? 'صح / خطأ' : 'True / False',     color: 'bg-blue-600'  },
+                    { value: 'SHORT_ANSWER',     label: isArabic ? 'إجابة قصيرة' : 'Short Answer',  color: 'bg-violet-600'},
+                  ].map(({ value, label, color }) => (
+                    <button key={value} type="button"
+                      onClick={() => setAddQuestionForm((p) => ({ ...p, type: value, correctAnswer: 0 }))}
+                      className={`flex-1 py-2 text-xs font-bold transition ${addQuestionForm.type === value ? `${color} text-white` : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Question text */}
               <div>
                 <label className="mb-1 block text-xs font-bold text-slate-600">{isArabic ? 'نص السؤال' : 'Question'}</label>
                 <textarea value={addQuestionForm.question} onChange={(e) => setAddQuestionForm((p) => ({ ...p, question: e.target.value }))}
                   className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm min-h-[60px]"
                   placeholder={isArabic ? 'اكتب السؤال هنا...' : 'Enter question here...'} />
               </div>
-              {[0, 1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input type="radio" name="correctAnswer" checked={addQuestionForm.correctAnswer === i}
-                    onChange={() => setAddQuestionForm((p) => ({ ...p, correctAnswer: i }))}
-                    className="accent-emerald-600" title={isArabic ? 'الإجابة الصحيحة' : 'Correct answer'} />
-                  <input value={addQuestionForm.options[i]}
-                    onChange={(e) => setAddQuestionForm((p) => { const opts = [...p.options]; opts[i] = e.target.value; return { ...p, options: opts }; })}
-                    placeholder={`${isArabic ? 'الخيار' : 'Option'} ${String.fromCharCode(65 + i)}`}
-                    className={`flex-1 h-9 rounded-xl border px-3 text-sm ${addQuestionForm.correctAnswer === i ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200'}`} />
+
+              {/* MULTIPLE_CHOICE: 4 options */}
+              {addQuestionForm.type === 'MULTIPLE_CHOICE' && (
+                <>
+                  {[0, 1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input type="radio" name="correctAnswer" checked={addQuestionForm.correctAnswer === i}
+                        onChange={() => setAddQuestionForm((p) => ({ ...p, correctAnswer: i }))}
+                        className="accent-emerald-600" title={isArabic ? 'الإجابة الصحيحة' : 'Correct answer'} />
+                      <input value={addQuestionForm.options[i]}
+                        onChange={(e) => setAddQuestionForm((p) => { const opts = [...p.options]; opts[i] = e.target.value; return { ...p, options: opts }; })}
+                        placeholder={`${isArabic ? 'الخيار' : 'Option'} ${String.fromCharCode(65 + i)}`}
+                        className={`flex-1 h-9 rounded-xl border px-3 text-sm ${addQuestionForm.correctAnswer === i ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200'}`} />
+                    </div>
+                  ))}
+                  <p className="text-[10px] text-slate-400">{isArabic ? '🔘 حدد الإجابة الصحيحة بالنقر على الدائرة' : '🔘 Select the radio button next to the correct answer'}</p>
+                </>
+              )}
+
+              {/* TRUE_FALSE: toggle */}
+              {addQuestionForm.type === 'TRUE_FALSE' && (
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold text-slate-600">{isArabic ? 'الإجابة الصحيحة' : 'Correct answer'}</label>
+                  <div className="flex gap-3">
+                    {[{ label: isArabic ? 'صح ✓' : 'True ✓', val: 0 }, { label: isArabic ? 'خطأ ✗' : 'False ✗', val: 1 }].map(({ label, val }) => (
+                      <button key={val} type="button"
+                        onClick={() => setAddQuestionForm((p) => ({ ...p, correctAnswer: val }))}
+                        className={`flex-1 rounded-xl border py-2.5 text-sm font-bold transition ${addQuestionForm.correctAnswer === val ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              ))}
-              <p className="text-[10px] text-slate-400">{isArabic ? '🔘 حدد الإجابة الصحيحة بالنقر على الدائرة' : '🔘 Select the radio button next to the correct answer'}</p>
+              )}
+
+              {/* SHORT_ANSWER: expected answer */}
+              {addQuestionForm.type === 'SHORT_ANSWER' && (
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">{isArabic ? 'الإجابة النموذجية (للتصحيح بالذكاء الاصطناعي)' : 'Expected answer (used by AI grader)'}</label>
+                  <textarea value={addQuestionForm.expectedAnswer}
+                    onChange={(e) => setAddQuestionForm((p) => ({ ...p, expectedAnswer: e.target.value }))}
+                    className="w-full rounded-xl border border-violet-200 bg-violet-50/50 px-3 py-2 text-sm min-h-[60px]"
+                    placeholder={isArabic ? 'اكتب الإجابة النموذجية التي سيستخدمها الذكاء الاصطناعي للتقييم...' : 'Write the reference answer the AI will use to grade student responses...'} />
+                  <p className="mt-1 text-[10px] text-violet-500">✨ {isArabic ? 'الذكاء الاصطناعي سيقارن إجابة الطالب بهذه الإجابة ويحكم عليها.' : 'AI will compare the student\'s answer to this and decide correct/incorrect.'}</p>
+                </div>
+              )}
+
+              {/* Explanation (all types) */}
               <div>
                 <label className="mb-1 block text-xs font-bold text-slate-600">{isArabic ? 'شرح الإجابة (اختياري)' : 'Explanation (optional)'}</label>
                 <input value={addQuestionForm.explanation} onChange={(e) => setAddQuestionForm((p) => ({ ...p, explanation: e.target.value }))}
                   className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm"
                   placeholder={isArabic ? 'لماذا هذه الإجابة صحيحة؟' : 'Why is this answer correct?'} />
               </div>
+
               <button type="button" onClick={onAddQuestion}
                 className="w-full rounded-xl bg-indigo-600 py-2.5 text-sm font-bold text-white hover:bg-indigo-700">
                 {isArabic ? '+ إضافة السؤال' : '+ Add Question'}

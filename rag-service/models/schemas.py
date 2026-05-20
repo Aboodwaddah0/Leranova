@@ -92,3 +92,21 @@ class QueryMatch(BaseModel):
 
 class QueryResponse(BaseModel):
     chunks: list[QueryMatch]
+
+
+class PlanScenesRequest(BaseModel):
+    lesson_id: str
+    lang: Literal["ar", "en"] = "ar"
+    fmt: Literal["explainer", "brief"] = "explainer"
+    focus: str = ""
+    visual_style: str = "dark"
+    interactive: bool = False
+
+
+class PlanScenesResponse(BaseModel):
+    title: str
+    lang: str
+    visual_style: str
+    scenes: list[dict]
+
+

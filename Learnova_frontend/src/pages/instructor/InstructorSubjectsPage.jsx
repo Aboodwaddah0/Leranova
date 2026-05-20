@@ -156,7 +156,7 @@ export default function InstructorSubjectsPage() {
               <th className="px-4 py-3">
                 {isSchool
                   ? isArabic ? "الصف" : "Grade"
-                  : isArabic ? "الكورس" : "Course"}
+                  : isArabic ? "المسار" : "Track"}
               </th>
               <th className="px-4 py-3">{isArabic ? "الوصف" : "Description"}</th>
             </tr>
@@ -169,7 +169,7 @@ export default function InstructorSubjectsPage() {
             ) : subjects.map((subject) => (
               <tr key={subject.id} className="border-t border-slate-100">
                 <td className="px-4 py-3 font-semibold text-slate-900">{subject.name}</td>
-                <td className="px-4 py-3 text-slate-700">{formatGradeName(subject.course, isSchool, isArabic) || "-"}</td>
+                <td className="px-4 py-3 text-slate-700">{formatGradeName(subject.track, isSchool, isArabic) || "-"}</td>
                 <td className="px-4 py-3 text-slate-700">{subject.Description || "-"}</td>
               </tr>
             ))}

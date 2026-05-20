@@ -32,6 +32,8 @@ const generatePassword = (name) => {
   return `${base}${random}@${number}`;
 };
 
+export const generateTempPassword = (name) => generatePassword(name);
+
 export const generateUserCredentials = async (name, domain) => {
   const email = await generateUniqueEmail(name, domain);
   const password = generatePassword(name);

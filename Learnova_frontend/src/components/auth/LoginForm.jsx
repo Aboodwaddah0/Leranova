@@ -33,7 +33,17 @@ export default function LoginForm({ t }) {
     e.preventDefault();
     dispatch(setAuthRole(selectedRole));
     const result = await dispatch(loginThunk({ role: selectedRole, password: formState.password, email: formState.email }));
-    if (loginThunk.fulfilled.match(result)) navigate(rolePaths[selectedRole] || "/dashboard");
+    if (loginThunk.fulfilled.match(result)) {
+      const mustChangePassword =
+        result.payload?.user?.mustChangePassword ||
+        result.payload?.parent?.mustChangePassword ||
+        false;
+      if (mustChangePassword) {
+        navigate("/change-password");
+      } else {
+        navigate(rolePaths[selectedRole] || "/dashboard");
+      }
+    }
   };
 
   return (

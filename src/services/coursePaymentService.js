@@ -32,7 +32,7 @@ export const canAccessCourse = async (userId, courseId) => {
     }
 
     // الحصول على معلومات الكورس
-    const course = await prisma.course.findUnique({
+    const course = await prisma.track.findUnique({
       where: { id: courseId }
     });
 
@@ -115,7 +115,7 @@ export const getCoursePaymentStatus = async (userId, courseId) => {
         }
       },
       include: {
-        course: true
+        track: true
       }
     });
 
@@ -140,7 +140,7 @@ export const createPaymentRecord = async (userId, courseId, amount) => {
         status: 'PENDING'
       },
       include: {
-        course: true,
+        track: true,
         academy_user: true
       }
     });
@@ -161,7 +161,7 @@ export const createPaymentRecord = async (userId, courseId, amount) => {
           amount: amount
         },
         include: {
-          course: true,
+          track: true,
           academy_user: true
         }
       });
@@ -191,7 +191,7 @@ export const markPaymentSuccess = async (userId, courseId, stripePaymentIntentId
         paidAt: new Date()
       },
       include: {
-        course: true,
+        track: true,
         academy_user: true
       }
     });
@@ -235,7 +235,7 @@ export const getStudentCoursePayments = async (userId) => {
         user_Academy_id: userId
       },
       include: {
-        course: {
+        track: {
           select: {
             id: true,
             Name: true,

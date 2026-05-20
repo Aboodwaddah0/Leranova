@@ -3,7 +3,6 @@ import Joi from 'joi';
 export const createTeacherSchema = Joi.object({
   name: Joi.string().max(255).required(),
   email: Joi.string().email().max(255).required(),
-  password: Joi.string().min(8).required(),
   age: Joi.number().integer().min(0).allow(null),
   gender: Joi.string().valid('FEMALE', 'MALE').allow(null),
   address: Joi.string().max(255).allow('', null),

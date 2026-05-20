@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import prisma from '../utils/prisma.js';
 import { hashPassword, comparePassword } from '../utils/hashPassword.js';
 import generateToken from '../utils/generateToken.js';
@@ -7,15 +8,17 @@ import {
   hashPasswordResetToken,
   buildPasswordResetLink,
 } from '../utils/passwordReset.js';
-import { sendPasswordResetEmail } from '../utils/emailService.js';
+import { sendPasswordResetEmail, sendOrgVerificationEmail, sendOrgApprovedEmail } from '../utils/emailService.js';
 import {
   createRegistrationCheckoutSession,
   ensureStripeConfigured,
 } from './stripeService.js';
 import { ensureSchoolClassesForOrg, normalizeClassRanges } from './schoolClassService.js';
 import { getOrCreateSchoolSettings } from './schoolSettingsService.js';
+import { isBusinessEmail } from '../utils/domainCheck.js';
 
 const PASSWORD_RESET_EXPIRY_MINUTES = 15;
+const EMAIL_VERIFICATION_EXPIRY_HOURS = 24;
 const normalizeSubdomain = (subdomain) => String(subdomain || '').trim().toLowerCase();
 const normalizeNationalId = (nationalId) => String(nationalId || '').trim().replace(/[\s-]/g, '');
 const normalizeRequestedUserRole = (role) => {
@@ -84,6 +87,7 @@ export const registerOrganization = async (data) => {
   }
 
   const hashedPassword = await hashPassword(data.password);
+  const verificationToken = crypto.randomBytes(32).toString('hex');
 
   const result = await prisma.$transaction(async (tx) => {
     const organization = await tx.organization.create({
@@ -98,7 +102,9 @@ export const registerOrganization = async (data) => {
         PhoneNumber: data.PhoneNumber ?? null,
         Description: data.Description ?? null,
         Role: normalizedRole,
-        status: 'APPROVED',
+        status: 'PENDING',
+        emailVerificationToken: verificationToken,
+        emailVerificationExpiresAt: new Date(Date.now() + EMAIL_VERIFICATION_EXPIRY_HOURS * 60 * 60 * 1000),
       },
       select: {
         id: true,
@@ -190,6 +196,16 @@ export const registerOrganization = async (data) => {
     };
   });
 
+  const verificationBaseUrl = process.env.EMAIL_VERIFICATION_URL_BASE;
+  if (verificationBaseUrl) {
+    const verificationLink = `${verificationBaseUrl}/${verificationToken}`;
+    await sendOrgVerificationEmail({
+      to: result.organization.Email,
+      name: result.organization.Name,
+      verificationLink,
+    }).catch(() => {});
+  }
+
   if (!selectedPlan) {
     return {
       ...result,
@@ -211,6 +227,64 @@ export const registerOrganization = async (data) => {
       checkoutUrl: checkoutSession.url,
       status: 'PENDING_PAYMENT',
     },
+  };
+};
+
+export const verifyOrganizationEmail = async (token) => {
+  const normalizedToken = String(token || '').trim();
+  if (!normalizedToken) {
+    throw new AppError('Verification token is required', 400);
+  }
+
+  const organization = await prisma.organization.findFirst({
+    where: { emailVerificationToken: normalizedToken },
+    select: {
+      id: true,
+      Email: true,
+      Name: true,
+      status: true,
+      emailVerificationExpiresAt: true,
+    },
+  });
+
+  if (!organization) {
+    throw new AppError('Invalid verification token', 400);
+  }
+
+  if (organization.emailVerificationExpiresAt < new Date()) {
+    throw new AppError('Verification token has expired', 400);
+  }
+
+  if (organization.status !== 'PENDING') {
+    return {
+      message: 'Email already verified.',
+      autoApproved: organization.status === 'APPROVED',
+    };
+  }
+
+  const businessEmail = isBusinessEmail(organization.Email);
+  const newStatus = businessEmail ? 'APPROVED' : 'EMAIL_VERIFIED';
+
+  await prisma.organization.update({
+    where: { id: organization.id },
+    data: {
+      status: newStatus,
+      emailVerificationToken: null,
+      emailVerificationExpiresAt: null,
+    },
+  });
+
+  if (businessEmail) {
+    await sendOrgApprovedEmail({ to: organization.Email, name: organization.Name }).catch(() => {});
+    return {
+      message: 'Email verified. Your organization has been automatically approved. You can now log in.',
+      autoApproved: true,
+    };
+  }
+
+  return {
+    message: 'Email verified. Your account is pending admin review. You will receive an email once approved.',
+    autoApproved: false,
   };
 };
 
@@ -271,22 +345,21 @@ export const loginUser = async ({ email, password, role }) => {
       student: {
         include: {
           organization: {
-            select: {
-              id: true,
-              Name: true,
-              Role: true,
-            },
+            select: { id: true, Name: true, Role: true },
           },
         },
       },
       academy_user: {
         include: {
           organization: {
-            select: {
-              id: true,
-              Name: true,
-              Role: true,
-            },
+            select: { id: true, Name: true, Role: true },
+          },
+        },
+      },
+      teacher: {
+        include: {
+          organization: {
+            select: { id: true, Name: true, Role: true },
           },
         },
       },
@@ -322,8 +395,9 @@ export const loginUser = async ({ email, password, role }) => {
       name: user.name,
       email: user.email,
       role: user.role,
-      organizationType: user.student?.organization?.Role || user.academy_user?.organization?.Role || null,
-      organization: user.student?.organization || user.academy_user?.organization || null,
+      mustChangePassword: user.mustChangePassword ?? false,
+      organizationType: user.student?.organization?.Role || user.academy_user?.organization?.Role || user.teacher?.organization?.Role || null,
+      organization: user.student?.organization || user.academy_user?.organization || user.teacher?.organization || null,
       student: user.student
         ? {
             studentId: user.student.Student_id,
@@ -377,6 +451,7 @@ export const loginParent = async ({ email, password }) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      mustChangePassword: user.mustChangePassword ?? false,
       nationalId: user.parent.nationalId,
     },
     token,
@@ -543,6 +618,7 @@ export const changePassword = async ({ userId, newPassword }) => {
     data: {
       passwordHashed: hashedPassword,
       passwordChangedAt: new Date(),
+      mustChangePassword: false,
     },
     select: {
       id: true,

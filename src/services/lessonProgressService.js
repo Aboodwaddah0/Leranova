@@ -18,8 +18,8 @@ const ensureStudentCanAccessLesson = async ({ studentId, lessonId }) => {
   const lesson = await prisma.lesson.findFirst({
     where: {
       id: lessonId,
-      subject: {
-        course: {
+      course: {
+        track: {
           Org_id: context.orgId,
         },
       },
@@ -27,7 +27,7 @@ const ensureStudentCanAccessLesson = async ({ studentId, lessonId }) => {
     select: {
       id: true,
       Subject_id: true,
-      subject: {
+      course: {
         select: {
           id: true,
           Course_id: true,
@@ -47,20 +47,20 @@ const ensureStudentCanAccessLesson = async ({ studentId, lessonId }) => {
     },
   });
 
-  if (!lesson?.subject) {
+  if (!lesson?.course) {
     throw new AppError('Lesson not found', 404);
   }
 
   if (context.mode === 'SCHOOL') {
-    if (Number(lesson.subject.Course_id) !== Number(context.classCourseId)) {
+    if (Number(lesson.course.Course_id) !== Number(context.classCourseId)) {
       throw new AppError('School student can only access class lessons', 403);
     }
 
     return lesson;
   }
 
-  const subjectIsPaid = Boolean(lesson.subject.isPaid);
-  const hasPaidSubscription = lesson.subject.subscriptions.length > 0;
+  const subjectIsPaid = Boolean(lesson.course.isPaid);
+  const hasPaidSubscription = lesson.course.subscriptions.length > 0;
 
   if (subjectIsPaid && !hasPaidSubscription) {
     throw new AppError('Subscription required for this material', 402);
@@ -116,10 +116,10 @@ export const upsertLessonProgress = async ({ studentId, lessonId, isCompleted })
 export const getSubjectProgressSummary = async ({ studentId, subjectId }) => {
   const context = await resolveStudentContext(studentId);
 
-  const subject = await prisma.subject.findFirst({
+  const subject = await prisma.course.findFirst({
     where: {
       id: subjectId,
-      course: {
+      track: {
         Org_id: context.orgId,
       },
     },

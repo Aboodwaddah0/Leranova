@@ -37,7 +37,7 @@ export const initiatePayment = async (req, res, next) => {
     // إذا تم الدفع مطلوب
     if (result.requiresPayment) {
       // احصل على معلومات الكورس والطالب
-      const course = await prisma.course.findUnique({
+      const course = await prisma.track.findUnique({
         where: { id: courseId },
       });
 
@@ -142,7 +142,7 @@ export const getCoursePaymentStatus = async (req, res, next) => {
       parseInt(courseId),
     );
 
-    const course = await prisma.course.findUnique({
+    const course = await prisma.track.findUnique({
       where: { id: parseInt(courseId) },
       select: { isPaid: true, price: true, Name: true },
     });
@@ -215,7 +215,7 @@ export const handleStripeWebhook = async (req, res, next) => {
             where: { user_academy_id: userId },
           });
 
-          const course = await prisma.course.findUnique({
+          const course = await prisma.track.findUnique({
             where: { id: courseId },
           });
 

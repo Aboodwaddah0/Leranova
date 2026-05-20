@@ -376,15 +376,25 @@ export default function StudentSubjectPage() {
       {loading ? <div className="ln-skeleton h-64 rounded-[1.75rem]" /> : null}
       {error ? <div className="mb-5 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{error}</div> : null}
       <section className="rounded-[2rem] border border-white/70 bg-white/85 p-5 shadow-xl shadow-indigo-500/5 backdrop-blur-xl">
-        <div className="rounded-[1.5rem] bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500 p-5 text-white">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="relative overflow-hidden rounded-[1.5rem] bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500 p-5 text-white">
+          {subject?.imageUrl && (
+            <img src={subject.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-20" />
+          )}
+          <div className="relative flex flex-wrap items-start justify-between gap-3">
             <Link to={`/courses/${numericCourseId}`} className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20">
-              <ArrowLeft size={16} /> {isArabic ? 'العودة للكورس' : 'Back to course'}
+              <ArrowLeft size={16} /> {isArabic ? 'العودة للمسار' : 'Back to track'}
             </Link>
             <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-100">{isArabic ? 'تركيز المادة' : 'Subject focus'}</p>
           </div>
-          <h1 className="mt-4 text-3xl font-black">{subject?.name || (isArabic ? 'دروس المادة' : 'Subject lessons')}</h1>
-          <p className="mt-2 max-w-3xl text-sm text-blue-50/90">{subject?.description || (isArabic ? 'اختر درسًا لفتح مساحة الدراسة الكاملة.' : 'Pick a lesson to open the full study view.')}</p>
+          <div className="relative mt-4 flex items-center gap-4">
+            {subject?.imageUrl && (
+              <img src={subject.imageUrl} alt={subject.name} className="h-16 w-16 flex-shrink-0 rounded-2xl object-cover shadow-lg ring-2 ring-white/30" />
+            )}
+            <div>
+              <h1 className="text-3xl font-black">{subject?.name || (isArabic ? 'دروس المادة' : 'Subject lessons')}</h1>
+              <p className="mt-1 max-w-3xl text-sm text-blue-50/90">{subject?.description || (isArabic ? 'اختر درسًا لفتح مساحة الدراسة الكاملة.' : 'Pick a lesson to open the full study view.')}</p>
+            </div>
+          </div>
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">

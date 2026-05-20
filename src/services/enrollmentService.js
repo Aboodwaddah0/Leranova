@@ -12,7 +12,7 @@ const ensureOrganizationRole = (orgRole) => {
 };
 
 const ensureCourseBelongsToOrg = async (orgId, courseId) => {
-  const course = await prisma.course.findFirst({
+  const course = await prisma.track.findFirst({
     where: {
       id: courseId,
       Org_id: orgId,
@@ -33,7 +33,7 @@ const enrollmentInclude = {
       user: { select: { id: true, name: true, email: true } },
     },
   },
-  course: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
+  track: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
 };
 
 const mapAcademyEnrollment = (record) => ({
@@ -47,9 +47,9 @@ const mapAcademyEnrollment = (record) => ({
     email: record.academy_user.user.email,
   },
   course: {
-    id: record.course.id,
-    Name: record.course.Name,
-    Description: record.course.Description,
+    id: record.track.id,
+    Name: record.track.Name,
+    Description: record.track.Description,
   },
 });
 
@@ -64,9 +64,9 @@ const mapSchoolEnrollment = (record) => ({
     email: record.user.email,
   },
   course: {
-    id: record.course.id,
-    Name: record.course.Name,
-    Description: record.course.Description,
+    id: record.track.id,
+    Name: record.track.Name,
+    Description: record.track.Description,
   },
 });
 
@@ -138,7 +138,7 @@ export const createEnrollment = async (orgId, orgRole, data) => {
     data: { Course_id: course.id },
     include: {
       user: { select: { id: true, name: true, email: true } },
-      course: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
+      track: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
     },
   });
 
@@ -152,7 +152,7 @@ export const getAllEnrollments = async (orgId, orgRole) => {
     const enrollments = await prisma.enrollment.findMany({
       where: {
         academy_user: { OrgId: orgId },
-        course: { Org_id: orgId },
+        track: { Org_id: orgId },
       },
       include: enrollmentInclude,
     });
@@ -167,7 +167,7 @@ export const getAllEnrollments = async (orgId, orgRole) => {
     },
     include: {
       user: { select: { id: true, name: true, email: true } },
-      course: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
+      track: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
     },
   });
 
@@ -197,7 +197,7 @@ export const getEnrollmentsByCourse = async (orgId, orgRole, courseId) => {
     },
     include: {
       user: { select: { id: true, name: true, email: true } },
-      course: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
+      track: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
     },
   });
 
@@ -219,7 +219,7 @@ export const getEnrollmentsByUser = async (orgId, orgRole, userId) => {
     const enrollments = await prisma.enrollment.findMany({
       where: {
         user_Academy_id: userId,
-        course: { Org_id: orgId },
+        track: { Org_id: orgId },
       },
       include: enrollmentInclude,
     });
@@ -234,7 +234,7 @@ export const getEnrollmentsByUser = async (orgId, orgRole, userId) => {
     },
     include: {
       user: { select: { id: true, name: true, email: true } },
-      course: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
+      track: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
     },
   });
 
@@ -242,7 +242,7 @@ export const getEnrollmentsByUser = async (orgId, orgRole, userId) => {
     throw new AppError('Student not found', 404);
   }
 
-  if (!student.Course_id || !student.course) {
+  if (!student.Course_id || !student.track) {
     return [];
   }
 
@@ -298,7 +298,7 @@ export const deleteEnrollment = async (orgId, orgRole, userId, courseId) => {
     },
     include: {
       user: { select: { id: true, name: true, email: true } },
-      course: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
+      track: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
     },
   });
 
@@ -306,7 +306,7 @@ export const deleteEnrollment = async (orgId, orgRole, userId, courseId) => {
     throw new AppError('Student not found', 404);
   }
 
-  if (!student.Course_id || student.Course_id !== courseId || !student.course) {
+  if (!student.Course_id || student.Course_id !== courseId || !student.track) {
     throw new AppError('Enrollment not found', 404);
   }
 

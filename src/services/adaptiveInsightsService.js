@@ -16,7 +16,7 @@ export async function getAdaptiveInsights(studentId) {
                 id: true,
                 name: true,
                 Subject_id: true,
-                subject: { select: { id: true, name: true } },
+                course: { select: { id: true, name: true } },
               },
             },
           },
@@ -35,7 +35,7 @@ export async function getAdaptiveInsights(studentId) {
             id: true,
             name: true,
             Subject_id: true,
-            subject: { select: { id: true, name: true } },
+            course: { select: { id: true, name: true } },
           },
         },
       },
@@ -45,7 +45,7 @@ export async function getAdaptiveInsights(studentId) {
   // ── Per-subject quiz performance ─────────────────────────────────────────
   const subjectMap = new Map();
   for (const attempt of quizAttempts) {
-    const subject = attempt.quiz?.lesson?.subject;
+    const subject = attempt.quiz?.lesson?.course;
     if (!subject) continue;
     if (!subjectMap.has(subject.id)) {
       subjectMap.set(subject.id, { id: subject.id, name: subject.name, scores: [], passed: 0 });
@@ -88,7 +88,7 @@ export async function getAdaptiveInsights(studentId) {
     nextLesson = {
       id: row.lesson.id,
       name: row.lesson.name,
-      subjectName: row.lesson.subject?.name ?? '',
+      subjectName: row.lesson.course?.name ?? '',
       subjectId: row.lesson.Subject_id,
     };
   }

@@ -132,7 +132,7 @@ export default function InstructorOverviewPage() {
           [
             isSchool
               ? isArabic ? "الصفوف" : "Grades"
-              : isArabic ? "الكورسات" : "Courses",
+              : isArabic ? "التخصصات" : "Specializations",
             stats.courses,
           ],
           [isArabic ? "المواد" : "Subjects", stats.subjects],

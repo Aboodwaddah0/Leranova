@@ -116,12 +116,6 @@ export const validateAddUserData = (data) => {
 		}
 	}
 
-	if (!password) {
-		errors.push("Password is required");
-	} else if (password.length < 8) {
-		errors.push("Password must be at least 8 characters");
-	}
-
 	if (!role || !USER_ROLES.has(role)) {
 		errors.push(`Role is required and must be one of ${USER_ROLES_TEXT}`);
 	}

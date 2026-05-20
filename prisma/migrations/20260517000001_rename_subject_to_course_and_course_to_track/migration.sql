@@ -1,0 +1,3 @@
+-- Rename Prisma model `course` → `track` and `subject` → `course`
+-- Uses @@map directives: DB tables are unchanged (course table stays, subject table stays)
+-- This migration records only the schema state change; no SQL DDL needed.

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import Pagination from "../../components/ui/Pagination";
 import { useSelector } from "react-redux";
 import { FileText, Trash2, Send, X, ChevronDown, ChevronUp } from "lucide-react";
 import InstructorLayout from "../../components/instructor/InstructorLayout";
@@ -218,6 +219,14 @@ export default function InstructorStudentsPage() {
     FILED:     { label: isArabic ? "مؤرشف" : "Filed",      cls: "bg-amber-100 text-amber-700"    },
   };
 
+  const STUDENTS_PAGE_SIZE = 15;
+  const [studentsPage, setStudentsPage] = useState(1);
+  useEffect(() => { setStudentsPage(1); }, [selectedSubjectId, students]);
+  const pagedStudents = useMemo(
+    () => students.slice((studentsPage - 1) * STUDENTS_PAGE_SIZE, studentsPage * STUDENTS_PAGE_SIZE),
+    [students, studentsPage],
+  );
+
   return (
     <InstructorLayout
       title={isArabic ? "الطلاب" : "Students"}
@@ -271,7 +280,7 @@ export default function InstructorStudentsPage() {
                   {isArabic ? "لا يوجد طلاب لهذه المادة." : "No students found for this subject."}
                 </td>
               </tr>
-            ) : students.map((entry) => {
+            ) : pagedStudents.map((entry) => {
               const statusKey = String(entry.student?.academicStatus || entry.student?.AcademicStatus || "ACTIVE").toUpperCase();
               const { label, cls } = statusMap[statusKey] || { label: statusKey, cls: "bg-slate-100 text-slate-500" };
               const isSelected = noteStudent?.id === entry.id || noteStudent?.user?.email === entry.user?.email;
@@ -304,6 +313,9 @@ export default function InstructorStudentsPage() {
             })}
           </tbody>
         </table>
+        <div className="mt-3 px-1 pb-2">
+          <Pagination page={studentsPage} totalPages={Math.ceil(students.length / STUDENTS_PAGE_SIZE)} totalItems={students.length} pageSize={STUDENTS_PAGE_SIZE} onPageChange={setStudentsPage} isArabic={isArabic} />
+        </div>
       </div>
 
       {/* Note panel */}
