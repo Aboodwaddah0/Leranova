@@ -139,12 +139,12 @@ const buildStudentSubjectAccessFilter = (scope) => {
 };
 
 const ensureSubjectBelongsToOrganization = async (scope, subjectId) => {
-	const subject = await prisma.subject.findFirst({
+	const subject = await prisma.course.findFirst({
 		where: {
 			id: subjectId,
 			...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
 			...buildStudentSubjectAccessFilter(scope),
-			course: {
+			track: {
 				Org_id: scope.orgId,
 			},
 		},
@@ -167,10 +167,10 @@ const ensureLessonBelongsToSubject = async (scope, subjectId, lessonId) => {
 		where: {
 			id: lessonId,
 			Subject_id: subjectId,
-			subject: {
+			course: {
 				...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
 				...buildStudentSubjectAccessFilter(scope),
-				course: {
+				track: {
 					Org_id: scope.orgId,
 				},
 			},
@@ -212,10 +212,10 @@ export const getLessons = async (actor, subjectId) => {
 	const lessons = await prisma.lesson.findMany({
 		where: {
 			Subject_id: subjectId,
-			subject: {
+			course: {
 				...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
 				...buildStudentSubjectAccessFilter(scope),
-				course: {
+				track: {
 					Org_id: scope.orgId,
 				},
 			},
@@ -257,10 +257,10 @@ export const getLessonById = async (actor, subjectId, lessonId) => {
 		where: {
 			id: lessonId,
 			Subject_id: subjectId,
-			subject: {
+			course: {
 				...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
 				...buildStudentSubjectAccessFilter(scope),
-				course: {
+				track: {
 					Org_id: scope.orgId,
 				},
 			},

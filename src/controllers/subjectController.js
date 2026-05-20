@@ -7,6 +7,7 @@ import {
 } from '../services/subjectService.js';
 import { createSubjectSchema, updateSubjectSchema } from '../validations/subjectValidation.js';
 import AppError from '../utils/appError.js';
+import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 
 const normalizeSubjectPayload = (payload) => ({
   Course_id: payload.Course_id ?? payload.courseId,
@@ -14,6 +15,7 @@ const normalizeSubjectPayload = (payload) => ({
   name: payload.name,
   isPaid: payload.isPaid,
   price: payload.price,
+  level: payload.level,
   imageUrl: payload.imageUrl,
   Description: payload.Description ?? payload.description,
 });
@@ -121,6 +123,18 @@ export const updateSubjectController = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+};
+
+export const uploadSubjectImageController = async (req, res, next) => {
+  try {
+    if (!req.file?.buffer) return next(new AppError('No image file provided', 400));
+    const courseId = getCourseIdFromParams(req);
+    const { url } = await uploadBufferToCloudinary(req.file.buffer, {
+      folder: `learnova/courses/${courseId}/subjects`,
+      resource_type: 'image',
+    });
+    return res.status(200).json({ success: true, status: 200, data: { imageUrl: url }, error: null, timestamp: new Date().toISOString() });
+  } catch (err) { next(err); }
 };
 
 export const deleteSubjectController = async (req, res, next) => {

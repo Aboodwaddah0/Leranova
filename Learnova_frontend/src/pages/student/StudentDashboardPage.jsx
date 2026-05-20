@@ -367,15 +367,15 @@ export default function StudentDashboardPage() {
       `}</style>
 
       {/* ── Global overlays ── */}
-      {levelUpModal && <LevelUpOverlay level={levelUpModal} onClose={() => setLevelUpModal(null)} />}
-      {achievementModal && <AchievementModal achievement={achievementModal} onClose={() => setAchievementModal(null)} />}
+      {levelUpModal && <LevelUpOverlay level={levelUpModal} onClose={() => setLevelUpModal(null)} isArabic={isArabic} />}
+      {achievementModal && <AchievementModal achievement={achievementModal} onClose={() => setAchievementModal(null)} isArabic={isArabic} />}
       <FloatingXPLayer items={floatingXps} />
 
       <div className="space-y-6 pb-8 ln-page-enter">
 
         {/* Streak warning banner */}
         {showStreakBanner && (
-          <StreakBanner streak={gamification.currentStreak} onDismiss={dismissStreakBanner} />
+          <StreakBanner streak={gamification.currentStreak} onDismiss={dismissStreakBanner} isArabic={isArabic} />
         )}
 
         {/* ── Skeleton loading state (first load only) ── */}
@@ -431,7 +431,7 @@ export default function StudentDashboardPage() {
                 to="/dashboard/student/courses"
                 className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-indigo-700 shadow-lg transition hover:shadow-indigo-200 hover:scale-[1.02]"
               >
-                {isArabic ? 'الكورسات' : 'My Courses'}
+                {isArabic ? 'تخصصاتي' : 'My Specializations'}
                 <ArrowRight size={14} />
               </Link>
             )}
@@ -464,24 +464,24 @@ export default function StudentDashboardPage() {
         {aiMentor && <AIMentorSection mentor={aiMentor} isArabic={isArabic} engagedToday={engagedToday} />}
 
         {/* ─── Achievements ─── */}
-        <section className="relative overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-6 shadow-sm">
-          <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-emerald-200/25 blur-2xl" />
+        <section className="relative overflow-hidden rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 via-indigo-50 to-violet-50 p-6 shadow-sm">
+          <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-violet-200/25 blur-2xl" />
           <div className="relative flex flex-wrap items-start justify-between gap-4">
             <div>
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-700">
+              <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-violet-700">
                 <Medal size={9} /> {isArabic ? 'الإنجازات' : 'Achievements'}
               </span>
-              <p className="mt-2 text-4xl font-black text-emerald-700">
+              <p className="mt-2 text-4xl font-black text-violet-700">
                 {achievements.unlocked.length}
-                <span className="text-lg font-semibold text-emerald-400">/11</span>
+                <span className="text-lg font-semibold text-violet-400">/11</span>
               </p>
-              <p className="text-sm font-semibold text-emerald-500">
+              <p className="text-sm font-semibold text-violet-500">
                 {achievements.locked.length > 0
                   ? `${achievements.locked.length} ${isArabic ? 'إنجاز متبقٍّ' : 'more to unlock'}`
                   : (isArabic ? '🎉 أتممت جميع الإنجازات!' : '🎉 All achievements unlocked!')}
               </p>
             </div>
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-200">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg shadow-violet-200">
               <Medal size={28} className="text-white" />
             </div>
           </div>
@@ -493,23 +493,23 @@ export default function StudentDashboardPage() {
                 <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-500">{isArabic ? 'آخر إنجاز' : 'Latest unlock'}</p>
                 <p className="truncate text-sm font-black text-emerald-800">{achievements.latestUnlocked.label}</p>
               </div>
-              <span className="rounded-full bg-emerald-500 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white shadow">NEW</span>
+              <span className="rounded-full bg-violet-500 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white shadow">{isArabic ? 'جديد' : 'NEW'}</span>
             </div>
           ) : (
-            <div className="relative mt-4 flex items-center gap-2 rounded-2xl bg-emerald-100/60 px-4 py-3">
-              <Lock size={13} className="shrink-0 text-emerald-400" />
-              <span className="text-xs font-semibold text-emerald-500">{isArabic ? 'أكمل دروسًا لفتح الإنجازات' : 'Complete lessons to unlock achievements'}</span>
+            <div className="relative mt-4 flex items-center gap-2 rounded-2xl bg-violet-100/60 px-4 py-3">
+              <Lock size={13} className="shrink-0 text-violet-400" />
+              <span className="text-xs font-semibold text-violet-500">{isArabic ? 'أكمل دروسًا لفتح الإنجازات' : 'Complete lessons to unlock achievements'}</span>
             </div>
           )}
 
           <div className="relative mt-5">
-            <div className="mb-1.5 flex justify-between text-[10px] font-bold text-emerald-600">
+            <div className="mb-1.5 flex justify-between text-[10px] font-bold text-violet-600">
               <span>{isArabic ? 'إجمالي التقدم' : 'Overall progress'}</span>
               <span>{Math.round((achievements.unlocked.length / 11) * 100)}%</span>
             </div>
-            <div className="h-3 overflow-hidden rounded-full bg-emerald-100">
+            <div className="h-3 overflow-hidden rounded-full bg-violet-100">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-400 transition-all duration-700"
+                className="h-full rounded-full bg-gradient-to-r from-violet-400 to-indigo-500 transition-all duration-700"
                 style={{ width: `${Math.round((achievements.unlocked.length / 11) * 100)}%` }}
               />
             </div>
@@ -745,8 +745,8 @@ export default function StudentDashboardPage() {
           <SectionHeader
             icon={BookOpen}
             iconBg="from-violet-500 to-fuchsia-500"
-            badge={isArabic ? 'كورساتي' : 'My Courses'}
-            title={isArabic ? 'الكورسات المسجلة' : 'Enrolled courses'}
+            badge={isArabic ? 'تخصصاتي' : 'My Specializations'}
+            title={isArabic ? 'المسارات المسجلة' : 'Enrolled tracks'}
             count={myCourses.length}
           />
           {myCourses.length ? (
@@ -801,19 +801,20 @@ const MISSION_ICONS = {
 // MISSION_COLORS removed — MissionRow uses inline logic
 
 const DIFFICULTY_CONFIG = {
-  BEGINNER:     { label: 'Beginner',     cls: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
-  MEDIUM:       { label: 'Medium',       cls: 'bg-blue-50 text-blue-600 border-blue-200'          },
-  INTERMEDIATE: { label: 'Intermediate', cls: 'bg-blue-50 text-blue-600 border-blue-200'          },
-  HARD:         { label: 'Hard',         cls: 'bg-amber-50 text-amber-600 border-amber-200'       },
-  ADVANCED:     { label: 'Advanced',     cls: 'bg-amber-50 text-amber-600 border-amber-200'       },
-  ELITE:        { label: 'Elite',        cls: 'bg-fuchsia-50 text-fuchsia-600 border-fuchsia-200' },
+  BEGINNER:     { label: 'Beginner',     labelAr: 'مبتدئ',   cls: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
+  MEDIUM:       { label: 'Medium',       labelAr: 'متوسط',   cls: 'bg-blue-50 text-blue-600 border-blue-200'          },
+  INTERMEDIATE: { label: 'Intermediate', labelAr: 'متوسط',   cls: 'bg-blue-50 text-blue-600 border-blue-200'          },
+  HARD:         { label: 'Hard',         labelAr: 'صعب',     cls: 'bg-amber-50 text-amber-600 border-amber-200'       },
+  ADVANCED:     { label: 'Advanced',     labelAr: 'متقدم',   cls: 'bg-amber-50 text-amber-600 border-amber-200'       },
+  ELITE:        { label: 'Elite',        labelAr: 'نخبة',    cls: 'bg-fuchsia-50 text-fuchsia-600 border-fuchsia-200' },
 };
 
-const UNIT_LABEL = (key) =>
-  key.includes('QUIZ') ? 'quizzes' :
-  key.includes('FLASHCARD') || key.includes('CHATBOT') ? 'sessions' : 'lessons';
+const UNIT_LABEL = (key, isArabic) =>
+  key.includes('QUIZ') ? (isArabic ? 'اختبارات' : 'quizzes') :
+  key.includes('FLASHCARD') || key.includes('CHATBOT') ? (isArabic ? 'جلسات' : 'sessions') : (isArabic ? 'دروس' : 'lessons');
 
 function MissionRow({ mission: m, period }) {
+  const { isArabic } = useLanguage();
   const pct  = Math.min(100, m.goal > 0 ? Math.round((m.progress / m.goal) * 100) : 0);
   const Icon = MISSION_ICONS[m.key] || Target;
   const diff = m.difficulty ? DIFFICULTY_CONFIG[m.difficulty] : null;
@@ -864,7 +865,7 @@ function MissionRow({ mission: m, period }) {
             {m.label}
           </p>
           {diff && (
-            <span className={`rounded-full border px-1.5 py-0.5 text-[8px] font-bold ${diff.cls}`}>{diff.label}</span>
+            <span className={`rounded-full border px-1.5 py-0.5 text-[8px] font-bold ${diff.cls}`}>{isArabic ? diff.labelAr : diff.label}</span>
           )}
         </div>
         {/* thin progress bar */}
@@ -873,7 +874,7 @@ function MissionRow({ mission: m, period }) {
             style={{ width: `${pct}%` }} />
         </div>
         <p className={`mt-0.5 text-[10px] font-semibold ${isDone ? 'text-emerald-500' : 'text-slate-400'}`}>
-          {isDone ? '✓ Complete' : `${m.progress}/${m.goal} ${UNIT_LABEL(m.key)}`}
+          {isDone ? (isArabic ? '✓ مكتمل' : '✓ Complete') : `${m.progress}/${m.goal} ${UNIT_LABEL(m.key, isArabic)}`}
         </p>
       </div>
 
@@ -903,12 +904,14 @@ const TIER_BADGE_CONFIG = {
   ELITE:        { cls: 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200', dot: 'bg-fuchsia-500' },
 };
 
+const TIER_LABELS_AR = { BEGINNER: 'مبتدئ', INTERMEDIATE: 'متوسط', ADVANCED: 'متقدم', ELITE: 'نخبة' };
+
 function TierBadge({ tier, isArabic }) {
   const cfg = TIER_BADGE_CONFIG[tier] || TIER_BADGE_CONFIG.BEGINNER;
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-wider ${cfg.cls}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
-      {isArabic ? 'المستوى:' : 'Tier:'} {tier}
+      {isArabic ? `المستوى: ${TIER_LABELS_AR[tier] || tier}` : `Tier: ${tier}`}
     </span>
   );
 }
@@ -933,9 +936,9 @@ const MENTOR_ACTION_ICONS = {
 };
 
 const URGENCY_CONFIG = {
-  HIGH:   { border: 'border-red-200',   bg: 'from-red-50 to-rose-50',     icon: 'text-red-500',   badge: 'bg-red-500',   label: 'Urgent'  },
-  MEDIUM: { border: 'border-amber-200', bg: 'from-amber-50 to-orange-50', icon: 'text-amber-500', badge: 'bg-amber-500', label: 'Today'   },
-  LOW:    { border: 'border-indigo-200', bg: 'from-indigo-50 to-violet-50', icon: 'text-indigo-500', badge: 'bg-indigo-500', label: 'Suggested' },
+  HIGH:   { border: 'border-red-200',   bg: 'from-red-50 to-rose-50',     icon: 'text-red-500',   badge: 'bg-red-500',   label: 'Urgent',    labelAr: 'عاجل'  },
+  MEDIUM: { border: 'border-amber-200', bg: 'from-amber-50 to-orange-50', icon: 'text-amber-500', badge: 'bg-amber-500', label: 'Today',     labelAr: 'اليوم' },
+  LOW:    { border: 'border-indigo-200', bg: 'from-indigo-50 to-violet-50', icon: 'text-indigo-500', badge: 'bg-indigo-500', label: 'Suggested', labelAr: 'مقترح' },
 };
 
 const COACHING_TYPE_CONFIG = {
@@ -947,8 +950,8 @@ const COACHING_TYPE_CONFIG = {
 const STREAK_WARN_TYPES = new Set(['STREAK_BROKEN', 'STREAK_AT_RISK']);
 const STREAK_DANGER_RE  = /fragile|protect it|study.*today|streak.*risk|every comeback|study something/i;
 
-const ENGAGED_SUCCESS = { message: "You're showing up — streak is safe and momentum is building.", type: 'ENGAGED' };
-const ENGAGED_ACTION  = { action: 'Keep exploring your courses', reason: 'You already engaged today — consistency compounds', urgency: 'LOW', icon: 'TARGET' };
+const ENGAGED_SUCCESS = (isArabic) => ({ message: isArabic ? 'أنت ملتزم — السلسلة في أمان وزخمك يتصاعد.' : "You're showing up — streak is safe and momentum is building.", type: 'ENGAGED' });
+const ENGAGED_ACTION  = (isArabic) => ({ action: isArabic ? 'واصل استكشاف كورساتك' : 'Keep exploring your courses', reason: isArabic ? 'لقد تفاعلت اليوم — الاستمرارية تتراكم' : 'You already engaged today — consistency compounds', urgency: 'LOW', icon: 'TARGET' });
 
 function _splitNarrative(text) {
   if (!text) return [];
@@ -960,18 +963,18 @@ function AIMentorSection({ mentor, isArabic, engagedToday }) {
   const isStreakWarn = mentor.urgentWarning && STREAK_WARN_TYPES.has(mentor.urgentWarning.type);
   const urgentWarning   = engagedToday && isStreakWarn ? null : mentor.urgentWarning;
   const successHighlight = engagedToday && isStreakWarn
-    ? ENGAGED_SUCCESS
+    ? ENGAGED_SUCCESS(isArabic)
     : mentor.successHighlight;
 
   const rawAction = mentor.nextBestAction;
   const isStreakAction = rawAction?.icon === 'FLAME';
-  const nextBestAction = engagedToday && isStreakAction ? ENGAGED_ACTION : rawAction;
+  const nextBestAction = engagedToday && isStreakAction ? ENGAGED_ACTION(isArabic) : rawAction;
 
   const coachingPoints = (mentor.coachingPoints ?? []).filter(
     p => !(engagedToday && STREAK_DANGER_RE.test(p.message)),
   );
   if (engagedToday && coachingPoints.length < (mentor.coachingPoints?.length ?? 0)) {
-    coachingPoints.unshift({ icon: 'TREND', type: 'success', message: "Engaged today — streak is protected and your habit is getting stronger." });
+    coachingPoints.unshift({ icon: 'TREND', type: 'success', message: isArabic ? 'تفاعلت اليوم — السلسلة محمية وعادتك تتعزز.' : "Engaged today — streak is protected and your habit is getting stronger." });
   }
 
   const urgCfg    = URGENCY_CONFIG[nextBestAction?.urgency] || URGENCY_CONFIG.LOW;
@@ -1056,7 +1059,7 @@ function AIMentorSection({ mentor, isArabic, engagedToday }) {
                     {isArabic ? 'الخطوة التالية' : 'Next action'}
                   </p>
                   <span className={`rounded-full ${urgCfg.badge} px-1.5 py-px text-[7px] font-black uppercase tracking-wider text-white`}>
-                    {urgCfg.label}
+                    {isArabic ? urgCfg.labelAr : urgCfg.label}
                   </span>
                 </div>
                 <p className="mt-0.5 text-xs font-black leading-tight text-slate-800">{nextBestAction.action}</p>
@@ -1089,10 +1092,10 @@ function AIMentorSection({ mentor, isArabic, engagedToday }) {
 /* ─────────────── AI Profile Section ─────────────── */
 
 const ENGAGEMENT_CONFIG = {
-  VERY_HIGH: { label: 'Very High', bar: 'from-emerald-400 to-teal-400',    pill: 'bg-emerald-100 text-emerald-700', score: 100 },
-  HIGH:      { label: 'High',      bar: 'from-indigo-400 to-violet-500',   pill: 'bg-indigo-100 text-indigo-700',  score: 75  },
-  MEDIUM:    { label: 'Medium',    bar: 'from-amber-400 to-orange-400',    pill: 'bg-amber-100 text-amber-700',    score: 45  },
-  LOW:       { label: 'Low',       bar: 'from-slate-300 to-slate-400',     pill: 'bg-slate-100 text-slate-500',    score: 15  },
+  VERY_HIGH: { label: 'Very High', labelAr: 'مرتفع جداً', bar: 'from-emerald-400 to-teal-400',    pill: 'bg-emerald-100 text-emerald-700', score: 100 },
+  HIGH:      { label: 'High',      labelAr: 'مرتفع',      bar: 'from-indigo-400 to-violet-500',   pill: 'bg-indigo-100 text-indigo-700',  score: 75  },
+  MEDIUM:    { label: 'Medium',    labelAr: 'متوسط',      bar: 'from-amber-400 to-orange-400',    pill: 'bg-amber-100 text-amber-700',    score: 45  },
+  LOW:       { label: 'Low',       labelAr: 'منخفض',      bar: 'from-slate-300 to-slate-400',     pill: 'bg-slate-100 text-slate-500',    score: 15  },
 };
 
 const TREND_ICON = { IMPROVING: ChevronUp, DECLINING: ChevronDown, STABLE: Minus };
@@ -1137,7 +1140,7 @@ function AIProfileSection({ profile, isArabic }) {
           </div>
         </div>
         <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider ${eng.pill}`}>
-          {eng.label}
+          {isArabic ? eng.labelAr : eng.label}
         </span>
       </div>
 
@@ -1175,7 +1178,9 @@ function AIProfileSection({ profile, isArabic }) {
           sub={
             <span className={`flex items-center gap-0.5 ${trendCls}`}>
               <TrendIcon size={10} />
-              {profile.learningVelocity?.trend?.toLowerCase()}
+              {isArabic
+                ? ({ IMPROVING: 'تحسّن', DECLINING: 'تراجع', STABLE: 'مستقر' }[profile.learningVelocity?.trend] ?? '')
+                : (profile.learningVelocity?.trend?.toLowerCase() ?? '')}
             </span>
           }
         />
@@ -1416,25 +1421,37 @@ const ACHIEVEMENT_LABELS_FE = {
   XP_100:       'Century Club', XP_500:     'XP Hunter',
 };
 
-function AchievementModal({ achievement, onClose }) {
-  const label = achievement?.label || ACHIEVEMENT_LABELS_FE[achievement?.key] || achievement?.key || 'Achievement';
+const ACHIEVEMENT_LABELS_AR = {
+  FIRST_LESSON: 'الخطوة الأولى', LESSON_10:  'متحمس للتعلم',   LESSON_50:    'باحث عن المعرفة',
+  FIRST_QUIZ:   'خاض أول اختبار', QUIZ_5:   'سيد الاختبارات', PERFECT_QUIZ: 'المثالي',
+  STREAK_3:     'في الطريق الصحيح', STREAK_7: 'محارب الأسبوع', STREAK_30:    'لا يُوقف',
+  XP_100:       'نادي المئة',    XP_500:     'صياد XP',
+};
+
+function AchievementModal({ achievement, onClose, isArabic }) {
+  const label = achievement?.label
+    || (isArabic ? ACHIEVEMENT_LABELS_AR[achievement?.key] : ACHIEVEMENT_LABELS_FE[achievement?.key])
+    || achievement?.key
+    || (isArabic ? 'إنجاز' : 'Achievement');
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={onClose}>
-      <div className="relative w-full max-w-xs overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 p-8 text-center text-white shadow-2xl"
+      <div className="relative w-full max-w-xs overflow-hidden rounded-3xl bg-gradient-to-br from-violet-500 via-indigo-600 to-violet-700 p-8 text-center text-white shadow-2xl"
         style={{ animation: 'scaleIn 0.22s ease-out' }}
         onClick={e => e.stopPropagation()}>
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.15),transparent_70%)]" />
         <div className="text-5xl">🏆</div>
-        <p className="mt-3 text-[10px] font-black uppercase tracking-[0.25em] text-emerald-100">Achievement Unlocked</p>
+        <p className="mt-3 text-[10px] font-black uppercase tracking-[0.25em] text-violet-200">
+          {isArabic ? 'تم فتح إنجاز' : 'Achievement Unlocked'}
+        </p>
         <h2 className="mt-1 text-2xl font-black">{label}</h2>
         {achievement?.xp > 0 && (
-          <p className="mt-1 text-sm font-semibold text-emerald-100">+{achievement.xp} bonus XP</p>
+          <p className="mt-1 text-sm font-semibold text-violet-200">+{achievement.xp} {isArabic ? 'XP إضافي' : 'bonus XP'}</p>
         )}
         <button onClick={onClose}
           className="mt-6 rounded-full border border-white/30 bg-white/20 px-6 py-2.5 text-sm font-black backdrop-blur transition hover:bg-white/30">
-          Claim! 🎉
+          {isArabic ? '!احتفل 🎉' : 'Claim! 🎉'}
         </button>
       </div>
     </div>
@@ -1443,7 +1460,7 @@ function AchievementModal({ achievement, onClose }) {
 
 /* ─────────────── Level-Up Overlay ─────────────── */
 
-function LevelUpOverlay({ level, onClose }) {
+function LevelUpOverlay({ level, onClose, isArabic }) {
   useEffect(() => {
     const t = setTimeout(onClose, 4500);
     return () => clearTimeout(t);
@@ -1467,12 +1484,18 @@ function LevelUpOverlay({ level, onClose }) {
           ))}
         </div>
         <div className="text-7xl">⚡</div>
-        <p className="mt-3 text-xs font-black uppercase tracking-[0.3em] text-violet-300">Level Up!</p>
-        <p className="mt-1 text-7xl font-black tracking-tight">
-          <span className="text-3xl font-bold text-violet-300">Lv.</span>{level}
+        <p className="mt-3 text-xs font-black uppercase tracking-[0.3em] text-violet-300">
+          {isArabic ? '!ترقٍ' : 'Level Up!'}
         </p>
-        <p className="mt-3 text-base font-semibold text-violet-200">You keep getting stronger</p>
-        <p className="mt-6 animate-pulse text-xs text-violet-500">tap to continue</p>
+        <p className="mt-1 text-7xl font-black tracking-tight">
+          <span className="text-3xl font-bold text-violet-300">{isArabic ? 'مستوى ' : 'Lv.'}</span>{level}
+        </p>
+        <p className="mt-3 text-base font-semibold text-violet-200">
+          {isArabic ? 'أنت تتقدم أكثر فأكثر' : 'You keep getting stronger'}
+        </p>
+        <p className="mt-6 animate-pulse text-xs text-violet-500">
+          {isArabic ? 'انقر للمتابعة' : 'tap to continue'}
+        </p>
       </div>
     </div>
   );
@@ -1480,15 +1503,15 @@ function LevelUpOverlay({ level, onClose }) {
 
 /* ─────────────── Streak Warning Banner ─────────────── */
 
-function StreakBanner({ streak, onDismiss }) {
+function StreakBanner({ streak, onDismiss, isArabic }) {
   return (
     <div className="flex items-center gap-2.5 rounded-xl border border-amber-100 bg-amber-50/80 px-3.5 py-2.5"
       style={{ animation: 'slideDown 0.2s ease-out' }}>
       <Flame size={13} className="shrink-0 text-amber-500" />
       <p className="flex-1 text-xs font-semibold text-amber-700">
         {streak > 0
-          ? `${streak}-day streak at risk — engage with anything today to keep it going.`
-          : 'Streak broken. Any lesson, quiz, or AI tool will start a new one.'}
+          ? (isArabic ? `سلسلة ${streak} أيام في خطر — تفاعل مع أي شيء اليوم للحفاظ عليها.` : `${streak}-day streak at risk — engage with anything today to keep it going.`)
+          : (isArabic ? 'انقطعت السلسلة. أي درس أو اختبار أو أداة ذكاء اصطناعي ستبدأ سلسلة جديدة.' : 'Streak broken. Any lesson, quiz, or AI tool will start a new one.')}
       </p>
       <button onClick={onDismiss}
         className="shrink-0 text-[10px] font-bold text-amber-400 transition hover:text-amber-600">
@@ -1513,7 +1536,12 @@ const MOMENTUM_GRADIENT = (score) =>
   : score >= 40 ? 'from-amber-400 to-orange-400'
   : 'from-red-400 to-rose-500';
 
-const MOMENTUM_LABEL = (score, trend) => {
+const MOMENTUM_LABEL = (score, trend, isArabic) => {
+  if (isArabic) {
+    if (score >= 70) return trend === 'IMPROVING' ? 'قوي ومتصاعد' : 'قوي';
+    if (score >= 40) return trend === 'DECLINING' ? 'يتراجع' : 'يتحسن';
+    return 'منخفض';
+  }
   if (score >= 70) return trend === 'IMPROVING' ? 'Strong & rising' : 'Strong';
   if (score >= 40) return trend === 'DECLINING' ? 'Declining' : 'Building';
   return 'Low — take action';
@@ -1521,7 +1549,7 @@ const MOMENTUM_LABEL = (score, trend) => {
 
 function MomentumGauge({ score, trend, isArabic }) {
   const grad = MOMENTUM_GRADIENT(score);
-  const label = MOMENTUM_LABEL(score, trend);
+  const label = MOMENTUM_LABEL(score, trend, isArabic);
   const TrendIcon = TREND_ICON[trend] || Minus;
   const trendCls  = TREND_CLS[trend] || 'text-slate-400';
 
@@ -1600,7 +1628,7 @@ function AdaptiveInsightsSection({ insights, profile, isArabic }) {
     <section className="space-y-3">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-indigo-600 shadow-md">
+        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-md">
           <Zap size={18} className="text-white" />
         </div>
         <div>
@@ -1672,8 +1700,14 @@ const FEED_GRADIENTS = {
   CHATBOT_SESSION:   'from-blue-500 to-indigo-600',
 };
 
-function relativeTime(iso) {
+function relativeTime(iso, isArabic) {
   const diff = Date.now() - new Date(iso).getTime();
+  if (isArabic) {
+    if (diff < 60_000)     return 'الآن';
+    if (diff < 3_600_000)  return `${Math.floor(diff / 60_000)} د`;
+    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} س`;
+    return `${Math.floor(diff / 86_400_000)} ي`;
+  }
   if (diff < 60_000)       return 'just now';
   if (diff < 3_600_000)    return `${Math.floor(diff / 60_000)}m ago`;
   if (diff < 86_400_000)   return `${Math.floor(diff / 3_600_000)}h ago`;
@@ -1687,7 +1721,7 @@ function ActivityFeedSection({ feed, isArabic }) {
     <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
       <div className="border-b border-slate-100 px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400 to-blue-500 shadow-md shadow-cyan-100">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-md shadow-indigo-100">
             <TrendingUp size={16} className="text-white" />
           </div>
           <div>
@@ -1721,7 +1755,7 @@ function ActivityFeedSection({ feed, isArabic }) {
                 {item.xp > 0 && (
                   <span className="rounded-full border border-amber-100 bg-amber-50 px-2 py-0.5 text-[9px] font-black text-amber-600">+{item.xp}</span>
                 )}
-                <span className="text-[10px] font-semibold text-slate-400 tabular-nums">{relativeTime(item.createdAt)}</span>
+                <span className="text-[10px] font-semibold text-slate-400 tabular-nums">{relativeTime(item.createdAt, isArabic)}</span>
               </div>
             </div>
           );

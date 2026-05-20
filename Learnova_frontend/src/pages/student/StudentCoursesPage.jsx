@@ -61,7 +61,7 @@ export default function StudentCoursesPage() {
           subjectId,
           subjectName: subscription.subjectName || subjectMeta?.name || (isArabic ? 'مادة' : 'Subject'),
           trackId,
-          trackName: subscription.trackName || trackDetails?.track?.name || (isArabic ? 'مسار' : 'Track'),
+          trackName: subscription.trackName || trackDetails?.track?.name || (isArabic ? 'تخصص' : 'Specialization'),
           imageUrl: subjectMeta?.imageUrl || '',
           lessonTotal: progress.total,
           lessonDone: progress.completed,
@@ -131,8 +131,8 @@ export default function StudentCoursesPage() {
               <h1 className="mt-2 text-2xl font-black md:text-3xl">{isArabic ? 'تصفح الكورسات المتاحة' : 'Browse available courses'}</h1>
               <p className="mt-2 text-sm text-blue-50/90">
                 {isArabic
-                  ? 'ادخل أي كورس، ثم اشترك بالمادة التي تريدها لفتح المحتوى والدردشة الخاصة بها.'
-                  : 'Open any course, then subscribe to a material to unlock its content and chat.'}
+                  ? 'ادخل أي مسار، ثم اشترك بالمادة التي تريدها لفتح المحتوى والدردشة الخاصة بها.'
+                  : 'Open any track, then subscribe to a material to unlock its content and chat.'}
               </p>
             </div>
 
@@ -175,7 +175,7 @@ export default function StudentCoursesPage() {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder={isArabic ? 'ابحث عن كورس...' : 'Search a course...'}
+            placeholder={isArabic ? 'ابحث عن تخصص...' : 'Search a specialization...'}
             className="w-full bg-transparent text-sm outline-none"
           />
         </label>
@@ -244,7 +244,7 @@ export default function StudentCoursesPage() {
                 to={`/courses/${course.trackId}/subjects/${course.subjectId}`}
                 className="mt-4 inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-indigo-500"
               >
-                <BookOpen size={14} /> {isArabic ? 'ادخل الكورس' : 'Open course'}
+                <BookOpen size={14} /> {isArabic ? 'ادخل التخصص' : 'Open specialization'}
               </Link>
             </article>
           ))}

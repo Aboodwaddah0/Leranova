@@ -91,7 +91,7 @@ export const verifyCourseBelongsToOrg = async (req, res, next) => {
     }
 
     // احصل على الكورس
-    const course = await prisma.course.findUnique({
+    const course = await prisma.track.findUnique({
       where: { id: courseId },
       include: {
         organization: true,

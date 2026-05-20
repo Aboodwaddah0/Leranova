@@ -1123,3 +1123,4 @@ export const submitStudentQuizAttempt = async (lessonId, answers, lang = 'ar') =
   const response = await api.post(`/lessons/${lessonId}/quiz/attempt`, { answers, lang });
   return response?.data?.data ?? null;
 };
+

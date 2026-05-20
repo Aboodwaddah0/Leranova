@@ -3,6 +3,7 @@ import AppError from '../utils/appError.js';
 import { hashPassword } from '../utils/hashPassword.js';
 import { ensureSchoolClassesForOrg, normalizeClassRanges } from './schoolClassService.js';
 import { getOrCreateSchoolSettings } from './schoolSettingsService.js';
+import { sendOrgApprovedEmail, sendOrgRejectedEmail } from '../utils/emailService.js';
 
 const organizationSelect = {
   id: true,
@@ -16,6 +17,7 @@ const organizationSelect = {
   Description: true,
   Role: true,
   status: true,
+  rejectionReason: true,
 };
 
 const normalizeOrganizationRole = (role) => String(role || '').trim().toUpperCase();
@@ -123,7 +125,7 @@ export const getOrganizationById = async (organizationId) => {
 };
 
 export const updateOrganization = async (organizationId, data) => {
-  await getOrganizationById(organizationId);
+  const existing = await getOrganizationById(organizationId);
 
   const normalizedSubdomain = data.subdomain ? normalizeSubdomain(data.subdomain) : undefined;
 
@@ -173,9 +175,18 @@ export const updateOrganization = async (organizationId, data) => {
       Description: data.Description ?? undefined,
       Role: data.Role ? normalizeOrganizationRole(data.Role) : undefined,
       status: data.status,
+      rejectionReason: data.rejectionReason ?? undefined,
     },
     select: organizationSelect,
   });
+
+  if (data.status && data.status !== existing.status) {
+    if (data.status === 'APPROVED') {
+      sendOrgApprovedEmail({ to: updated.Email, name: updated.Name }).catch(() => {});
+    } else if (data.status === 'REJECTED') {
+      sendOrgRejectedEmail({ to: updated.Email, name: updated.Name, reason: data.rejectionReason ?? null }).catch(() => {});
+    }
+  }
 
   return updated;
 };
@@ -192,18 +203,26 @@ export const deleteOrganization = async (organizationId) => {
   return { id: organizationId };
 };
 
+const PAID_SUBSCRIPTION_FILTER = {
+  OR: [
+    { paymentStatus: 'PAID' },
+    { status: 'PAID' },
+    { status: 'SUCCESS' },
+  ],
+};
+
 export const getOrganizationRevenue = async (organizationId) => {
-  const courses = await prisma.course.findMany({
-    where: { Org_id: organizationId },
+  const orgCourses = await prisma.course.findMany({
+    where: { track: { Org_id: organizationId } },
     select: {
       id: true,
-      Name: true,
+      name: true,
       price: true,
       isPaid: true,
     },
   });
 
-  const courseIds = courses.map((course) => course.id);
+  const courseIds = orgCourses.map((c) => c.id);
 
   if (courseIds.length === 0) {
     return {
@@ -217,48 +236,37 @@ export const getOrganizationRevenue = async (organizationId) => {
   }
 
   const [aggregate, recentPayments, groupedPayments] = await Promise.all([
-    prisma.student_course_payment.aggregate({
+    prisma.student_subject_subscription.aggregate({
       where: {
-        status: 'SUCCESS',
-        Course_id: { in: courseIds },
+        Subject_id: { in: courseIds },
+        ...PAID_SUBSCRIPTION_FILTER,
       },
       _sum: { amount: true },
       _count: { _all: true },
     }),
-    prisma.student_course_payment.findMany({
+    prisma.student_subject_subscription.findMany({
       where: {
-        status: 'SUCCESS',
-        Course_id: { in: courseIds },
+        Subject_id: { in: courseIds },
+        ...PAID_SUBSCRIPTION_FILTER,
       },
       include: {
         course: {
-          select: {
-            id: true,
-            Name: true,
-          },
+          select: { id: true, name: true },
         },
         academy_user: {
           select: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
+            user: { select: { id: true, name: true, email: true } },
           },
         },
       },
-      orderBy: {
-        paidAt: 'desc',
-      },
+      orderBy: { paidAt: 'desc' },
       take: 10,
     }),
-    prisma.student_course_payment.groupBy({
-      by: ['Course_id'],
+    prisma.student_subject_subscription.groupBy({
+      by: ['Subject_id'],
       where: {
-        status: 'SUCCESS',
-        Course_id: { in: courseIds },
+        Subject_id: { in: courseIds },
+        ...PAID_SUBSCRIPTION_FILTER,
       },
       _sum: { amount: true },
       _count: { _all: true },
@@ -266,13 +274,13 @@ export const getOrganizationRevenue = async (organizationId) => {
   ]);
 
   const courseMap = new Map(
-    courses.map((course) => [
-      course.id,
+    orgCourses.map((c) => [
+      c.id,
       {
-        courseId: course.id,
-        courseName: course.Name,
-        isPaid: course.isPaid,
-        price: course.price,
+        courseId: c.id,
+        courseName: c.name,
+        isPaid: c.isPaid,
+        price: c.price,
         revenue: 0,
         payments: 0,
       },
@@ -280,28 +288,25 @@ export const getOrganizationRevenue = async (organizationId) => {
   );
 
   for (const row of groupedPayments) {
-    const entry = courseMap.get(row.Course_id);
-    if (!entry) {
-      continue;
-    }
-
+    const entry = courseMap.get(row.Subject_id);
+    if (!entry) continue;
     entry.revenue = Number(row._sum.amount || 0);
     entry.payments = row._count?._all || 0;
   }
 
   return {
-    totalRevenue: Number(aggregate._sum.amount || 0),
+    totalRevenue: Number(aggregate._sum?.amount || 0),
     totalPayments: aggregate._count?._all || 0,
-    paidCoursesCount: courses.filter((course) => course.isPaid).length,
-    freeCoursesCount: courses.filter((course) => !course.isPaid || Number(course.price || 0) === 0).length,
-    recentPayments: recentPayments.map((payment) => ({
-      id: payment.id,
-      amount: Number(payment.amount),
-      status: payment.status,
-      paymentMethod: payment.paymentMethod,
-      paidAt: payment.paidAt,
-      course: payment.course,
-      student: payment.academy_user?.user || null,
+    paidCoursesCount: orgCourses.filter((c) => c.isPaid).length,
+    freeCoursesCount: orgCourses.filter((c) => !c.isPaid || Number(c.price || 0) === 0).length,
+    recentPayments: recentPayments.map((sub) => ({
+      id: sub.id,
+      amount: Number(sub.amount),
+      status: sub.status,
+      paymentMethod: sub.paymentMethod,
+      paidAt: sub.paidAt,
+      course: sub.course ? { id: sub.course.id, Name: sub.course.name } : null,
+      student: sub.academy_user?.user || null,
     })),
     byCourse: Array.from(courseMap.values()).sort((a, b) => b.revenue - a.revenue),
   };

@@ -49,7 +49,7 @@ const resolveAccessScope = async (actor) => {
 };
 
 const ensureCourseBelongsToOrg = async (orgId, courseId) => {
-  const course = await prisma.course.findFirst({
+  const course = await prisma.track.findFirst({
     where: {
       id: courseId,
       Org_id: orgId,
@@ -67,7 +67,7 @@ const ensureCourseBelongsToOrg = async (orgId, courseId) => {
 };
 
 const ensureSubjectPaymentRules = async (courseId, data = {}) => {
-  const course = await prisma.course.findUnique({
+  const course = await prisma.track.findUnique({
     where: { id: courseId },
     include: {
       organization: {
@@ -148,9 +148,9 @@ export const createSubject = async (actor, courseId, data) => {
     ? String(data.level).toUpperCase()
     : null;
 
-  const subject = await prisma.subject.create({
+  const subject = await prisma.course.create({
     data: {
-      course: { connect: { id: courseId } },
+      track: { connect: { id: courseId } },
       ...(resolvedTeacherId ? { teacher: { connect: { Teacher_id: resolvedTeacherId } } } : {}),
       name: data.name,
       level,
@@ -174,7 +174,7 @@ export const getSubjects = async (actor, courseId) => {
     }
   }
 
-  const subjects = await prisma.subject.findMany({
+  const subjects = await prisma.course.findMany({
     where: {
       Course_id: courseId,
       ...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
@@ -192,7 +192,7 @@ export const getSubjects = async (actor, courseId) => {
             },
           }
         : {}),
-      course: {
+      track: {
         Org_id: scope.orgId,
       },
     },
@@ -222,7 +222,7 @@ export const getSubjectById = async (actor, courseId, subjectId) => {
     }
   }
 
-  const subject = await prisma.subject.findFirst({
+  const subject = await prisma.course.findFirst({
     where: {
       id: subjectId,
       Course_id: courseId,
@@ -241,7 +241,7 @@ export const getSubjectById = async (actor, courseId, subjectId) => {
             },
           }
         : {}),
-      course: {
+      track: {
         Org_id: scope.orgId,
       },
     },
@@ -274,7 +274,7 @@ export const updateSubject = async (actor, courseId, subjectId, data) => {
     await ensureTeacherBelongsToOrg(scope.orgId, requestedTeacherId);
   }
 
-  const updated = await prisma.subject.update({
+  const updated = await prisma.course.update({
     where: {
       id: subjectId,
     },
@@ -307,7 +307,7 @@ export const deleteSubject = async (actor, courseId, subjectId) => {
 
   await getSubjectById(actor, courseId, subjectId);
 
-  await prisma.subject.delete({
+  await prisma.course.delete({
     where: {
       id: subjectId,
     },

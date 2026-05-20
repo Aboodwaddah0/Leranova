@@ -24,9 +24,9 @@ export const ensureLessonExists = async (lessonId) => {
 		},
 		select: {
 			id: true,
-			subject: {
+			course: {
 				select: {
-					course: {
+					track: {
 						select: {
 							Org_id: true,
 						},
@@ -175,9 +175,9 @@ export const canDeleteComment = async (userId, userRole, comment) => {
 		const lesson = await prisma.lesson.findUnique({
 			where: { id: comment.lesson_id },
 			select: {
-				subject: {
+				course: {
 					select: {
-						course: {
+						track: {
 							select: {
 								Org_id: true,
 							},
@@ -187,7 +187,7 @@ export const canDeleteComment = async (userId, userRole, comment) => {
 			},
 		});
 
-		if (lesson && lesson.subject.course.Org_id === userId) {
+		if (lesson && lesson.course.track.Org_id === userId) {
 			return true;
 		}
 	}

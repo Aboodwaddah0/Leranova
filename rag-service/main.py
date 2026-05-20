@@ -16,7 +16,10 @@ from models.schemas import (
     QdrantChunkCountResponse,
     QueryRequest,
     QueryResponse,
+    PlanScenesRequest,
+    PlanScenesResponse,
 )
+from services.slide_planner import plan_scenes
 from services.downloader import download_file
 from services.audio_extractor import extract_audio_to_wav
 from services.transcription import transcribe_audio_segments
@@ -296,7 +299,6 @@ def process_direct_file_pipeline(
             raise ValueError("No chunks created")
         embeddings = embed_chunks(chunks)
 
-        # Keep current point ID strategy while using a stable direct source reference.
         direct_source_ref = f"direct://{lesson_id}/{source_name}"
         store_lesson_chunks(
             lesson_id=lesson_id,
@@ -359,8 +361,6 @@ def retrieve(request: RetrieveRequest) -> RetrieveResponse:
         raise HTTPException(status_code=400, detail="query is required")
 
     query_vector = embed_text(query)
-    # Use vector similarity directly — reranker takes 30-40s on CPU and always
-    # exceeded the Node.js client timeout, causing empty results and 422 errors.
     matches = retrieve_lesson_chunks(
         query_vector=query_vector,
         lesson_id=request.lessonId,
@@ -371,10 +371,7 @@ def retrieve(request: RetrieveRequest) -> RetrieveResponse:
 
 @app.post("/query", response_model=QueryResponse)
 def query_lessons(request: QueryRequest) -> QueryResponse:
-    """
-    Batch semantic search across multiple lessons in a single Qdrant call.
-    Replaces the N+1 /retrieve-per-lesson pattern used by the Node.js fallback.
-    """
+    """Batch semantic search across multiple lessons in a single Qdrant call."""
     query = request.question.strip()
     if not query:
         raise HTTPException(status_code=400, detail="question is required")
@@ -383,9 +380,6 @@ def query_lessons(request: QueryRequest) -> QueryResponse:
         return QueryResponse(chunks=[])
 
     query_vector = embed_text(query)
-    # Use vector similarity only (no cross-encoder reranker) so the batch query
-    # returns in < 2s instead of 30–40s on CPU. The /retrieve endpoint still
-    # rerankings for single-lesson precision lookups.
     candidates = retrieve_chunks_multi_lesson(
         query_vector=query_vector,
         lesson_ids=request.lesson_ids,
@@ -398,3 +392,22 @@ def query_lessons(request: QueryRequest) -> QueryResponse:
 def get_lesson_chunk_count(lesson_id: int = Query(..., ge=1)) -> QdrantChunkCountResponse:
     count = count_lesson_chunks(str(lesson_id))
     return QdrantChunkCountResponse(lesson_id=lesson_id, count=count)
+
+
+@app.post("/plan-scenes", response_model=PlanScenesResponse)
+def plan_lesson_scenes(request: PlanScenesRequest) -> PlanScenesResponse:
+    """Generate an animated video scene plan from indexed lesson chunks."""
+    try:
+        result = plan_scenes(
+            lesson_id=request.lesson_id,
+            lang=request.lang,
+            fmt=request.fmt,
+            focus=request.focus,
+            visual_style=request.visual_style,
+            interactive=request.interactive,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return PlanScenesResponse(**result)
+
+

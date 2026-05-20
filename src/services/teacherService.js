@@ -2,6 +2,7 @@ import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { hashPassword } from '../utils/hashPassword.js';
 import { encryptPassword } from '../utils/passwordCrypto.js';
+import { generateTempPassword } from '../utils/generateUsersAccount.js';
 
 const resolveRequesterOrgId = async (tokenUser) => {
   const directOrgId = Number(tokenUser?.orgId ?? tokenUser?.organizationId ?? tokenUser?.OrgId ?? tokenUser?.Org_id);
@@ -59,14 +60,14 @@ const teacherSelect = {
   specialization: true,
   bio: true,
   createdAt: true,
-  subject: {
+  courses: {
     select: {
       name: true,
     },
   },
   _count: {
     select: {
-      subject: true,
+      courses: true,
     },
   },
   user: {
@@ -132,7 +133,7 @@ const serializeTeacher = (teacher) => ({
   gender: teacher?.user?.gender ?? null,
   address: teacher?.user?.address ?? null,
   avatarUrl: null,
-  subjectCount: Number(teacher?._count?.subject || 0),
+  subjectCount: Number(teacher?._count?.courses || 0),
   subjects: Array.isArray(teacher?.subjects)
     ? teacher.subjects
       .map((subject) => {
@@ -142,8 +143,8 @@ const serializeTeacher = (teacher) => ({
       })
       .map((value) => String(value || '').trim())
       .filter(Boolean)
-    : Array.isArray(teacher?.subject)
-      ? teacher.subject
+    : Array.isArray(teacher?.courses)
+      ? teacher.courses
         .map((subject) => String(subject?.name || '').trim())
         .filter(Boolean)
       : [],
@@ -209,8 +210,9 @@ export const createTeacher = async (orgId, data) => {
     throw new AppError('User email already exists', 409);
   }
 
-  const passwordHashed = await hashPassword(data.password);
-  const passwordEncrypted = encryptPassword(data.password);
+  const tempPassword = generateTempPassword(data.name);
+  const passwordHashed = await hashPassword(tempPassword);
+  const passwordEncrypted = encryptPassword(tempPassword);
 
   let teacher;
 
@@ -222,6 +224,7 @@ export const createTeacher = async (orgId, data) => {
           email: data.email,
           passwordHashed,
           passwordEncrypted,
+          mustChangePassword: true,
           role: 'TEACHER',
           age: data.age ?? null,
           gender: data.gender ?? null,
@@ -256,7 +259,7 @@ export const createTeacher = async (orgId, data) => {
 
   console.info('Teacher created successfully', { orgId, email: data.email, teacherId: teacher.Teacher_id });
 
-  return serializeTeacher(teacher);
+  return { teacher: serializeTeacher(teacher), tempPassword };
 };
 
 export const getTeachers = async (requester) => {
@@ -276,7 +279,7 @@ export const getTeachers = async (requester) => {
 
   const teacherIds = teachers.map((teacher) => teacher.Teacher_id);
   const subjects = teacherIds.length
-    ? await prisma.subject.findMany({
+    ? await prisma.course.findMany({
         where: { Teacher_id: { in: teacherIds } },
         select: teacherSubjectSelect,
         orderBy: { id: 'asc' },
@@ -288,7 +291,7 @@ export const getTeachers = async (requester) => {
 
 export const getTeacherById = async (orgId, teacherId) => {
   const teacher = await ensureTeacherBelongsToOrg(orgId, teacherId);
-  const subjects = await prisma.subject.findMany({
+  const subjects = await prisma.course.findMany({
     where: { Teacher_id: teacherId },
     select: teacherSubjectSelect,
     orderBy: { id: 'asc' },
@@ -385,10 +388,10 @@ export const deleteTeacher = async (orgId, teacherId) => {
 export const getTeacherSubjects = async (orgId, teacherId) => {
   await ensureTeacherBelongsToOrg(orgId, teacherId);
 
-  return prisma.subject.findMany({
-    where: { Teacher_id: teacherId, course: { Org_id: orgId } },
+  return prisma.course.findMany({
+    where: { Teacher_id: teacherId, track: { Org_id: orgId } },
     include: {
-      course: { select: { id: true, Name: true } },
+      track: { select: { id: true, Name: true } },
     },
     orderBy: { id: 'asc' },
   });
@@ -399,10 +402,10 @@ export const getTeacherLessons = async (orgId, teacherId) => {
 
   return prisma.lesson.findMany({
     where: {
-      subject: { Teacher_id: teacherId, course: { Org_id: orgId } },
+      course: { Teacher_id: teacherId, track: { Org_id: orgId } },
     },
     include: {
-      subject: { select: { id: true, name: true } },
+      course: { select: { id: true, name: true } },
     },
     orderBy: { id: 'asc' },
   });
@@ -416,12 +419,12 @@ export const getMyTeacherProfile = async (teacherId) => {
 export const getMyTeacherCourses = async (teacherId) => {
   const teacher = await ensureTeacherExists(teacherId);
 
-  return prisma.course.findMany({
+  return prisma.track.findMany({
     where: {
       Org_id: teacher.OrgId,
       OR: [
         { Teacher_id: teacher.Teacher_id },
-        { subject: { some: { Teacher_id: teacher.Teacher_id } } },
+        { courses: { some: { Teacher_id: teacher.Teacher_id } } },
       ],
     },
     select: {
@@ -445,10 +448,10 @@ export const getMyTeacherCourses = async (teacherId) => {
 export const getMyTeacherSubjects = async (teacherId) => {
   await ensureTeacherExists(teacherId);
 
-  return prisma.subject.findMany({
+  return prisma.course.findMany({
     where: { Teacher_id: teacherId },
     include: {
-      course: {
+      track: {
         select: {
           id: true,
           Name: true,
@@ -468,17 +471,17 @@ export const getMyTeacherLessons = async (teacherId, filters = {}) => {
   return prisma.lesson.findMany({
     where: {
       ...(filters.Subject_id ? { Subject_id: filters.Subject_id } : {}),
-      subject: {
+      course: {
         Teacher_id: teacherId,
       },
     },
     include: {
-      subject: {
+      course: {
         select: {
           id: true,
           name: true,
           Course_id: true,
-          course: {
+          track: {
             select: {
               id: true,
               Name: true,
@@ -495,7 +498,7 @@ export const getMyTeacherLessons = async (teacherId, filters = {}) => {
 export const getMyTeacherStudents = async (teacherId, filters = {}) => {
   const teacher = await ensureTeacherExists(teacherId);
 
-  const teacherSubjects = await prisma.subject.findMany({
+  const teacherSubjects = await prisma.course.findMany({
     where: {
       Teacher_id: teacherId,
       ...(filters.Subject_id ? { id: filters.Subject_id } : {}),
@@ -505,7 +508,7 @@ export const getMyTeacherStudents = async (teacherId, filters = {}) => {
       id: true,
       name: true,
       Course_id: true,
-      course: {
+      track: {
         select: {
           id: true,
           Name: true,
@@ -528,7 +531,7 @@ export const getMyTeacherStudents = async (teacherId, filters = {}) => {
 
   const courseNameById = teacherSubjects.reduce((acc, subject) => {
     if (!acc.has(subject.Course_id)) {
-      acc.set(subject.Course_id, subject.course?.Name || null);
+      acc.set(subject.Course_id, subject.track?.Name || null);
     }
     return acc;
   }, new Map());

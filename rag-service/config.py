@@ -32,5 +32,16 @@ class Settings:
     request_timeout_seconds: int = int(os.getenv("REQUEST_TIMEOUT_SECONDS", "120"))
     max_download_bytes: int = int(os.getenv("MAX_DOWNLOAD_BYTES", str(500 * 1024 * 1024)))
 
+    groq_api_key: str = os.getenv("GROQ_API_KEY", "")
+    groq_api_url: str = os.getenv("GROQ_API_URL", "https://api.groq.com/openai/v1/chat/completions")
+    groq_model: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+    hf_token: str = os.getenv("HF_TOKEN", "")
+
+    elevenlabs_api_key: str = os.getenv("ELEVENLABS_API_KEY", "")
+    elevenlabs_voice_ar: str = os.getenv("ELEVENLABS_VOICE_AR", "pqHfZKP75CvOlQylNhV4")
+    elevenlabs_voice_en: str = os.getenv("ELEVENLABS_VOICE_EN", "21m00Tcm4TlvDq8ikWAM")
+
+
 
 settings = Settings()

@@ -51,8 +51,8 @@ model chats {
   chat_participants chat_participants[]
   user              user                @relation(fields: [created_by], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_chats_created_by")
   organization      organization        @relation(fields: [organization_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_chats_organization")
-  course            course?             @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_chats_course")
-  subject           subject?            @relation(fields: [subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_chats_subject")
+  track             track?              @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_chats_course")
+  course            course?             @relation(fields: [subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_chats_subject")
   messages          messages[]
 
   @@index([created_by], map: "fk_chats_created_by")
@@ -77,7 +77,7 @@ model comment {
   @@index([User_id], map: "idx_comment_user_id")
 }
 
-model course {
+model track {
   id                     Int                       @id @default(autoincrement())
   Org_id                 Int
   Teacher_id             Int?
@@ -94,7 +94,7 @@ model course {
   organization           organization              @relation(fields: [Org_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_course_org")
   teacher                teacher?                  @relation(fields: [Teacher_id], references: [Teacher_id], onDelete: SetNull, onUpdate: Restrict, map: "fk_course_teacher")
   student                student[]
-  subject                subject[]
+  courses                course[]
   enrollment             enrollment[]
 
   chats                  chats[]
@@ -109,13 +109,14 @@ model course {
   @@index([kind], map: "idx_course_kind")
   @@index([GradeLevel], map: "idx_course_grade_level")
   @@index([isPaid], map: "idx_course_is_paid")
+  @@map("course")
 }
 
 model enrollment {
   user_Academy_id Int
   Course_id       Int
   academy_user    academy_user @relation(fields: [user_Academy_id], references: [user_academy_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_enrollment_academy_user")
-  course          course       @relation(fields: [Course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_enrollment_course")
+  track           track        @relation(fields: [Course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_enrollment_course")
   createdAt       DateTime     @default(now()) @db.Timestamp(0)
   updatedAt       DateTime     @default(now()) @updatedAt @db.Timestamp(0)
 
@@ -133,7 +134,7 @@ model student_course_payment {
   stripePaymentIntentId String?      @db.VarChar(500)
   paidAt                DateTime?    @db.Timestamp(0)
   academy_user          academy_user @relation(fields: [user_Academy_id], references: [user_academy_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_course_payment_academy_user")
-  course                course       @relation(fields: [Course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_course_payment_course")
+  track                 track        @relation(fields: [Course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_course_payment_course")
   createdAt             DateTime     @default(now()) @db.Timestamp(0)
   updatedAt             DateTime     @default(now()) @updatedAt @db.Timestamp(0)
 
@@ -151,7 +152,7 @@ model lesson {
   comment            comment[]
   lesson_transcripts lesson_transcripts[]
   lesson_progress    lesson_progress[]
-  subject            subject              @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_subject")
+  course             course               @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_subject")
   rag_assets         lesson_rag_asset[]
   attachments        lesson_attachment[]
   ai_content         lesson_ai_content?
@@ -180,32 +181,35 @@ model quiz {
 }
 
 model quiz_question {
-  id            Int      @id @default(autoincrement())
-  quizId        Int
-  lang          String   @default("ar") @db.VarChar(5)
-  question      String   @db.Text
-  options       Json
-  correctAnswer Int
-  explanation   String?  @db.Text
-  orderIndex    Int      @default(0)
-  quiz          quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade, map: "fk_quiz_question_quiz")
-  createdAt     DateTime @default(now()) @db.Timestamp(0)
-  updatedAt     DateTime @default(now()) @updatedAt @db.Timestamp(0)
+  id             Int      @id @default(autoincrement())
+  quizId         Int
+  lang           String   @default("ar") @db.VarChar(5)
+  type           String   @default("MULTIPLE_CHOICE") @db.VarChar(30)
+  question       String   @db.Text
+  options        Json
+  correctAnswer  Int?
+  expectedAnswer String?  @db.Text
+  explanation    String?  @db.Text
+  orderIndex     Int      @default(0)
+  quiz           quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade, map: "fk_quiz_question_quiz")
+  createdAt      DateTime @default(now()) @db.Timestamp(0)
+  updatedAt      DateTime @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([quizId], map: "idx_quiz_question_quiz_id")
   @@index([quizId, lang], map: "idx_quiz_question_quiz_lang")
 }
 
 model quiz_attempt {
-  id        Int      @id @default(autoincrement())
-  quizId    Int
-  studentId Int
-  answers   Json
-  score     Int
-  isPassed  Boolean
-  quiz      quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade, map: "fk_quiz_attempt_quiz")
-  student   user     @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "fk_quiz_attempt_user")
-  createdAt DateTime @default(now()) @db.Timestamp(0)
+  id         Int      @id @default(autoincrement())
+  quizId     Int
+  studentId  Int
+  answers    Json
+  score      Int
+  isPassed   Boolean
+  aiGrading  Json?
+  quiz       quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade, map: "fk_quiz_attempt_quiz")
+  student    user     @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "fk_quiz_attempt_user")
+  createdAt  DateTime @default(now()) @db.Timestamp(0)
 
   @@index([quizId], map: "idx_quiz_attempt_quiz_id")
   @@index([studentId], map: "idx_quiz_attempt_student_id")
@@ -295,7 +299,7 @@ model marks {
   MarkType       String    @default("EXAM") @db.VarChar(50)
   time           DateTime? @db.Date
   student        student   @relation(fields: [Student_id], references: [Student_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_marks_student")
-  subject        subject   @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_marks_subject")
+  course         course    @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_marks_subject")
   createdAt      DateTime  @default(now()) @db.Timestamp(0)
   updatedAt      DateTime  @default(now()) @updatedAt @db.Timestamp(0)
 
@@ -385,9 +389,13 @@ model organization {
   PhoneNumber            String?                       @db.VarChar(50)
   Description            String?                       @db.Text
   Role                   organization_Role
+  status                 organization_status           @default(PENDING)
+  emailVerificationToken     String?                   @db.VarChar(255)
+  emailVerificationExpiresAt DateTime?                 @db.Timestamp(0)
+  rejectionReason            String?                   @db.Text
   academy_user           academy_user[]
   chats                  chats[]
-  course                 course[]
+  track                  track[]
   student                student[]
   teacher                teacher[]
   subscriptions          subscription[]
@@ -396,7 +404,6 @@ model organization {
   promotion_runs         organization_promotion_run[]
   academic_years         academic_year[]
   student_notes          student_note[]
-  status                 organization_status           @default(PENDING)
   createdAt              DateTime                      @default(now()) @db.Timestamp(0)
   updatedAt              DateTime                      @default(now()) @updatedAt @db.Timestamp(0)
 
@@ -503,7 +510,7 @@ model student {
   DOB               DateTime?                   @db.Date
   GradeLevel        Int?
   AcademicStatus    String                      @default("ACTIVE") @db.VarChar(20)
-  course            course?                     @relation(fields: [Course_id], references: [id], onUpdate: Restrict, map: "fk_student_course")
+  track             track?                      @relation(fields: [Course_id], references: [id], onUpdate: Restrict, map: "fk_student_course")
   promotion_history student_promotion_history[]
   marks             marks[]
   organization      organization                @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_org")
@@ -589,7 +596,7 @@ model student_promotion_history {
   @@index([schoolYear], map: "idx_student_promotion_history_school_year")
 }
 
-model subject {
+model course {
   id          Int      @id @default(autoincrement())
   Course_id   Int
   Teacher_id  Int?
@@ -603,7 +610,7 @@ model subject {
   lesson      lesson[]
   marks       marks[]
   subscriptions student_subject_subscription[]
-  course      course   @relation(fields: [Course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_course")
+  track       track    @relation(fields: [Course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_course")
   teacher     teacher? @relation(fields: [Teacher_id], references: [Teacher_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_teacher")
   createdAt   DateTime @default(now()) @db.Timestamp(0)
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamp(0)
@@ -611,6 +618,7 @@ model subject {
   @@index([Course_id], map: "idx_subject_course_id")
   @@index([Teacher_id], map: "idx_subject_teacher_id")
   @@index([isPaid], map: "idx_subject_is_paid")
+  @@map("subject")
 }
 
 model student_subject_subscription {
@@ -626,7 +634,7 @@ model student_subject_subscription {
   createdAt         DateTime     @default(now()) @db.Timestamp(0)
   updatedAt         DateTime     @default(now()) @updatedAt @db.Timestamp(0)
   academy_user      academy_user @relation(fields: [user_Academy_id], references: [user_academy_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_subject_subscription_academy_user")
-  subject           subject      @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_subject_subscription_subject")
+  course            course       @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_subject_subscription_subject")
 
   @@unique([user_Academy_id, Subject_id], map: "uq_student_subject_subscription")
   @@index([user_Academy_id], map: "idx_student_subject_subscription_user")
@@ -642,8 +650,8 @@ model teacher {
   bio            String?        @db.Text
   createdAt      DateTime       @default(now()) @db.Timestamp(0)
   organization   organization   @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_teacher_org")
-  course         course[]
-  subject        subject[]
+  track          track[]
+  courses        course[]
   user           user           @relation(fields: [Teacher_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_teacher_user")
   student_notes  student_note[]
 
@@ -661,6 +669,7 @@ model user {
   passwordResetToken     String?             @db.VarChar(255)
   passwordResetExpiresAt DateTime?           @db.Timestamp(0)
   passwordChangedAt      DateTime?           @db.Timestamp(0)
+  mustChangePassword     Boolean             @default(false)
   address                String?             @db.VarChar(255)
   role                   user_Role
   academy_user           academy_user?
@@ -759,6 +768,7 @@ enum organization_Role {
 
 enum organization_status {
   PENDING
+  EMAIL_VERIFIED
   APPROVED
   REJECTED
 }

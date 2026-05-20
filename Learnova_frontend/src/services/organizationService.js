@@ -128,6 +128,12 @@ export const fetchSubjectLessonsForOrg = async (subjectId) => {
   return data?.data || [];
 };
 
+export const fetchOrganizationMarks = async (params = {}) => {
+  const query = buildQueryString(params);
+  const { data } = await api.get(`/marks/org${query}`);
+  return data?.data || [];
+};
+
 export const fetchOrganizationUsers = async (params = {}) => {
   const query = buildQueryString(params);
   const { data } = await api.get(`/users${query}`);

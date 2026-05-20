@@ -141,7 +141,7 @@ const ensureLessonBelongsToOrganization = async (scope, lessonId) => {
   const lesson = await prisma.lesson.findFirst({
     where: {
       id: lessonId,
-      subject: {
+      course: {
         ...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
         ...(scope.role === 'STUDENT' && scope.studentMode === 'SCHOOL'
           ? { Course_id: scope.classCourseId }
@@ -160,7 +160,7 @@ const ensureLessonBelongsToOrganization = async (scope, lessonId) => {
               },
             }
           : {}),
-        course: {
+        track: {
           Org_id: scope.orgId,
         },
       },
@@ -168,7 +168,7 @@ const ensureLessonBelongsToOrganization = async (scope, lessonId) => {
     select: {
       id: true,
       Subject_id: true,
-      subject: {
+      course: {
         select: {
           id: true,
           Course_id: true,
@@ -183,8 +183,8 @@ const ensureLessonBelongsToOrganization = async (scope, lessonId) => {
 
   return {
     lessonId: lesson.id,
-    subjectId: lesson.subject?.id || lesson.Subject_id,
-    courseId: lesson.subject?.Course_id,
+    subjectId: lesson.course?.id || lesson.Subject_id,
+    courseId: lesson.course?.Course_id,
   };
 };
 
@@ -345,9 +345,9 @@ export const deleteLessonAttachment = async ({ actor, lessonId, attachmentId }) 
       id: attachmentId,
       lessonId,
       lesson: {
-        subject: {
+        course: {
           ...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
-          course: {
+          track: {
             Org_id: scope.orgId,
           },
         },

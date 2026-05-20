@@ -30,8 +30,8 @@ const ensureLessonBelongsToOrganization = async (orgId, lessonId) => {
   const lesson = await prisma.lesson.findFirst({
     where: {
       id: lessonId,
-      subject: {
-        course: {
+      course: {
+        track: {
           Org_id: orgId,
         },
       },

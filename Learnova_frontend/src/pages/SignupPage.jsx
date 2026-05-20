@@ -14,6 +14,7 @@ export default function SignupPage() {
   const navigate  = useNavigate();
   const { loading, error, plans } = useSelector((s) => s.auth);
   const [selectedPlanId, setSelectedPlanId] = useState(null);
+  const [registrationComplete, setRegistrationComplete] = useState(false);
   const { lang, isArabic, t, toggleLang } = useLanguage();
   const hasPlans = Array.isArray(plans) && plans.length > 0;
 
@@ -29,7 +30,7 @@ export default function SignupPage() {
         navigate("/signup/checkout", { state: { checkout: result.payload?.checkout } });
         return;
       }
-      navigate("/login");
+      setRegistrationComplete(true);
     }
   };
 
@@ -112,42 +113,59 @@ export default function SignupPage() {
         </div>
 
         {/* Form area */}
-        <div className="mx-auto max-w-2xl px-6 pb-16 sm:px-10">
-          <div className="mb-8">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-indigo-600 mb-2">
-              {t.signup.badge}
-            </p>
-            <h1 className="text-3xl font-black tracking-tight text-slate-900">{t.signup.title}</h1>
-          </div>
-
-          {/* Step 1: Plans */}
-          <section className="mb-10">
-            <div className="mb-5 flex items-center gap-3">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-black text-white" style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}>1</div>
-              <h2 className="text-lg font-black text-slate-900">{t.signup.step1}</h2>
+        {registrationComplete ? (
+          <div className="mx-auto max-w-2xl px-6 pb-16 sm:px-10 flex flex-col items-center justify-center min-h-[70vh] text-center">
+            <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-50">
+              <CheckCircle2 size={32} className="text-indigo-600" />
             </div>
-            <PlanSelector selectedPlanId={selectedPlanId} onSelect={setSelectedPlanId} t={t} />
-            {!hasPlans && (
-              <p className="mt-3 text-xs text-slate-400">{t.signup.noPlansProceedHint}</p>
-            )}
-          </section>
-
-          {/* Divider */}
-          <div className="mb-10 flex items-center gap-4">
-            <div className="h-px flex-1 bg-slate-100" />
-            <div className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-black text-white" style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}>2</div>
-            <h2 className="text-lg font-black text-slate-900">{t.signup.step2}</h2>
-            <div className="h-px flex-1 bg-slate-100" />
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 mb-3">
+              {t.signup.verifyEmail.title}
+            </h1>
+            <p className="text-slate-500 mb-6 max-w-sm">
+              {t.signup.verifyEmail.description}
+            </p>
+            <Link to="/login" className="text-sm font-bold text-indigo-600 hover:text-indigo-700">
+              {t.signup.backToLogin}
+            </Link>
           </div>
+        ) : (
+          <div className="mx-auto max-w-2xl px-6 pb-16 sm:px-10">
+            <div className="mb-8">
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-indigo-600 mb-2">
+                {t.signup.badge}
+              </p>
+              <h1 className="text-3xl font-black tracking-tight text-slate-900">{t.signup.title}</h1>
+            </div>
 
-          {/* Step 2: Org details */}
-          <OrgSignupForm
-            selectedPlanId={selectedPlanId}
-            onSubmit={handleSignup}
-            loading={loading}
-            t={t}
-          />
-        </div>
+            {/* Step 1: Plans */}
+            <section className="mb-10">
+              <div className="mb-5 flex items-center gap-3">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-black text-white" style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}>1</div>
+                <h2 className="text-lg font-black text-slate-900">{t.signup.step1}</h2>
+              </div>
+              <PlanSelector selectedPlanId={selectedPlanId} onSelect={setSelectedPlanId} t={t} />
+              {!hasPlans && (
+                <p className="mt-3 text-xs text-slate-400">{t.signup.noPlansProceedHint}</p>
+              )}
+            </section>
+
+            {/* Divider */}
+            <div className="mb-10 flex items-center gap-4">
+              <div className="h-px flex-1 bg-slate-100" />
+              <div className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-black text-white" style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}>2</div>
+              <h2 className="text-lg font-black text-slate-900">{t.signup.step2}</h2>
+              <div className="h-px flex-1 bg-slate-100" />
+            </div>
+
+            {/* Step 2: Org details */}
+            <OrgSignupForm
+              selectedPlanId={selectedPlanId}
+              onSubmit={handleSignup}
+              loading={loading}
+              t={t}
+            />
+          </div>
+        )}
       </div>
     </main>
   );

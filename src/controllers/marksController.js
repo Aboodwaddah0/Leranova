@@ -5,6 +5,7 @@ import {
 	updateMark,
 	deleteMark,
 	getStudentMarks,
+	getOrgMarks,
 } from '../services/marksService.js';
 import {
 	createMarkSchema,
@@ -127,4 +128,14 @@ export const deleteMarkController = async (req, res, next) => {
 	} catch (err) {
 		next(err);
 	}
+};
+
+export const getOrgMarksController = async (req, res, next) => {
+	try {
+		const orgId = req.user?.id;
+		if (!orgId) throw new AppError('Unauthorized', 401);
+		const { subjectId, gradeLevel, studentName, dateFrom, dateTo, markType } = req.query;
+		const marks = await getOrgMarks(orgId, { subjectId, gradeLevel, studentName, dateFrom, dateTo, markType });
+		return res.status(200).json({ success: true, status: 200, data: marks, error: null, timestamp: new Date().toISOString() });
+	} catch (err) { next(err); }
 };

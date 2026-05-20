@@ -60,7 +60,7 @@ export const createCourse = async (orgId, data) => {
 
   // Courses are always free — payment is at the subject level for academy
   const course = await prisma.$transaction(async (tx) => {
-    const createdCourse = await tx.course.create({
+    const createdCourse = await tx.track.create({
       data: {
         Org_id: orgId,
         Teacher_id: resolvedTeacherId,
@@ -100,7 +100,7 @@ export const getCourses = async (orgId) => {
   const organizationRole = await getOrganizationRole(orgId);
 
   if (organizationRole === 'ACADEMY') {
-    return prisma.course.findMany({
+    return prisma.track.findMany({
       where: { Org_id: orgId },
       orderBy: { id: 'asc' },
       include: {
@@ -112,7 +112,7 @@ export const getCourses = async (orgId) => {
   }
 
   // SCHOOL: teacher is per-subject, not per-course
-  const courses = await prisma.course.findMany({
+  const courses = await prisma.track.findMany({
     where: { Org_id: orgId },
     orderBy: { id: 'asc' },
     select: {
@@ -141,7 +141,7 @@ export const getCourseById = async (orgId, courseId) => {
   );
 
   if (organizationRole === 'ACADEMY') {
-    const course = await prisma.course.findFirst({
+    const course = await prisma.track.findFirst({
       where: { id: courseId, Org_id: orgId },
       include: {
         teacher: {
@@ -154,7 +154,7 @@ export const getCourseById = async (orgId, courseId) => {
   }
 
   // SCHOOL: teacher is per-subject
-  const course = await prisma.course.findFirst({
+  const course = await prisma.track.findFirst({
     where: { id: courseId, Org_id: orgId },
     select: {
       id: true,
@@ -180,7 +180,7 @@ export const updateCourse = async (orgId, courseId, data) => {
   await getCourseById(orgId, courseId);
 
   // Courses are always free — payment is at the subject level for academy
-  const updated = await prisma.course.update({
+  const updated = await prisma.track.update({
     where: {
       id: courseId,
     },
@@ -203,7 +203,7 @@ export const updateCourse = async (orgId, courseId, data) => {
 export const deleteCourse = async (orgId, courseId) => {
   await getCourseById(orgId, courseId);
 
-  await prisma.course.delete({
+  await prisma.track.delete({
     where: {
       id: courseId,
     },
@@ -213,7 +213,7 @@ export const deleteCourse = async (orgId, courseId) => {
 };
 
 export const ensureCourseForGradeLevel = async (orgId, gradeLevel, tx = prisma) => {
-  const existingByGrade = await tx.course.findFirst({
+  const existingByGrade = await tx.track.findFirst({
     where: {
       Org_id: orgId,
       GradeLevel: gradeLevel,
@@ -234,7 +234,7 @@ export const ensureCourseForGradeLevel = async (orgId, gradeLevel, tx = prisma) 
 
   const courseName = getGradeCourseName(gradeLevel);
 
-  const existingByName = await tx.course.findFirst({
+  const existingByName = await tx.track.findFirst({
     where: {
       Org_id: orgId,
       Name: courseName,
@@ -244,7 +244,7 @@ export const ensureCourseForGradeLevel = async (orgId, gradeLevel, tx = prisma) 
 
   if (existingByName) {
     if (!existingByName.GradeLevel) {
-      const updatedCourse = await tx.course.update({
+      const updatedCourse = await tx.track.update({
         where: { id: existingByName.id },
         data: { GradeLevel: gradeLevel },
       });
@@ -269,7 +269,7 @@ export const ensureCourseForGradeLevel = async (orgId, gradeLevel, tx = prisma) 
     return existingByName;
   }
 
-  const createdCourse = await tx.course.create({
+  const createdCourse = await tx.track.create({
     data: {
       Org_id: orgId,
       Name: courseName,

@@ -7,6 +7,7 @@ import {
   resetPassword,
   changePassword,
   getMe,
+  verifyOrganizationEmail,
 } from '../services/authService.js';
 import {
   registerOrganizationSchema,
@@ -33,8 +34,8 @@ export const register = async (req, res, next) => {
 
     return res.status(201).json({
       message: hasCheckout
-        ? 'Organization registered successfully. Complete payment via Stripe checkout URL.'
-        : 'Organization registered successfully.',
+        ? 'Organization registered successfully. Please check your email to verify your account, then complete payment.'
+        : 'Organization registered successfully. Please check your email to verify your account.',
       data: result,
     });
   } catch (error) {
@@ -165,6 +166,21 @@ export const changePasswordController = async (req, res, next) => {
     return res.status(200).json({
       message: result.message,
       data: result.user,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const verifyOrgEmailController = async (req, res, next) => {
+  try {
+    const { token } = req.params;
+
+    const result = await verifyOrganizationEmail(token);
+
+    return res.status(200).json({
+      message: result.message,
+      autoApproved: result.autoApproved,
     });
   } catch (error) {
     return next(error);

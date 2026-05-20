@@ -101,7 +101,7 @@ export const resolveStudentContext = async (userId) => {
           Role: true,
         },
       },
-      course: {
+      track: {
         select: {
           id: true,
           Name: true,
@@ -122,7 +122,7 @@ export const resolveStudentContext = async (userId) => {
       orgId: schoolStudent.OrgId,
       organizationName: schoolStudent.organization.Name,
       classCourseId: schoolStudent.Course_id,
-      className: schoolStudent.course?.Name || 'Class',
+      className: schoolStudent.track?.Name || 'Class',
       gradeLevel: schoolStudent.GradeLevel,
     };
   }
@@ -153,14 +153,14 @@ export const isAcademySubjectSubscribed = async (userId, subjectId) => {
 export const ensureStudentCanAccessSubject = async ({ userId, subjectId }) => {
   const context = await resolveStudentContext(userId);
 
-  const subject = await prisma.subject.findUnique({
+  const subject = await prisma.course.findUnique({
     where: { id: subjectId },
     select: {
       id: true,
       name: true,
       isPaid: true,
       Course_id: true,
-      course: {
+      track: {
         select: {
           id: true,
           Org_id: true,
@@ -171,11 +171,11 @@ export const ensureStudentCanAccessSubject = async ({ userId, subjectId }) => {
     },
   });
 
-  if (!subject || !subject.course) {
+  if (!subject || !subject.track) {
     throw new AppError('Subject not found', 404);
   }
 
-  if (subject.course.Org_id !== context.orgId) {
+  if (subject.track.Org_id !== context.orgId) {
     throw new AppError('Cross-organization subject access denied', 403);
   }
 
@@ -199,7 +199,7 @@ export const getStudentContextSummary = async (userId) => {
   const context = await resolveStudentContext(userId);
 
   if (context.mode === 'SCHOOL') {
-    const subjectCount = await prisma.subject.count({
+    const subjectCount = await prisma.course.count({
       where: { Course_id: context.classCourseId },
     });
 
@@ -218,7 +218,7 @@ export const getStudentContextSummary = async (userId) => {
     };
   }
 
-  const trackCount = await prisma.course.count({
+  const trackCount = await prisma.track.count({
     where: {
       Org_id: context.orgId,
       kind: 'TRACK',
@@ -252,7 +252,7 @@ export const getSchoolStudentSubjects = async (userId) => {
     throw new AppError('School student profile required', 403);
   }
 
-  const subjects = await prisma.subject.findMany({
+  const subjects = await prisma.course.findMany({
     where: {
       Course_id: context.classCourseId,
     },
@@ -305,13 +305,13 @@ export const getAcademyTracks = async (userId) => {
     throw new AppError('Academy student profile required', 403);
   }
 
-  const tracks = await prisma.course.findMany({
+  const tracks = await prisma.track.findMany({
     where: {
       Org_id: context.orgId,
       kind: 'TRACK',
     },
     include: {
-      subject: {
+      courses: {
         select: {
           id: true,
         },
@@ -329,13 +329,13 @@ export const getAcademyTracks = async (userId) => {
         where: {
           user_Academy_id: userId,
           ...PAID_SUBSCRIPTION_FILTER,
-          subject: {
+          course: {
             Course_id: { in: trackIds },
           },
         },
         select: {
           Subject_id: true,
-          subject: {
+          course: {
             select: {
               Course_id: true,
             },
@@ -346,7 +346,7 @@ export const getAcademyTracks = async (userId) => {
 
   const subscriptionByTrack = new Map();
   for (const row of subscriptions) {
-    const key = row.subject?.Course_id;
+    const key = row.course?.Course_id;
     if (!key) continue;
     subscriptionByTrack.set(key, (subscriptionByTrack.get(key) || 0) + 1);
   }
@@ -356,7 +356,7 @@ export const getAcademyTracks = async (userId) => {
     name: track.Name,
     description: track.Description,
     thumbnail: track.Thumbnail,
-    subjectCount: track.subject.length,
+    subjectCount: track.courses.length,
     subscribedSubjectCount: subscriptionByTrack.get(track.id) || 0,
   }));
 };
@@ -368,7 +368,7 @@ export const getAcademyTrackSubjects = async (userId, trackId) => {
     throw new AppError('Academy student profile required', 403);
   }
 
-  const track = await prisma.course.findFirst({
+  const track = await prisma.track.findFirst({
     where: {
       id: trackId,
       Org_id: context.orgId,
@@ -385,7 +385,7 @@ export const getAcademyTrackSubjects = async (userId, trackId) => {
     throw new AppError('Track not found', 404);
   }
 
-  const subjects = await prisma.subject.findMany({
+  const subjects = await prisma.course.findMany({
     where: {
       Course_id: track.id,
     },
@@ -466,10 +466,10 @@ export const subscribeAcademySubject = async ({ userId, subjectId, paymentMethod
     throw new AppError('Academy student profile required', 403);
   }
 
-  const subject = await prisma.subject.findFirst({
+  const subject = await prisma.course.findFirst({
     where: {
       id: subjectId,
-      course: {
+      track: {
         Org_id: context.orgId,
         kind: 'TRACK',
       },
@@ -683,11 +683,11 @@ export const verifyAcademySubjectCheckout = async ({ userId, sessionId }) => {
     };
   }
 
-  const subject = await prisma.subject.findFirst({
+  const subject = await prisma.course.findFirst({
     where: {
       id: subjectId,
       Course_id: courseId,
-      course: {
+      track: {
         Org_id: context.orgId,
       },
     },
@@ -774,12 +774,12 @@ export const getAcademySubjectSubscriptions = async (userId) => {
       ...PAID_SUBSCRIPTION_FILTER,
     },
     include: {
-      subject: {
+      course: {
         select: {
           id: true,
           name: true,
           Course_id: true,
-          course: {
+          track: {
             select: {
               id: true,
               Name: true,
@@ -796,9 +796,9 @@ export const getAcademySubjectSubscriptions = async (userId) => {
   return subscriptions.map((item) => ({
     id: item.id,
     subjectId: item.Subject_id,
-    subjectName: item.subject?.name || null,
-    trackId: item.subject?.Course_id || null,
-    trackName: item.subject?.course?.Name || null,
+    subjectName: item.course?.name || null,
+    trackId: item.course?.Course_id || null,
+    trackName: item.course?.track?.Name || null,
     amount: Number(item.amount || 0),
     status: item.status,
     paidAt: item.paidAt,

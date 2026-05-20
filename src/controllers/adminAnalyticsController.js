@@ -145,7 +145,7 @@ export const getOrganizationAnalytics = async (req, res, next) => {
           createdAt: true,
           _count: {
             select: {
-              course: true,
+              track: true,
               student: true,
               teacher: true,
               academy_user: true,

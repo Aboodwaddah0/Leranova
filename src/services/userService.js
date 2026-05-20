@@ -1,5 +1,5 @@
 import prisma from "../utils/prisma.js";
-import { generateUserCredentials } from "../utils/generateUsersAccount.js";
+import { generateUserCredentials, generateTempPassword } from "../utils/generateUsersAccount.js";
 import { hashPassword } from "../utils/hashPassword.js";
 import { decryptPassword, encryptPassword } from "../utils/passwordCrypto.js";
 import AppError from "../utils/appError.js";
@@ -126,23 +126,25 @@ const toCsvValue = (value) => {
   return `"${escaped}"`;
 };
 
-const createParentForNationalId = async (nationalId, domain) => {
+const createParentForNationalId = async (nationalId, domain, tx = prisma) => {
   const safeNationalId = String(nationalId || "").trim();
   const parentName = `Parent ${safeNationalId}`;
   const { email, password } = await generateUserCredentials(parentName, domain);
   const passwordHashed = await hashPassword(password);
   const passwordEncrypted = encryptPassword(password);
 
-  const createdParentUser = await prisma.user.create({
+  const createdParentUser = await tx.user.create({
     data: {
       name: parentName,
       email,
       passwordHashed,
       passwordEncrypted,
+      mustChangePassword: true,
       role: "PARENT",
       parent: {
         create: {
           Work: null,
+          nationalId: safeNationalId,
         },
       },
     },
@@ -153,12 +155,6 @@ const createParentForNationalId = async (nationalId, domain) => {
       role: true,
     },
   });
-
-  await prisma.$executeRawUnsafe(
-    "UPDATE parent SET nationalId = ? WHERE Parent_id = ?",
-    safeNationalId,
-    createdParentUser.id,
-  );
 
   return {
     parentId: createdParentUser.id,
@@ -310,39 +306,31 @@ export const generateUsers = async (data, domain) => {
       continue;
     }
 
+    // Pre-resolve parent from existing map (already-created parents in this batch)
     let resolvedParentId = user.parentNationalId ? parentIdByNationalId.get(String(user.parentNationalId)) : null;
-
-    if (user.role === 'STUDENT' && user.parentNationalId && !resolvedParentId) {
-      try {
-        const createdParent = await createParentForNationalId(user.parentNationalId, domain);
-        resolvedParentId = createdParent.parentId;
-        parentIdByNationalId.set(String(createdParent.nationalId), Number(createdParent.parentId));
-        createdParents.push(createdParent);
-      } catch (_error) {
-        const fallbackRows = await prisma.$queryRawUnsafe(
-          "SELECT Parent_id, nationalId FROM parent WHERE nationalId = ? LIMIT 1",
-          String(user.parentNationalId),
-        );
-
-        const fallbackParentId = Array.isArray(fallbackRows) && fallbackRows[0]
-          ? Number(fallbackRows[0].Parent_id)
-          : null;
-
-        if (!fallbackParentId) {
-          skippedUsers.push({
-            name: user.name,
-            email: user.finalEmail,
-            reason: `Parent with nationalId ${user.parentNationalId} was not found and could not be auto-created`,
-          });
-          continue;
-        }
-
-        resolvedParentId = fallbackParentId;
-        parentIdByNationalId.set(String(user.parentNationalId), fallbackParentId);
-      }
-    }
+    const needsNewParent = user.role === 'STUDENT' && user.parentNationalId && !resolvedParentId;
 
     try {
+      // Resolve or create parent INSIDE the try block so that if student creation
+      // fails, both operations are either committed or cleaned up together.
+      let newlyCreatedParent = null;
+
+      if (needsNewParent) {
+        const existingParent = await prisma.parent.findUnique({
+          where: { nationalId: String(user.parentNationalId) },
+          select: { Parent_id: true },
+        });
+
+        if (existingParent) {
+          resolvedParentId = existingParent.Parent_id;
+          parentIdByNationalId.set(String(user.parentNationalId), resolvedParentId);
+        } else {
+          newlyCreatedParent = await createParentForNationalId(user.parentNationalId, domain);
+          resolvedParentId = newlyCreatedParent.parentId;
+          parentIdByNationalId.set(String(newlyCreatedParent.nationalId), Number(newlyCreatedParent.parentId));
+        }
+      }
+
       const schoolPlacement = await prepareSchoolPlacement(user, prisma, true);
       const userPayload = {
         ...user,
@@ -365,6 +353,7 @@ export const generateUsers = async (data, domain) => {
           email: user.finalEmail,
           passwordHashed,
           passwordEncrypted,
+          mustChangePassword: true,
           role: userPayload.role,
           age: finalAge,
           gender: userPayload.gender,
@@ -389,6 +378,11 @@ export const generateUsers = async (data, domain) => {
         },
       });
 
+      // Student created successfully — register the new parent in the output list
+      if (newlyCreatedParent) {
+        createdParents.push(newlyCreatedParent);
+      }
+
       createdUsers.push({
         id: createdUser.id,
         name: createdUser.name,
@@ -404,6 +398,14 @@ export const generateUsers = async (data, domain) => {
         academicStatus: createdUser.student?.AcademicStatus ?? null,
       });
     } catch (error) {
+      // Clean up any parent created in this iteration if the student failed
+      if (needsNewParent && resolvedParentId) {
+        const inMap = parentIdByNationalId.get(String(user.parentNationalId)) === resolvedParentId;
+        if (inMap) {
+          parentIdByNationalId.delete(String(user.parentNationalId));
+          await prisma.user.delete({ where: { id: resolvedParentId } }).catch(() => {});
+        }
+      }
       skippedUsers.push({
         name: user.name,
         email: user.finalEmail,
@@ -450,8 +452,9 @@ const payload = {
   academicStatus: placement.academicStatus,
 };
 
-const hashedPassword= await hashPassword(data.password);
-const passwordEncrypted = encryptPassword(data.password);
+const tempPassword = generateTempPassword(data.name);
+const hashedPassword= await hashPassword(tempPassword);
+const passwordEncrypted = encryptPassword(tempPassword);
 const user=await prisma.user.create({
     data:{
   name:payload.name,
@@ -459,6 +462,7 @@ const user=await prisma.user.create({
   email:payload.email,
   passwordHashed: hashedPassword,
   passwordEncrypted,
+  mustChangePassword: true,
   gender:payload.gender,
   role:payload.role,
   address:payload.address,
@@ -469,6 +473,7 @@ const user=await prisma.user.create({
 
 return {
   ...user,
+  tempPassword,
   parentLinkStatus: resolvedParentInfo?.parentLinkStatus ?? null,
 };
 
@@ -504,6 +509,7 @@ export const addUserWithGeneratedCredentials = async (data, domain) => {
       email,
       passwordHashed,
       passwordEncrypted,
+      mustChangePassword: true,
       role: payload.role,
       age: payload.age,
       gender: payload.gender,
@@ -660,29 +666,18 @@ export const getAllUsers = async (orgId, orgRole, filters = {}) => {
     select: baseSelect,
   });
 
-  return users.map((user) => {
-    let decryptedPassword = null;
-
-    try {
-      decryptedPassword = decryptPassword(user.passwordEncrypted);
-    } catch (_error) {
-      decryptedPassword = null;
-    }
-
-    return {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      age: user.age,
-      gender: user.gender,
-      address: user.address,
-      password: decryptedPassword || '-',
-      student: user.student || null,
-      status: user.student?.AcademicStatus || user.academy_user?.AcademicStatus || null,
-      academy_user: user.academy_user,
-    };
-  });
+  return users.map((user) => ({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    age: user.age,
+    gender: user.gender,
+    address: user.address,
+    student: user.student || null,
+    status: user.student?.AcademicStatus || user.academy_user?.AcademicStatus || null,
+    academy_user: user.academy_user,
+  }));
 };
 
 export const updateUser = async (id, data, orgId, orgRole) => {
@@ -706,7 +701,7 @@ export const updateUser = async (id, data, orgId, orgRole) => {
   if (data.gender !== undefined)  updateData.gender  = data.gender;
   if (data.role !== undefined)    updateData.role    = data.role;
   if (data.address !== undefined) updateData.address = data.address;
-  if (data.password !== undefined) {
+  if (data.password !== undefined && String(data.password).trim() !== '') {
     updateData.passwordHashed = await hashPassword(data.password);
     updateData.passwordEncrypted = encryptPassword(data.password);
   }
@@ -758,13 +753,12 @@ export const deleteUser = async (id, orgId, orgRole) => {
 
 export const exportOrganizationUsersCredentials = async (orgId, orgRole) => {
   const users = await getAllUsers(orgId, orgRole);
-  const header = ['name', 'email', 'role', 'password'];
+  const header = ['name', 'email', 'role'];
 
   const rows = users.map((user) => [
     user.name || '',
     user.email || '',
     user.role || '',
-    user.password || '-',
   ]);
 
   return [header, ...rows]

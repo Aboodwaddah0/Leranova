@@ -82,7 +82,7 @@ const markSubjectSubscriptionSucceeded = async (metadata) => {
     return;
   }
 
-  const subject = await prisma.subject.findUnique({
+  const subject = await prisma.course.findUnique({
     where: { id: subjectId },
     select: {
       id: true,

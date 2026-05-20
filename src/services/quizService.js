@@ -1,6 +1,6 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
-import { gatherLessonContent, callGroq } from './aiContentService.js';
+import { gatherLessonContent, callGroq, gradeShortAnswer, buildMixedQuizPrompt } from './aiContentService.js';
 import { dispatch, dispatchGamificationEvent, mergeRewards } from './gamificationDispatcher.js';
 
 /* ─── Role resolution ─────────────────────────────────────────────────────── */
@@ -27,11 +27,11 @@ const resolveActor = async (actor) => {
 const ensureTeacherOwnsLesson = async (scope, lessonId) => {
   const lesson = await prisma.lesson.findUnique({
     where: { id: Number(lessonId) },
-    include: { subject: { select: { Teacher_id: true, course: { select: { Org_id: true } } } } },
+    include: { course: { select: { Teacher_id: true, track: { select: { Org_id: true } } } } },
   });
   if (!lesson) throw new AppError('Lesson not found', 404);
-  if (lesson.subject.course.Org_id !== scope.orgId) throw new AppError('Access denied', 403);
-  if (scope.role === 'TEACHER' && lesson.subject.Teacher_id !== scope.teacherId) {
+  if (lesson.course.track.Org_id !== scope.orgId) throw new AppError('Access denied', 403);
+  if (scope.role === 'TEACHER' && lesson.course.Teacher_id !== scope.teacherId) {
     throw new AppError('This lesson does not belong to your subjects', 403);
   }
   return lesson;
@@ -40,11 +40,11 @@ const ensureTeacherOwnsLesson = async (scope, lessonId) => {
 const ensureTeacherOwnsQuiz = async (scope, quizId) => {
   const quiz = await prisma.quiz.findUnique({
     where: { id: Number(quizId) },
-    include: { lesson: { include: { subject: { select: { Teacher_id: true, course: { select: { Org_id: true } } } } } } },
+    include: { lesson: { include: { course: { select: { Teacher_id: true, track: { select: { Org_id: true } } } } } } },
   });
   if (!quiz) throw new AppError('Quiz not found', 404);
-  if (quiz.lesson.subject.course.Org_id !== scope.orgId) throw new AppError('Access denied', 403);
-  if (scope.role === 'TEACHER' && quiz.lesson.subject.Teacher_id !== scope.teacherId) {
+  if (quiz.lesson.course.track.Org_id !== scope.orgId) throw new AppError('Access denied', 403);
+  if (scope.role === 'TEACHER' && quiz.lesson.course.Teacher_id !== scope.teacherId) {
     throw new AppError('This quiz does not belong to your subjects', 403);
   }
   return quiz;
@@ -63,11 +63,13 @@ const serializeQuiz = (quiz, { includeCorrectAnswers = false } = {}) => ({
   questionCount: quiz.questions?.length ?? 0,
   questions: (quiz.questions || []).map((q) => ({
     id: q.id,
+    type: q.type || 'MULTIPLE_CHOICE',
     question: q.question,
     options: q.options,
     orderIndex: q.orderIndex,
     explanation: includeCorrectAnswers ? q.explanation : undefined,
     correctAnswer: includeCorrectAnswers ? q.correctAnswer : undefined,
+    expectedAnswer: includeCorrectAnswers ? q.expectedAnswer : undefined,
   })),
   createdAt: quiz.createdAt,
   updatedAt: quiz.updatedAt,
@@ -115,6 +117,7 @@ export const getQuizForLesson = async (actor, lessonId, lang = 'ar') => {
     answers: quiz.attempts[0].answers,
     score: quiz.attempts[0].score,
     isPassed: quiz.attempts[0].isPassed,
+    aiGrading: quiz.attempts[0].aiGrading ?? null,
     createdAt: quiz.attempts[0].createdAt,
   } : null;
 
@@ -315,42 +318,89 @@ const sanitizeQuestion = (q, lang) => {
   };
 };
 
-export const generateQuizQuestions = async (actor, quizId, { numQuestions = 10, difficulty = 'MEDIUM', notes = '', lang = 'ar' }) => {
+export const generateQuizQuestions = async (actor, quizId, { numQuestions, numMCQ, numTrueFalse, numShortAnswer, difficulty = 'MEDIUM', notes = '', lang = 'ar' }) => {
   const scope = await resolveActor(actor);
   if (scope.role === 'STUDENT') throw new AppError('Students cannot generate quiz questions', 403);
   const quiz = await ensureTeacherOwnsQuiz(scope, quizId);
   const l = validLang(lang);
 
-  const num = Math.min(Math.max(Number(numQuestions) || 10, 3), 20);
   const diff = ['EASY', 'MEDIUM', 'HARD'].includes(String(difficulty).toUpperCase())
     ? String(difficulty).toUpperCase()
     : 'MEDIUM';
 
+  // Support both old (numQuestions) and new (numMCQ + numTrueFalse + numShortAnswer) format
+  const mcq  = Math.min(15, Math.max(0, Number(numMCQ  ?? 0)));
+  const tf   = Math.min(15, Math.max(0, Number(numTrueFalse   ?? 0)));
+  const sa   = Math.min(15, Math.max(0, Number(numShortAnswer ?? 0)));
+  // Legacy: if no breakdown provided, fall back to all-MCQ
+  const resolvedMCQ = (mcq + tf + sa === 0) ? Math.min(Math.max(Number(numQuestions) || 10, 3), 20) : mcq;
+  const resolvedTF  = (mcq + tf + sa === 0) ? 0 : tf;
+  const resolvedSA  = (mcq + tf + sa === 0) ? 0 : sa;
+  const total = resolvedMCQ + resolvedTF + resolvedSA;
+  if (total < 1) throw new AppError('At least one question type must have count > 0', 400);
+
   const { lesson, content } = await gatherLessonContent(quiz.lessonId);
-  const prompt = buildQuizPrompt(lesson.name, content, { numQuestions: num, difficulty: diff, notes, lang: l });
+  const prompt = buildMixedQuizPrompt(lesson.name, content, {
+    numMCQ: resolvedMCQ, numTrueFalse: resolvedTF, numShortAnswer: resolvedSA,
+    difficulty: diff, notes, lang: l,
+  });
   const systemPrompt = l === 'en' ? SYS_EN : SYS_AR;
-  const raw = await callGroq(prompt, systemPrompt, 'llama-3.1-8b-instant');
+  const raw = await callGroq(prompt, systemPrompt, 'llama-3.3-70b-versatile', 4000);
 
   const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
   const match = cleaned.match(/\{[\s\S]*\}/);
   if (!match) throw new AppError('Invalid AI response — no JSON found', 502);
   const parsed = JSON.parse(match[0]);
 
-  const questions = Array.isArray(parsed.questions)
-    ? parsed.questions
-        .filter((q) => q.question && Array.isArray(q.options) && q.options.length === 4 && typeof q.correctAnswer === 'number')
-        .map((q, i) => {
-          const base = {
-            question: String(q.question).trim(),
-            options: q.options.map((o) => String(o).trim()),
-            correctAnswer: Math.min(Math.max(Math.round(q.correctAnswer), 0), 3),
-            explanation: q.explanation ? String(q.explanation).trim() : null,
-            orderIndex: i,
-            lang: l,
-          };
-          return sanitizeQuestion(base, l);
-        })
-    : [];
+  const questions = [];
+  let idx = 0;
+
+  // Multiple Choice
+  for (const q of (parsed.multipleChoice || [])) {
+    if (!q.question || !Array.isArray(q.options) || q.options.length !== 4 || typeof q.correctAnswer !== 'number') continue;
+    const base = {
+      type: 'MULTIPLE_CHOICE',
+      question: String(q.question).trim(),
+      options: q.options.map((o) => String(o).trim()),
+      correctAnswer: Math.min(Math.max(Math.round(q.correctAnswer), 0), 3),
+      explanation: q.explanation ? String(q.explanation).trim() : null,
+      orderIndex: idx++,
+      lang: l,
+    };
+    questions.push(sanitizeQuestion(base, l));
+  }
+
+  // True / False
+  for (const q of (parsed.trueFalse || [])) {
+    if (!q.question || typeof q.correctAnswer !== 'number') continue;
+    const ca = Math.round(q.correctAnswer) === 0 ? 0 : 1;
+    const base = {
+      type: 'TRUE_FALSE',
+      question: String(q.question).trim(),
+      options: ['True', 'False'],
+      correctAnswer: ca,
+      explanation: q.explanation ? String(q.explanation).trim() : null,
+      orderIndex: idx++,
+      lang: l,
+    };
+    questions.push(sanitizeQuestion(base, l));
+  }
+
+  // Short Answer
+  for (const q of (parsed.shortAnswer || [])) {
+    if (!q.question || !q.expectedAnswer) continue;
+    const base = {
+      type: 'SHORT_ANSWER',
+      question: String(q.question).trim(),
+      options: [],
+      correctAnswer: null,
+      expectedAnswer: String(q.expectedAnswer).trim(),
+      explanation: q.explanation ? String(q.explanation).trim() : null,
+      orderIndex: idx++,
+      lang: l,
+    };
+    questions.push(sanitizeQuestion(base, l));
+  }
 
   if (!questions.length) throw new AppError('AI did not return valid questions', 502);
 
@@ -372,14 +422,40 @@ export const generateQuizQuestions = async (actor, quizId, { numQuestions = 10, 
 
 /* ─── Question CRUD ───────────────────────────────────────────────────────── */
 
-export const addQuestion = async (actor, quizId, { question, options, correctAnswer, explanation, lang = 'ar' }) => {
+export const addQuestion = async (actor, quizId, { question, options, correctAnswer, explanation, lang = 'ar', type, expectedAnswer }) => {
   const scope = await resolveActor(actor);
   if (scope.role === 'STUDENT') throw new AppError('Students cannot add questions', 403);
   await ensureTeacherOwnsQuiz(scope, quizId);
   const l = validLang(lang);
 
-  if (!question || !Array.isArray(options) || options.length !== 4 || typeof correctAnswer !== 'number') {
-    throw new AppError('question, options (4 items), and correctAnswer (0-3) are required', 400);
+  if (!question) throw new AppError('question is required', 400);
+
+  const qType = ['MULTIPLE_CHOICE', 'TRUE_FALSE', 'SHORT_ANSWER'].includes(String(type || '').toUpperCase())
+    ? String(type).toUpperCase()
+    : 'MULTIPLE_CHOICE';
+
+  let finalOptions;
+  let finalCorrectAnswer;
+
+  if (qType === 'MULTIPLE_CHOICE') {
+    if (!Array.isArray(options) || options.length !== 4 || typeof correctAnswer !== 'number') {
+      throw new AppError('Multiple choice questions require options (4 items) and correctAnswer (0-3)', 400);
+    }
+    finalOptions = options.map((o) => String(o).trim());
+    finalCorrectAnswer = Math.min(Math.max(Math.round(correctAnswer), 0), 3);
+  } else if (qType === 'TRUE_FALSE') {
+    finalOptions = ['True', 'False'];
+    if (typeof correctAnswer !== 'number' || (correctAnswer !== 0 && correctAnswer !== 1)) {
+      throw new AppError('True/False questions require correctAnswer of 0 (True) or 1 (False)', 400);
+    }
+    finalCorrectAnswer = correctAnswer;
+  } else {
+    // SHORT_ANSWER
+    if (!expectedAnswer || !String(expectedAnswer).trim()) {
+      throw new AppError('Short answer questions require an expectedAnswer for AI grading', 400);
+    }
+    finalOptions = [];
+    finalCorrectAnswer = null;
   }
 
   const maxOrder = await prisma.quiz_question.aggregate({
@@ -391,9 +467,11 @@ export const addQuestion = async (actor, quizId, { question, options, correctAns
     data: {
       quizId: Number(quizId),
       lang: l,
+      type: qType,
       question: String(question).trim(),
-      options: options.map((o) => String(o).trim()),
-      correctAnswer: Math.min(Math.max(Math.round(correctAnswer), 0), 3),
+      options: finalOptions,
+      correctAnswer: finalCorrectAnswer,
+      expectedAnswer: qType === 'SHORT_ANSWER' ? String(expectedAnswer).trim() : null,
       explanation: explanation ? String(explanation).trim() : null,
       orderIndex: (maxOrder._max.orderIndex ?? -1) + 1,
     },
@@ -438,8 +516,23 @@ export const submitQuizAttempt = async (actor, lessonId, { answers, lang = 'ar' 
   // Override quiz.questions with resolved set for scoring
   quiz.questions = quizQuestions;
 
-  const correct = quiz.questions.filter((q, i) => answers[i] === q.correctAnswer).length;
-  const score = quiz.questions.length > 0 ? Math.round((correct / quiz.questions.length) * 100) : 0;
+  // Grade each question by type — SHORT_ANSWER uses AI, others use exact match
+  const aiGrading = {};
+  let correctCount = 0;
+
+  await Promise.all(quiz.questions.map(async (q, i) => {
+    const qType = q.type || 'MULTIPLE_CHOICE';
+    if (qType === 'SHORT_ANSWER') {
+      const result = await gradeShortAnswer(q.question, q.expectedAnswer, answers[i], preferred);
+      aiGrading[q.id] = result;
+      if (result.correct) correctCount++;
+    } else {
+      // MULTIPLE_CHOICE and TRUE_FALSE: exact index match
+      if (answers[i] === q.correctAnswer) correctCount++;
+    }
+  }));
+
+  const score = quiz.questions.length > 0 ? Math.round((correctCount / quiz.questions.length) * 100) : 0;
   const isPassed = score >= quiz.passingScore;
 
   const attempt = await prisma.quiz_attempt.create({
@@ -449,6 +542,7 @@ export const submitQuizAttempt = async (actor, lessonId, { answers, lang = 'ar' 
       answers,
       score,
       isPassed,
+      aiGrading: Object.keys(aiGrading).length > 0 ? aiGrading : undefined,
     },
   });
 
@@ -466,12 +560,14 @@ export const submitQuizAttempt = async (actor, lessonId, { answers, lang = 'ar' 
 
   // Return full quiz with answers revealed + attempt result + reward payload
   return {
-    attempt: { id: attempt.id, answers, score, isPassed, createdAt: attempt.createdAt },
+    attempt: { id: attempt.id, answers, score, isPassed, aiGrading, createdAt: attempt.createdAt },
     questions: quiz.questions.map((q) => ({
       id: q.id,
+      type: q.type || 'MULTIPLE_CHOICE',
       question: q.question,
       options: q.options,
       correctAnswer: q.correctAnswer,
+      expectedAnswer: q.expectedAnswer,
       explanation: q.explanation,
       orderIndex: q.orderIndex,
     })),

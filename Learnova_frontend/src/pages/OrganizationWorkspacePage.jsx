@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bell, ChevronDown, ChevronRight, Eye, FolderOpen, Search, UserCircle2, Trash2, Pencil } from "lucide-react";
+import { createPortal } from "react-dom";
+import { BadgeCheck, Bell, ChevronDown, ChevronRight, Eye, FolderOpen, Search, UserCircle2, Trash2, Pencil } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { logout, setAuthSession } from "../redux/slices/authSlice";
 import {
@@ -38,12 +39,14 @@ import {
   createTerm,
   updateTerm,
   reopenTerm,
+  fetchOrganizationMarks,
 } from "../services/organizationService";
-import { useLanguage } from "../utils/i18n";
+import { useLanguage, getSubjectLabels } from "../utils/i18n";
 import { notifyError, notifySuccess } from "../lib/notify";
 import { formatGradeName } from "../utils/gradeHelpers";
 import QuantumMeshBackground from "../components/ui/QuantumMeshBackground";
 import Modal from "../components/ui/Modal";
+import Pagination from "../components/ui/Pagination";
 
 /* ─── Read-only lesson viewer used by org admins ──────────────────────── */
 function LessonsViewModal({ open, subject, lessons, loading, isArabic, onClose }) {
@@ -208,6 +211,7 @@ const TABS = {
   COURSES: "courses",
   STUDENTS: "students",
   PARENTS: "parents",
+  MARKS: "marks",
   SCHOOL: "school",
   FINANCE: "finance",
 };
@@ -378,6 +382,7 @@ export default function OrganizationWorkspacePage() {
   const isSchool = organizationType === "SCHOOL";
   const isAcademy = organizationType === "ACADEMY";
   const canManageCourses = isSchool || isAcademy;
+  const sl = getSubjectLabels(isAcademy, isArabic);
 
   const [activeTab, setActiveTab] = useState(TABS.OVERVIEW);
   const [loading, setLoading] = useState(false);
@@ -457,7 +462,7 @@ export default function OrganizationWorkspacePage() {
     specialization: "",
     bio: "",
   });
-  const [teacherAutoCredentials, setTeacherAutoCredentials] = useState(false);
+  const [teacherEmailAuto, setTeacherEmailAuto] = useState(false);
 
   const [courseForm, setCourseForm] = useState({
     id: null,
@@ -483,7 +488,10 @@ export default function OrganizationWorkspacePage() {
     isPaid: false,
     price: "",
     level: "",
+    imageUrl: "",
   });
+  const [subjectImageFile, setSubjectImageFile] = useState(null);
+  const [subjectImagePreview, setSubjectImagePreview] = useState("");
 
   const [studentForm, setStudentForm] = useState({
     id: null,
@@ -496,7 +504,7 @@ export default function OrganizationWorkspacePage() {
     dob: "",
     parentNationalId: "",
   });
-  const [studentAutoCredentials, setStudentAutoCredentials] = useState(false);
+  const [studentEmailAuto, setStudentEmailAuto] = useState(false);
 
   const [parentForm, setParentForm] = useState({
     id: null,
@@ -505,7 +513,7 @@ export default function OrganizationWorkspacePage() {
     password: "",
     address: "",
   });
-  const [parentAutoCredentials, setParentAutoCredentials] = useState(false);
+  const [parentEmailAuto, setParentEmailAuto] = useState(false);
   const [isLinkDrawerOpen, setIsLinkDrawerOpen] = useState(false);
   const [linkTargetParent, setLinkTargetParent] = useState(null);
   const [linkSearchTerm, setLinkSearchTerm] = useState("");
@@ -517,6 +525,9 @@ export default function OrganizationWorkspacePage() {
 
   const [teacherSearch, setTeacherSearch] = useState("");
   const [teacherTrack, setTeacherTrack] = useState("ALL");
+  const [teacherPage, setTeacherPage] = useState(1);
+  const [studentPage, setStudentPage] = useState(1);
+  const [parentPage, setParentPage] = useState(1);
   const [courseSearch, setCourseSearch] = useState("");
   const [courseTrack, setCourseTrack] = useState("ALL");
   const [coursePrice, setCoursePrice] = useState("ALL");
@@ -546,6 +557,14 @@ export default function OrganizationWorkspacePage() {
   const [schoolSettingsModalOpen, setSchoolSettingsModalOpen] = useState(false);
   const [showPromotionConfirm, setShowPromotionConfirm] = useState(false);
 
+  // ── Marks tab state ────────────────────────────────────────────────────────
+  const [orgMarks, setOrgMarks] = useState([]);
+  const [marksLoading, setMarksLoading] = useState(false);
+  const [marksFilters, setMarksFilters] = useState({ gradeLevel: '', subjectId: '', studentName: '', yearId: '', termId: '', markType: '' });
+  const [marksTerms, setMarksTerms] = useState([]);
+
+  const [credentialsModal, setCredentialsModal] = useState({ open: false, name: "", email: "", password: "" });
+  const [bulkCredentialsModal, setBulkCredentialsModal] = useState({ open: false, users: [] });
   const [teacherModalOpen, setTeacherModalOpen] = useState(false);
   const [courseModalOpen, setCourseModalOpen] = useState(false);
   const [subjectModalOpen, setSubjectModalOpen] = useState(false);
@@ -567,37 +586,7 @@ export default function OrganizationWorkspacePage() {
     [users],
   );
 
-  const teacherPasswordsById = useMemo(() => {
-    const map = new Map();
-    for (const user of users) {
-      if (String(user.role || "").toUpperCase() !== "TEACHER") {
-        continue;
-      }
-
-      if (user?.id) {
-        map.set(Number(user.id), user.password || "-");
-      }
-    }
-    return map;
-  }, [users]);
-
-  const teachersWithPasswords = useMemo(() => {
-    return teachers.map((teacher) => {
-      const userId = Number(teacher?.user?.id || teacher?.id || 0);
-      if (!userId || !teacher?.user) {
-        return teacher;
-      }
-
-      const password = teacherPasswordsById.get(userId);
-      return {
-        ...teacher,
-        user: {
-          ...teacher.user,
-          password: password || teacher?.user?.password,
-        },
-      };
-    });
-  }, [teachers, teacherPasswordsById]);
+  const teachersWithPasswords = teachers;
 
   const parentNameById = useMemo(() => {
     const map = new Map();
@@ -777,6 +766,18 @@ export default function OrganizationWorkspacePage() {
     });
   }, [parentUsers, parentSearch, parentLinkFilter, linkedParentIds]);
 
+  const TEACHER_PAGE_SIZE = 10;
+  const STUDENT_PAGE_SIZE = 15;
+  const PARENT_PAGE_SIZE  = 15;
+
+  useEffect(() => { setTeacherPage(1); }, [teacherSearch, teacherTrack]);
+  useEffect(() => { setStudentPage(1); }, [studentSearch, studentGenderFilter, studentStatus]);
+  useEffect(() => { setParentPage(1);  }, [parentSearch, parentLinkFilter]);
+
+  const pagedTeachers  = useMemo(() => filteredTeachers.slice((teacherPage - 1) * TEACHER_PAGE_SIZE, teacherPage * TEACHER_PAGE_SIZE),  [filteredTeachers, teacherPage]);
+  const pagedStudents  = useMemo(() => filteredStudents.slice((studentPage - 1) * STUDENT_PAGE_SIZE, studentPage * STUDENT_PAGE_SIZE),  [filteredStudents, studentPage]);
+  const pagedParents   = useMemo(() => filteredParents.slice((parentPage  - 1) * PARENT_PAGE_SIZE,  parentPage  * PARENT_PAGE_SIZE),   [filteredParents,  parentPage]);
+
   const linkCandidateStudents = useMemo(() => {
     return studentUsers.filter((student) => {
       const parentId = Number(student?.student?.Parent_id);
@@ -791,6 +792,29 @@ export default function OrganizationWorkspacePage() {
       String(student?.id || ""),
     ], linkSearchTerm));
   }, [linkCandidateStudents, linkSearchTerm]);
+
+  // ── Client-side marks filtering (instant — no API call) ──────────────────
+  const visibleOrgMarks = useMemo(() => {
+    const { gradeLevel, subjectId, studentName, termId, markType } = marksFilters;
+    const nameQ = studentName.trim().toLowerCase();
+    const term  = termId ? marksTerms.find((t) => String(t.id) === String(termId)) : null;
+    const dateFrom = term?.startDate ? new Date(term.startDate) : null;
+    const dateTo   = term?.endDate   ? new Date(term.endDate)   : null;
+
+    return orgMarks.filter((m) => {
+      if (gradeLevel && String(m.subject?.course?.GradeLevel) !== String(gradeLevel)) return false;
+      if (subjectId  && String(m.Subject_id) !== String(subjectId)) return false;
+      if (markType   && m.MarkType !== markType) return false;
+      if (nameQ && !(m.student?.user?.name || '').toLowerCase().includes(nameQ)) return false;
+      if (dateFrom || dateTo) {
+        if (!m.time) return false;
+        const d = new Date(m.time);
+        if (dateFrom && d < dateFrom) return false;
+        if (dateTo   && d > dateTo)   return false;
+      }
+      return true;
+    });
+  }, [orgMarks, marksFilters, marksTerms]);
 
   const overviewStats = useMemo(() => {
     const totalStudents = studentUsers.length;
@@ -924,6 +948,35 @@ export default function OrganizationWorkspacePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSchool, isAcademy]);
 
+  // ── Load ALL marks once when the MARKS tab is first opened ────────────────
+  // Filtering is done client-side in visibleOrgMarks — no re-fetch on filter change.
+  const [marksLoaded, setMarksLoaded] = useState(false);
+  useEffect(() => {
+    if (activeTab !== TABS.MARKS || marksLoaded) return;
+    let cancelled = false;
+    setMarksLoading(true);
+    fetchOrganizationMarks()
+      .then((data) => { if (!cancelled) { setOrgMarks(data); setMarksLoaded(true); } })
+      .catch(() => { if (!cancelled) setOrgMarks([]); })
+      .finally(() => { if (!cancelled) setMarksLoading(false); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  const refreshOrgMarks = () => {
+    setMarksLoading(true);
+    fetchOrganizationMarks()
+      .then(setOrgMarks)
+      .catch(() => setOrgMarks([]))
+      .finally(() => setMarksLoading(false));
+  };
+
+  // Load terms when year filter changes (lightweight — only fired on year select)
+  useEffect(() => {
+    if (!marksFilters.yearId) { setMarksTerms([]); return; }
+    fetchTerms(Number(marksFilters.yearId)).then(setMarksTerms).catch(() => setMarksTerms([]));
+  }, [marksFilters.yearId]);
+
   const loadSubjectsForCourse = async (courseId, options = {}) => {
     const force = Boolean(options.force);
     if (!courseId) {
@@ -1051,15 +1104,8 @@ export default function OrganizationWorkspacePage() {
   };
 
   const resetTeacherForm = () => {
-    setTeacherForm({
-      id: null,
-      name: "",
-      email: "",
-      password: "",
-      specialization: "",
-      bio: "",
-    });
-    setTeacherAutoCredentials(false);
+    setTeacherForm({ id: null, name: "", email: "", password: "", specialization: "", bio: "" });
+    setTeacherEmailAuto(false);
   };
 
   const resetCourseForm = () => {
@@ -1181,41 +1227,19 @@ export default function OrganizationWorkspacePage() {
   };
 
   const resetSubjectForm = () => {
-    setSubjectForm({
-      id: null,
-      name: "",
-      Description: "",
-      Teacher_id: "",
-      isPaid: false,
-      price: "",
-      level: "",
-    });
+    setSubjectForm({ id: null, name: "", Description: "", Teacher_id: "", isPaid: false, price: "", level: "", imageUrl: "" });
+    setSubjectImageFile(null);
+    setSubjectImagePreview("");
   };
 
   const resetStudentForm = () => {
-    setStudentForm({
-      id: null,
-      name: "",
-      email: "",
-      password: "",
-      age: "",
-      gender: "MALE",
-      address: "",
-      dob: "",
-      parentNationalId: "",
-    });
-    setStudentAutoCredentials(false);
+    setStudentForm({ id: null, name: "", email: "", password: "", age: "", gender: "MALE", address: "", dob: "", parentNationalId: "" });
+    setStudentEmailAuto(false);
   };
 
   const resetParentForm = () => {
-    setParentForm({
-      id: null,
-      name: "",
-      email: "",
-      password: "",
-      address: "",
-    });
-    setParentAutoCredentials(false);
+    setParentForm({ id: null, name: "", email: "", password: "", address: "" });
+    setParentEmailAuto(false);
   };
 
   const handleAction = async (work, successMessage) => {
@@ -1249,57 +1273,54 @@ export default function OrganizationWorkspacePage() {
   const saveTeacher = async (event) => {
     event.preventDefault();
 
-    const payload = {
-      name: teacherForm.name,
-      email: teacherForm.email,
-      specialization: teacherForm.specialization || undefined,
-      bio: teacherForm.bio || undefined,
-    };
-
-    if (!teacherForm.id || teacherForm.password) {
-      payload.password = teacherForm.password;
-    }
-
     await handleAction(async () => {
       if (teacherForm.id) {
-        await updateOrganizationTeacher(teacherForm.id, payload);
-      } else {
-        if (teacherAutoCredentials) {
-          const generated = await createOrganizationUserWithGeneratedCredentials({
-            name: teacherForm.name,
+        await updateOrganizationTeacher(teacherForm.id, {
+          name: teacherForm.name,
+          specialization: teacherForm.specialization || undefined,
+          bio: teacherForm.bio || undefined,
+        });
+        const next = await fetchOrganizationTeachers();
+        setTeachers(next);
+        resetTeacherForm();
+        setTeacherModalOpen(false);
+      } else if (teacherEmailAuto) {
+        const generated = await createOrganizationUserWithGeneratedCredentials({
+          name: teacherForm.name,
+          role: "TEACHER",
+          specialization: teacherForm.specialization || undefined,
+          bio: teacherForm.bio || undefined,
+        });
+        const generatedTeacherId = generated?.data?.id;
+        if (generatedTeacherId && (teacherForm.specialization || teacherForm.bio)) {
+          await updateOrganizationTeacher(generatedTeacherId, {
             specialization: teacherForm.specialization || undefined,
             bio: teacherForm.bio || undefined,
-            role: "TEACHER",
           });
-
-          const generatedTeacherId = generated?.data?.id;
-          if (generatedTeacherId && (teacherForm.specialization || teacherForm.bio)) {
-            await updateOrganizationTeacher(generatedTeacherId, {
-              specialization: teacherForm.specialization || undefined,
-              bio: teacherForm.bio || undefined,
-            });
-          }
-
-          const next = await fetchOrganizationTeachers();
-          setTeachers(next);
-          resetTeacherForm();
-          setTeacherModalOpen(false);
-
-          const generatedEmail = generated?.credentials?.email || "-";
-          const generatedPassword = generated?.credentials?.password || "-";
-          await copyCredentialsToClipboard(generatedEmail, generatedPassword);
-          return `${isArabic ? "تم إنشاء الحساب" : "Account created"}: ${generatedEmail} / ${generatedPassword}`;
         }
-
-        await createOrganizationTeacher(payload);
+        const next = await fetchOrganizationTeachers();
+        setTeachers(next);
+        resetTeacherForm();
+        setTeacherModalOpen(false);
+        const email = generated?.credentials?.email || "-";
+        const password = generated?.credentials?.password || "-";
+        setCredentialsModal({ open: true, name: teacherForm.name, email, password });
+        return isArabic ? "تم إنشاء حساب المدرس" : "Teacher account created";
+      } else {
+        const created = await createOrganizationTeacher({
+          name: teacherForm.name,
+          email: teacherForm.email,
+          specialization: teacherForm.specialization || undefined,
+          bio: teacherForm.bio || undefined,
+        });
+        const next = await fetchOrganizationTeachers();
+        setTeachers(next);
+        resetTeacherForm();
+        setTeacherModalOpen(false);
+        const tempPassword = created?.data?.tempPassword || "-";
+        setCredentialsModal({ open: true, name: teacherForm.name, email: teacherForm.email, password: tempPassword });
+        return isArabic ? "تم إنشاء حساب المدرس" : "Teacher account created";
       }
-
-      const next = await fetchOrganizationTeachers();
-      setTeachers(next);
-      resetTeacherForm();
-      setTeacherModalOpen(false);
-      await copyCredentialsToClipboard(payload.email, payload.password);
-      return `${isArabic ? "تم حفظ المدرس" : "Teacher saved"}`;
     }, t.organization.messages.teacherSaved);
   };
 
@@ -1410,20 +1431,23 @@ export default function OrganizationWorkspacePage() {
       }
     }
 
-    const payload = {
-      name: subjectForm.name,
-      Description: subjectForm.Description || undefined,
-      // Both school and academy: teacher is assigned per subject
-      ...(subjectForm.Teacher_id ? { Teacher_id: Number(subjectForm.Teacher_id) } : {}),
-      // ACADEMY: send payment info + level
-      ...(isAcademy ? {
-        isPaid: Boolean(subjectForm.isPaid),
-        price: subjectForm.isPaid ? Number(subjectForm.price) || 0 : 0,
-        level: subjectForm.level || null,
-      } : {}),
-    };
-
     await handleAction(async () => {
+      let imageUrl = subjectForm.imageUrl || "";
+      if (subjectImageFile) {
+        const fd = new FormData();
+        fd.append("image", subjectImageFile);
+        const res = await fetch(`/api/courses/${selectedCourseId}/subjects/upload-image`, { method: "POST", body: fd, headers: { Authorization: `Bearer ${localStorage.getItem("learnova_token")}` } });
+        if (res.ok) { const json = await res.json(); imageUrl = json?.data?.imageUrl || imageUrl; }
+      }
+
+      const payload = {
+        name: subjectForm.name,
+        Description: subjectForm.Description || undefined,
+        ...(subjectForm.Teacher_id ? { Teacher_id: Number(subjectForm.Teacher_id) } : {}),
+        ...(isAcademy ? { isPaid: Boolean(subjectForm.isPaid), price: subjectForm.isPaid ? Number(subjectForm.price) || 0 : 0, level: subjectForm.level || null } : {}),
+        imageUrl: imageUrl || undefined,
+      };
+
       if (subjectForm.id) {
         await updateCourseSubject(selectedCourseId, subjectForm.id, payload);
       } else {
@@ -1437,17 +1461,15 @@ export default function OrganizationWorkspacePage() {
       }));
       resetSubjectForm();
       setSubjectModalOpen(false);
-    }, t.organization.messages.subjectSaved);
+    }, sl.saved);
   };
 
 
   const saveStudent = async (event) => {
     event.preventDefault();
 
-    const payload = {
+    const basePayload = {
       name: studentForm.name,
-      email: studentForm.email,
-      password: studentForm.password,
       role: "STUDENT",
       age: studentForm.age ? Number(studentForm.age) : undefined,
       gender: studentForm.gender || undefined,
@@ -1457,117 +1479,80 @@ export default function OrganizationWorkspacePage() {
     };
 
     const buildParentLinkMessage = (parentLinkStatus) => {
-      if (!studentForm.parentNationalId) {
-        return "";
-      }
-
-      if (parentLinkStatus === "existing") {
-        return isArabic
-          ? " | تم الربط مع حساب ولي أمر موجود مسبقًا"
-          : " | Linked to existing parent account";
-      }
-
-      if (parentLinkStatus === "created") {
-        return isArabic
-          ? " | تم إنشاء حساب ولي أمر جديد تلقائيًا وربطه"
-          : " | New parent account was auto-created and linked";
-      }
-
+      if (!studentForm.parentNationalId) return "";
+      if (parentLinkStatus === "existing") return isArabic ? " | تم الربط مع حساب ولي أمر موجود مسبقًا" : " | Linked to existing parent account";
+      if (parentLinkStatus === "created") return isArabic ? " | تم إنشاء حساب ولي أمر جديد تلقائيًا وربطه" : " | New parent account was auto-created and linked";
       return "";
     };
 
     await handleAction(async () => {
       if (studentForm.id) {
-        await updateOrganizationUser(studentForm.id, payload);
-      } else {
-        if (studentAutoCredentials) {
-          const generated = await createOrganizationUserWithGeneratedCredentials({
-            name: studentForm.name,
-            role: "STUDENT",
-            age: studentForm.age ? Number(studentForm.age) : undefined,
-            gender: studentForm.gender || undefined,
-            address: studentForm.address || undefined,
-            dob: studentForm.dob || undefined,
-            parentNationalId: studentForm.parentNationalId || undefined,
-          });
-
-          const nextUsersGenerated = await fetchOrganizationUsers();
-          setUsers(nextUsersGenerated);
-          resetStudentForm();
-          setStudentModalOpen(false);
-
-          const generatedEmail = generated?.credentials?.email || "-";
-          const generatedPassword = generated?.credentials?.password || "-";
-          const parentLinkMessage = buildParentLinkMessage(generated?.parentLinkStatus);
-          await copyCredentialsToClipboard(generatedEmail, generatedPassword);
-          return `${isArabic ? "تم إنشاء الحساب تلقائيًا" : "Account created with generated credentials"}: ${generatedEmail} / ${generatedPassword}${parentLinkMessage}`;
-        }
-
-        const created = await createOrganizationUser(payload);
-
-        const nextUsersManual = await fetchOrganizationUsers();
-        setUsers(nextUsersManual);
+        await updateOrganizationUser(studentForm.id, { ...basePayload, email: studentForm.email });
+        const nextUsers = await fetchOrganizationUsers();
+        setUsers(nextUsers);
         resetStudentForm();
         setStudentModalOpen(false);
-
+      } else if (studentEmailAuto) {
+        const generated = await createOrganizationUserWithGeneratedCredentials(basePayload);
+        const nextUsers = await fetchOrganizationUsers();
+        setUsers(nextUsers);
+        resetStudentForm();
+        setStudentModalOpen(false);
+        const email = generated?.credentials?.email || "-";
+        const password = generated?.credentials?.password || "-";
+        const parentLinkMessage = buildParentLinkMessage(generated?.parentLinkStatus);
+        setCredentialsModal({ open: true, name: studentForm.name, email, password });
+        return `${isArabic ? "تم إنشاء حساب الطالب" : "Student account created"}${parentLinkMessage}`;
+      } else {
+        const created = await createOrganizationUser({ ...basePayload, email: studentForm.email });
+        const nextUsers = await fetchOrganizationUsers();
+        setUsers(nextUsers);
+        resetStudentForm();
+        setStudentModalOpen(false);
+        const tempPassword = created?.tempPassword || "-";
         const parentLinkMessage = buildParentLinkMessage(created?.parentLinkStatus);
-        await copyCredentialsToClipboard(payload.email, payload.password);
-        return `${isArabic ? "تم إنشاء الحساب" : "Account created"}: ${payload.email || "-"} / ${payload.password || "-"}${parentLinkMessage}`;
+        setCredentialsModal({ open: true, name: studentForm.name, email: studentForm.email, password: tempPassword });
+        return `${isArabic ? "تم إنشاء حساب الطالب" : "Student account created"}${parentLinkMessage}`;
       }
-
-      const nextUsers = await fetchOrganizationUsers();
-      setUsers(nextUsers);
-      resetStudentForm();
-      setStudentModalOpen(false);
     }, t.organization.messages.studentSaved);
   };
 
   const saveParent = async (event) => {
     event.preventDefault();
 
-    const payload = {
+    const basePayload = {
       name: parentForm.name,
-      email: parentForm.email,
-      password: parentForm.password || undefined,
       role: "PARENT",
       address: parentForm.address || undefined,
     };
 
     await handleAction(async () => {
       if (parentForm.id) {
-        await updateOrganizationUser(parentForm.id, payload);
-      } else if (parentAutoCredentials) {
-        const generated = await createOrganizationUserWithGeneratedCredentials({
-          name: parentForm.name,
-          role: "PARENT",
-          address: parentForm.address || undefined,
-        });
-
-        const nextUsersGenerated = await fetchOrganizationUsers();
-        setUsers(nextUsersGenerated);
+        await updateOrganizationUser(parentForm.id, { ...basePayload, email: parentForm.email });
+        const nextUsers = await fetchOrganizationUsers();
+        setUsers(nextUsers);
         resetParentForm();
         setParentModalOpen(false);
-
-        const generatedEmail = generated?.credentials?.email || "-";
-        const generatedPassword = generated?.credentials?.password || "-";
-        await copyCredentialsToClipboard(generatedEmail, generatedPassword);
-        return `${isArabic ? "تم إنشاء حساب ولي الأمر تلقائيًا" : "Parent account created with generated credentials"}: ${generatedEmail} / ${generatedPassword}`;
+      } else if (parentEmailAuto) {
+        const generated = await createOrganizationUserWithGeneratedCredentials(basePayload);
+        const nextUsers = await fetchOrganizationUsers();
+        setUsers(nextUsers);
+        resetParentForm();
+        setParentModalOpen(false);
+        const email = generated?.credentials?.email || "-";
+        const password = generated?.credentials?.password || "-";
+        setCredentialsModal({ open: true, name: parentForm.name, email, password });
+        return isArabic ? "تم إنشاء حساب ولي الأمر" : "Parent account created";
       } else {
-        await createOrganizationUser(payload);
-
-        const nextUsersManual = await fetchOrganizationUsers();
-        setUsers(nextUsersManual);
+        const created = await createOrganizationUser({ ...basePayload, email: parentForm.email });
+        const nextUsers = await fetchOrganizationUsers();
+        setUsers(nextUsers);
         resetParentForm();
         setParentModalOpen(false);
-
-        await copyCredentialsToClipboard(payload.email, payload.password);
-        return `${isArabic ? "تم إنشاء حساب ولي الأمر" : "Parent account created"}: ${payload.email || "-"} / ${payload.password || "-"}`;
+        const tempPassword = created?.tempPassword || "-";
+        setCredentialsModal({ open: true, name: parentForm.name, email: parentForm.email || "", password: tempPassword });
+        return isArabic ? "تم إنشاء حساب ولي الأمر" : "Parent account created";
       }
-
-      const nextUsers = await fetchOrganizationUsers();
-      setUsers(nextUsers);
-      resetParentForm();
-      setParentModalOpen(false);
     }, t.organization.messages.parentSaved);
   };
 
@@ -1610,8 +1595,8 @@ export default function OrganizationWorkspacePage() {
       await addStudentToCourse(enrollmentTargetStudent.id, courseId, isSchool);
       const enrollments = await fetchStudentCourses(enrollmentTargetStudent.id);
       setStudentEnrollments(enrollments);
-      return isArabic ? "تم إضافة الطالب إلى الكورس" : "Student enrolled in course";
-    }, isArabic ? "تم إضافة الطالب إلى الكورس" : "Student enrolled in course");
+      return isArabic ? "تم إضافة الطالب إلى التخصص" : "Student enrolled in specialization";
+    }, isArabic ? "تم إضافة الطالب إلى التخصص" : "Student enrolled in specialization");
   };
 
   const handleUnenrollStudent = async (courseId) => {
@@ -1661,12 +1646,11 @@ export default function OrganizationWorkspacePage() {
       teacher?.id || "",
       teacher?.user?.name || "",
       teacher?.user?.email || "",
-      teacher?.user?.password || "",
       teacher?.specialization || "",
       teacher?.bio || "",
     ]);
 
-    downloadCsvFromRows(`teachers-list-${dateLabel}.csv`, ["id", "name", "email", "password", "specialization", "bio"], rows);
+    downloadCsvFromRows(`teachers-list-${dateLabel}.csv`, ["id", "name", "email", "specialization", "bio"], rows);
     setSuccess(isArabic ? "تم تنزيل قائمة المعلمين" : "Teachers list downloaded");
   };
 
@@ -1693,7 +1677,7 @@ export default function OrganizationWorkspacePage() {
     });
 
     downloadCsvFromRows(`courses-list-${dateLabel}.csv`, ["id", "name", "description", "type", "price"], rows);
-    setSuccess(isArabic ? "تم تنزيل قائمة الكورسات" : "Courses list downloaded");
+    setSuccess(isArabic ? "تم تنزيل قائمة التخصصات" : "Specializations list downloaded");
   };
 
   const _downloadSubjectsList = () => {
@@ -1707,7 +1691,7 @@ export default function OrganizationWorkspacePage() {
     ]);
 
     downloadCsvFromRows(`subjects-list-${dateLabel}.csv`, ["id", "name", "description", "teacher", "courseId"], rows);
-    setSuccess(isArabic ? "تم تنزيل قائمة المواد" : "Subjects list downloaded");
+    setSuccess(sl.downloadedList);
   };
 
   const downloadStudentsList = () => {
@@ -1716,14 +1700,13 @@ export default function OrganizationWorkspacePage() {
       student?.id || "",
       student?.name || "",
       student?.email || "",
-      student?.password || "",
       parentNameById.get(Number(student?.student?.Parent_id)) || "",
       student?.age ?? "",
       student?.gender || "",
       student?.address || "",
     ]);
 
-    downloadCsvFromRows(`students-list-${dateLabel}.csv`, ["id", "name", "email", "password", "parent", "age", "gender", "address"], rows);
+    downloadCsvFromRows(`students-list-${dateLabel}.csv`, ["id", "name", "email", "parent", "age", "gender", "address"], rows);
     setSuccess(isArabic ? "تم تنزيل قائمة الطلاب" : "Students list downloaded");
   };
 
@@ -1733,26 +1716,25 @@ export default function OrganizationWorkspacePage() {
       parent?.id || "",
       parent?.name || "",
       parent?.email || "",
-      parent?.password || "",
       linkedParentIds.has(Number(parent?.id)) ? "YES" : "NO",
       (childrenByParentId.get(Number(parent?.id)) || []).map((child) => `${child.name} (ID: ${child.id})`).join(" | "),
       parent?.address || "",
     ]);
 
-    downloadCsvFromRows(`parents-list-${dateLabel}.csv`, ["id", "name", "email", "password", "linked", "children", "address"], rows);
+    downloadCsvFromRows(`parents-list-${dateLabel}.csv`, ["id", "name", "email", "linked", "children", "address"], rows);
     setSuccess(isArabic ? "تم تنزيل قائمة أولياء الأمور" : "Parents list downloaded");
   };
 
   const uploadStudentExcel = async (event) => {
     const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
+    if (!file) return;
 
     await handleAction(async () => {
       const result = await importUsersFromExcel(file);
       const summary = result?.summary;
       const skippedRows = Array.isArray(result?.skipped) ? result.skipped : [];
+      const createdUsers = Array.isArray(result?.users) ? result.users : [];
+      const autoParents = Array.isArray(result?.autoCreatedParents) ? result.autoCreatedParents : [];
       const nextUsers = await fetchOrganizationUsers();
       setUsers(nextUsers);
 
@@ -1760,10 +1742,16 @@ export default function OrganizationWorkspacePage() {
         setError(`Some rows were skipped (${skippedRows.length}): ${formatSkippedRows(skippedRows)}`);
       }
 
-      if (summary) {
-        return `${t.organization.messages.importDone} (${summary.created}/${summary.totalRows})`;
+      const allCreated = [
+        ...createdUsers.map((u) => ({ name: u.name, email: u.email, password: u.password || "-", role: u.role })),
+        ...autoParents.map((p) => ({ name: `Parent ${p.nationalId}`, email: p.email, password: p.password || "-", role: "PARENT" })),
+      ].filter((u) => u.password && u.password !== "-");
+
+      if (allCreated.length > 0) {
+        setBulkCredentialsModal({ open: true, users: allCreated });
       }
 
+      if (summary) return `${t.organization.messages.importDone} (${summary.created}/${summary.totalRows})`;
       return t.organization.messages.importDone;
     }, t.organization.messages.importDone);
 
@@ -1772,14 +1760,13 @@ export default function OrganizationWorkspacePage() {
 
   const uploadTeacherExcel = async (event) => {
     const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
+    if (!file) return;
 
     await handleAction(async () => {
       const result = await importUsersFromExcel(file);
       const summary = result?.summary;
       const skippedRows = Array.isArray(result?.skipped) ? result.skipped : [];
+      const createdUsers = Array.isArray(result?.users) ? result.users : [];
       const [nextTeachers, nextUsers] = await Promise.all([
         fetchOrganizationTeachers(),
         fetchOrganizationUsers(),
@@ -1792,10 +1779,15 @@ export default function OrganizationWorkspacePage() {
         setError(`Some rows were skipped (${skippedRows.length}): ${formatSkippedRows(skippedRows)}`);
       }
 
-      if (summary) {
-        return `${t.organization.messages.teacherImportDone} (${summary.created}/${summary.totalRows})`;
+      const allCreated = createdUsers
+        .map((u) => ({ name: u.name, email: u.email, password: u.password || "-", role: u.role }))
+        .filter((u) => u.password && u.password !== "-");
+
+      if (allCreated.length > 0) {
+        setBulkCredentialsModal({ open: true, users: allCreated });
       }
 
+      if (summary) return `${t.organization.messages.teacherImportDone} (${summary.created}/${summary.totalRows})`;
       return t.organization.messages.teacherImportDone;
     }, t.organization.messages.teacherImportDone);
 
@@ -1931,13 +1923,14 @@ export default function OrganizationWorkspacePage() {
       { id: TABS.OVERVIEW, label: t.organization.tabs.overview },
       { id: TABS.TEACHERS, label: t.organization.tabs.teachers },
       { id: TABS.COURSES, label: courseTabLabel },
-      { id: "subjects", label: t.organization.tabs.subjects },
+      { id: "subjects", label: sl.tab },
       { id: TABS.STUDENTS, label: t.organization.tabs.students },
     ];
 
     if (isSchool) {
       baseTabs.push({ id: TABS.PARENTS, label: t.organization.tabs.parents });
-      baseTabs.push({ id: TABS.SCHOOL, label: t.organization.tabs.schoolSettings });
+      baseTabs.push({ id: TABS.MARKS,   label: isArabic ? 'الدرجات' : 'Marks' });
+      baseTabs.push({ id: TABS.SCHOOL,  label: t.organization.tabs.schoolSettings });
     }
 
     if (isAcademy) {
@@ -1945,7 +1938,7 @@ export default function OrganizationWorkspacePage() {
     }
 
     return baseTabs;
-  }, [isSchool, isArabic, t.organization.tabs]);
+  }, [isSchool, isAcademy, isArabic, t.organization.tabs, sl]);
 
   const organizationTitle =
     organizationProfile?.Name ||
@@ -1957,6 +1950,122 @@ export default function OrganizationWorkspacePage() {
   return (
     <main dir={isArabic ? "rtl" : "ltr"} className={`admin-management-theme dashboard-page organization-workspace-shell relative min-h-screen overflow-hidden ${isArabic ? "lang-ar" : "lang-en"}`}>
       <QuantumMeshBackground />
+
+      {credentialsModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-8 shadow-2xl">
+            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 border border-emerald-200">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <h3 className="text-lg font-black text-slate-900">{isArabic ? "بيانات الحساب" : "Account Credentials"}</h3>
+            <p className="mt-1 text-xs text-slate-400">{isArabic ? "احفظ هذه البيانات الآن — لن تظهر مجدداً." : "Save these credentials now — they won't be shown again."}</p>
+
+            <div className="mt-5 space-y-3">
+              {credentialsModal.name && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{isArabic ? "الاسم" : "Name"}</p>
+                  <p className="mt-0.5 text-sm font-semibold text-slate-800">{credentialsModal.name}</p>
+                </div>
+              )}
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{isArabic ? "البريد الإلكتروني" : "Email"}</p>
+                <p className="mt-0.5 text-sm font-semibold text-slate-800 break-all">{credentialsModal.email}</p>
+              </div>
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">{isArabic ? "كلمة المرور المؤقتة" : "Temporary Password"}</p>
+                <p className="mt-0.5 font-mono text-sm font-bold text-indigo-700 tracking-wider">{credentialsModal.password}</p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  await copyCredentialsToClipboard(credentialsModal.email, credentialsModal.password);
+                }}
+                className="flex-1 rounded-2xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                {isArabic ? "نسخ" : "Copy"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCredentialsModal({ open: false, name: "", email: "", password: "" })}
+                className="flex-1 rounded-2xl bg-slate-900 py-2.5 text-sm font-bold text-white transition hover:bg-slate-700"
+              >
+                {isArabic ? "تم، أغلق" : "Done"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bulkCredentialsModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-sm">
+          <div className="flex w-full max-w-2xl flex-col rounded-3xl border border-slate-200 bg-white shadow-2xl" style={{ maxHeight: "85vh" }}>
+            {/* Header */}
+            <div className="flex items-start gap-4 border-b border-slate-100 p-6">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="font-black text-slate-900">{isArabic ? "بيانات الحسابات المُنشأة" : "Created Accounts Credentials"}</h3>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  {isArabic
+                    ? `${bulkCredentialsModal.users.length} حساب — احفظ هذه البيانات الآن، لن تظهر مجدداً.`
+                    : `${bulkCredentialsModal.users.length} account(s) — save these now, they won't be shown again.`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const rows = bulkCredentialsModal.users.map((u) => [u.name, u.email, u.password, u.role]);
+                  downloadCsvFromRows(`credentials-${new Date().toISOString().slice(0, 10)}.csv`, ["name", "email", "temp_password", "role"], rows);
+                }}
+                className="shrink-0 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 transition hover:bg-sky-100"
+              >
+                {isArabic ? "تنزيل CSV" : "Download CSV"}
+              </button>
+            </div>
+
+            {/* Table */}
+            <div className="overflow-y-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+                  <tr>
+                    <th className="px-5 py-3">{isArabic ? "الاسم" : "Name"}</th>
+                    <th className="px-5 py-3">{isArabic ? "البريد الإلكتروني" : "Email"}</th>
+                    <th className="px-5 py-3">{isArabic ? "كلمة المرور المؤقتة" : "Temp Password"}</th>
+                    <th className="px-5 py-3">{isArabic ? "الدور" : "Role"}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {bulkCredentialsModal.users.map((u, i) => (
+                    <tr key={i} className="hover:bg-slate-50/60">
+                      <td className="px-5 py-3 font-semibold text-slate-900">{u.name || "-"}</td>
+                      <td className="px-5 py-3 text-slate-600 break-all">{u.email}</td>
+                      <td className="px-5 py-3 font-mono font-bold text-indigo-700">{u.password}</td>
+                      <td className="px-5 py-3">
+                        <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">{u.role}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-slate-100 p-5 text-right">
+              <button
+                type="button"
+                onClick={() => setBulkCredentialsModal({ open: false, users: [] })}
+                className="rounded-2xl bg-slate-900 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-slate-700"
+              >
+                {isArabic ? "تم، أغلق" : "Done"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmDelete.open && (
         <div
@@ -2019,7 +2128,12 @@ export default function OrganizationWorkspacePage() {
         <aside className={`dashboard-sidebar organization-workspace-shell__sidebar flex h-full flex-col gap-5 rounded-none border p-4 ${isArabic ? "right-0 left-auto" : "left-0"}`}>
           <div className="rounded-[1.75rem] bg-gradient-to-br from-indigo-600 via-violet-600 to-cyan-500 p-5 text-white shadow-lg shadow-indigo-500/20">
             <p className="text-xs font-black uppercase tracking-[0.22em]">Learnova</p>
-            <h1 className="mt-2 text-2xl font-black">{organizationTitle}</h1>
+            <div className="mt-2 flex items-center gap-1.5">
+              <h1 className="text-2xl font-black">{organizationTitle}</h1>
+              {organizationProfile?.status === 'APPROVED' && organizationProfile?.Role === 'ACADEMY' && (
+                <BadgeCheck size={20} className="shrink-0 text-cyan-300" title="Verified Academy" />
+              )}
+            </div>
             <p className="mt-2 text-sm text-indigo-50/90">{t.organization.badge}</p>
           </div>
 
@@ -2053,7 +2167,12 @@ export default function OrganizationWorkspacePage() {
           <header className="dashboard-hero rounded-[2rem] p-6 shadow-xl flex items-start justify-between">
             <div>
               <p className="dashboard-hero-kicker text-xs font-bold uppercase tracking-[0.2em]">{t.organization.badge}</p>
-              <h2 className="mt-2 text-3xl font-black">{organizationTitle}</h2>
+              <div className="mt-2 flex items-center gap-2">
+                <h2 className="text-3xl font-black">{organizationTitle}</h2>
+                {organizationProfile?.status === 'APPROVED' && organizationProfile?.Role === 'ACADEMY' && (
+                  <BadgeCheck size={28} className="shrink-0 text-white/80" title="Verified Academy" />
+                )}
+              </div>
               <p className="mt-2 text-sm">{t.organization.subtitle}</p>
             </div>
             <button
@@ -2123,7 +2242,7 @@ export default function OrganizationWorkspacePage() {
                   <p className="mt-1 text-2xl font-black text-slate-900">{overviewStats.totalCourses}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{t.organization.overview.subjectsCount}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{sl.count}</p>
                   <p className="mt-1 text-2xl font-black text-slate-900">{overviewStats.totalSubjects}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
@@ -2316,15 +2435,26 @@ export default function OrganizationWorkspacePage() {
               <form onSubmit={saveTeacher} className="space-y-3">
                 <input name="name" value={teacherForm.name} onChange={setField(setTeacherForm)} placeholder={t.organization.teachers.name} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
                 {!teacherForm.id && (
-                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
-                    <input type="checkbox" checked={teacherAutoCredentials} onChange={(event) => setTeacherAutoCredentials(event.target.checked)} />
-                    {isArabic ? "توليد البريد وكلمة المرور تلقائيًا" : "Generate email/password automatically"}
-                  </label>
+                  <div className="flex overflow-hidden rounded-xl border border-slate-200">
+                    <button type="button" onClick={() => setTeacherEmailAuto(false)}
+                      className={`flex-1 py-2 text-xs font-semibold transition ${!teacherEmailAuto ? "bg-slate-900 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                      {isArabic ? "إدخال البريد يدوياً" : "Enter email manually"}
+                    </button>
+                    <button type="button" onClick={() => setTeacherEmailAuto(true)}
+                      className={`flex-1 py-2 text-xs font-semibold transition ${teacherEmailAuto ? "bg-indigo-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                      {isArabic ? "توليد تلقائي بالنطاق" : "Auto-generate by domain"}
+                    </button>
+                  </div>
                 )}
-                <input name="email" value={teacherForm.email} onChange={setField(setTeacherForm)} placeholder={t.organization.teachers.email} className="h-11 w-full rounded-xl border border-slate-200 px-3" required={!teacherForm.id && !teacherAutoCredentials} disabled={!teacherForm.id && teacherAutoCredentials} />
-                <input name="password" type="password" value={teacherForm.password} onChange={setField(setTeacherForm)} placeholder={teacherForm.id ? t.organization.common.optionalPassword : t.organization.teachers.password} className="h-11 w-full rounded-xl border border-slate-200 px-3" required={!teacherForm.id && !teacherAutoCredentials} disabled={!teacherForm.id && teacherAutoCredentials} />
+                {(!teacherForm.id && !teacherEmailAuto) || teacherForm.id ? (
+                  <input name="email" value={teacherForm.email} onChange={setField(setTeacherForm)} placeholder={t.organization.teachers.email} className="h-11 w-full rounded-xl border border-slate-200 px-3" required={!teacherForm.id} />
+                ) : (
+                  <p className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-xs text-indigo-600">
+                    {isArabic ? "سيتم توليد البريد تلقائياً بناءً على اسم المدرس ونطاق المنظمة." : "Email will be auto-generated based on the teacher's name and your organization's domain."}
+                  </p>
+                )}
                 <input name="specialization" value={teacherForm.specialization} onChange={setField(setTeacherForm)} placeholder={t.organization.teachers.specialization} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
-                <textarea name="bio" value={teacherForm.bio} onChange={setField(setTeacherForm)} placeholder={t.organization.teachers.bio} className="min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2" />
+                <textarea name="bio" value={teacherForm.bio} onChange={setField(setTeacherForm)} placeholder={t.organization.teachers.bio} className="min-h-20 w-full rounded-xl border border-slate-200 px-3 py-2" />
                 <div className="flex gap-2 pt-1">
                   <button type="submit" disabled={actionLoading} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">{t.organization.common.save}</button>
                   <button type="button" onClick={resetTeacherForm} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">{t.organization.common.clear}</button>
@@ -2363,7 +2493,7 @@ export default function OrganizationWorkspacePage() {
                 </label>
 
                 <select value={teacherTrack} onChange={(event) => setTeacherTrack(event.target.value)} className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">
-                  <option value="ALL">{isArabic ? "كل المسارات" : "All Tracks"}</option>
+                  <option value="ALL">{isArabic ? "كل التخصصات" : "All Specializations"}</option>
                   {teacherTrackOptions.map((track) => (
                     <option key={track} value={track}>{track}</option>
                   ))}
@@ -2386,81 +2516,86 @@ export default function OrganizationWorkspacePage() {
                 </button>
               </div>
 
-              <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {filteredTeachers.length === 0 ? (
-                  <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center text-sm text-slate-500 md:col-span-2 xl:col-span-3">
-                    {t.organization.common.empty}
-                  </div>
-                ) : filteredTeachers.map((teacher) => {
-                  const initials = String(teacher?.user?.name || teacher?.name || "T")
-                    .trim()
-                    .split(/\s+/)
-                    .filter(Boolean)
-                    .slice(0, 2)
-                    .map((part) => part[0]?.toUpperCase())
-                    .join("") || "T";
-                  const specialization = teacher?.specialization || (isArabic ? "غير محدد" : "Unspecified");
-                  const courseCount = Number(teacher?.coursesCount || teacher?.courseCount || 0);
-                  const studentCount = Number(teacher?.studentsCount || teacher?.studentCount || 0);
+              <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+                    <tr>
+                      <th className="px-5 py-3">{isArabic ? "المدرس" : "Teacher"}</th>
+                      <th className="px-5 py-3">{isArabic ? "البريد الإلكتروني" : "Email"}</th>
+                      <th className="px-5 py-3">{isArabic ? "التخصص" : "Specialization"}</th>
+                      <th className="px-5 py-3 text-center">{isArabic ? "المواد" : "Subjects"}</th>
+                      <th className="px-5 py-3 text-center">{isArabic ? "الطلاب" : "Students"}</th>
+                      <th className="px-5 py-3">{t.organization.common.actions}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {filteredTeachers.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="px-5 py-10 text-center text-slate-400">{t.organization.common.empty}</td>
+                      </tr>
+                    ) : pagedTeachers.map((teacher) => {
+                      const initials = String(teacher?.user?.name || teacher?.name || "T")
+                        .trim().split(/\s+/).filter(Boolean).slice(0, 2)
+                        .map((p) => p[0]?.toUpperCase()).join("") || "T";
+                      const specialization = teacher?.specialization || "-";
+                      const courseCount = Number(teacher?.subjectCount || teacher?.coursesCount || teacher?.courseCount || 0);
+                      const studentCount = Number(teacher?.studentsCount || teacher?.studentCount || 0);
 
-                  return (
-                    <article key={teacher.id} className="relative overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-                      <div className="h-1 w-full bg-gradient-to-r from-indigo-500 via-violet-500 to-cyan-500" />
-                      <div className="p-6 text-center">
-                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-xl font-black text-white shadow-lg shadow-indigo-500/25">
-                          {initials}
-                        </div>
-                        <h3 className="mt-4 text-lg font-black text-slate-900">{teacher?.user?.name || "-"}</h3>
-                        <p className="mt-1 text-sm text-slate-500">{teacher?.user?.email || "-"}</p>
-                        <p className="mt-1 text-sm text-slate-500">{(isArabic ? "كلمة المرور" : "Password")}: {teacher?.user?.password || "-"}</p>
-                        <span className="mt-3 inline-flex rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700">
-                          {specialization}
-                        </span>
-
-                        <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-200 pt-4 text-center">
-                          <div>
-                            <p className="text-lg font-black text-purple-600">{courseCount}</p>
-                            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{isArabic ? "كورسات" : "Courses"}</p>
-                          </div>
-                          <div>
-                            <p className="text-lg font-black text-purple-600">{studentCount}</p>
-                            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{isArabic ? "طلاب" : "Students"}</p>
-                          </div>
-                        </div>
-
-                        <div className="mt-5 flex items-center justify-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => { setTeacherForm({ id: teacher.id, name: teacher?.user?.name || "", email: teacher?.user?.email || "", password: "", specialization: teacher?.specialization || "", bio: teacher?.bio || "" }); setTeacherModalOpen(true); }}
-                            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
-                            title={t.organization.common.edit}
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openDeleteConfirm({
-                              title: isArabic ? "حذف المدرس؟" : "Delete Teacher?",
-                              label: teacher?.user?.name || teacher?.user?.email || `${teacher.id}`,
-                              onConfirm: async () => {
-                                await handleAction(async () => {
-                                  await deleteOrganizationTeacher(teacher.id);
-                                  const next = await fetchOrganizationTeachers();
-                                  setTeachers(next);
-                                  closeDeleteConfirm();
-                                }, t.organization.messages.teacherDeleted);
-                              },
-                            })}
-                            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-rose-50 hover:text-rose-700"
-                            title={t.organization.common.delete}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
+                      return (
+                        <tr key={teacher.id} className="hover:bg-slate-50/60">
+                          <td className="px-5 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-xs font-black text-white">
+                                {initials}
+                              </div>
+                              <span className="font-semibold text-slate-900">{teacher?.user?.name || "-"}</span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3 text-slate-500">{teacher?.user?.email || "-"}</td>
+                          <td className="px-5 py-3">
+                            <span className="inline-flex rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700">{specialization}</span>
+                          </td>
+                          <td className="px-5 py-3 text-center font-black text-purple-600">{courseCount}</td>
+                          <td className="px-5 py-3 text-center font-black text-purple-600">{studentCount}</td>
+                          <td className="px-5 py-3">
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => { setTeacherForm({ id: teacher.id, name: teacher?.user?.name || "", email: teacher?.user?.email || "", password: "", specialization: teacher?.specialization || "", bio: teacher?.bio || "" }); setTeacherModalOpen(true); }}
+                                className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                                title={t.organization.common.edit}
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openDeleteConfirm({
+                                  title: isArabic ? "حذف المدرس؟" : "Delete Teacher?",
+                                  label: teacher?.user?.name || teacher?.user?.email || `${teacher.id}`,
+                                  onConfirm: async () => {
+                                    await handleAction(async () => {
+                                      await deleteOrganizationTeacher(teacher.id);
+                                      const next = await fetchOrganizationTeachers();
+                                      setTeachers(next);
+                                      closeDeleteConfirm();
+                                    }, t.organization.messages.teacherDeleted);
+                                  },
+                                })}
+                                className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-rose-50 hover:text-rose-700"
+                                title={t.organization.common.delete}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-3 px-1">
+                <Pagination page={teacherPage} totalPages={Math.ceil(filteredTeachers.length / TEACHER_PAGE_SIZE)} totalItems={filteredTeachers.length} pageSize={TEACHER_PAGE_SIZE} onPageChange={setTeacherPage} isArabic={isArabic} />
               </div>
             </article>
           </section>
@@ -2469,7 +2604,7 @@ export default function OrganizationWorkspacePage() {
         {!loading && activeTab === TABS.COURSES && (
           <section className="space-y-4">
             {canManageCourses && (
-              <Modal open={courseModalOpen} onClose={() => { setCourseModalOpen(false); resetCourseForm(); }} title={courseForm.id ? t.organization.courses.formTitle : (isSchool ? (isArabic ? "إضافة صف جديد" : "Add New Grade") : (isArabic ? "إضافة كورس جديد" : "Add New Course"))} maxWidth="max-w-lg">
+              <Modal open={courseModalOpen} onClose={() => { setCourseModalOpen(false); resetCourseForm(); }} title={courseForm.id ? t.organization.courses.formTitle : (isSchool ? (isArabic ? "إضافة صف جديد" : "Add New Grade") : (isArabic ? "إضافة تخصص جديد" : "Add New Specialization"))} maxWidth="max-w-lg">
                 <form onSubmit={saveCourse} className="space-y-3">
                   {isSchool ? (
                     <div className="space-y-3">
@@ -2481,15 +2616,6 @@ export default function OrganizationWorkspacePage() {
                     <input name="Name" value={courseForm.Name} onChange={setField(setCourseForm)} placeholder={t.organization.courses.name} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
                   )}
                   <textarea name="Description" value={courseForm.Description} onChange={setField(setCourseForm)} placeholder={t.organization.courses.description} className="min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2" />
-                  {!isSchool && (
-                    <select name="level" value={courseForm.level} onChange={setField(setCourseForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
-                      <option value="">{isArabic ? "المستوى (اختياري)" : "Level (optional)"}</option>
-                      <option value="BEGINNER">{isArabic ? "مبتدئ" : "Beginner"}</option>
-                      <option value="INTERMEDIATE">{isArabic ? "متوسط" : "Intermediate"}</option>
-                      <option value="ADVANCED">{isArabic ? "متقدم" : "Advanced"}</option>
-                      <option value="EXPERT">{isArabic ? "خبير" : "Expert"}</option>
-                    </select>
-                  )}
                   <div className="space-y-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -2513,7 +2639,7 @@ export default function OrganizationWorkspacePage() {
               {drillCourse && (
                 <div className="mb-5 flex flex-wrap items-center gap-2 text-sm">
                   <button type="button" onClick={() => { setDrillCourse(null); setDrillSubject(null); setDrillExpandedLesson(null); }} className="font-bold text-indigo-600 hover:underline">
-                    {isSchool ? (isArabic ? "الصفوف" : "Grades") : (isArabic ? "الكورسات" : "Courses")}
+                    {isSchool ? (isArabic ? "الصفوف" : "Grades") : (isArabic ? "التخصصات" : "Specializations")}
                   </button>
                   <ChevronRight size={14} className="flex-shrink-0 text-slate-400" />
                   {drillSubject ? (
@@ -2534,17 +2660,17 @@ export default function OrganizationWorkspacePage() {
               {!drillCourse && (<>
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-sky-700">{isSchool ? (isArabic ? "قسم الصفوف" : "Grades section") : (isArabic ? "قسم الكورسات" : "Courses section")}</p>
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-sky-700">{isSchool ? (isArabic ? "قسم الصفوف" : "Grades section") : (isArabic ? "قسم التخصصات" : "Specializations section")}</p>
                   <h2 className="mt-2 text-2xl font-black text-slate-900">{isSchool ? (isArabic ? "الصفوف" : "Grades") : t.organization.courses.listTitle}</h2>
-                  <p className="mt-2 text-sm text-slate-600">{isSchool ? (isArabic ? "هنا تضيف الصفوف وتعدّلها" : "Add and edit grades in their own section") : (isArabic ? "هنا تضيف الكورسات وتعدّلها وتدير تفاصيلها بشكل مستقل" : "Add, edit, and manage courses in their own section")}</p>
+                  <p className="mt-2 text-sm text-slate-600">{isSchool ? (isArabic ? "هنا تضيف الصفوف وتعدّلها" : "Add and edit grades in their own section") : (isArabic ? "هنا تضيف التخصصات وتعدّلها وتدير تفاصيلها بشكل مستقل" : "Add, edit, and manage specializations in their own section")}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-sm font-bold text-sky-700">
-                    {filteredCourses.length} {isSchool ? (isArabic ? "صف" : "grades") : (isArabic ? "كورس" : "courses")}
+                    {filteredCourses.length} {isSchool ? (isArabic ? "صف" : "grades") : (isArabic ? "مسار" : "tracks")}
                   </span>
                   {canManageCourses && (
                     <button type="button" onClick={() => { resetCourseForm(); setCourseModalOpen(true); }} className="rounded-full bg-purple-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-purple-700">
-                      {isSchool ? (isArabic ? "+ إضافة صف" : "+ Add Grade") : (isArabic ? "+ إضافة كورس" : "+ Add Course")}
+                      {isSchool ? (isArabic ? "+ إضافة صف" : "+ Add Grade") : (isArabic ? "+ إضافة تخصص" : "+ Add Specialization")}
                     </button>
                   )}
                 </div>
@@ -2552,7 +2678,7 @@ export default function OrganizationWorkspacePage() {
 
               {!canManageCourses && (
                 <div className="mt-5 rounded-[24px] border border-amber-200 bg-amber-50 p-5">
-                  <p className="text-sm font-bold text-amber-900">{isArabic ? "إنشاء الكورس متاح فقط لحسابات المنظمة." : "Course creation is available only for organization accounts."}</p>
+                  <p className="text-sm font-bold text-amber-900">{isArabic ? "إنشاء التخصص متاح فقط لحسابات المنظمة." : "Specialization creation is available only for organization accounts."}</p>
                   <p className="mt-2 text-sm text-amber-800">{isArabic ? "المعلمون يمكنهم إدارة المواد والدروس فقط." : "Teachers can manage subjects and lessons only."}</p>
                 </div>
               )}
@@ -2569,7 +2695,7 @@ export default function OrganizationWorkspacePage() {
                 </label>
 
                 <select value={courseTrack} onChange={(event) => setCourseTrack(event.target.value)} className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">
-                  <option value="ALL">{isArabic ? "كل المسارات" : "All Tracks"}</option>
+                  <option value="ALL">{isArabic ? "كل التخصصات" : "All Specializations"}</option>
                   {courseTrackOptions.map((track) => (
                     <option key={track} value={track}>{track}</option>
                   ))}
@@ -2647,20 +2773,9 @@ export default function OrganizationWorkspacePage() {
 
                         <div className="mt-4 flex flex-wrap gap-2">
                           <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">{trackLabel}</span>
-                          {!isSchool && levelInfo && (
-                            <span className={`rounded-full px-3 py-1 text-xs font-bold ${levelInfo.cls}`}>
-                              {isArabic ? levelInfo.ar : levelInfo.en}
-                            </span>
-                          )}
                         </div>
 
-                        <div className={`mt-5 flex items-center border-t border-slate-200 pt-4 ${isSchool ? 'justify-end' : 'justify-between'}`}>
-                          {!isSchool && (
-                            <div>
-                              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{isArabic ? "السعر" : "Price"}</p>
-                              <p className="mt-1 text-base font-black text-slate-900">{course?.Price != null && course?.Price !== "" ? `${course.Price} $` : (isArabic ? "مجاني" : "Free")}</p>
-                            </div>
-                          )}
+                        <div className="mt-5 flex items-center justify-end border-t border-slate-200 pt-4">
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
@@ -2720,11 +2835,11 @@ export default function OrganizationWorkspacePage() {
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-5">
                     <div>
-                      <p className="text-xs font-black uppercase tracking-[0.22em] text-indigo-700">{isArabic ? "المواد" : "Subjects"}</p>
+                      <p className="text-xs font-black uppercase tracking-[0.22em] text-indigo-700">{sl.plural}</p>
                       <h2 className="mt-2 text-2xl font-black text-slate-900">{formatGradeName(drillCourse, isSchool, isArabic) || drillCourse.Name || drillCourse.name}</h2>
                     </div>
                     <span className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-sm font-bold text-indigo-700">
-                      {drillSubjects.length} {isArabic ? "مادة" : "subject(s)"}
+                      {drillSubjects.length} {sl.countOf}
                     </span>
                   </div>
                   {drillSubjectsLoading ? (
@@ -2733,7 +2848,7 @@ export default function OrganizationWorkspacePage() {
                     </div>
                   ) : drillSubjects.length === 0 ? (
                     <div className="mt-6 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center">
-                      <p className="text-sm font-semibold text-slate-500">{isArabic ? "لا توجد مواد في هذا الكورس بعد." : "No subjects in this course yet."}</p>
+                      <p className="text-sm font-semibold text-slate-500">{isArabic ? "لا توجد مواد في هذا التخصص بعد." : "No subjects in this specialization yet."}</p>
                     </div>
                   ) : (
                     <div className="mt-6 overflow-x-auto">
@@ -2741,7 +2856,7 @@ export default function OrganizationWorkspacePage() {
                         <thead>
                           <tr className="border-b border-slate-200">
                             <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">#</th>
-                            <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "المادة" : "Subject"}</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{sl.singular}</th>
                             <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "المدرس" : "Teacher"}</th>
                             <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "الوصف" : "Description"}</th>
                             <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "الإجراءات" : "Actions"}</th>
@@ -2760,7 +2875,7 @@ export default function OrganizationWorkspacePage() {
                                     <FolderOpen size={13} />
                                     {isArabic ? "عرض الدروس" : "View Lessons"}
                                   </button>
-                                  <button type="button" onClick={() => { setSubjectForm({ id: subject.id, name: subject.name, Description: subject.Description || "", Teacher_id: subject.Teacher_id || "", isPaid: Boolean(subject.isPaid), price: subject.price ? String(subject.price) : "", level: subject.level || "" }); setSubjectModalOpen(true); }} className="rounded-lg border border-slate-300 bg-white p-2 text-slate-700 transition hover:bg-slate-50" title={isArabic ? "تعديل" : "Edit"}>
+                                  <button type="button" onClick={() => { setSubjectForm({ id: subject.id, name: subject.name, Description: subject.Description || "", Teacher_id: subject.Teacher_id || "", isPaid: Boolean(subject.isPaid), price: subject.price ? String(subject.price) : "", level: subject.level || "", imageUrl: subject.imageUrl || "" }); setSubjectImageFile(null); setSubjectImagePreview(subject.imageUrl || ""); setSubjectModalOpen(true); }} className="rounded-lg border border-slate-300 bg-white p-2 text-slate-700 transition hover:bg-slate-50" title={isArabic ? "تعديل" : "Edit"}>
                                     <Pencil size={14} />
                                   </button>
                                 </div>
@@ -2888,34 +3003,57 @@ export default function OrganizationWorkspacePage() {
               </div>
             </article>
 
-            <Modal open={subjectModalOpen} onClose={() => { setSubjectModalOpen(false); resetSubjectForm(); }} title={subjectForm.id ? t.organization.subjects.formTitle : (isArabic ? "إضافة مادة جديدة" : "Add New Subject")} maxWidth="max-w-lg">
+            <Modal open={subjectModalOpen} onClose={() => { setSubjectModalOpen(false); resetSubjectForm(); }} title={subjectForm.id ? sl.formTitle : sl.addNew} maxWidth="max-w-lg">
               <form onSubmit={saveSubject} className="space-y-3">
-                <p className="text-xs text-slate-500">{isSchool ? t.organization.subjects.gradeHint : t.organization.subjects.courseHint}</p>
+                <p className="text-xs text-slate-500">{isSchool ? sl.gradeHint : sl.courseHint}</p>
                 <div className="mt-4 space-y-3">
                   <select value={selectedCourseId || ""} onChange={(event) => handleSubjectsCourseChange(Number(event.target.value) || null)} className="h-11 w-full rounded-xl border border-slate-200 px-3">
                      <option value="">
-                       {isSchool
-                         ? (isArabic ? t.organization.subjects.selectGradeFirst : t.organization.subjects.selectGradeFirst)
-                         : (isArabic ? t.organization.subjects.selectCourseFirst : t.organization.subjects.selectCourseFirst)}
+                       {isSchool ? sl.selectGradeFirst : sl.selectCourseFirst}
                      </option>
                      {sortedSubjectCourses.map((course) => (
                        <option key={course.id} value={course.id}>{formatGradeName(course, isSchool, isArabic) || course.Name}</option>
                      ))}
                   </select>
-                  <input name="name" value={subjectForm.name} onChange={setField(setSubjectForm)} placeholder={t.organization.subjects.name} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
-                  <textarea name="Description" value={subjectForm.Description} onChange={setField(setSubjectForm)} placeholder={t.organization.subjects.description} className="min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2" />
+                  <input name="name" value={subjectForm.name} onChange={setField(setSubjectForm)} placeholder={sl.name} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
+                  <textarea name="Description" value={subjectForm.Description} onChange={setField(setSubjectForm)} placeholder={sl.description} className="min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2" />
                   <select name="Teacher_id" value={subjectForm.Teacher_id} onChange={setField(setSubjectForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3">
                     <option value="">{isArabic ? "اختر المدرس (اختياري)" : "Select teacher (optional)"}</option>
                     {teacherOptions.map((option) => (
                       <option key={option.id} value={option.id}>{option.label}</option>
                     ))}
                   </select>
+
+                  {/* Subject image */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                      {sl.image}
+                    </label>
+                    {subjectImagePreview && (
+                      <div className="relative overflow-hidden rounded-2xl border border-slate-200">
+                        <img src={subjectImagePreview} alt="" className="h-32 w-full object-cover" />
+                        <button type="button" onClick={() => { setSubjectImageFile(null); setSubjectImagePreview(""); setSubjectForm(p => ({ ...p, imageUrl: "" })); }}
+                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70">✕</button>
+                      </div>
+                    )}
+                    <label className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-indigo-300 hover:bg-indigo-50">
+                      <span className="text-xl">🖼</span>
+                      <span className="text-sm text-slate-500">{isArabic ? "اختر صورة..." : "Choose image..."}</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setSubjectImageFile(file);
+                        setSubjectImagePreview(URL.createObjectURL(file));
+                      }} />
+                    </label>
+                  </div>
+
                   {isAcademy ? (
                     <div className="space-y-2">
                       {/* Level selector — academy only */}
                       <div>
                         <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">
-                          {isArabic ? "مستوى المادة" : "Subject Level"}
+                          {sl.level}
                         </label>
                         <div className="grid grid-cols-4 gap-2">
                           {[
@@ -3007,11 +3145,11 @@ export default function OrganizationWorkspacePage() {
             <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
                 <div>
-                  <h2 className="text-2xl font-black text-slate-900">{isArabic ? "إدارة المواد" : "Subjects Management"}</h2>
-                  <p className="mt-1 text-sm text-slate-600">{isArabic ? "إدارة المواد حسب المسار والمدرس" : "Manage all subjects across your tracks & grades"}</p>
+                  <h2 className="text-2xl font-black text-slate-900">{sl.managementTitle}</h2>
+                  <p className="mt-1 text-sm text-slate-600">{isArabic ? `إدارة ${sl.plural} حسب المسار والمدرس` : `Manage all ${sl.plural.toLowerCase()} across your tracks & grades`}</p>
                 </div>
                 <button type="button" onClick={() => { resetSubjectForm(); setSubjectModalOpen(true); }} className="rounded-full bg-purple-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-purple-700">
-                  {isArabic ? "+ إضافة مادة" : "+ Add Subject"}
+                  {sl.addNewBtn}
                 </button>
               </div>
 
@@ -3077,7 +3215,7 @@ export default function OrganizationWorkspacePage() {
                     <thead>
                       <tr className="border-b border-slate-200">
                         <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">#</th>
-                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "المادة" : "Subject Name"}</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{sl.columnName}</th>
                         <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "الصف/المسار" : "Track"}</th>
                         <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "المدرس" : "Teacher"}</th>
                         <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "الوصف" : "Description"}</th>
@@ -3128,7 +3266,7 @@ export default function OrganizationWorkspacePage() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => { setSubjectForm({ id: subject.id, name: subject.name, Description: subject.Description || "", Teacher_id: subject.Teacher_id || "", isPaid: Boolean(subject.isPaid), price: subject.price ? String(subject.price) : "", level: subject.level || "" }); setSubjectModalOpen(true); }}
+                                onClick={() => { setSubjectForm({ id: subject.id, name: subject.name, Description: subject.Description || "", Teacher_id: subject.Teacher_id || "", isPaid: Boolean(subject.isPaid), price: subject.price ? String(subject.price) : "", level: subject.level || "", imageUrl: subject.imageUrl || "" }); setSubjectImageFile(null); setSubjectImagePreview(subject.imageUrl || ""); setSubjectModalOpen(true); }}
                                 className="rounded-lg border border-slate-300 bg-white p-2 text-slate-700 hover:bg-slate-50 transition"
                                 title={isArabic ? "تعديل" : "Edit"}
                               >
@@ -3146,7 +3284,7 @@ export default function OrganizationWorkspacePage() {
                                       setSubjectsByCourse((prev) => ({ ...prev, [selectedCourseId]: next }));
                                       setSubjectSelectionTouched(true);
                                       closeDeleteConfirm();
-                                    }, t.organization.messages.subjectDeleted);
+                                    }, sl.deleted);
                                   },
                                 })}
                                 className="rounded-lg border border-rose-300 bg-rose-50 p-2 text-rose-700 hover:bg-rose-100 transition"
@@ -3163,13 +3301,13 @@ export default function OrganizationWorkspacePage() {
                 </div>
               ) : shouldShowSubjectsEmptyState ? (
                 <div className="mt-8 rounded-[20px] border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
-                  <p className="text-sm font-semibold text-slate-600">{isArabic ? "لا توجد مواد لهذا المسار" : "No subjects in this track"}</p>
+                  <p className="text-sm font-semibold text-slate-600">{isArabic ? "لا توجد مواد لهذا التخصص" : "No subjects in this specialization"}</p>
                   <p className="mt-1 text-xs text-slate-500">{isArabic ? "حاول تغيير الفلاتر أو أضف مادة جديدة" : "Try adjusting filters or add a new subject"}</p>
                 </div>
               ) : (
                 <div className="mt-8 rounded-[20px] border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
-                  <p className="text-sm font-semibold text-slate-600">{isArabic ? "اختر مسارًا لعرض المواد" : "Choose a track to view subjects"}</p>
-                  <p className="mt-1 text-xs text-slate-500">{isArabic ? "يمكنك التبديل بين الصفوف/المسارات من الأعلى" : "Use the selector above to switch grades/tracks"}</p>
+                  <p className="text-sm font-semibold text-slate-600">{isArabic ? "اختر تخصصًا لعرض المواد" : "Choose a specialization to view subjects"}</p>
+                  <p className="mt-1 text-xs text-slate-500">{isArabic ? "يمكنك التبديل بين الصفوف/التخصصات من الأعلى" : "Use the selector above to switch grades/specializations"}</p>
                 </div>
               )}
             </div>
@@ -3182,13 +3320,24 @@ export default function OrganizationWorkspacePage() {
               <form onSubmit={saveStudent} className="space-y-3">
                 <input name="name" value={studentForm.name} onChange={setField(setStudentForm)} placeholder={t.organization.students.name} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
                 {!studentForm.id && (
-                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
-                    <input type="checkbox" checked={studentAutoCredentials} onChange={(event) => setStudentAutoCredentials(event.target.checked)} />
-                    {isArabic ? "توليد البريد وكلمة المرور تلقائيًا" : "Generate email/password automatically"}
-                  </label>
+                  <div className="flex overflow-hidden rounded-xl border border-slate-200">
+                    <button type="button" onClick={() => setStudentEmailAuto(false)}
+                      className={`flex-1 py-2 text-xs font-semibold transition ${!studentEmailAuto ? "bg-slate-900 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                      {isArabic ? "إدخال البريد يدوياً" : "Enter email manually"}
+                    </button>
+                    <button type="button" onClick={() => setStudentEmailAuto(true)}
+                      className={`flex-1 py-2 text-xs font-semibold transition ${studentEmailAuto ? "bg-indigo-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                      {isArabic ? "توليد تلقائي بالنطاق" : "Auto-generate by domain"}
+                    </button>
+                  </div>
                 )}
-                <input name="email" value={studentForm.email} onChange={setField(setStudentForm)} placeholder={t.organization.students.email} className="h-11 w-full rounded-xl border border-slate-200 px-3" required={!studentForm.id && !studentAutoCredentials} disabled={!studentForm.id && studentAutoCredentials} />
-                <input name="password" type="password" value={studentForm.password} onChange={setField(setStudentForm)} placeholder={studentForm.id ? t.organization.common.optionalPassword : t.organization.students.password} className="h-11 w-full rounded-xl border border-slate-200 px-3" required={!studentForm.id && !studentAutoCredentials} disabled={!studentForm.id && studentAutoCredentials} />
+                {(!studentForm.id && !studentEmailAuto) || studentForm.id ? (
+                  <input name="email" value={studentForm.email} onChange={setField(setStudentForm)} placeholder={t.organization.students.email} className="h-11 w-full rounded-xl border border-slate-200 px-3" required={!studentForm.id} />
+                ) : (
+                  <p className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-xs text-indigo-600">
+                    {isArabic ? "سيتم توليد البريد تلقائياً بناءً على اسم الطالب ونطاق المنظمة." : "Email will be auto-generated based on the student's name and your organization's domain."}
+                  </p>
+                )}
                 <input name="age" type="number" value={studentForm.age} onChange={setField(setStudentForm)} placeholder={t.organization.students.age} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
                 <input name="dob" type="date" value={studentForm.dob} onChange={setField(setStudentForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
                 {isSchool && <input name="parentNationalId" value={studentForm.parentNationalId} onChange={setField(setStudentForm)} placeholder={t.organization.students.parentNationalId} className="h-11 w-full rounded-xl border border-slate-200 px-3" />}
@@ -3291,8 +3440,7 @@ export default function OrganizationWorkspacePage() {
                         <th className="px-4 py-3">#</th>
                         <th className="px-4 py-3">{t.organization.students.name}</th>
                         <th className="px-4 py-3">{t.organization.students.email}</th>
-                        <th className="px-4 py-3">{isArabic ? "كلمة المرور" : "Password"}</th>
-                        <th className="px-4 py-3">{isSchool ? (isArabic ? "الصف" : "Grade") : (isArabic ? "الدورة" : "Course")}</th>
+                        <th className="px-4 py-3">{isSchool ? (isArabic ? "الصف" : "Grade") : (isArabic ? "المسار" : "Track")}</th>
                         <th className="px-4 py-3">{t.organization.students.age}</th>
                         <th className="px-4 py-3">{isArabic ? "الحالة" : "Status"}</th>
                         <th className="px-4 py-3">{t.organization.common.actions}</th>
@@ -3301,9 +3449,9 @@ export default function OrganizationWorkspacePage() {
                     <tbody className="divide-y divide-slate-100 bg-white">
                       {filteredStudents.length === 0 ? (
                         <tr>
-                          <td colSpan="8" className="px-4 py-6 text-center text-slate-500">{t.organization.common.empty}</td>
+                          <td colSpan="7" className="px-4 py-6 text-center text-slate-500">{t.organization.common.empty}</td>
                         </tr>
-                      ) : filteredStudents.map((student, index) => {
+                      ) : pagedStudents.map((student, index) => {
                         const statusValue = String(student?.status || student?.Status || "").toUpperCase();
                         const statusLabel = {
                           ACTIVE:    isArabic ? "نشط"     : "Active",
@@ -3323,7 +3471,6 @@ export default function OrganizationWorkspacePage() {
                             <td className="px-4 py-4 font-semibold text-slate-500">{index + 1}</td>
                             <td className="px-4 py-4 font-semibold text-slate-900">{student.name}</td>
                             <td className="px-4 py-4 text-slate-600">{student.email}</td>
-                            <td className="px-4 py-4 text-slate-600">{student.password || "-"}</td>
                             <td className="px-4 py-4 text-slate-600">{selectedCourseId ? (formatGradeName(courses.find((course) => course.id === selectedCourseId), isSchool, isArabic) || "-") : (isArabic ? "الكل" : "All")}</td>
                             <td className="px-4 py-4 text-slate-600">{student.age ?? "-"}</td>
                             <td className="px-4 py-4">
@@ -3402,6 +3549,9 @@ export default function OrganizationWorkspacePage() {
                     </tbody>
                   </table>
                 </div>
+                <div className="mt-3 px-1">
+                  <Pagination page={studentPage} totalPages={Math.ceil(filteredStudents.length / STUDENT_PAGE_SIZE)} totalItems={filteredStudents.length} pageSize={STUDENT_PAGE_SIZE} onPageChange={setStudentPage} isArabic={isArabic} />
+                </div>
               </div>
             </article>
           </section>
@@ -3414,13 +3564,24 @@ export default function OrganizationWorkspacePage() {
                 <p className="text-xs text-slate-500">{parentForm.id ? t.organization.parents.selectHint : t.organization.parents.createHint}</p>
                 <input name="name" value={parentForm.name} onChange={setField(setParentForm)} placeholder={t.organization.parents.name} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
                 {!parentForm.id && (
-                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
-                    <input type="checkbox" checked={parentAutoCredentials} onChange={(event) => setParentAutoCredentials(event.target.checked)} />
-                    {t.organization.parents.autoCredentials}
-                  </label>
+                  <div className="flex overflow-hidden rounded-xl border border-slate-200">
+                    <button type="button" onClick={() => setParentEmailAuto(false)}
+                      className={`flex-1 py-2 text-xs font-semibold transition ${!parentEmailAuto ? "bg-slate-900 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                      {isArabic ? "إدخال البريد يدوياً" : "Enter email manually"}
+                    </button>
+                    <button type="button" onClick={() => setParentEmailAuto(true)}
+                      className={`flex-1 py-2 text-xs font-semibold transition ${parentEmailAuto ? "bg-indigo-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                      {isArabic ? "توليد تلقائي بالنطاق" : "Auto-generate by domain"}
+                    </button>
+                  </div>
                 )}
-                <input name="email" value={parentForm.email} onChange={setField(setParentForm)} placeholder={t.organization.parents.email} className="h-11 w-full rounded-xl border border-slate-200 px-3" required={!parentForm.id && !parentAutoCredentials} disabled={!parentForm.id && parentAutoCredentials} />
-                <input name="password" type="password" value={parentForm.password} onChange={setField(setParentForm)} placeholder={t.organization.parents.passwordHint} className="h-11 w-full rounded-xl border border-slate-200 px-3" required={!parentForm.id && !parentAutoCredentials} disabled={!parentForm.id && parentAutoCredentials} />
+                {(!parentForm.id && !parentEmailAuto) || parentForm.id ? (
+                  <input name="email" value={parentForm.email} onChange={setField(setParentForm)} placeholder={t.organization.parents.email} className="h-11 w-full rounded-xl border border-slate-200 px-3" required={!parentForm.id} />
+                ) : (
+                  <p className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-xs text-indigo-600">
+                    {isArabic ? "سيتم توليد البريد تلقائياً بناءً على اسم ولي الأمر ونطاق المنظمة." : "Email will be auto-generated based on the parent's name and your organization's domain."}
+                  </p>
+                )}
                 <input name="address" value={parentForm.address} onChange={setField(setParentForm)} placeholder={t.organization.parents.address} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
                 <div className="flex gap-2 pt-1">
                   <button type="submit" disabled={actionLoading} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">{t.organization.common.save}</button>
@@ -3476,7 +3637,6 @@ export default function OrganizationWorkspacePage() {
                     <tr>
                       <th className="py-2 pr-3">{t.organization.parents.name}</th>
                       <th className="py-2 pr-3">{t.organization.parents.email}</th>
-                      <th className="py-2 pr-3">{t.organization.parents.passwordHint}</th>
                       <th className="py-2 pr-3">{t.organization.parents.childrenLinked}</th>
                       <th className="py-2 pr-3">{t.organization.parents.children}</th>
                       <th className="py-2 pr-3">{t.organization.parents.address}</th>
@@ -3486,13 +3646,12 @@ export default function OrganizationWorkspacePage() {
                   <tbody>
                     {filteredParents.length === 0 ? (
                       <tr>
-                        <td colSpan="7" className="py-4 text-slate-500">{t.organization.common.empty}</td>
+                        <td colSpan="6" className="py-4 text-slate-500">{t.organization.common.empty}</td>
                       </tr>
-                    ) : filteredParents.map((parent) => (
+                    ) : pagedParents.map((parent) => (
                       <tr key={parent.id} className="border-t border-slate-100">
                         <td className="py-2 pr-3">{parent.name || "-"}</td>
                         <td className="py-2 pr-3">{parent.email || "-"}</td>
-                        <td className="py-2 pr-3">{parent.password || "-"}</td>
                         <td className="py-2 pr-3">{linkedParentIds.has(Number(parent.id)) ? t.organization.parents.linkedYes : t.organization.parents.linkedNo}</td>
                         <td className="py-2 pr-3">{(childrenByParentId.get(Number(parent.id)) || []).map((child) => `${child.name} (ID: ${child.id})`).join("، ") || "-"}</td>
                         <td className="py-2 pr-3">{parent.address || "-"}</td>
@@ -3541,13 +3700,16 @@ export default function OrganizationWorkspacePage() {
                     ))}
                   </tbody>
                 </table>
+                <div className="mt-3 px-1">
+                  <Pagination page={parentPage} totalPages={Math.ceil(filteredParents.length / PARENT_PAGE_SIZE)} totalItems={filteredParents.length} pageSize={PARENT_PAGE_SIZE} onPageChange={setParentPage} isArabic={isArabic} />
+                </div>
               </div>
             </article>
           </section>
         )}
 
-        {isLinkDrawerOpen && linkTargetParent ? (
-          <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/40" onClick={closeLinkDrawer}>
+        {isLinkDrawerOpen && linkTargetParent ? createPortal(
+          <div className="fixed inset-0 z-[90] flex justify-end bg-slate-900/40" onClick={closeLinkDrawer}>
             <aside className="h-full w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -3632,8 +3794,170 @@ export default function OrganizationWorkspacePage() {
                 </button>
               </div>
             </aside>
-          </div>
+          </div>,
+          document.getElementById('modal-root')
         ) : null}
+
+        {/* ─────────────── MARKS TAB ─────────────── */}
+        {!loading && isSchool && activeTab === TABS.MARKS && (() => {
+          // Collect all subjects from all courses for the filter dropdown
+          // Derive subject list directly from loaded marks — no extra API calls needed
+          const allSubjects = [...new Map(
+            orgMarks.filter((m) => m.subject).map((m) => [m.Subject_id, { id: m.Subject_id, name: m.subject.name }])
+          ).values()].sort((a, b) => a.name.localeCompare(b.name));
+          // Unique grade levels from courses
+          const gradeLevels = [...new Set(courses.filter((c) => c.GradeLevel).map((c) => c.GradeLevel))].sort((a, b) => a - b);
+          // Mark types present
+          const markTypes = ['EXAM', 'MIDTERM', 'QUIZ'];
+
+          const totalStudents = new Set(visibleOrgMarks.map((m) => m.Student_id)).size;
+
+          return (
+            <section className="space-y-5">
+              {/* Header */}
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900">{isArabic ? 'درجات الطلاب' : 'Student Marks'}</h2>
+                  <p className="mt-0.5 text-sm text-slate-500">{isArabic ? 'استعراض وتصفية درجات جميع طلاب المدرسة' : 'Browse and filter marks across all students'}</p>
+                </div>
+                {/* Summary pills + refresh */}
+                <div className="flex items-center gap-2">
+                  <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-2 text-center">
+                    <p className="text-lg font-black text-indigo-700">{visibleOrgMarks.length}</p>
+                    <p className="text-[10px] font-bold uppercase text-indigo-400">{isArabic ? 'سجل' : 'Records'}</p>
+                  </div>
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-2 text-center">
+                    <p className="text-lg font-black text-emerald-700">{totalStudents}</p>
+                    <p className="text-[10px] font-bold uppercase text-emerald-400">{isArabic ? 'طالب' : 'Students'}</p>
+                  </div>
+                  <button type="button" onClick={refreshOrgMarks} disabled={marksLoading}
+                    title={isArabic ? 'تحديث' : 'Refresh'}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:opacity-40">
+                    <svg className={marksLoading ? 'animate-spin' : ''} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Filters card */}
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-slate-400">{isArabic ? 'تصفية النتائج' : 'Filter Results'}</p>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+
+                  {/* Student name */}
+                  <div className="relative">
+                    <svg className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input
+                      value={marksFilters.studentName}
+                      onChange={(e) => setMarksFilters((p) => ({ ...p, studentName: e.target.value, termId: p.termId }))}
+                      placeholder={isArabic ? 'اسم الطالب...' : 'Student name...'}
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 ps-9 pe-3 text-sm outline-none focus:border-indigo-400 focus:bg-white"
+                    />
+                  </div>
+
+                  {/* Grade level */}
+                  <select value={marksFilters.gradeLevel} onChange={(e) => setMarksFilters((p) => ({ ...p, gradeLevel: e.target.value, subjectId: '' }))}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-indigo-400">
+                    <option value="">{isArabic ? 'كل الصفوف' : 'All grades'}</option>
+                    {gradeLevels.map((g) => <option key={g} value={g}>{isArabic ? `الصف ${g}` : `Grade ${g}`}</option>)}
+                  </select>
+
+                  {/* Subject */}
+                  <select value={marksFilters.subjectId} onChange={(e) => setMarksFilters((p) => ({ ...p, subjectId: e.target.value }))}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-indigo-400">
+                    <option value="">{isArabic ? 'كل المواد' : 'All subjects'}</option>
+                    {allSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+
+                  {/* Academic year */}
+                  <select value={marksFilters.yearId} onChange={(e) => setMarksFilters((p) => ({ ...p, yearId: e.target.value, termId: '' }))}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-indigo-400">
+                    <option value="">{isArabic ? 'كل السنوات' : 'All years'}</option>
+                    {academicYears.map((y) => <option key={y.id} value={y.id}>{y.name}{y.isActive ? (isArabic ? ' (نشط)' : ' (Active)') : ''}</option>)}
+                  </select>
+
+                  {/* Term */}
+                  <select value={marksFilters.termId} onChange={(e) => setMarksFilters((p) => ({ ...p, termId: e.target.value }))}
+                    disabled={!marksFilters.yearId || marksTerms.length === 0}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-indigo-400 disabled:opacity-50">
+                    <option value="">{isArabic ? 'كل الفصول' : 'All terms'}</option>
+                    {marksTerms.map((t) => <option key={t.id} value={t.id}>{t.name || `${isArabic ? 'الفصل' : 'Term'} ${t.termNumber}`}</option>)}
+                  </select>
+
+                  {/* Mark type */}
+                  <select value={marksFilters.markType} onChange={(e) => setMarksFilters((p) => ({ ...p, markType: e.target.value }))}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-indigo-400">
+                    <option value="">{isArabic ? 'كل الأنواع' : 'All types'}</option>
+                    {markTypes.map((mt) => <option key={mt} value={mt}>{mt}</option>)}
+                  </select>
+                </div>
+
+                {/* Reset */}
+                {Object.values(marksFilters).some(Boolean) && (
+                  <button type="button"
+                    onClick={() => setMarksFilters({ gradeLevel: '', subjectId: '', studentName: '', yearId: '', termId: '', markType: '' })}
+                    className="mt-3 text-xs font-bold text-rose-500 hover:text-rose-700">
+                    ✕ {isArabic ? 'مسح الفلاتر' : 'Clear filters'}
+                  </button>
+                )}
+              </div>
+
+              {/* Marks table */}
+              <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                {marksLoading ? (
+                  <div className="flex items-center justify-center gap-3 py-16 text-slate-500">
+                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-300 border-t-indigo-600" />
+                    <span className="text-sm font-semibold">{isArabic ? 'جارٍ التحميل...' : 'Loading...'}</span>
+                  </div>
+                ) : visibleOrgMarks.length === 0 ? (
+                  <div className="flex flex-col items-center gap-3 py-16 text-center">
+                    <span className="text-4xl">📊</span>
+                    <p className="text-sm font-bold text-slate-500">{isArabic ? 'لا توجد درجات تطابق الفلاتر المحددة.' : 'No marks match the selected filters.'}</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3 text-start">{isArabic ? 'الطالب' : 'Student'}</th>
+                          <th className="px-4 py-3 text-start">{isArabic ? 'الصف' : 'Grade'}</th>
+                          <th className="px-4 py-3 text-start">{isArabic ? 'المادة' : 'Subject'}</th>
+                          <th className="px-4 py-3 text-start">{isArabic ? 'المعلم' : 'Teacher'}</th>
+                          <th className="px-4 py-3 text-center">{isArabic ? 'الدرجة' : 'Score'}</th>
+                          <th className="px-4 py-3 text-center">{isArabic ? 'الوزن' : 'Weight'}</th>
+                          <th className="px-4 py-3 text-center">{isArabic ? 'النوع' : 'Type'}</th>
+                          <th className="px-4 py-3 text-center">{isArabic ? 'التاريخ' : 'Date'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {visibleOrgMarks.map((mark) => {
+                          const gradeLevel = mark.subject?.course?.GradeLevel;
+                          return (
+                            <tr key={mark.id} className="hover:bg-slate-50/60 transition">
+                              <td className="px-4 py-3 font-semibold text-slate-900">{mark.student?.user?.name || `#${mark.Student_id}`}</td>
+                              <td className="px-4 py-3 text-slate-600">{gradeLevel ? (isArabic ? `الصف ${gradeLevel}` : `Grade ${gradeLevel}`) : '—'}</td>
+                              <td className="px-4 py-3 text-slate-700 font-medium">{mark.subject?.name || '—'}</td>
+                              <td className="px-4 py-3 text-slate-500 text-xs">{mark.subject?.teacher?.user?.name || '—'}</td>
+                              <td className="px-4 py-3 text-center font-black text-slate-900">{Number(mark.Numbers).toFixed(0)} <span className="text-[10px] font-semibold text-slate-400">/ {Number(mark.OutOf).toFixed(0)}</span></td>
+                              <td className="px-4 py-3 text-center text-xs text-slate-500">{mark.ExamPercentage ? `${Number(mark.ExamPercentage).toFixed(0)}%` : '—'}</td>
+                              <td className="px-4 py-3 text-center">
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${
+                                  mark.MarkType === 'EXAM' ? 'bg-indigo-100 text-indigo-700' :
+                                  mark.MarkType === 'MIDTERM' ? 'bg-violet-100 text-violet-700' :
+                                  'bg-amber-100 text-amber-700'
+                                }`}>{mark.MarkType}</span>
+                              </td>
+                              <td className="px-4 py-3 text-center text-xs text-slate-500">{mark.time ? String(mark.time).slice(0, 10) : '—'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </section>
+          );
+        })()}
 
         {!loading && isSchool && activeTab === TABS.SCHOOL && (
           <>
@@ -4080,7 +4404,7 @@ export default function OrganizationWorkspacePage() {
                   {isArabic
                     ? isSchool
                       ? "إضافة إلى صف"
-                      : "إضافة إلى كورس"
+                      : "إضافة إلى مسار"
                     : isSchool
                       ? "Enroll in Grade"
                       : "Enroll in Course"}

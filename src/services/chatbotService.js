@@ -1,5 +1,6 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
+import { groqFetchWithRetry } from '../utils/groqClient.js';
 
 const RAG_QUERY_TIMEOUT_MS = Number(process.env.RAG_QUERY_TIMEOUT_MS || 10000);
 const RAG_FALLBACK_TIMEOUT_MS = Number(process.env.RAG_FALLBACK_TIMEOUT_MS || 5000);
@@ -678,13 +679,13 @@ const resolveRequesterContext = async (tokenUser) => {
 };
 
 const getCourseContext = async ({ orgId, courseId, subjectId, lessonId }) => {
-  const course = await prisma.course.findFirst({
+  const course = await prisma.track.findFirst({
     where: {
       id: courseId,
       Org_id: orgId,
     },
     include: {
-      subject: {
+      courses: {
         include: {
           lesson: {
             select: { id: true, name: true },
@@ -696,7 +697,7 @@ const getCourseContext = async ({ orgId, courseId, subjectId, lessonId }) => {
 
   if (!course) throw new AppError('course_id not found for this organization', 404);
 
-  const subjects = course.subject;
+  const subjects = course.courses;
   if (!subjects.length) throw new AppError('No subjects found in this course', 404);
 
   const lessonToSubject = new Map();
@@ -1115,7 +1116,7 @@ const askGroq = async ({ question, chunks, questionStyle, scope, modeHint, histo
 
   let response;
   try {
-    response = await fetch(GROQ_API_URL, {
+    response = await groqFetchWithRetry(GROQ_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1155,7 +1156,7 @@ const askGroq = async ({ question, chunks, questionStyle, scope, modeHint, histo
         ],
       }),
       signal: groqController.signal,
-    });
+    }, { retries: 3, baseDelay: 500 });
   } finally {
     clearTimeout(groqTimeout);
   }
@@ -1184,7 +1185,7 @@ const askGroqGeneral = async ({ question, systemPrompt, lang = 'ar', history = [
 
   let response;
   try {
-    response = await fetch(GROQ_API_URL, {
+    response = await groqFetchWithRetry(GROQ_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1201,7 +1202,7 @@ const askGroqGeneral = async ({ question, systemPrompt, lang = 'ar', history = [
         ],
       }),
       signal: groqController.signal,
-    });
+    }, { retries: 3, baseDelay: 500 });
   } finally {
     clearTimeout(groqTimeout);
   }
@@ -1251,7 +1252,7 @@ export const askChatbot = async ({ tokenUser, question, courseId, subjectId, les
   const { orgId } = await resolveRequesterContext(tokenUser);
 
   if (courseId) {
-    const course = await prisma.course.findFirst({
+    const course = await prisma.track.findFirst({
       where: { id: Number(courseId), Org_id: orgId },
       select: { id: true },
     });
@@ -1260,7 +1261,7 @@ export const askChatbot = async ({ tokenUser, question, courseId, subjectId, les
 
   if (lessonId) {
     const lesson = await prisma.lesson.findFirst({
-      where: { id: Number(lessonId), subject: { course: { Org_id: orgId } } },
+      where: { id: Number(lessonId), course: { track: { Org_id: orgId } } },
       select: { id: true },
     });
     if (!lesson) throw new AppError('Lesson not found or access denied', 403);

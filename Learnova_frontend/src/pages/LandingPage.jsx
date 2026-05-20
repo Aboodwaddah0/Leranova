@@ -167,7 +167,7 @@ export default function LandingPage() {
     <main
       dir={isArabic ? "rtl" : "ltr"}
       className={`relative overflow-x-hidden ${isArabic ? "lang-ar" : "lang-en"}`}
-      style={{ background: "#030712", color: "#f8fafc" }}
+      style={{ background: "#ffffff", color: "#0f172a" }}
     >
       <style>{CSS}</style>
 
@@ -175,27 +175,27 @@ export default function LandingPage() {
       <nav
         className="fixed inset-x-0 top-0 z-50 transition-all duration-300"
         style={{
-          background:    scrolled ? "rgba(3,7,18,0.94)" : "rgba(3,7,18,0.45)",
+          background:    scrolled ? "rgba(255,255,255,0.97)" : "rgba(255,255,255,0.85)",
           backdropFilter: "blur(20px)",
-          borderBottom:  scrolled ? "1px solid rgba(99,102,241,0.18)" : "1px solid rgba(255,255,255,0.05)",
-          boxShadow:     scrolled ? "0 1px 0 rgba(99,102,241,.06), 0 8px 40px rgba(0,0,0,.4)" : "none",
+          borderBottom:  scrolled ? "1px solid #e2e8f0" : "1px solid rgba(99,102,241,0.08)",
+          boxShadow:     scrolled ? "0 1px 0 rgba(99,102,241,.04), 0 4px 24px rgba(0,0,0,.06)" : "none",
         }}
       >
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-3.5 sm:px-8 lg:px-10">
           {/* Logo */}
           <Link to="/" className="flex shrink-0 items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl"
-              style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 0 18px rgba(99,102,241,.55)" }}>
+              style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 0 18px rgba(99,102,241,.35)" }}>
               <Sparkles size={13} className="text-white" />
             </div>
-            <span className="text-[13px] font-black uppercase tracking-[0.26em] text-white/85">Learnova</span>
+            <span className="text-[13px] font-black uppercase tracking-[0.26em] text-slate-800">Learnova</span>
           </Link>
 
           {/* Desktop nav */}
           <div className="hidden items-center gap-0.5 lg:flex">
             {navLinks.map((link) => (
               <button key={link.id} type="button" onClick={() => scrollTo(link.id)}
-                className="lnv-nav-link rounded-lg px-4 py-2 text-sm font-semibold text-white/55 transition-colors hover:text-white/90">
+                className="lnv-nav-link rounded-lg px-4 py-2 text-sm font-semibold text-slate-500 transition-colors hover:text-slate-900">
                 {link.label}
               </button>
             ))}
@@ -204,22 +204,22 @@ export default function LandingPage() {
           {/* Actions */}
           <div className="flex items-center gap-2">
             <button type="button" onClick={toggleLang}
-              className="hidden rounded-xl border border-white/10 bg-white/4 px-3 py-1.5 text-xs font-bold text-white/55 transition hover:border-white/18 hover:text-white/80 sm:inline-flex">
+              className="hidden rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-500 transition hover:border-indigo-200 hover:text-indigo-600 sm:inline-flex">
               <Globe2 size={12} className="me-1.5 inline-block" />
               {lang === "en" ? "العربية" : "English"}
             </button>
             <Link to={isAuthenticated ? dashPath : "/login"}
-              className="hidden rounded-xl border border-white/10 bg-white/4 px-4 py-2 text-sm font-semibold text-white/65 transition hover:border-white/18 hover:text-white sm:inline-flex">
+              className="hidden rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-indigo-200 hover:text-indigo-700 sm:inline-flex">
               {isAuthenticated ? l.dashboardCta : l.loginCta}
             </Link>
             <Link to={primaryHref}
               className="lnv-glow inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold text-white"
-              style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 4px 20px rgba(99,102,241,.45)" }}>
+              style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 4px 20px rgba(99,102,241,.35)" }}>
               {primaryLabel}
               <ArrowRight size={13} />
             </Link>
             <button type="button" onClick={() => setMobileOpen((v) => !v)}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/4 text-white/65 lg:hidden">
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 lg:hidden">
               {mobileOpen ? <X size={15} /> : <Menu size={15} />}
             </button>
           </div>
@@ -228,17 +228,17 @@ export default function LandingPage() {
         {/* Mobile menu */}
         {mobileOpen && (
           <div className="border-t px-5 pb-5 pt-2 lg:hidden"
-            style={{ background: "rgba(3,7,18,0.98)", borderColor: "rgba(255,255,255,0.07)" }}>
+            style={{ background: "rgba(255,255,255,0.99)", borderColor: "#e2e8f0" }}>
             {navLinks.map((link) => (
               <button key={link.id} type="button"
                 onClick={() => { scrollTo(link.id); setMobileOpen(false); }}
-                className="block w-full rounded-xl px-4 py-2.5 text-start text-sm font-semibold text-white/55 transition hover:bg-white/5 hover:text-white">
+                className="block w-full rounded-xl px-4 py-2.5 text-start text-sm font-semibold text-slate-500 transition hover:bg-slate-50 hover:text-slate-900">
                 {link.label}
               </button>
             ))}
-            <div className="mt-3 flex gap-2 border-t pt-3" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+            <div className="mt-3 flex gap-2 border-t pt-3" style={{ borderColor: "#e2e8f0" }}>
               <Link to="/login" onClick={() => setMobileOpen(false)}
-                className="flex-1 rounded-xl border border-white/12 bg-white/6 py-2.5 text-center text-sm font-semibold text-white/65">
+                className="flex-1 rounded-xl border border-slate-200 bg-slate-50 py-2.5 text-center text-sm font-semibold text-slate-600">
                 {l.loginCta}
               </Link>
               <Link to={primaryHref} onClick={() => setMobileOpen(false)}
@@ -254,17 +254,17 @@ export default function LandingPage() {
       {/* ══════════ HERO ══════════ */}
       <section
         className="relative flex min-h-screen items-center overflow-hidden pt-16"
-        style={{ background: "radial-gradient(ellipse 80% 55% at 50% -5%,rgba(99,102,241,0.28) 0%,transparent 65%), #030712" }}
+        style={{ background: "radial-gradient(ellipse 80% 55% at 50% -5%,rgba(99,102,241,0.10) 0%,transparent 65%), #f9fafb" }}
       >
         {/* Grid */}
         <div aria-hidden="true" className="pointer-events-none absolute inset-0"
-          style={{ backgroundImage: "linear-gradient(rgba(99,102,241,0.055) 1px,transparent 1px),linear-gradient(90deg,rgba(99,102,241,0.055) 1px,transparent 1px)", backgroundSize: "64px 64px" }} />
+          style={{ backgroundImage: "linear-gradient(rgba(99,102,241,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(99,102,241,0.06) 1px,transparent 1px)", backgroundSize: "64px 64px" }} />
 
         {/* Orbs */}
         <div aria-hidden="true" className="lnv-orb pointer-events-none absolute -left-1/4 -top-1/4 h-[900px] w-[900px] rounded-full"
-          style={{ background: "radial-gradient(circle,rgba(99,102,241,0.16) 0%,transparent 65%)" }} />
+          style={{ background: "radial-gradient(circle,rgba(99,102,241,0.10) 0%,transparent 65%)" }} />
         <div aria-hidden="true" className="lnv-orb pointer-events-none absolute -right-1/4 top-1/4 h-[700px] w-[700px] rounded-full"
-          style={{ background: "radial-gradient(circle,rgba(139,92,246,0.12) 0%,transparent 65%)", animationDelay: "2.5s" }} />
+          style={{ background: "radial-gradient(circle,rgba(139,92,246,0.08) 0%,transparent 65%)", animationDelay: "2.5s" }} />
 
         <div className="relative z-10 mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-10 lg:py-32">
           <div className="grid items-center gap-16 lg:grid-cols-2">
@@ -273,36 +273,35 @@ export default function LandingPage() {
             <div className={isArabic ? "text-right" : "text-left"}>
               <motion.div {...fadeIn(0.08)}
                 className="mb-7 inline-flex items-center gap-2.5 rounded-full border px-4 py-2"
-                style={{ borderColor: "rgba(99,102,241,0.38)", background: "rgba(99,102,241,0.1)", backdropFilter: "blur(12px)" }}>
+                style={{ borderColor: "rgba(99,102,241,0.28)", background: "rgba(99,102,241,0.07)" }}>
                 <span className="relative flex h-2 w-2">
-                  <span className="lnv-ping absolute h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative h-2 w-2 rounded-full bg-emerald-400" />
+                  <span className="lnv-ping absolute h-full w-full rounded-full bg-emerald-500 opacity-75" />
+                  <span className="relative h-2 w-2 rounded-full bg-emerald-500" />
                 </span>
-                <span className="text-xs font-bold tracking-wide text-indigo-200">{l.badge}</span>
+                <span className="text-xs font-bold tracking-wide text-indigo-700">{l.badge}</span>
               </motion.div>
 
               <motion.h1 {...fadeUp(0.12)}
-                className="text-5xl font-black leading-[1.04] tracking-tight text-white md:text-6xl xl:text-[4.5rem]">
+                className="text-5xl font-black leading-[1.04] tracking-tight text-slate-900 md:text-6xl xl:text-[4.5rem]">
                 {isArabic
                   ? <>{isArabic ? "منصة التعلم" : "The AI-Powered"}<br /><span style={GT}>{isArabic ? "بالذكاء الاصطناعي" : "Learning Platform"}</span></>
                   : <>The AI-Powered<br /><span style={GT}>Learning Platform</span></>}
               </motion.h1>
 
               <motion.p {...fadeUp(0.22)}
-                className="mt-6 max-w-lg text-lg leading-8 text-white/50">
+                className="mt-6 max-w-lg text-lg leading-8 text-slate-500">
                 {l.heroSubtitle}
               </motion.p>
 
               <motion.div {...fadeUp(0.32)} className="mt-10 flex flex-wrap gap-3">
                 <Link to={primaryHref}
                   className="lnv-glow inline-flex h-14 items-center gap-2 rounded-2xl px-8 text-[15px] font-black text-white"
-                  style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 8px 36px rgba(99,102,241,.5)" }}>
+                  style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 8px 36px rgba(99,102,241,.35)" }}>
                   {primaryLabel}
                   <ArrowRight size={17} />
                 </Link>
                 <button type="button" onClick={() => scrollTo("features")}
-                  className="inline-flex h-14 items-center gap-2 rounded-2xl border px-8 text-[15px] font-semibold text-white/65 transition hover:border-indigo-500/40 hover:text-white"
-                  style={{ borderColor: "rgba(255,255,255,0.11)", background: "rgba(255,255,255,0.04)", backdropFilter: "blur(8px)" }}>
+                  className="inline-flex h-14 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-8 text-[15px] font-semibold text-slate-600 transition hover:border-indigo-300 hover:text-indigo-700">
                   {isArabic ? "استكشف المميزات" : "Explore features"}
                   <ChevronRight size={16} className={isArabic ? "rotate-180" : ""} />
                 </button>
@@ -315,8 +314,7 @@ export default function LandingPage() {
                   : ["Schools", "Academies", "Teachers", "Students", "Parents", "Admins"]
                 ).map((item) => (
                   <span key={item}
-                    className="rounded-full border px-3.5 py-1 text-xs font-semibold text-white/45"
-                    style={{ borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)" }}>
+                    className="rounded-full border border-slate-200 bg-white px-3.5 py-1 text-xs font-semibold text-slate-500">
                     {item}
                   </span>
                 ))}
@@ -451,16 +449,15 @@ export default function LandingPage() {
 
         {/* Bottom fade */}
         <div aria-hidden="true" className="pointer-events-none absolute bottom-0 inset-x-0 h-28"
-          style={{ background: "linear-gradient(to bottom,transparent,#030712)" }} />
+          style={{ background: "linear-gradient(to bottom,transparent,#f9fafb)" }} />
       </section>
 
       {/* ══════════ TICKER ══════════ */}
-      <div className="overflow-hidden border-y py-4"
-        style={{ borderColor: "rgba(99,102,241,0.14)", background: "rgba(99,102,241,0.04)" }}>
+      <div className="overflow-hidden border-y border-indigo-100 bg-indigo-50 py-4">
         <div className="lnv-ticker flex w-max gap-12 whitespace-nowrap">
           {[...ticker, ...ticker].map((item, i) => (
-            <span key={i} className="flex items-center gap-2.5 text-sm font-semibold text-white/35">
-              <Sparkles size={11} className="text-indigo-500" />
+            <span key={i} className="flex items-center gap-2.5 text-sm font-semibold text-slate-400">
+              <Sparkles size={11} className="text-indigo-400" />
               {item}
             </span>
           ))}
@@ -468,15 +465,14 @@ export default function LandingPage() {
       </div>
 
       {/* ══════════ STATS ══════════ */}
-      <section className="py-20" style={{ background: "#030712" }}>
+      <section className="py-20 bg-white">
         <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
           <div className="grid grid-cols-2 gap-5 md:grid-cols-4">
             {stats.map((s, i) => (
               <motion.div key={s.label} {...fadeUp(i * 0.1)}
-                className="rounded-2xl border p-6 text-center"
-                style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
+                className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
                 <p className="text-4xl font-black tracking-tight" style={{ color: s.color }}>{s.value}</p>
-                <p className="mt-2 text-sm text-white/38">{s.label}</p>
+                <p className="mt-2 text-sm text-slate-400">{s.label}</p>
               </motion.div>
             ))}
           </div>
@@ -484,18 +480,18 @@ export default function LandingPage() {
       </section>
 
       {/* ══════════ FEATURES ══════════ */}
-      <section id="features" className="py-28" style={{ background: "#050514" }}>
+      <section id="features" className="py-28 bg-slate-50">
         <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
           <motion.div {...fadeUp(0)} className={`mb-16 ${isArabic ? "text-right" : "text-left"}`}>
-            <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-indigo-500/28 bg-indigo-500/10 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-indigo-400">
+            <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-indigo-600">
               <Zap size={11} /> {isArabic ? "المميزات" : "Platform features"}
             </span>
-            <h2 className="mt-4 max-w-2xl text-4xl font-black tracking-tight text-white md:text-5xl" style={{ lineHeight: 1.1 }}>
+            <h2 className="mt-4 max-w-2xl text-4xl font-black tracking-tight text-slate-900 md:text-5xl" style={{ lineHeight: 1.1 }}>
               {isArabic
                 ? <>{isArabic ? "كل ما تحتاجه" : "Everything you need"}<br /><span style={GT}>{isArabic ? "في مكان واحد" : "in one platform"}</span></>
                 : <>Everything you need<br /><span style={GT}>in one platform</span></>}
             </h2>
-            <p className="mt-4 max-w-2xl text-base leading-8 text-white/42">
+            <p className="mt-4 max-w-2xl text-base leading-8 text-slate-500">
               {isArabic
                 ? "Learnova تجمع الذكاء الاصطناعي، التحفيز، والتحليلات في بيئة تعليمية متكاملة."
                 : "Learnova combines AI, gamification, and analytics in one connected educational environment."}
@@ -505,29 +501,27 @@ export default function LandingPage() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {features.map((f, i) => (
               <motion.article key={f.title} {...fadeUp(i * 0.06)}
-                className="lnv-card group relative cursor-default overflow-hidden rounded-2xl border p-6"
-                style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}
+                className="lnv-card group relative cursor-default overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = `${f.color}44`;
-                  e.currentTarget.style.background   = `${f.color}0d`;
+                  e.currentTarget.style.borderColor = `${f.color}55`;
+                  e.currentTarget.style.background   = `${f.color}08`;
+                  e.currentTarget.style.boxShadow    = `0 8px 30px ${f.color}18`;
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)";
-                  e.currentTarget.style.background   = "rgba(255,255,255,0.03)";
+                  e.currentTarget.style.borderColor = "#e2e8f0";
+                  e.currentTarget.style.background   = "#ffffff";
+                  e.currentTarget.style.boxShadow    = "";
                 }}
               >
                 {/* Accent top bar */}
-                <div className="absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
+                <div className="absolute inset-x-0 top-0 h-0.5 opacity-0 transition-opacity group-hover:opacity-100"
                   style={{ background: `linear-gradient(90deg,transparent,${f.color},transparent)` }} />
                 <div className="lnv-icon-hover mb-5 flex h-11 w-11 items-center justify-center rounded-xl"
-                  style={{ background: `${f.color}1e`, border: `1px solid ${f.color}30` }}>
+                  style={{ background: `${f.color}18`, border: `1px solid ${f.color}30` }}>
                   <f.icon size={19} style={{ color: f.color }} />
                 </div>
-                <h3 className="text-lg font-black text-white">{f.title}</h3>
-                <p className="mt-2 text-sm leading-7 text-white/42">{f.desc}</p>
-                {/* Corner glow */}
-                <div aria-hidden="true" className="pointer-events-none absolute -bottom-10 -end-10 h-36 w-36 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
-                  style={{ background: `radial-gradient(circle,${f.color}22 0%,transparent 70%)` }} />
+                <h3 className="text-lg font-black text-slate-900">{f.title}</h3>
+                <p className="mt-2 text-sm leading-7 text-slate-500">{f.desc}</p>
               </motion.article>
             ))}
           </div>
@@ -536,7 +530,7 @@ export default function LandingPage() {
 
       {/* ══════════ AI EXPERIENCE ══════════ */}
       <section id="ai-section" className="relative overflow-hidden py-28"
-        style={{ background: "radial-gradient(ellipse 55% 45% at 50% 50%,rgba(99,102,241,0.13) 0%,transparent 70%), #030712" }}>
+        style={{ background: "radial-gradient(ellipse 55% 45% at 50% 50%,rgba(99,102,241,0.06) 0%,transparent 70%), #ffffff" }}>
         <div aria-hidden="true" className="pointer-events-none absolute inset-0"
           style={{ backgroundImage: "linear-gradient(rgba(99,102,241,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(99,102,241,0.04) 1px,transparent 1px)", backgroundSize: "48px 48px" }} />
 
@@ -598,15 +592,15 @@ export default function LandingPage() {
 
             {/* AI feature list */}
             <motion.div {...fadeUp(0.15)}>
-              <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-500/28 bg-violet-500/10 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-violet-400">
+              <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-violet-600">
                 <Cpu size={11} /> {isArabic ? "تجربة الذكاء الاصطناعي" : "AI Experience"}
               </span>
-              <h2 className="mt-4 text-4xl font-black leading-tight tracking-tight text-white md:text-5xl">
+              <h2 className="mt-4 text-4xl font-black leading-tight tracking-tight text-slate-900 md:text-5xl">
                 {isArabic
                   ? <>{isArabic ? "ذكاء مبني على" : "Intelligence built on"}<br /><span style={GT}>{isArabic ? "محتوى دروسك" : "your lesson content"}</span></>
                   : <>Intelligence built on<br /><span style={GT}>your lesson content</span></>}
               </h2>
-              <p className="mt-5 text-base leading-8 text-white/42">
+              <p className="mt-5 text-base leading-8 text-slate-500">
                 {isArabic
                   ? "النظام يقرأ ملفات الدرس ويبني قاعدة معرفية، ثم يجيب الطلاب بدقة من المصدر — لا توليد عشوائي."
                   : "The system indexes lesson files into a vector knowledge base, then answers students precisely from source — no hallucination."}
@@ -619,14 +613,14 @@ export default function LandingPage() {
                   { icon: FileText,  title: isArabic ? "ملخصات ذكية"             : "AI summaries",           desc: isArabic ? "ملخص كل درس بضغطة واحدة."       : "One-click lesson summarization." },
                 ].map((item) => (
                   <div key={item.title}
-                    className="flex items-start gap-4 rounded-xl border border-white/6 bg-white/3 p-4 transition hover:border-indigo-500/25 hover:bg-indigo-500/5">
+                    className="flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-indigo-300 hover:shadow-md">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-                      style={{ background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.22)" }}>
-                      <item.icon size={16} className="text-indigo-400" />
+                      style={{ background: "rgba(99,102,241,0.10)", border: "1px solid rgba(99,102,241,0.18)" }}>
+                      <item.icon size={16} className="text-indigo-600" />
                     </div>
                     <div>
-                      <p className="text-sm font-black text-white">{item.title}</p>
-                      <p className="mt-0.5 text-xs text-white/38">{item.desc}</p>
+                      <p className="text-sm font-black text-slate-900">{item.title}</p>
+                      <p className="mt-0.5 text-xs text-slate-400">{item.desc}</p>
                     </div>
                   </div>
                 ))}
@@ -637,18 +631,18 @@ export default function LandingPage() {
       </section>
 
       {/* ══════════ STUDENT EXPERIENCE ══════════ */}
-      <section id="experience" className="py-28" style={{ background: "#050514" }}>
+      <section id="experience" className="py-28 bg-slate-50">
         <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
           <motion.div {...fadeUp(0)} className={`mb-16 ${isArabic ? "text-right" : "text-left"}`}>
-            <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-orange-500/28 bg-orange-500/10 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-orange-400">
+            <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-orange-600">
               <Flame size={11} /> {isArabic ? "تجربة الطالب" : "Student experience"}
             </span>
-            <h2 className="mt-4 max-w-2xl text-4xl font-black tracking-tight text-white md:text-5xl" style={{ lineHeight: 1.1 }}>
+            <h2 className="mt-4 max-w-2xl text-4xl font-black tracking-tight text-slate-900 md:text-5xl" style={{ lineHeight: 1.1 }}>
               {isArabic
                 ? <>{isArabic ? "تعلّم يُثير الشغف" : "Learning that sparks"}<br /><span style={GT}>{isArabic ? "ويكافئ التقدم" : "passion and progress"}</span></>
                 : <>Learning that sparks<br /><span style={GT}>passion and progress</span></>}
             </h2>
-            <p className="mt-4 max-w-xl text-base leading-8 text-white/42">
+            <p className="mt-4 max-w-xl text-base leading-8 text-slate-500">
               {isArabic
                 ? "نقاط XP، سلاسل يومية، إنجازات، ومنافسة صحية — كلها تحفّز الطالب على الاستمرار كل يوم."
                 : "XP points, daily streaks, achievements, and healthy competition keep students motivated every single day."}
@@ -658,24 +652,23 @@ export default function LandingPage() {
           <div className="grid gap-5 lg:grid-cols-3">
             {/* XP & Streak */}
             <motion.div {...fadeUp(0.1)}
-              className="rounded-2xl border p-6"
-              style={{ borderColor: "rgba(249,115,22,0.22)", background: "rgba(249,115,22,0.05)" }}>
+              className="rounded-2xl border border-orange-200 bg-orange-50 p-6 shadow-sm">
               <div className="mb-4 flex items-center justify-between">
-                <p className="text-xs font-black uppercase tracking-wider text-orange-400">⚡ XP &amp; Streaks</p>
-                <span className="rounded-full px-2.5 py-1 text-[10px] font-bold text-orange-300" style={{ background: "rgba(249,115,22,0.15)" }}>
+                <p className="text-xs font-black uppercase tracking-wider text-orange-600">⚡ XP &amp; Streaks</p>
+                <span className="rounded-full bg-orange-100 px-2.5 py-1 text-[10px] font-bold text-orange-600">
                   🔥 14 {isArabic ? "أيام" : "days"}
                 </span>
               </div>
-              <p className="text-5xl font-black text-white">2,340</p>
-              <p className="mt-1 text-sm text-white/38">XP {isArabic ? "هذا الأسبوع" : "this week"}</p>
-              <div className="mt-4 h-2 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
+              <p className="text-5xl font-black text-slate-900">2,340</p>
+              <p className="mt-1 text-sm text-slate-400">XP {isArabic ? "هذا الأسبوع" : "this week"}</p>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-orange-100">
                 <div style={{ width: "78%", height: "100%", borderRadius: 99, background: "linear-gradient(90deg,#f97316,#fbbf24)" }} />
               </div>
-              <p className="mt-2 text-xs text-white/30">Level 7 · 660 XP to next level</p>
+              <p className="mt-2 text-xs text-slate-400">Level 7 · 660 XP to next level</p>
               <div className="mt-5 grid grid-cols-7 gap-1.5">
                 {["M","T","W","T","F","S","S"].map((d, i) => (
                   <div key={i} className="flex flex-col items-center gap-1 rounded-lg py-2 text-[9px] font-bold"
-                    style={i < 5 ? { background: "rgba(249,115,22,0.15)", color: "#fb923c" } : { background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.2)" }}>
+                    style={i < 5 ? { background: "rgba(249,115,22,0.12)", color: "#ea580c" } : { background: "#f1f5f9", color: "#94a3b8" }}>
                     {i < 5 ? "🔥" : "○"}
                     {d}
                   </div>
@@ -685,9 +678,8 @@ export default function LandingPage() {
 
             {/* Achievements */}
             <motion.div {...fadeUp(0.15)}
-              className="rounded-2xl border p-6"
-              style={{ borderColor: "rgba(251,191,36,0.22)", background: "rgba(251,191,36,0.04)" }}>
-              <p className="mb-4 text-xs font-black uppercase tracking-wider text-amber-400">🏆 {isArabic ? "الإنجازات" : "Achievements"}</p>
+              className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+              <p className="mb-4 text-xs font-black uppercase tracking-wider text-amber-600">🏆 {isArabic ? "الإنجازات" : "Achievements"}</p>
               <div className="space-y-2.5">
                 {[
                   { icon: "🎯", title: isArabic ? "إتقان الفيزياء" : "Physics Master",  desc: isArabic ? "100% في 5 اختبارات" : "5 perfect quizzes",      done: true  },
@@ -698,14 +690,14 @@ export default function LandingPage() {
                   <div key={a.title}
                     className="flex items-center gap-3 rounded-xl p-3 transition"
                     style={a.done
-                      ? { background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.22)", opacity: 1 }
-                      : { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", opacity: 0.38 }}>
+                      ? { background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.30)" }
+                      : { background: "#f8fafc", border: "1px solid #e2e8f0", opacity: 0.5 }}>
                     <span className="text-xl">{a.icon}</span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-black text-white">{a.title}</p>
-                      <p className="text-[10px] text-white/38">{a.desc}</p>
+                      <p className="truncate text-xs font-black text-slate-900">{a.title}</p>
+                      <p className="text-[10px] text-slate-400">{a.desc}</p>
                     </div>
-                    {a.done && <CheckCircle2 size={14} className="shrink-0 text-amber-400" />}
+                    {a.done && <CheckCircle2 size={14} className="shrink-0 text-amber-500" />}
                   </div>
                 ))}
               </div>
@@ -713,11 +705,10 @@ export default function LandingPage() {
 
             {/* Rankings */}
             <motion.div {...fadeUp(0.2)}
-              className="rounded-2xl border p-6"
-              style={{ borderColor: "rgba(139,92,246,0.22)", background: "rgba(139,92,246,0.05)" }}>
+              className="rounded-2xl border border-violet-200 bg-violet-50 p-6 shadow-sm">
               <div className="mb-4 flex items-center justify-between">
-                <p className="text-xs font-black uppercase tracking-wider text-violet-400">🏅 {isArabic ? "التصنيف" : "Rankings"}</p>
-                <span className="text-[10px] text-white/30">{isArabic ? "هذا الأسبوع" : "This week"}</span>
+                <p className="text-xs font-black uppercase tracking-wider text-violet-600">🏅 {isArabic ? "التصنيف" : "Rankings"}</p>
+                <span className="text-[10px] text-slate-400">{isArabic ? "هذا الأسبوع" : "This week"}</span>
               </div>
               <div className="space-y-2">
                 {[
@@ -730,14 +721,14 @@ export default function LandingPage() {
                   <div key={r.rank}
                     className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition"
                     style={r.you
-                      ? { background: "linear-gradient(135deg,rgba(99,102,241,0.22),rgba(139,92,246,0.16))", border: "1px solid rgba(99,102,241,0.35)" }
-                      : { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                      ? { background: "linear-gradient(135deg,rgba(99,102,241,0.12),rgba(139,92,246,0.10))", border: "1px solid rgba(99,102,241,0.30)" }
+                      : { background: "#ffffff", border: "1px solid #e2e8f0" }}>
                     <span className="w-5 text-center text-xs font-black"
-                      style={{ color: r.rank <= 3 ? ["#fbbf24","#94a3b8","#c97c2a"][r.rank - 1] : "rgba(255,255,255,0.28)" }}>
+                      style={{ color: r.rank <= 3 ? ["#d97706","#94a3b8","#b45309"][r.rank - 1] : "#94a3b8" }}>
                       {r.rank <= 3 ? ["🥇","🥈","🥉"][r.rank - 1] : r.rank}
                     </span>
-                    <span className={`flex-1 text-xs font-semibold ${r.you ? "text-indigo-200" : "text-white/55"}`}>{r.name}</span>
-                    <span className="text-xs font-black" style={{ color: r.you ? "#818cf8" : "rgba(255,255,255,0.32)" }}>{r.xp} XP</span>
+                    <span className={`flex-1 text-xs font-semibold ${r.you ? "text-indigo-700" : "text-slate-500"}`}>{r.name}</span>
+                    <span className="text-xs font-black" style={{ color: r.you ? "#6366f1" : "#94a3b8" }}>{r.xp} XP</span>
                   </div>
                 ))}
               </div>
@@ -747,43 +738,43 @@ export default function LandingPage() {
       </section>
 
       {/* ══════════ INSTRUCTOR EXPERIENCE ══════════ */}
-      <section className="relative overflow-hidden py-28" style={{ background: "#030712" }}>
+      <section className="relative overflow-hidden py-28 bg-white">
         <div aria-hidden="true" className="pointer-events-none absolute inset-0"
-          style={{ backgroundImage: "linear-gradient(rgba(34,211,238,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(34,211,238,0.03) 1px,transparent 1px)", backgroundSize: "60px 60px" }} />
+          style={{ backgroundImage: "linear-gradient(rgba(99,102,241,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(99,102,241,0.03) 1px,transparent 1px)", backgroundSize: "60px 60px" }} />
 
         <div className="relative z-10 mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
           <div className="grid items-center gap-16 lg:grid-cols-2">
             {/* Copy */}
             <motion.div {...fadeUp(0)} className={isArabic ? "lg:order-2" : "lg:order-1"}>
-              <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-500/28 bg-cyan-500/10 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-cyan-400">
+              <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-cyan-700">
                 <BarChart3 size={11} /> {isArabic ? "تجربة المعلم" : "Instructor experience"}
               </span>
-              <h2 className="mt-4 text-4xl font-black leading-tight tracking-tight text-white md:text-5xl">
+              <h2 className="mt-4 text-4xl font-black leading-tight tracking-tight text-slate-900 md:text-5xl">
                 {isArabic
                   ? <>{isArabic ? "لوحة تحكم" : "A dashboard that"}<br /><span style={GT}>{isArabic ? "تقود الفصل كاملاً" : "runs your classroom"}</span></>
                   : <>A dashboard that<br /><span style={GT}>runs your classroom</span></>}
               </h2>
-              <p className="mt-5 text-base leading-8 text-white/42">
+              <p className="mt-5 text-base leading-8 text-slate-500">
                 {isArabic
                   ? "المعلم يرى كل شيء: من درجات الطلاب إلى معدل مشاركتهم، وينشئ اختبارات ذكية بضغطة واحدة."
                   : "Instructors see everything: from student grades to engagement rates, and generate smart quizzes in one click."}
               </p>
               <div className="mt-8 grid grid-cols-2 gap-3">
                 {[
-                  { icon: BarChart3,     label: isArabic ? "تحليلات لحظية" : "Live analytics",    color: "#22d3ee" },
-                  { icon: Brain,        label: isArabic ? "توليد اختبارات" : "Quiz generation",  color: "#a78bfa" },
-                  { icon: BookOpen,     label: isArabic ? "إدارة الدروس"   : "Lesson management",color: "#34d399" },
-                  { icon: MessageCircle,label: isArabic ? "تواصل مباشر"    : "Direct messaging", color: "#f97316" },
-                  { icon: TrendingUp,   label: isArabic ? "تتبع التقدم"    : "Progress tracking",color: "#fbbf24" },
-                  { icon: Users,        label: isArabic ? "إدارة الطلاب"   : "Student roster",   color: "#f43f5e" },
+                  { icon: BarChart3,     label: isArabic ? "تحليلات لحظية" : "Live analytics",    color: "#0891b2" },
+                  { icon: Brain,        label: isArabic ? "توليد اختبارات" : "Quiz generation",  color: "#7c3aed" },
+                  { icon: BookOpen,     label: isArabic ? "إدارة الدروس"   : "Lesson management",color: "#059669" },
+                  { icon: MessageCircle,label: isArabic ? "تواصل مباشر"    : "Direct messaging", color: "#ea580c" },
+                  { icon: TrendingUp,   label: isArabic ? "تتبع التقدم"    : "Progress tracking",color: "#d97706" },
+                  { icon: Users,        label: isArabic ? "إدارة الطلاب"   : "Student roster",   color: "#e11d48" },
                 ].map((item) => (
                   <div key={item.label}
-                    className="flex items-center gap-3 rounded-xl border border-white/6 bg-white/3 p-3.5 transition hover:border-white/10">
+                    className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm transition hover:border-slate-300 hover:shadow-md">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
-                      style={{ background: `${item.color}18` }}>
+                      style={{ background: `${item.color}15` }}>
                       <item.icon size={15} style={{ color: item.color }} />
                     </div>
-                    <p className="text-sm font-semibold text-white/68">{item.label}</p>
+                    <p className="text-sm font-semibold text-slate-600">{item.label}</p>
                   </div>
                 ))}
               </div>
@@ -857,13 +848,13 @@ export default function LandingPage() {
       </section>
 
       {/* ══════════ TESTIMONIALS ══════════ */}
-      <section className="py-28" style={{ background: "#050514" }}>
+      <section className="py-28 bg-slate-50">
         <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
           <motion.div {...fadeUp(0)} className="mb-16 text-center">
-            <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-500/28 bg-emerald-500/10 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-emerald-400">
+            <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-emerald-700">
               <Star size={11} /> {isArabic ? "قالوا عنا" : "What they say"}
             </span>
-            <h2 className="mt-4 text-4xl font-black tracking-tight text-white md:text-5xl" style={{ lineHeight: 1.1 }}>
+            <h2 className="mt-4 text-4xl font-black tracking-tight text-slate-900 md:text-5xl" style={{ lineHeight: 1.1 }}>
               {isArabic
                 ? <><span style={GT}>مؤسسات حقيقية</span> تثق في Learnova</>
                 : <>Real institutions trust <span style={GT}>Learnova</span></>}
@@ -873,22 +864,21 @@ export default function LandingPage() {
           <div className="grid gap-5 md:grid-cols-3">
             {testimonials.map((t, i) => (
               <motion.article key={t.name} {...fadeUp(i * 0.12)}
-                className="lnv-card rounded-2xl border p-6"
-                style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
+                className="lnv-card rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="mb-5 flex gap-1">
                   {Array.from({ length: 5 }, (_, j) => (
                     <Star key={j} size={13} className="fill-amber-400 text-amber-400" />
                   ))}
                 </div>
-                <p className="text-sm italic leading-8 text-white/62">"{t.quote}"</p>
+                <p className="text-sm italic leading-8 text-slate-600">"{t.quote}"</p>
                 <div className="mt-6 flex items-center gap-3">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-black text-white"
                     style={{ background: `linear-gradient(135deg,${t.color},${t.color}99)` }}>
                     {t.avatar}
                   </div>
                   <div>
-                    <p className="text-sm font-black text-white">{t.name}</p>
-                    <p className="text-xs text-white/38">{t.role}</p>
+                    <p className="text-sm font-black text-slate-900">{t.name}</p>
+                    <p className="text-xs text-slate-400">{t.role}</p>
                   </div>
                 </div>
               </motion.article>
@@ -898,16 +888,16 @@ export default function LandingPage() {
       </section>
 
       {/* ══════════ PRICING ══════════ */}
-      <section id="pricing" className="py-28" style={{ background: "#030712" }}>
+      <section id="pricing" className="py-28 bg-white">
         <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
           <motion.div {...fadeUp(0)} className="mb-16 text-center">
-            <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-indigo-500/28 bg-indigo-500/10 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-indigo-400">
+            <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-indigo-600">
               <Target size={11} /> {isArabic ? "الأسعار" : "Pricing"}
             </span>
-            <h2 className="mt-4 text-4xl font-black tracking-tight text-white md:text-5xl" style={{ lineHeight: 1.1 }}>
+            <h2 className="mt-4 text-4xl font-black tracking-tight text-slate-900 md:text-5xl" style={{ lineHeight: 1.1 }}>
               {l.plansTitle}
             </h2>
-            <p className="mx-auto mt-4 max-w-xl text-base leading-8 text-white/40">{l.plansSubtitle}</p>
+            <p className="mx-auto mt-4 max-w-xl text-base leading-8 text-slate-500">{l.plansSubtitle}</p>
           </motion.div>
 
           {planList.length > 0 ? (
@@ -921,38 +911,37 @@ export default function LandingPage() {
                   <motion.article key={plan.id || label} {...fadeUp(index * 0.1)}
                     className="relative flex flex-col rounded-2xl p-7"
                     style={isPopular ? {
-                      background: "linear-gradient(180deg,rgba(99,102,241,0.16) 0%,rgba(139,92,246,0.08) 100%)",
-                      border: "1px solid rgba(99,102,241,0.42)",
-                      boxShadow: "0 0 60px rgba(99,102,241,0.16), 0 20px 60px rgba(0,0,0,.5)",
+                      background: "linear-gradient(180deg,rgba(99,102,241,0.07) 0%,rgba(139,92,246,0.04) 100%)",
+                      border: "2px solid rgba(99,102,241,0.40)",
+                      boxShadow: "0 0 40px rgba(99,102,241,0.10), 0 20px 40px rgba(99,102,241,0.08)",
                     } : {
-                      background: "rgba(255,255,255,0.03)",
-                      border: "1px solid rgba(255,255,255,0.08)",
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
                     }}>
                     {isPopular && (
                       <div className="absolute -top-3.5 start-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-4 py-1 text-xs font-black text-white"
-                        style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 4px 16px rgba(99,102,241,.5)" }}>
+                        style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 4px 16px rgba(99,102,241,.4)" }}>
                         ★ {isArabic ? "الأكثر شيوعاً" : "Most popular"}
                       </div>
                     )}
-                    <p className="text-[10px] font-black uppercase tracking-widest text-white/28">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                       {plan.durationDays} {isArabic ? "يوم" : "days"}
                     </p>
-                    <h3 className="mt-2 text-2xl font-black text-white">{label}</h3>
+                    <h3 className="mt-2 text-2xl font-black text-slate-900">{label}</h3>
                     <div className="mt-3 flex items-end gap-1.5">
-                      <span className="text-5xl font-black tracking-tight text-white" style={{ lineHeight: 1 }}>
+                      <span className="text-5xl font-black tracking-tight text-slate-900" style={{ lineHeight: 1 }}>
                         {price === 0 ? l.planFree : `$${price}`}
                       </span>
-                      {price > 0 && <span className="mb-1.5 text-sm text-white/38">{l.planPerMonth}</span>}
+                      {price > 0 && <span className="mb-1.5 text-sm text-slate-400">{l.planPerMonth}</span>}
                     </div>
-                    <p className="mt-4 text-sm leading-7 text-white/42">
+                    <p className="mt-4 text-sm leading-7 text-slate-500">
                       {plan.description || plan.Description || (isArabic ? "خطة جاهزة للاستخدام." : "Ready-to-use plan.")}
                     </p>
                     {feats.length > 0 && (
-                      <ul className="mt-6 space-y-2.5 border-t pt-6 text-sm text-white/52"
-                        style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+                      <ul className="mt-6 space-y-2.5 border-t border-slate-200 pt-6 text-sm text-slate-500">
                         {feats.slice(0, 5).map((item) => (
                           <li key={item} className="flex items-start gap-2.5">
-                            <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-indigo-400" />
+                            <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-indigo-500" />
                             <span>{item}</span>
                           </li>
                         ))}
@@ -960,10 +949,10 @@ export default function LandingPage() {
                     )}
                     <Link
                       to={isAuthenticated && String(role).toUpperCase() === AUTH_ROLES.ORGANIZATION ? dashPath : "/signup"}
-                      className="lnv-glow mt-auto inline-flex h-12 items-center justify-center rounded-xl px-5 text-sm font-bold text-white transition"
+                      className="lnv-glow mt-auto inline-flex h-12 items-center justify-center rounded-xl px-5 text-sm font-bold transition"
                       style={Object.assign({ marginTop: "1.75rem" }, isPopular
-                        ? { background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 6px 24px rgba(99,102,241,.42)" }
-                        : { background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)" }
+                        ? { background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", boxShadow: "0 6px 24px rgba(99,102,241,.35)" }
+                        : { background: "#ffffff", border: "1px solid #e2e8f0", color: "#374151" }
                       )}>
                       {l.planCta}
                     </Link>
@@ -972,15 +961,14 @@ export default function LandingPage() {
               })}
             </div>
           ) : (
-            <div className="mx-auto max-w-md rounded-2xl border p-12 text-center"
-              style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
-              <p className="text-2xl font-black text-white">{l.noPlans}</p>
-              <p className="mt-3 text-sm leading-7 text-white/40">
+            <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-slate-50 p-12 text-center shadow-sm">
+              <p className="text-2xl font-black text-slate-900">{l.noPlans}</p>
+              <p className="mt-3 text-sm leading-7 text-slate-500">
                 {isArabic ? "أنشئ حسابك وعد لاحقاً لاختيار الخطة." : "Create your account and choose a plan later."}
               </p>
               <Link to="/signup"
                 className="lnv-glow mt-7 inline-flex h-12 items-center justify-center rounded-xl px-8 text-sm font-bold text-white"
-                style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 6px 24px rgba(99,102,241,.42)" }}>
+                style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 6px 24px rgba(99,102,241,.35)" }}>
                 {l.startNow}
               </Link>
             </div>
@@ -990,25 +978,25 @@ export default function LandingPage() {
 
       {/* ══════════ FINAL CTA ══════════ */}
       <section className="relative overflow-hidden py-32"
-        style={{ background: "radial-gradient(ellipse 65% 55% at 50% 50%,rgba(99,102,241,0.22) 0%,transparent 70%), #030712" }}>
+        style={{ background: "radial-gradient(ellipse 65% 55% at 50% 50%,rgba(99,102,241,0.08) 0%,transparent 70%), #f0f4ff" }}>
         <div aria-hidden="true" className="pointer-events-none absolute inset-0"
           style={{ backgroundImage: "linear-gradient(rgba(99,102,241,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(99,102,241,0.05) 1px,transparent 1px)", backgroundSize: "56px 56px" }} />
 
         <div className="relative z-10 mx-auto max-w-3xl px-5 text-center sm:px-8">
           <motion.div {...fadeIn(0)}>
-            <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-indigo-500/28 bg-indigo-500/10 px-4 py-2 text-xs font-black uppercase tracking-widest text-indigo-400">
+            <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-xs font-black uppercase tracking-widest text-indigo-600">
               <Sparkles size={11} /> {isArabic ? "ابدأ اليوم" : "Get started today"}
             </span>
           </motion.div>
 
           <motion.h2 {...fadeUp(0.1)}
-            className="text-5xl font-black leading-[1.05] tracking-tight text-white md:text-6xl">
+            className="text-5xl font-black leading-[1.05] tracking-tight text-slate-900 md:text-6xl">
             {isArabic
               ? <>{isArabic ? "حوّل تجربة التعلم" : "Transform learning"}<br /><span style={GT}>{isArabic ? "في مؤسستك اليوم" : "in your organization"}</span></>
               : <>Transform learning<br /><span style={GT}>in your organization</span></>}
           </motion.h2>
 
-          <motion.p {...fadeUp(0.18)} className="mx-auto mt-6 max-w-lg text-lg leading-8 text-white/44">
+          <motion.p {...fadeUp(0.18)} className="mx-auto mt-6 max-w-lg text-lg leading-8 text-slate-500">
             {isArabic
               ? "أنشئ حساب المؤسسة خلال دقائق وابدأ تفعيل الكورسات الذكية فوراً."
               : "Create your organization account in minutes and start activating AI-powered courses immediately."}
@@ -1017,55 +1005,54 @@ export default function LandingPage() {
           <motion.div {...fadeUp(0.26)} className="mt-10 flex flex-wrap justify-center gap-4">
             <Link to={primaryHref}
               className="lnv-glow inline-flex h-14 items-center gap-2.5 rounded-2xl px-10 text-[15px] font-black text-white"
-              style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 8px 40px rgba(99,102,241,.52)" }}>
+              style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 8px 40px rgba(99,102,241,.35)" }}>
               {primaryLabel}
               <ArrowRight size={18} />
             </Link>
             <Link to="/login"
-              className="inline-flex h-14 items-center rounded-2xl border border-white/12 bg-white/5 px-10 text-[15px] font-semibold text-white/65 transition hover:border-white/20 hover:text-white">
+              className="inline-flex h-14 items-center rounded-2xl border border-slate-300 bg-white px-10 text-[15px] font-semibold text-slate-600 transition hover:border-indigo-300 hover:text-indigo-700">
               {l.loginCta}
             </Link>
           </motion.div>
 
-          <motion.p {...fadeIn(0.36)} className="mt-8 text-sm text-white/24">
+          <motion.p {...fadeIn(0.36)} className="mt-8 text-sm text-slate-400">
             {isArabic ? "لا بطاقة ائتمانية · إعداد فوري · دعم مباشر" : "No credit card required · Instant setup · Direct support"}
           </motion.p>
         </div>
       </section>
 
       {/* ══════════ FOOTER ══════════ */}
-      <footer className="border-t px-5 py-16 sm:px-8 lg:px-10"
-        style={{ background: "#030712", borderColor: "rgba(255,255,255,0.07)" }}>
+      <footer className="border-t border-slate-200 bg-slate-50 px-5 py-16 sm:px-8 lg:px-10">
         <div className="mx-auto max-w-7xl">
           <div className="grid gap-12 lg:grid-cols-[1.6fr_0.8fr_0.8fr_1fr]">
             {/* Brand */}
             <div>
               <div className="flex items-center gap-2.5">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl"
-                  style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 0 18px rgba(99,102,241,.42)" }}>
+                  style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 0 18px rgba(99,102,241,.28)" }}>
                   <Sparkles size={15} className="text-white" />
                 </div>
-                <span className="text-[13px] font-black uppercase tracking-[0.26em] text-white/78">Learnova</span>
+                <span className="text-[13px] font-black uppercase tracking-[0.26em] text-slate-700">Learnova</span>
               </div>
-              <p className="mt-4 max-w-xs text-sm leading-7 text-white/32">
+              <p className="mt-4 max-w-xs text-sm leading-7 text-slate-400">
                 {isArabic
                   ? "منصة تعلم ذكية للمدارس والأكاديميات — دروس حقيقية، ذكاء اصطناعي، وتحليلات."
                   : "AI-powered learning for schools and academies — real lessons, AI mentor, and analytics."}
               </p>
               <div className="mt-5 flex flex-wrap gap-2">
                 {(isArabic ? ["مدارس", "أكاديميات", "معلمون"] : ["Schools", "Academies", "Teachers"]).map((t) => (
-                  <span key={t} className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold text-white/28">{t}</span>
+                  <span key={t} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-400">{t}</span>
                 ))}
               </div>
             </div>
 
             {/* Product */}
             <div>
-              <p className="text-[11px] font-black uppercase tracking-widest text-white/28">{isArabic ? "المنتج" : "Product"}</p>
-              <div className="mt-5 flex flex-col gap-3 text-sm text-white/42">
+              <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">{isArabic ? "المنتج" : "Product"}</p>
+              <div className="mt-5 flex flex-col gap-3 text-sm text-slate-500">
                 {navLinks.map((link) => (
                   <button key={link.id} type="button" onClick={() => scrollTo(link.id)}
-                    className="text-start transition hover:text-indigo-400">
+                    className="text-start transition hover:text-indigo-600">
                     {link.label}
                   </button>
                 ))}
@@ -1074,44 +1061,43 @@ export default function LandingPage() {
 
             {/* Roles */}
             <div>
-              <p className="text-[11px] font-black uppercase tracking-widest text-white/28">{isArabic ? "الأدوار" : "Roles"}</p>
-              <div className="mt-5 flex flex-col gap-3 text-sm text-white/42">
+              <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">{isArabic ? "الأدوار" : "Roles"}</p>
+              <div className="mt-5 flex flex-col gap-3 text-sm text-slate-500">
                 {[
                   { to: "/login",       label: isArabic ? "طالب"   : "Student" },
                   { to: "/login",       label: isArabic ? "معلم"   : "Instructor" },
                   { to: "/signup",      label: isArabic ? "مؤسسة" : "Organization" },
                   { to: "/admin/login", label: isArabic ? "أدمن"  : "Admin" },
                 ].map((r) => (
-                  <Link key={r.label} to={r.to} className="transition hover:text-indigo-400">{r.label}</Link>
+                  <Link key={r.label} to={r.to} className="transition hover:text-indigo-600">{r.label}</Link>
                 ))}
               </div>
             </div>
 
             {/* Get started */}
             <div>
-              <p className="text-[11px] font-black uppercase tracking-widest text-white/28">{isArabic ? "ابدأ الآن" : "Get started"}</p>
+              <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">{isArabic ? "ابدأ الآن" : "Get started"}</p>
               <div className="mt-5 flex flex-col gap-3">
                 <Link to={primaryHref}
                   className="lnv-glow inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-5 text-sm font-bold text-white"
-                  style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 4px 18px rgba(99,102,241,.36)" }}>
+                  style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 4px 18px rgba(99,102,241,.28)" }}>
                   {primaryLabel}
                   <ArrowRight size={13} />
                 </Link>
                 <Link to="/login"
-                  className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/4 px-5 text-sm font-semibold text-white/52 transition hover:border-white/18 hover:text-white/78">
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-500 transition hover:border-indigo-200 hover:text-indigo-700">
                   {l.loginCta}
                 </Link>
               </div>
             </div>
           </div>
 
-          <div className="mt-12 flex flex-col gap-3 border-t pt-8 text-xs text-white/22 md:flex-row md:items-center md:justify-between"
-            style={{ borderColor: "rgba(255,255,255,0.07)" }}>
+          <div className="mt-12 flex flex-col gap-3 border-t border-slate-200 pt-8 text-xs text-slate-400 md:flex-row md:items-center md:justify-between">
             <p>© {new Date().getFullYear()} Learnova. {isArabic ? "جميع الحقوق محفوظة." : "All rights reserved."}</p>
             <div className="flex flex-wrap gap-5">
               {navLinks.slice(0, 3).map((link) => (
                 <button key={link.id} type="button" onClick={() => scrollTo(link.id)}
-                  className="transition hover:text-indigo-400">{link.label}
+                  className="transition hover:text-indigo-600">{link.label}
                 </button>
               ))}
             </div>
