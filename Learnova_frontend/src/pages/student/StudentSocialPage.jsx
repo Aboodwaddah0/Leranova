@@ -3,663 +3,685 @@ import { motion, AnimatePresence } from 'framer-motion';
 import StudentLayout from '../../components/student/StudentLayout';
 import { fetchStudentSocial } from '../../services/studentService';
 import { useLanguage } from '../../utils/i18n';
+import { useTheme } from '../../contexts/ThemeContext';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const fmt = (n) => (n ?? 0).toLocaleString();
-const ordinal = (n) => {
-  if (!n) return '—';
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
-};
-
-const EVENT_ICONS = {
-  LESSON_COMPLETE: '📖', QUIZ_PASS: '✅', QUIZ_PERFECT: '🏆',
-  DAILY_LOGIN: '🌅', FLASHCARD_SESSION: '🃏', MINDMAP_SESSION: '🗺️', CHATBOT_SESSION: '🤖',
-};
-const MEDALS = ['🥇', '🥈', '🥉'];
-
+const ordinal = (n) => { if (!n) return '—'; const s = ['th','st','nd','rd'], v = n%100; return n+(s[(v-20)%10]||s[v]||s[0]); };
 function timeAgo(iso) {
   if (!iso) return '—';
-  const d = new Date(iso).getTime();
-  if (isNaN(d)) return '—';
-  const m = Math.floor((Date.now() - d) / 60000);
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+  const m = Math.floor((Date.now()-new Date(iso).getTime())/60000);
+  if (isNaN(m)) return '—';
+  if (m<1) return 'just now'; if (m<60) return `${m}m ago`;
+  const h=Math.floor(m/60); if (h<24) return `${h}h ago`;
+  return `${Math.floor(h/24)}d ago`;
 }
+const isLive = (iso) => iso && Date.now()-new Date(iso).getTime()<300_000;
+const EVENT_ICONS = { LESSON_COMPLETE:'📖', QUIZ_PASS:'✅', QUIZ_PERFECT:'🏆', DAILY_LOGIN:'🌅', FLASHCARD_SESSION:'🃏', MINDMAP_SESSION:'🗺️', CHATBOT_SESSION:'🤖' };
+const MEDALS = ['🥇','🥈','🥉'];
 
-const isLive = (iso) => iso && Date.now() - new Date(iso).getTime() < 300_000;
-
-// ── animation presets ─────────────────────────────────────────────────────────
-const fadeUp = {
-  hidden:  { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0,  transition: { duration: 0.38, ease: [0.25, 0.46, 0.45, 0.94] } },
-};
-const stagger = { visible: { transition: { staggerChildren: 0.07 } } };
-
-// ── skeleton ──────────────────────────────────────────────────────────────────
-function Skel({ className }) {
-  return <div className={`ln-skeleton ${className ?? ''}`} />;
-}
-
-function SocialSkeleton() {
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        {[...Array(4)].map((_, i) => <Skel key={i} className="h-10 w-28 rounded-2xl" />)}
-      </div>
-      <Skel className="h-80 rounded-3xl" />
-      <div className="grid gap-4 md:grid-cols-2">
-        <Skel className="h-56 rounded-2xl" />
-        <Skel className="h-56 rounded-2xl" />
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <Skel className="h-64 rounded-2xl" />
-        <Skel className="h-64 rounded-2xl" />
-      </div>
-      <Skel className="h-72 rounded-2xl" />
-    </div>
-  );
-}
-
-// ── countdown ─────────────────────────────────────────────────────────────────
-function useCountdown(iso) {
-  const [rem, setRem] = useState(0);
-  useEffect(() => {
-    if (!iso) return;
-    const tick = () => setRem(Math.max(0, new Date(iso).getTime() - Date.now()));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [iso]);
-  const s = Math.floor(rem / 1000);
-  return {
-    days: Math.floor(s / 86400),
-    hours: Math.floor((s % 86400) / 3600),
-    minutes: Math.floor((s % 3600) / 60),
-    seconds: s % 60,
-    done: rem === 0,
+// ── theme colors ──────────────────────────────────────────────────────────────
+function useC() {
+  const { isDark } = useTheme();
+  return isDark ? {
+    card:'#111029', border:'rgba(255,255,255,0.07)', text:'#f5f3f7',
+    sub:'rgba(255,255,255,0.5)', muted:'rgba(255,255,255,0.25)',
+    divider:'rgba(255,255,255,0.06)', row:'rgba(255,255,255,0.04)',
+    you:'rgba(255,255,255,0.1)', youBorder:'rgba(255,255,255,0.3)',
+    accent:'#8b5cf6', isDark,
+  } : {
+    card:'#ffffff', border:'rgba(0,0,0,0.08)', text:'#0f172a',
+    sub:'#475569', muted:'#94a3b8',
+    divider:'rgba(0,0,0,0.06)', row:'#f8fafc',
+    you:'rgba(99,102,241,0.07)', youBorder:'rgba(99,102,241,0.4)',
+    accent:'#6366f1', isDark,
   };
 }
 
-function CountUnit({ value, label }) {
+// ── animations ────────────────────────────────────────────────────────────────
+const fadeUp = { hidden:{opacity:0,y:16}, visible:{opacity:1,y:0,transition:{duration:.38,ease:[.25,.46,.45,.94]}} };
+const stagger = { visible:{transition:{staggerChildren:.08}} };
+
+// ── keyframes ─────────────────────────────────────────────────────────────────
+const CSS = `
+  @keyframes lnRotate    { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+  @keyframes lnGrad      { 0%,100%{opacity:.32} 50%{opacity:.52} }
+  @keyframes lnShimmer   { 0%{transform:translateX(-100%) skewX(-12deg)} 100%{transform:translateX(260%) skewX(-12deg)} }
+  @keyframes lnPulse     { 0%,100%{opacity:1} 50%{opacity:.25} }
+  @keyframes lnBtnGlow   { 0%,100%{box-shadow:0 0 7px rgba(251,191,36,.3),0 0 0 1px rgba(251,191,36,.28)} 50%{box-shadow:0 0 20px rgba(251,191,36,.6),0 0 0 1px rgba(251,191,36,.55),0 0 36px rgba(251,191,36,.18)} }
+  @keyframes lnRopeSwing { 0%{transform:rotate(-11deg)} 50%{transform:rotate(11deg)} 100%{transform:rotate(-11deg)} }
+  @keyframes lnBurst { 0%{opacity:1;transform:translate(-50%,-50%) scale(1.3)} 100%{opacity:0;transform:translate(calc(-50% + var(--tx)),calc(-50% + var(--ty))) scale(.15)} }
+  .ln-row { transition:background .15s,transform .18s; cursor:default; }
+  .ln-row:hover { transform:translateX(3px); }
+  .ln-burst { position:absolute;left:50%;top:50%;font-size:13px;opacity:0;pointer-events:none;user-select:none;z-index:25; }
+  .ln-hero-icon { position:relative; }
+  .ln-hero-icon:hover .ln-burst { animation:lnBurst .6s ease-out var(--bd,0s) forwards; }
+  .ln-hero-icon:hover { cursor:default; }
+  .ln-champ-wrap { position:relative; display:inline-block; }
+  .ln-rope { position:absolute;left:50%;top:calc(100% + 1px);transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;opacity:0;pointer-events:none;transition:opacity .18s;z-index:30; }
+  .ln-champ-wrap:hover .ln-rope { opacity:1; }
+  .ln-rope-inner { display:flex;flex-direction:column;align-items:center;transform-origin:top center; }
+  .ln-champ-wrap:hover .ln-rope-inner { animation:lnRopeSwing 1.3s ease-in-out infinite; }
+  .ln-rope-line { width:2px;height:0;background:linear-gradient(180deg,rgba(251,191,36,.95),rgba(251,191,36,.25));border-radius:1px;transition:height .22s ease; }
+  .ln-champ-wrap:hover .ln-rope-line { height:22px; }
+  .ln-rope-dot { width:6px;height:6px;border-radius:50%;background:rgba(251,191,36,.75);box-shadow:0 0 6px rgba(251,191,36,.6);transform:scale(0);transition:transform .18s .14s; }
+  .ln-champ-wrap:hover .ln-rope-dot { transform:scale(1); }
+`;
+
+// ── countdown ─────────────────────────────────────────────────────────────────
+function useCountdown(iso) {
+  const [rem,setRem] = useState(0);
+  useEffect(() => {
+    if (!iso) return;
+    const tick = () => setRem(Math.max(0,new Date(iso).getTime()-Date.now()));
+    tick(); const id=setInterval(tick,1000); return ()=>clearInterval(id);
+  },[iso]);
+  const s=Math.floor(rem/1000);
+  return { days:Math.floor(s/86400), hours:Math.floor((s%86400)/3600), minutes:Math.floor((s%3600)/60), seconds:s%60, done:rem===0 };
+}
+
+// ── base card ─────────────────────────────────────────────────────────────────
+function Card({ C, children, className='', style={} }) {
   return (
-    <div className="flex flex-col items-center min-w-[40px]">
-      <span className="text-2xl font-black tabular-nums leading-none text-white drop-shadow">
-        {String(value).padStart(2, '0')}
-      </span>
-      <span className="mt-1 text-[10px] font-bold uppercase tracking-widest text-white/60">{label}</span>
+    <div className={`overflow-hidden rounded-2xl ${className}`}
+      style={{ background:C.card, border:`1px solid ${C.border}`, boxShadow: C.isDark?'none':'0 1px 8px rgba(0,0,0,0.05)', ...style }}>
+      {children}
+    </div>
+  );
+}
+function CardHead({ C, icon, title, badge }) {
+  return (
+    <div className="flex items-center gap-2 px-5 py-3.5" style={{ borderBottom:`1px solid ${C.divider}` }}>
+      <span className="text-base">{icon}</span>
+      <h3 className="text-[10px] font-bold uppercase tracking-wider" style={{ color:C.muted }}>{title}</h3>
+      {badge!=null && <span className="ml-auto rounded-full px-2 py-0.5 text-[9px] font-bold" style={{ background:C.row, color:C.muted }}>{badge}</span>}
     </div>
   );
 }
 
-function Divider() {
-  return <span className="text-xl font-black text-white/40 self-start mt-0.5">:</span>;
+// ── skeleton ──────────────────────────────────────────────────────────────────
+function Skel({ h='48', round='xl' }) {
+  return <div className={`animate-pulse rounded-${round}`} style={{ height:h, background:'rgba(128,128,128,0.09)' }} />;
+}
+function PageSkeleton() {
+  return (
+    <div className="space-y-5">
+      <Skel h="180" round="3xl" /><Skel h="280" /><Skel h="260" /><Skel h="220" /><Skel h="200" />
+    </div>
+  );
 }
 
-// ── rank badges ───────────────────────────────────────────────────────────────
-function MyRankBadge({ myRank }) {
-  if (!myRank) return null;
+// ── ① Hero ────────────────────────────────────────────────────────────────────
+function Hero({ myRank, xpRace, isArabic, achieveCount }) {
+  const C         = useC();
+  const D         = C.isDark;
+  const rank      = myRank?.rank ?? xpRace?.me?.rank;
+  const totalXp   = myRank?.totalXp ?? xpRace?.me?.totalXp ?? 0;
+  const level     = xpRace?.me?.level ?? '—';
+  const weeklyXp  = myRank?.weeklyXp ?? 0;
+  const streak    = xpRace?.me?.currentStreak ?? 0;
+  const weeklyRank= myRank?.weeklyRank;
+  const above     = xpRace?.above;
+  const xpGap     = xpRace?.xpToOvertake;
+
+  // theme-aware tokens
+  const H = D ? {
+    bg:        'linear-gradient(135deg,#0c0b23 0%,#12102e 100%)',
+    border:    '1px solid rgba(255,255,255,0.07)',
+    shadow:    '0 24px 64px rgba(0,0,0,0.5)',
+    glow:      'radial-gradient(ellipse 60% 70% at 8% 50%,rgba(255,255,255,0.06),transparent)',
+    gridClr:   'rgba(255,255,255,0.18)',
+    ring:      'conic-gradient(from 0deg,rgba(255,255,255,0.6),rgba(255,255,255,0.08),rgba(255,255,255,0.6))',
+    iconBg:    'rgba(255,255,255,0.07)',
+    iconBdr:   '2px solid rgba(255,255,255,0.16)',
+    iconShd:   '0 8px 24px rgba(0,0,0,0.4)',
+    label:     'rgba(255,255,255,0.3)',
+    title:     '#ffffff',
+    sub:       'rgba(255,255,255,0.38)',
+    chipBg:    'rgba(255,255,255,0.08)',
+    chipBdr:   'rgba(255,255,255,0.12)',
+    chipVal:   '#ffffff',
+    chipLbl:   'rgba(255,255,255,0.35)',
+    chipGoldBg:'rgba(255,215,0,0.1)',
+    chipGoldBdr:'rgba(255,215,0,0.3)',
+    stripDiv:  'rgba(255,255,255,0.06)',
+    indBg:     'rgba(255,255,255,0.06)',
+    indBdr:    'rgba(255,255,255,0.09)',
+    indTxt:    'rgba(255,255,255,0.7)',
+    indVal:    '#ffffff',
+    goldBg:    'rgba(255,215,0,0.08)',
+    goldBdr:   'rgba(255,215,0,0.2)',
+    goldTxt:   '#fbbf24',
+    refTxt:    'rgba(255,255,255,0.22)',
+  } : {
+    bg:        'linear-gradient(135deg,#ffffff 0%,#f0f4ff 100%)',
+    border:    '1px solid rgba(99,102,241,0.14)',
+    shadow:    '0 4px 32px rgba(99,102,241,0.1)',
+    glow:      'radial-gradient(ellipse 55% 70% at 8% 50%,rgba(99,102,241,0.08),transparent)',
+    gridClr:   'rgba(99,102,241,0.08)',
+    ring:      'conic-gradient(from 0deg,rgba(99,102,241,0.7),rgba(99,102,241,0.12),rgba(99,102,241,0.7))',
+    iconBg:    'rgba(99,102,241,0.1)',
+    iconBdr:   '2px solid rgba(99,102,241,0.25)',
+    iconShd:   '0 8px 24px rgba(99,102,241,0.12)',
+    label:     '#6366f1',
+    title:     '#1e1b4b',
+    sub:       '#4f46e5',
+    chipBg:    'rgba(99,102,241,0.07)',
+    chipBdr:   'rgba(99,102,241,0.2)',
+    chipVal:   '#1e1b4b',
+    chipLbl:   '#6366f1',
+    chipGoldBg:'rgba(217,119,6,0.08)',
+    chipGoldBdr:'rgba(217,119,6,0.25)',
+    chipVal_gold:'#b45309',
+    chipLbl_gold:'#d97706',
+    stripDiv:  'rgba(99,102,241,0.1)',
+    indBg:     'rgba(99,102,241,0.06)',
+    indBdr:    'rgba(99,102,241,0.15)',
+    indTxt:    '#4338ca',
+    indVal:    '#1e1b4b',
+    goldBg:    'rgba(217,119,6,0.07)',
+    goldBdr:   'rgba(217,119,6,0.2)',
+    goldTxt:   '#b45309',
+    refTxt:    '#94a3b8',
+  };
+
+  const chipVar = { hidden:{opacity:0,y:10,scale:.9}, visible:{opacity:1,y:0,scale:1,transition:{duration:.3}} };
   const chips = [
-    myRank.rank      && { label: ordinal(myRank.rank),    sub: 'overall',    cls: 'bg-violet-100 border-violet-200 text-violet-800' },
-    myRank.weeklyRank && { label: ordinal(myRank.weeklyRank), sub: 'this week', cls: 'bg-amber-100 border-amber-200 text-amber-800'   },
-    { label: `${fmt(myRank.totalXp)} XP`, sub: 'total',    cls: 'bg-slate-100 border-slate-200 text-slate-700' },
-    { label: `+${fmt(myRank.weeklyXp)} XP`, sub: 'this week', cls: 'bg-slate-100 border-slate-200 text-slate-700' },
+    rank       && { v:`#${rank}`,       l:isArabic?'ترتيبك':'Rank',   gold:rank<=3 },
+    weeklyRank && { v:`#${weeklyRank}`, l:isArabic?'أسبوعي':'Weekly', gold:false },
+    {             v:fmt(totalXp),       l:'Total XP',                  gold:false },
+    {             v:`Lv.${level}`,      l:isArabic?'المستوى':'Level',  gold:false },
+    streak>0   && { v:`🔥${streak}d`,   l:isArabic?'السلسلة':'Streak', gold:false },
   ].filter(Boolean);
 
   return (
-    <motion.div variants={fadeUp} className="flex flex-wrap gap-2">
-      {chips.map((chip, i) => (
-        <div key={i} className={`flex items-baseline gap-1.5 rounded-2xl border px-4 py-2 ${chip.cls}`}>
-          <span className="text-sm font-black">{chip.label}</span>
-          <span className="text-[10px] opacity-60">{chip.sub}</span>
-        </div>
-      ))}
-    </motion.div>
-  );
-}
+    <motion.section variants={fadeUp} className="relative overflow-hidden rounded-3xl"
+      style={{ padding:'28px 32px 24px', background:H.bg, border:H.border, boxShadow:H.shadow }}>
+      <div className="pointer-events-none absolute inset-0" style={{ background:H.glow, animation:'lnGrad 9s ease infinite' }} />
+      <div className="pointer-events-none absolute inset-0" style={{ opacity:.018, backgroundImage:`linear-gradient(${H.gridClr} 1px,transparent 1px),linear-gradient(90deg,${H.gridClr} 1px,transparent 1px)`, backgroundSize:'22px 22px' }} />
 
-// ── weekly challenge ──────────────────────────────────────────────────────────
-function WeeklyChallengeCard({ challenge }) {
-  const { days, hours, minutes, seconds, done } = useCountdown(challenge?.endsAt);
-  if (!challenge) return null;
-  const { title, description, myRank, myWeeklyXp, leader, leaderboard } = challenge;
-  const progress = leader?.weeklyXp > 0 ? Math.min((myWeeklyXp / leader.weeklyXp) * 100, 100) : 0;
-
-  return (
-    <motion.div variants={fadeUp} className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-700 via-indigo-700 to-violet-900 p-6 shadow-2xl shadow-violet-900/30 text-white">
-      {/* orbs */}
-      <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-white/5 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-0 left-1/4 h-32 w-32 rounded-full bg-fuchsia-400/10 blur-2xl" />
-
-      <div className="relative">
-        {/* header */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex-1">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-[10px] font-bold uppercase tracking-wider backdrop-blur">
-              ⚡ Weekly Challenge
-            </span>
-            <h2 className="mt-3 text-xl font-black leading-tight sm:text-2xl">{title}</h2>
-            <p className="mt-1 text-sm text-white/60">{description}</p>
-          </div>
-          {myRank && (
-            <div className="shrink-0 rounded-2xl bg-white/15 px-4 py-3 text-center backdrop-blur-sm border border-white/10">
-              <p className="text-2xl font-black">{ordinal(myRank)}</p>
-              <p className="text-[10px] text-white/60 mt-0.5">my rank</p>
-            </div>
-          )}
-        </div>
-
-        {/* countdown */}
-        {!done && (
-          <div className="mt-5 flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 mr-1">Ends in</span>
-            {days > 0 && <><CountUnit value={days} label="days" /><Divider /></>}
-            <CountUnit value={hours} label="hrs" />
-            <Divider />
-            <CountUnit value={minutes} label="min" />
-            <Divider />
-            <CountUnit value={seconds} label="sec" />
-          </div>
-        )}
-
-        {/* progress bar */}
-        {leader && leader.weeklyXp > 0 && (
-          <div className="mt-5">
-            <div className="flex items-center justify-between text-xs text-white/60 mb-1.5">
-              <span>Me: <span className="font-bold text-white">{fmt(myWeeklyXp)} XP</span></span>
-              <span>Leader: <span className="font-bold text-yellow-300">{fmt(leader.weeklyXp)} XP</span> ({leader.name})</span>
-            </div>
-            <div className="h-2.5 rounded-full bg-white/15 overflow-hidden shadow-inner">
-              <motion.div
-                className="h-full rounded-full bg-gradient-to-r from-yellow-300 to-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]"
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.8, ease: 'easeOut' }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* mini leaderboard */}
-        {leaderboard.length > 0 && (
-          <div className="mt-5">
-            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-white/50">Top this week</p>
-            <div className="space-y-1.5">
-              {leaderboard.slice(0, 5).map((s) => (
-                <div key={s.studentId} className="flex items-center gap-2.5 rounded-xl bg-white/10 px-3 py-2 backdrop-blur-sm border border-white/5">
-                  <span className="w-6 text-center text-base font-bold shrink-0">
-                    {s.rank <= 3 ? MEDALS[s.rank - 1] : `#${s.rank}`}
-                  </span>
-                  <span className="flex-1 truncate text-sm font-medium">{s.name}</span>
-                  <span className="shrink-0 text-xs font-black text-yellow-300">+{fmt(s.weeklyXp)} XP</span>
-                </div>
+      <div className="relative z-10">
+        <div className="flex flex-wrap items-center justify-between gap-5">
+          <div className="flex items-center gap-4">
+            <div className="relative shrink-0 ln-hero-icon">
+              {[[0,-42,'0s'],[30,-30,'.04s'],[42,0,'.02s'],[30,30,'.06s'],[0,42,'.04s'],[-30,30,'.08s'],[-42,0,'.03s'],[-30,-30,'.05s']].map(([tx,ty,bd],i)=>(
+                <span key={i} className="ln-burst" style={{ '--tx':`${tx}px`,'--ty':`${ty}px`,'--bd':bd }}>🏆</span>
               ))}
+              <div className="absolute rounded-full pointer-events-none" style={{ inset:'-4px', background:H.ring, animation:'lnRotate 5s linear infinite', opacity:.45 }} />
+              <div className="relative flex h-[60px] w-[60px] items-center justify-center rounded-full text-3xl"
+                style={{ background:H.iconBg, border:H.iconBdr, boxShadow:H.iconShd }}>🏆</div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-[9px] font-bold uppercase tracking-[.22em]" style={{ color:H.label }}>
+                  {isArabic?'منصة المنافسة':'Competition Arena'}
+                </p>
+                <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                  style={{ background:'rgba(74,222,128,0.12)', border:'1px solid rgba(74,222,128,0.28)', color:'#16a34a' }}>
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" style={{ animation:'lnPulse 1.4s ease infinite' }} />
+                  {isArabic?'مباشر':'Live'}
+                </span>
+              </div>
+              <h1 className="text-[24px] font-black tracking-tight" style={{ color:H.title }}>{isArabic?'المنافسة والتحديات':'Competition & Challenges'}</h1>
+              <p className="mt-0.5 text-[12px]" style={{ color:H.sub }}>
+                {isArabic?'تحدَّ زملاءك واكسب المزيد من XP':'Compete with classmates and earn more XP'}
+              </p>
             </div>
           </div>
-        )}
-      </div>
-    </motion.div>
-  );
-}
 
-// ── xp race ───────────────────────────────────────────────────────────────────
-function XpRaceWidget({ xpRace }) {
-  if (!xpRace?.me) return null;
-  const { me, above, below, xpToOvertake } = xpRace;
-
-  return (
-    <motion.div variants={fadeUp} className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow h-full">
-      <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3.5">
-        <span className="text-base">🏁</span>
-        <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">XP Race</h3>
-      </div>
-      <div className="flex-1 p-4 space-y-2.5">
-        {above && (
-          <div className="flex items-center gap-3 rounded-xl bg-amber-50 border border-amber-100 px-4 py-3">
-            <span className="text-lg shrink-0">⬆️</span>
-            <div className="flex-1 min-w-0">
-              <p className="truncate text-sm font-semibold text-slate-800">{above.name}</p>
-              <p className="text-xs text-slate-400">Rank #{above.rank} · Lv {above.level}</p>
-            </div>
-            <span className="shrink-0 text-sm font-black text-amber-700">{fmt(above.totalXp)}</span>
-          </div>
-        )}
-        <div className="flex items-center gap-3 rounded-xl bg-violet-100 border border-violet-200 px-4 py-3">
-          <span className="text-lg shrink-0">⚡</span>
-          <div className="flex-1 min-w-0">
-            <p className="truncate text-sm font-black text-violet-900">{me.name} (You)</p>
-            <p className="text-xs text-violet-500">Rank #{me.rank} · Lv {me.level}</p>
-          </div>
-          <span className="shrink-0 text-sm font-black text-violet-700">{fmt(me.totalXp)}</span>
+          <motion.div className="flex flex-wrap gap-2" variants={{ visible:{transition:{staggerChildren:.08,delayChildren:.15}} }}>
+            {chips.map((c,i) => (
+              <motion.div key={i} variants={chipVar} className="flex flex-col items-center rounded-2xl px-5 py-2.5"
+                style={{ background:c.gold?H.chipGoldBg:H.chipBg, border:`1px solid ${c.gold?H.chipGoldBdr:H.chipBdr}`, minWidth:68 }}>
+                <span className="text-[20px] font-black leading-tight"
+                  style={{ color: c.gold ? (H.chipVal_gold||'#fbbf24') : H.chipVal }}>{c.v}</span>
+                <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wider"
+                  style={{ color: c.gold ? (H.chipLbl_gold||H.chipLbl) : H.chipLbl }}>{c.l}</span>
+              </motion.div>
+            ))}
+          </motion.div>
         </div>
-        {below && (
-          <div className="flex items-center gap-3 rounded-xl bg-slate-50 border border-slate-100 px-4 py-3">
-            <span className="text-lg shrink-0">⬇️</span>
-            <div className="flex-1 min-w-0">
-              <p className="truncate text-sm font-medium text-slate-500">{below.name}</p>
-              <p className="text-xs text-slate-400">Rank #{below.rank} · Lv {below.level}</p>
-            </div>
-            <span className="shrink-0 text-sm font-semibold text-slate-400">{fmt(below.totalXp)}</span>
-          </div>
-        )}
-        {xpToOvertake != null && above ? (
-          <div className="mt-2 rounded-xl bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-200 px-4 py-3 text-center">
-            <p className="text-[11px] text-slate-500">
-              Need to overtake <span className="font-semibold text-violet-700">{above.name}</span>
-            </p>
-            <p className="mt-0.5 text-2xl font-black text-violet-700">+{fmt(xpToOvertake)} XP</p>
-          </div>
-        ) : !above ? (
-          <div className="mt-2 rounded-xl bg-gradient-to-r from-yellow-50 to-amber-50 border border-amber-200 px-4 py-3 text-center">
-            <p className="text-xl">🥇</p>
-            <p className="text-sm font-bold text-amber-700">You're #1! Keep the lead.</p>
-          </div>
-        ) : null}
-      </div>
-    </motion.div>
-  );
-}
 
-// ── top performer ─────────────────────────────────────────────────────────────
-function TopPerformerCard({ performer }) {
-  if (!performer) return null;
-  return (
-    <motion.div variants={fadeUp} className="flex flex-col rounded-2xl border border-yellow-200 bg-gradient-to-br from-yellow-50 to-amber-50 shadow-sm hover:shadow-md transition-shadow h-full">
-      <div className="flex items-center gap-2 border-b border-amber-100 px-5 py-3.5">
-        <span className="text-base">🌟</span>
-        <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-500">Top of the Week</h3>
-      </div>
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 text-3xl shadow-lg shadow-amber-200/50">
-          🏆
-        </div>
-        <p className="text-lg font-black text-slate-900 text-center">{performer.name}</p>
-        <p className="text-sm font-semibold text-amber-700">+{fmt(performer.weeklyXp)} XP this week</p>
-        <div className="flex items-center gap-3 text-xs text-slate-500">
-          <span className="rounded-full bg-white border border-slate-200 px-2.5 py-1 font-semibold">Lv {performer.level}</span>
-          {performer.currentStreak > 0 && (
-            <span className="rounded-full bg-orange-50 border border-orange-200 px-2.5 py-1 font-semibold text-orange-700">
-              🔥 {performer.currentStreak}d streak
+        <div className="mt-4 flex flex-wrap items-center gap-2.5" style={{ borderTop:`1px solid ${H.stripDiv}`, paddingTop:14 }}>
+          {weeklyXp>0 && (
+            <span className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-semibold"
+              style={{ background:H.indBg, border:`1px solid ${H.indBdr}`, color:H.indTxt }}>
+              📈 <span className="font-black" style={{ color:H.indVal }}>+{fmt(weeklyXp)}</span> XP {isArabic?'هذا الأسبوع':'this week'}
             </span>
           )}
+          {xpGap!=null && above ? (
+            <span className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-semibold"
+              style={{ background:H.indBg, border:`1px solid ${H.indBdr}`, color:H.indTxt }}>
+              ⚔️ <span className="font-black" style={{ color:H.indVal }}>+{fmt(xpGap)}</span> XP {isArabic?`للتغلب على ${above.name}`:`to overtake ${above.name}`}
+            </span>
+          ) : !above && (
+            <span className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-semibold"
+              style={{ background:H.goldBg, border:`1px solid ${H.goldBdr}`, color:H.goldTxt }}>
+              👑 {isArabic?'أنت في الصدارة!':'You\'re leading!'}
+            </span>
+          )}
+          {achieveCount>0 && (
+            <span className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-semibold"
+              style={{ background:H.goldBg, border:`1px solid ${H.goldBdr}`, color:H.goldTxt }}>
+              🏅 <span className="font-black" style={{ color:H.indVal }}>{achieveCount}</span> {isArabic?'إنجاز مكتسب':'badges earned'}
+            </span>
+          )}
+          <span className="ml-auto flex items-center gap-1.5 text-[10px]" style={{ color:H.refTxt }}>
+            <span className="h-1 w-1 rounded-full bg-emerald-500" style={{ animation:'lnPulse 2s ease infinite' }} />
+            {isArabic?'يتحدث كل 30 ث':'Refreshes every 30s'}
+          </span>
         </div>
       </div>
-    </motion.div>
+    </motion.section>
   );
 }
 
-// ── competition page header ───────────────────────────────────────────────────
-function CompetitionPageHeader({ isArabic }) {
-  return (
-    <motion.div variants={fadeUp} className="flex items-start justify-between gap-3">
-      <div>
-        <h1 className="text-[22px] font-semibold text-slate-900">{isArabic ? 'المنافسة' : 'Competition'}</h1>
-        <p className="mt-0.5 text-sm text-slate-500">{isArabic ? 'أفضل الطلاب هذا الأسبوع' : 'Top students this week'}</p>
-      </div>
-    </motion.div>
-  );
-}
+// ── ② Top Champions Podium ────────────────────────────────────────────────────
+const PODIUM_META = {
+  1:{ grad:'linear-gradient(135deg,#f59e0b,#fbbf24)', glow:'rgba(251,191,36,0.45)', border:'rgba(251,191,36,0.5)',  rankClr:'#f59e0b', medal:'🥇', blockH:72, avSize:64, avFont:20 },
+  2:{ grad:'linear-gradient(135deg,#64748b,#94a3b8)', glow:'rgba(148,163,184,0.25)',border:'rgba(148,163,184,0.45)',rankClr:'#94a3b8', medal:'🥈', blockH:52, avSize:52, avFont:16 },
+  3:{ grad:'linear-gradient(135deg,#c2410c,#fb923c)', glow:'rgba(251,146,60,0.3)', border:'rgba(251,146,60,0.4)',  rankClr:'#fb923c', medal:'🥉', blockH:40, avSize:44, avFont:14 },
+};
 
-// ── your ranking summary card ─────────────────────────────────────────────────
-function YourRankingSummary({ myRank, xpRace, isArabic }) {
-  if (!myRank && !xpRace?.me) return null;
-  const rank   = myRank?.rank ?? xpRace?.me?.rank;
-  const level  = xpRace?.me?.level;
-  const totalXp = myRank?.totalXp ?? xpRace?.me?.totalXp;
-  const weeklyXp = myRank?.weeklyXp;
+function TopChampions({ top3, isArabic }) {
+  const C = useC();
+  if (!top3?.length) return null;
+  // display order: silver (left), gold (center), bronze (right)
+  const display = [{ s:top3[1],pos:2 },{ s:top3[0],pos:1 },{ s:top3[2],pos:3 }].filter(d=>d.s);
 
   return (
     <motion.div
-      variants={fadeUp}
-      className="rounded-2xl border-2 border-indigo-500 p-4"
-      style={{ background: 'linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%)' }}
+      initial={{ opacity:0, scale:.93, y:-10 }}
+      animate={{ opacity:1, scale:1, y:0 }}
+      exit={{ opacity:0, scale:.93, y:-8 }}
+      transition={{ duration:.38, ease:[.22,1,.36,1] }}
     >
-      <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-indigo-600">
-        {isArabic ? 'ترتيبك' : 'Your ranking'}
-      </p>
-      <div className="flex flex-wrap items-center gap-3">
-        {rank && (
-          <>
-            <div className="flex items-center gap-2">
-              <span className="text-xl">🏆</span>
-              <span className="text-xl font-semibold text-slate-900">#{rank}</span>
-            </div>
-            <div className="h-6 w-px bg-indigo-200" />
-          </>
-        )}
-        {level != null && (
-          <>
-            <span className="text-sm text-slate-500">
-              {isArabic ? 'المستوى ' : 'Level '}<strong className="text-slate-900">{level}</strong>
-            </span>
-            <div className="h-6 w-px bg-indigo-200" />
-          </>
-        )}
-        {totalXp != null && (
-          <>
-            <span className="text-sm text-slate-500">
-              <strong className="text-slate-900">{fmt(totalXp)}</strong> XP
-            </span>
-          </>
-        )}
-        {weeklyXp > 0 && (
-          <>
-            <div className="h-6 w-px bg-indigo-200" />
-            <span className="text-sm text-slate-500">
-              <strong className="text-slate-900">+{fmt(weeklyXp)}</strong> {isArabic ? 'هذا الأسبوع' : 'this week'}
-            </span>
-          </>
-        )}
-      </div>
-    </motion.div>
-  );
-}
-
-// ── competition leaderboard (new design matching reference) ───────────────────
-function CompetitionLeaderboard({ streakBoard, achieveShowcase, myStudentId, xpRace, isArabic }) {
-  if (!streakBoard?.length) return null;
-
-  const achieveMap = new Map();
-  (achieveShowcase?.topAchievers || []).forEach(a => achieveMap.set(a.studentId, a.count));
-  const meXp    = xpRace?.me?.totalXp ?? null;
-  const meLevel = xpRace?.me?.level   ?? null;
-
-  return (
-    <motion.div variants={fadeUp} className="overflow-hidden rounded-2xl" style={{ border: '0.5px solid #E2E8F0' }}>
-      {streakBoard.map((s) => {
-        const isMe     = s.studentId === myStudentId;
-        const rank     = s.rank;
-        const initials = (s.name || '??').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
-        const achCount = achieveMap.get(s.studentId) ?? 0;
-        const streakBarFill = s.currentStreak > 0 ? Math.min(100, (s.currentStreak / 30) * 100) : 0;
-
-        const rankIcon = rank === 1 ? '👑' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : isMe ? '⭐' : null;
-
-        let rowStyle = { background: 'white' };
-        let rankColor = '#6B7280';
-        if (isMe) {
-          rowStyle = { background: '#EEF2FF', border: '2px solid #6366F1', boxShadow: '0 2px 8px rgba(99,102,241,0.1)' };
-          rankColor = '#6366F1';
-        } else if (rank === 1) {
-          rowStyle = { background: 'linear-gradient(90deg, #FEF3C7, transparent 70%)', borderLeft: '4px solid #F59E0B' };
-          rankColor = '#D97706';
-        } else if (rank === 2) {
-          rowStyle = { background: 'linear-gradient(90deg, #F1F5F9, transparent 70%)', borderLeft: '4px solid #94A3B8' };
-          rankColor = '#64748B';
-        } else if (rank === 3) {
-          rowStyle = { background: 'linear-gradient(90deg, #FED7AA, transparent 70%)', borderLeft: '4px solid #D97706' };
-          rankColor = '#C2410C';
-        }
-
-        let avatarGradient = 'linear-gradient(135deg, #6366F1, #8B5CF6)';
-        if (rank === 1) avatarGradient = 'linear-gradient(135deg, #F59E0B, #D97706)';
-        else if (rank === 2) avatarGradient = 'linear-gradient(135deg, #94A3B8, #64748B)';
-        else if (rank === 3) avatarGradient = 'linear-gradient(135deg, #F59E0B, #D97706)';
-
-        const barBg    = rank === 1 ? '#FEF3C7' : rank === 2 ? '#F1F5F9' : rank === 3 ? '#FED7AA' : isMe ? '#DDD6FE' : '#F1F5F9';
-        const barFill  = rank === 1 ? '#F59E0B' : rank === 2 ? '#94A3B8' : rank === 3 ? '#D97706' : isMe ? '#6366F1' : '#94A3B8';
-        const lvBg     = rank === 1 ? '#FEF3C7' : rank === 2 ? '#F1F5F9' : rank === 3 ? '#FED7AA' : isMe ? '#DDD6FE' : '#F8FAFC';
-        const lvColor  = rank === 1 ? '#92400E' : rank === 2 ? '#475569' : rank === 3 ? '#92400E' : isMe ? '#6366F1' : '#64748B';
-
-        return (
-          <div
-            key={s.studentId}
-            className="flex items-center gap-3 transition-all duration-150 hover:opacity-90"
-            style={{ padding: rank <= 3 ? '18px 20px' : '14px 20px', borderBottom: '0.5px solid #E5E7EB', cursor: 'pointer', ...rowStyle }}
-          >
-            {/* Rank */}
-            <div className="flex min-w-[52px] items-center gap-1.5">
-              {rankIcon && <span className="text-[17px]">{rankIcon}</span>}
-              <span className="text-[15px] font-semibold" style={{ color: rankColor }}>#{rank}</span>
-            </div>
-
-            {/* Avatar */}
-            <div
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-medium text-white"
-              style={{ background: avatarGradient, ...(isMe ? { boxShadow: '0 0 0 2px white, 0 0 0 4px #6366F1' } : {}) }}
-            >
-              {initials}
-            </div>
-
-            {/* Name + sub */}
-            <div className="flex-1 min-w-0">
-              <p className="truncate text-[15px]" style={{ color: isMe ? '#6366F1' : '#1E293B', fontWeight: isMe ? 600 : 500 }}>
-                {isMe ? `${isArabic ? 'أنت' : 'You'} (${s.name.split(' ')[0]})` : s.name}
-              </p>
-              <p className="mt-0.5 text-xs text-slate-400">
-                {s.longestStreak > 0 ? `${isArabic ? 'أفضل سلسلة' : 'Best'}: ${s.longestStreak}d` : (isArabic ? 'لا توجد سلسلة' : 'No streak yet')}
-              </p>
-            </div>
-
-            {/* Level badge */}
-            <div className="hidden sm:block rounded-md px-2.5 py-[3px] text-[12px] font-semibold whitespace-nowrap" style={{ background: lvBg, color: lvColor }}>
-              {isMe && meLevel ? `Lv. ${meLevel}` : `—`}
-            </div>
-
-            {/* Streak bar */}
-            <div className="hidden md:block w-[110px]">
-              <div className="h-2 overflow-hidden rounded-full" style={{ background: barBg }}>
-                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${streakBarFill}%`, background: barFill }} />
-              </div>
-            </div>
-
-            {/* XP or achievements */}
-            <span className="hidden lg:block min-w-[80px] text-right text-sm font-medium text-slate-700">
-              {isMe && meXp != null ? `${fmt(meXp)} XP` : achCount > 0 ? `${achCount} 🏅` : '—'}
-            </span>
-
-            {/* Streak count */}
-            <span className="min-w-[48px] text-right text-sm font-medium" style={{ color: '#F59E0B' }}>
-              🔥 {s.currentStreak}
-            </span>
-          </div>
-        );
-      })}
-    </motion.div>
-  );
-}
-
-// ── recent activity card ──────────────────────────────────────────────────────
-function RecentActivityCard({ feed, isArabic }) {
-  const AVATAR_COLORS = [
-    'linear-gradient(135deg, #F59E0B, #D97706)',
-    'linear-gradient(135deg, #6366F1, #8B5CF6)',
-    'linear-gradient(135deg, #14B8A6, #0D9488)',
-    'linear-gradient(135deg, #EC4899, #DB2777)',
-  ];
-  const items = (feed || []).slice(0, 10);
-
-  return (
-    <motion.div variants={fadeUp} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4">
-        <span className="text-base">🎯</span>
-        <h2 className="text-[15px] font-medium text-slate-900">{isArabic ? 'الإنجازات الأخيرة' : 'Recent achievements'}</h2>
-        {items.length > 0 && (
-          <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{items.length}</span>
-        )}
-      </div>
-
-      <div className="p-4">
-        {items.length === 0 ? (
-          <p className="py-6 text-center text-sm text-slate-400">{isArabic ? 'لا يوجد نشاط حديث' : 'No recent activity'}</p>
-        ) : (
-          <div className="space-y-2.5">
-            {items.map((item, i) => {
-              const initials = (item.studentName || '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+      <Card C={C} className="relative overflow-hidden">
+        {/* subtle gold glow at top */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-28"
+          style={{ background:'radial-gradient(ellipse 70% 100% at 50% 0%,rgba(251,191,36,0.07),transparent)' }} />
+        <div className="relative px-6 pt-5 pb-0">
+          <p className="text-center text-[10px] font-bold uppercase tracking-[.2em] mb-5" style={{ color:C.muted }}>
+            {isArabic?'أبطال المتصدرين':'Top Champions'}
+          </p>
+          <div className="flex items-end justify-center gap-3">
+            {display.map(({ s, pos }, idx) => {
+              const P    = PODIUM_META[pos];
+              const init = (s?.name||'?').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+              const xp   = s?._xp ?? s?.totalXp ?? 0;
+              const blkBg= C.isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)';
               return (
-                <div key={i} className="flex items-center gap-3 rounded-xl p-3" style={{ background: '#F8FAFC' }}>
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-medium text-white" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
-                    {initials}
+                <motion.div key={pos} className="flex flex-col items-center"
+                  initial={{ opacity:0, y:24 }}
+                  animate={{ opacity:1, y:0 }}
+                  transition={{ duration:.42, delay:idx*.08+.1, ease:[.22,1,.36,1] }}>
+                  {/* crown space — #1 only */}
+                  <div className="flex h-7 items-end justify-center mb-1">
+                    {pos===1 && <span style={{ fontSize:22, lineHeight:1 }}>👑</span>}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-slate-700">
-                      <strong className="text-slate-900">{item.studentName}</strong>{' '}{item.label}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-slate-400">{timeAgo(item.occurredAt)}</p>
+                  {/* avatar ring + initials */}
+                  <div className="relative mb-2">
+                    <div className="flex items-center justify-center rounded-full font-black text-white"
+                      style={{ width:P.avSize, height:P.avSize, background:P.grad, fontSize:P.avFont,
+                        boxShadow:`0 0 0 3px ${C.card},0 0 0 5px ${P.border},0 6px 20px ${P.glow}` }}>
+                      {init}
+                    </div>
+                    <span className="absolute -bottom-1.5 -right-1.5 leading-none"
+                      style={{ fontSize:pos===1?16:14, filter:'drop-shadow(0 1px 3px rgba(0,0,0,0.4))' }}>
+                      {P.medal}
+                    </span>
                   </div>
-                  {item.xpAwarded > 0 && (
-                    <span className="shrink-0 text-xs font-semibold text-violet-600">+{item.xpAwarded} XP</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-        <button type="button" className="mt-4 w-full rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700">
-          {isArabic ? 'عرض كل النشاطات' : 'View all activity'}
-        </button>
-      </div>
-    </motion.div>
-  );
-}
-
-// ── streak competition ────────────────────────────────────────────────────────
-function StreakCompetitionCard({ leaderboard, myStudentId }) {
-  return (
-    <motion.div variants={fadeUp} className="rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3.5">
-        <span className="text-base">🔥</span>
-        <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Streak Competition</h3>
-      </div>
-      <div className="p-4">
-        {!leaderboard?.length ? (
-          <p className="py-4 text-center text-sm text-slate-400">No streak data yet.</p>
-        ) : (
-          <motion.div variants={stagger} className="space-y-2">
-            {leaderboard.map((s) => {
-              const isMe = s.studentId === myStudentId;
-              return (
-                <motion.div
-                  key={s.studentId}
-                  variants={fadeUp}
-                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors
-                    ${isMe ? 'bg-orange-100 border border-orange-200' : 'bg-slate-50 border border-slate-100 hover:bg-slate-100'}`}
-                >
-                  <span className="w-7 text-center text-base font-bold shrink-0">
-                    {s.rank <= 3 ? MEDALS[s.rank - 1] : <span className="text-xs text-slate-400">#{s.rank}</span>}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className={`truncate text-sm font-semibold ${isMe ? 'text-orange-800' : 'text-slate-700'}`}>
-                      {s.name}{isMe ? ' (You)' : ''}
-                    </p>
-                    <p className="text-[10px] text-slate-400">Best: {s.longestStreak}d</p>
-                  </div>
-                  <div className="shrink-0 flex items-center gap-1">
-                    <span className="text-base">🔥</span>
-                    <span className={`text-sm font-black ${isMe ? 'text-orange-700' : 'text-slate-600'}`}>{s.currentStreak}</span>
+                  {/* name */}
+                  <p className="text-center font-semibold truncate"
+                    style={{ fontSize:pos===1?12:11, maxWidth:P.avSize+16, color:C.text }}>
+                    {s?.name?.split(' ')[0]||'—'}
+                  </p>
+                  {/* xp — teal */}
+                  <p className="font-black tabular-nums mt-0.5" style={{ fontSize:pos===1?11:10, color:'#0d9488' }}>
+                    {fmt(xp)} XP
+                  </p>
+                  {/* podium block */}
+                  <div className="mt-2 rounded-t-lg flex items-center justify-center"
+                    style={{ width:P.avSize+16, height:P.blockH, background:blkBg, border:`1.5px solid ${P.border}`, borderBottom:'none' }}>
+                    <span className="font-black" style={{ fontSize:pos===1?28:22, color:P.rankClr }}>{pos}</span>
                   </div>
                 </motion.div>
               );
             })}
-          </motion.div>
-        )}
-      </div>
-    </motion.div>
-  );
-}
-
-// ── achievement showcase ──────────────────────────────────────────────────────
-function AchievementShowcase({ showcase, myStudentId }) {
-  if (!showcase) return null;
-  const { myCount, topAchievers } = showcase;
-
-  return (
-    <motion.div variants={fadeUp} className="rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3.5">
-        <span className="text-base">🏅</span>
-        <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Achievement Leaders</h3>
-      </div>
-      <div className="p-4 space-y-3">
-        <div className="rounded-xl bg-violet-50 border border-violet-100 px-4 py-3 text-center">
-          <p className="text-[10px] text-violet-500 font-semibold uppercase tracking-wider">Your badges</p>
-          <p className="text-3xl font-black text-violet-700 mt-0.5">{myCount}</p>
+          </div>
         </div>
-        {topAchievers.length === 0 ? (
-          <p className="text-center text-sm text-slate-400">No achievement data yet.</p>
-        ) : (
-          <motion.div variants={stagger} className="space-y-2">
-            {topAchievers.map((a) => (
-              <motion.div
-                key={a.studentId}
-                variants={fadeUp}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2 transition-colors
-                  ${a.isMe ? 'bg-violet-100 border border-violet-200' : 'bg-slate-50 border border-slate-100 hover:bg-slate-100'}`}
-              >
-                <span className="w-7 text-center text-base shrink-0">
-                  {a.rank <= 3 ? MEDALS[a.rank - 1] : <span className="text-xs text-slate-400">#{a.rank}</span>}
-                </span>
-                <p className={`flex-1 truncate text-sm font-semibold ${a.isMe ? 'text-violet-800' : 'text-slate-700'}`}>
-                  {a.name}{a.isMe ? ' (You)' : ''}
-                </p>
-                <span className={`shrink-0 text-xs font-bold rounded-full px-2 py-0.5 border
-                  ${a.isMe ? 'bg-violet-200 text-violet-800 border-violet-300' : 'bg-slate-200 text-slate-600 border-slate-300'}`}>
-                  {a.count} 🏅
-                </span>
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
-      </div>
+      </Card>
     </motion.div>
   );
 }
 
-// ── social feed ───────────────────────────────────────────────────────────────
-function SocialFeedCard({ feed }) {
+// ── ③ Leaderboard (bar chart + rows) ─────────────────────────────────────────
+const RANK_COLORS = {
+  1: { bar:'linear-gradient(90deg,#f59e0b,#fbbf24)', glow:'rgba(251,191,36,0.35)', label:'#fbbf24', medal:'👑' },
+  2: { bar:'linear-gradient(90deg,#64748b,#94a3b8)', glow:'rgba(148,163,184,0.2)',  label:'#94a3b8', medal:'🥈' },
+  3: { bar:'linear-gradient(90deg,#d97706,#fb923c)', glow:'rgba(251,146,60,0.3)',   label:'#fb923c', medal:'🥉' },
+};
+
+function Leaderboard({ board, achieveShowcase, myStudentId, xpRace, weeklyChallenge, isArabic }) {
+  const C = useC();
+  const achieveMap = new Map((achieveShowcase?.topAchievers||[]).map(a=>[a.studentId,a.count]));
+  const meXp   = xpRace?.me?.totalXp ?? null;
+  const meLevel= xpRace?.me?.level ?? null;
+  const [showPodium, setShowPodium] = useState(false);
+  if (!board?.length) return null;
+
+  const wlMap  = new Map((weeklyChallenge?.leaderboard||[]).map(e=>[e.studentId,e.weeklyXp]));
+  const enrich = s => ({ ...s, _xp: wlMap.get(s.studentId) ?? s.weeklyXp ?? (s.studentId===myStudentId&&meXp!=null?meXp:0) });
+  const all    = board.map(enrich);
+  const maxXp  = Math.ceil(Math.max(...all.slice(0,5).map(s=>s._xp), 1) * 1.22); // pad 22% so leader bar ≠ 100%
+  const top3   = all.slice(0,3);
+
   return (
-    <motion.div variants={fadeUp} className="rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3.5">
-        <span className="text-base">📡</span>
-        <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Class Feed</h3>
-        {feed.length > 0 && (
-          <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
-            {feed.length} events
-          </span>
+    <motion.div variants={fadeUp} className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-bold uppercase tracking-[.18em]" style={{ color:C.muted }}>
+          {isArabic?'لوحة المتصدرين':'Leaderboard'}
+        </p>
+        {top3.length >= 2 && (
+          <div className="ln-champ-wrap">
+            {/* rope — pendulum on hover */}
+            <div className="ln-rope">
+              <div className="ln-rope-inner">
+                <div className="ln-rope-line" />
+                <div className="ln-rope-dot" />
+              </div>
+            </div>
+            <button type="button" onClick={() => setShowPodium(p=>!p)}
+              className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[10px] font-bold"
+              style={{
+                background: showPodium
+                  ? (C.isDark?'rgba(251,191,36,0.18)':'rgba(251,191,36,0.13)')
+                  : (C.isDark?'rgba(251,191,36,0.07)':'rgba(251,191,36,0.06)'),
+                border:`1px solid ${showPodium?'rgba(251,191,36,0.6)':'rgba(251,191,36,0.3)'}`,
+                color:'#f59e0b',
+                animation:'lnBtnGlow 2.6s ease infinite',
+                transition:'background .2s,border-color .2s',
+              }}>
+              🏆 {isArabic?'الأبطال':'Champions'}
+              <span style={{ display:'inline-block', transform:showPodium?'rotate(180deg)':'none', transition:'transform .2s' }}>▾</span>
+            </button>
+          </div>
         )}
       </div>
-      <div className="p-4">
-        {!feed?.length ? (
-          <p className="py-6 text-center text-sm text-slate-400">No class activity in the last 3 days.</p>
-        ) : (
-          <motion.div variants={stagger} className="divide-y divide-slate-50">
-            {feed.map((item, i) => (
-              <motion.div
-                key={i}
-                variants={fadeUp}
-                className="flex items-start gap-3 py-2.5 -mx-2 px-2 rounded-lg hover:bg-slate-50/60 transition-colors"
-              >
-                <div className="relative mt-0.5 shrink-0">
-                  <span className="text-base">{EVENT_ICONS[item.eventType] ?? '⚡'}</span>
-                  {isLive(item.occurredAt) && (
-                    <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                  )}
+      <AnimatePresence>
+        {showPodium && <TopChampions key="podium" top3={top3} isArabic={isArabic} />}
+      </AnimatePresence>
+      <Card C={C}>
+        {/* ── Bar chart: top 5 ── */}
+        <div className="px-5 pt-4 pb-3" style={{ borderBottom:`1px solid ${C.divider}` }}>
+          <p className="mb-3 text-[10px] font-bold uppercase tracking-wider" style={{ color:C.muted }}>
+            {isArabic?'الترتيب حسب النقاط':'Rankings by XP'}
+          </p>
+          <div className="space-y-1">
+            {all.slice(0,5).map((s,i) => {
+              const isMe   = s.studentId===myStudentId;
+              const meta   = RANK_COLORS[s.rank];
+              const xpVal  = isMe&&meXp!=null ? meXp : s._xp;
+              const pct    = Math.max(2, (xpVal / maxXp) * 100);
+              const init   = (s.name||'?').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+              const barClr = isMe ? `linear-gradient(90deg,${C.accent}bb,${C.accent})` : (meta?.bar||`linear-gradient(90deg,${C.border},${C.sub}aa)`);
+              const barShd = isMe ? `0 2px 10px ${C.accent}44` : (meta?`0 2px 8px ${meta.glow}`:'none');
+
+              return (
+                <motion.div key={s.studentId}
+                  whileHover={{ backgroundColor:C.isDark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.03)', x:1 }}
+                  transition={{ duration:.13 }}
+                  style={{ borderRadius:10, padding:'9px 8px', margin:'0 -8px', cursor:'default' }}>
+                  {/* name row */}
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <div className="w-5 shrink-0 text-center">
+                      {meta ? <span className="text-[14px]">{meta.medal}</span>
+                        : <span className="text-[10px] font-bold" style={{ color:C.muted }}>#{s.rank}</span>}
+                    </div>
+                    <div className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+                      style={{ background:isMe?C.you:(meta?'transparent':C.row), border:`1.5px solid ${isMe?C.youBorder:(meta?.label||C.border)}`, color:isMe?C.accent:(meta?.label||C.sub) }}>
+                      {init}
+                    </div>
+                    <span className="flex-1 truncate text-[12px] font-semibold" style={{ color:isMe?C.text:C.sub }}>
+                      {isMe?(isArabic?'⭐ أنت':'⭐ You'):s.name?.split(' ')[0]}
+                    </span>
+                    <span className="shrink-0 text-[12px] font-black tabular-nums" style={{ color:meta?.label||(isMe?C.accent:C.text) }}>
+                      {fmt(xpVal)}<span className="text-[9px] font-medium ml-0.5" style={{ color:C.muted }}>XP</span>
+                    </span>
+                    {s.currentStreak>0 && <span className="shrink-0 text-[10px] font-bold text-amber-500 tabular-nums">🔥{s.currentStreak}</span>}
+                  </div>
+                  {/* slim bar — no track label, no numbers */}
+                  <div className="ml-[46px] rounded-full overflow-hidden"
+                    style={{ height:5, background:C.isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.07)' }}>
+                    <motion.div className="h-full rounded-full relative overflow-hidden"
+                      initial={{ width:0 }}
+                      animate={{ width:`${pct}%` }}
+                      transition={{ type:'spring', stiffness:52, damping:13, delay:i*.1 }}
+                      style={{ background:barClr, boxShadow:barShd }}>
+                      <div className="absolute inset-0" style={{ background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.28),transparent)', animation:'lnShimmer 3.5s ease infinite' }} />
+                    </motion.div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Rows: rest ── */}
+        {all.slice(5).map((s,i) => {
+          const isMe    = s.studentId===myStudentId;
+          const init    = (s.name||'?').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+          const fillPct = Math.min(100,(s.currentStreak/30)*100);
+          const achCount= achieveMap.get(s.studentId)??0;
+
+          return (
+            <div key={s.studentId} className="ln-row flex items-center gap-3"
+              style={{
+                padding:'10px 20px',
+                borderBottom: i<all.slice(5).length-1 ? `1px solid ${C.divider}` : 'none',
+                background: isMe ? C.you : 'transparent',
+                ...(isMe ? { borderLeft:`3px solid ${C.youBorder}` } : {}),
+              }}>
+              <span className="w-8 shrink-0 text-center text-[12px] font-bold" style={{ color:isMe?C.accent:C.muted }}>#{s.rank}</span>
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+                style={{ background:C.row, border:`1px solid ${isMe?C.youBorder:C.border}`, color:C.sub }}>
+                {init}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="truncate text-[12px] font-semibold" style={{ color:isMe?C.text:C.sub }}>
+                  {isMe?(isArabic?'⭐ أنت':'⭐ You'):s.name}
+                </p>
+                {s.longestStreak>0 && <p className="text-[10px]" style={{ color:C.muted }}>Best: {s.longestStreak}d</p>}
+              </div>
+              {isMe&&meLevel && (
+                <span className="hidden sm:block shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold"
+                  style={{ background:C.row, color:C.muted }}>Lv.{meLevel}</span>
+              )}
+              <div className="hidden md:block w-[80px]">
+                <div className="h-1.5 overflow-hidden rounded-full" style={{ background:C.divider }}>
+                  <div className="h-full rounded-full transition-all duration-700"
+                    style={{ width:`${fillPct}%`, background:isMe?C.accent:'rgba(251,191,36,0.6)' }} />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-slate-700 leading-snug">
-                    <span className="font-semibold text-slate-800">{item.studentName}</span>
-                    {' — '}{item.label}
-                  </p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">{timeAgo(item.occurredAt)}</p>
-                </div>
-                {item.xpAwarded > 0 && (
-                  <span className="shrink-0 rounded-full bg-violet-50 border border-violet-200 px-2 py-0.5 text-[10px] font-bold text-violet-600">
-                    +{item.xpAwarded} XP
+              </div>
+              <span className="hidden lg:block shrink-0 min-w-[58px] text-right text-[11px]" style={{ color:C.muted }}>
+                {isMe&&meXp!=null?`${fmt(meXp)} XP`:achCount>0?`${achCount} 🏅`:'—'}
+              </span>
+              {s.currentStreak>0 && <span className="shrink-0 text-[11px] font-bold text-amber-500">🔥{s.currentStreak}</span>}
+            </div>
+          );
+        })}
+      </Card>
+    </motion.div>
+  );
+}
+
+// ── ③ Weekly Challenge ────────────────────────────────────────────────────────
+function WeeklyChallenge({ challenge, isArabic }) {
+  const C = useC();
+  const { days,hours,minutes,seconds,done } = useCountdown(challenge?.endsAt);
+  if (!challenge) return null;
+  const { title, description, myRank, myWeeklyXp, leader, leaderboard } = challenge;
+  const progress = leader?.weeklyXp>0 ? Math.min((myWeeklyXp/leader.weeklyXp)*100,100) : 0;
+  const pad = n => String(n).padStart(2,'0');
+
+  return (
+    <motion.div variants={fadeUp}>
+      <Card C={C} className="relative overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
+          <div className="absolute inset-y-0 w-[50%]" style={{ background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.02),transparent)', animation:'lnShimmer 6s ease infinite' }} />
+        </div>
+        <div className="relative p-6">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[9px] font-bold uppercase tracking-widest"
+                  style={{ background:C.row, border:`1px solid ${C.border}`, color:C.muted }}>
+                  ⚡ {isArabic?'تحدي الأسبوع':'Weekly Challenge'}
+                </span>
+                {!done && (
+                  <span className="flex items-center gap-1 text-[10px] font-semibold" style={{ color:'#4ade80' }}>
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" style={{ animation:'lnPulse 1.4s ease infinite' }} />
+                    {isArabic?'نشط':'Active'}
                   </span>
                 )}
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
-      </div>
+              </div>
+              <h2 className="text-[20px] font-black" style={{ color:C.text }}>{title}</h2>
+              <p className="mt-1 text-[12px]" style={{ color:C.sub }}>{description}</p>
+            </div>
+            {myRank && (
+              <div className="shrink-0 rounded-2xl px-5 py-3 text-center"
+                style={{ background:C.row, border:`1px solid ${C.border}` }}>
+                <p className="text-[22px] font-black" style={{ color:C.text }}>{ordinal(myRank)}</p>
+                <p className="text-[9px] font-semibold mt-0.5" style={{ color:C.muted }}>{isArabic?'ترتيبك':'my rank'}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Countdown */}
+          {!done && (
+            <div className="flex items-center gap-2 flex-wrap mb-4">
+              <span className="text-[9px] font-bold uppercase tracking-wider mr-1" style={{ color:C.muted }}>
+                {isArabic?'ينتهي':'Ends in'}
+              </span>
+              {[days>0&&[days,'d'],[hours,'h'],[minutes,'m'],[seconds,'s']].filter(Boolean).map(([v,l],i,arr)=>(
+                <span key={i} className="flex items-baseline gap-0.5">
+                  <span className="text-[22px] font-black tabular-nums" style={{ color:C.text }}>{pad(v)}</span>
+                  <span className="text-[10px] font-bold" style={{ color:C.muted }}>{l}</span>
+                  {i<arr.length-1 && <span className="mx-1 text-[18px]" style={{ color:C.divider }}>:</span>}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Progress vs leader */}
+          {leader?.weeklyXp>0 && (
+            <div className="rounded-xl p-4 mb-4" style={{ background:C.row, border:`1px solid ${C.border}` }}>
+              <div className="flex justify-between text-[10px] mb-2" style={{ color:C.sub }}>
+                <span>{isArabic?'أنا':'Me'}: <span className="font-black" style={{ color:C.text }}>{fmt(myWeeklyXp)} XP</span></span>
+                <span>{isArabic?'المتصدر':'Leader'}: <span className="font-black text-amber-500">{fmt(leader.weeklyXp)} XP ({leader.name})</span></span>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full" style={{ background:C.divider }}>
+                <motion.div className="h-full rounded-full relative overflow-hidden"
+                  style={{ background:`linear-gradient(90deg,${C.accent}cc,${C.accent})` }}
+                  initial={{ width:0 }} animate={{ width:`${progress}%` }} transition={{ duration:.9, ease:'easeOut' }}>
+                  <div className="absolute inset-0" style={{ background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent)', animation:'lnShimmer 2.5s ease infinite' }} />
+                </motion.div>
+              </div>
+            </div>
+          )}
+
+          {/* Mini leaderboard */}
+          {leaderboard?.length>0 && (
+            <div>
+              <p className="mb-2 text-[9px] font-bold uppercase tracking-wider" style={{ color:C.muted }}>
+                {isArabic?'الأوائل هذا الأسبوع':'Top this week'}
+              </p>
+              <div className="space-y-1.5">
+                {leaderboard.slice(0,4).map(s=>(
+                  <div key={s.studentId} className="flex items-center gap-2.5 rounded-xl px-3 py-2"
+                    style={{ background:C.row, border:`1px solid ${C.border}` }}>
+                    <span className="w-5 text-center shrink-0 text-[13px]">{s.rank<=3?MEDALS[s.rank-1]:`#${s.rank}`}</span>
+                    <span className="flex-1 truncate text-[12px] font-medium" style={{ color:C.text }}>{s.name}</span>
+                    <span className="shrink-0 text-[11px] font-black text-amber-500">+{fmt(s.weeklyXp)} XP</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
     </motion.div>
   );
 }
 
-// ── main page ─────────────────────────────────────────────────────────────────
+// ── ④ Class Feed ──────────────────────────────────────────────────────────────
+function ClassFeed({ feed, isArabic }) {
+  const C = useC();
+  const items = (feed||[]).slice(0,8);
+  return (
+    <motion.div variants={fadeUp}>
+      <Card C={C}>
+        <CardHead C={C} icon="📡" title={isArabic?'نشاط الصف':'Class Feed'} badge={items.length||null} />
+        <div className="p-4">
+          {!items.length ? (
+            <p className="py-6 text-center text-[12px]" style={{ color:C.muted }}>{isArabic?'لا يوجد نشاط':'No class activity'}</p>
+          ) : (
+            <div className="space-y-1.5">
+              {items.map((item,i)=>(
+                <div key={i} className="flex items-center gap-3 rounded-xl px-3 py-2" style={{ background:C.row }}>
+                  <span className="relative shrink-0 text-base">
+                    {EVENT_ICONS[item.eventType]??'⚡'}
+                    {isLive(item.occurredAt) && <span className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-emerald-400" style={{ animation:'lnPulse 1.5s ease infinite' }} />}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px]" style={{ color:C.sub }}>
+                      <span className="font-semibold" style={{ color:C.text }}>{item.studentName}</span> — {item.label}
+                    </p>
+                    <p className="text-[10px]" style={{ color:C.muted }}>{timeAgo(item.occurredAt)}</p>
+                  </div>
+                  {item.xpAwarded>0 && (
+                    <span className="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold"
+                      style={{ background:C.row, border:`1px solid ${C.border}`, color:C.sub }}>
+                      +{item.xpAwarded} XP
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Card>
+    </motion.div>
+  );
+}
+
+// ── ⑤ Achievements ────────────────────────────────────────────────────────────
+function Achievements({ showcase, isArabic }) {
+  const C = useC();
+  if (!showcase?.topAchievers?.length) return null;
+  const { myCount, topAchievers } = showcase;
+  return (
+    <motion.div variants={fadeUp}>
+      <Card C={C}>
+        <CardHead C={C} icon="🏅" title={isArabic?'قادة الإنجازات':'Achievement Leaders'} badge={myCount>0?`${isArabic?'لديك':'You'}: ${myCount}`:null} />
+        <div className="p-4 space-y-1.5">
+          {topAchievers.slice(0,5).map(a=>(
+            <div key={a.studentId} className="flex items-center gap-3 rounded-xl px-3 py-2.5"
+              style={{ background:a.isMe?C.you:C.row, border:`1px solid ${a.isMe?C.youBorder:C.border}` }}>
+              <span className="w-6 text-center shrink-0">{a.rank<=3?MEDALS[a.rank-1]:`#${a.rank}`}</span>
+              <p className="flex-1 truncate text-[12px] font-semibold" style={{ color:C.text }}>
+                {a.name}{a.isMe?` (${isArabic?'أنت':'You'})`:''}
+              </p>
+              <span className="shrink-0 text-[11px] font-bold" style={{ color:C.muted }}>{a.count} 🏅</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </motion.div>
+  );
+}
+
+// ── main ──────────────────────────────────────────────────────────────────────
 export default function StudentSocialPage() {
   const { isArabic } = useLanguage();
   const [social, setSocial]   = useState(null);
@@ -667,92 +689,50 @@ export default function StudentSocialPage() {
   const [error, setError]     = useState(null);
   const pollRef               = useRef(null);
   const myStudentId           = social?.xpRace?.me?.studentId ?? null;
+  const C = useC();
 
-  const load = useCallback(async (silent = false) => {
+  const load = useCallback(async (silent=false) => {
     if (!silent) setError(null);
-    try {
-      const data = await fetchStudentSocial();
-      if (data) setSocial(data);
-    } catch {
-      if (!silent) setError('Failed to load social data.');
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, []);
+    try { const d=await fetchStudentSocial(); if(d) setSocial(d); }
+    catch { if(!silent) setError('Failed to load competition data.'); }
+    finally { if(!silent) setLoading(false); }
+  },[]);
 
   useEffect(() => {
     load();
-    pollRef.current = setInterval(() => load(true), 30_000);
-    return () => clearInterval(pollRef.current);
-  }, [load]);
+    pollRef.current = setInterval(()=>load(true), 30_000);
+    return ()=>clearInterval(pollRef.current);
+  },[load]);
 
   return (
-    <StudentLayout
-      title={isArabic ? 'المنافسة والتحديات' : 'Competition & Challenges'}
-      subtitle={isArabic ? 'تحدَّ زملاءك واكسب المزيد من XP' : 'Compete with classmates and earn more XP'}
-    >
+    <StudentLayout fullWidth>
+      <style>{CSS}</style>
       <AnimatePresence mode="wait">
         {loading ? (
-          <motion.div key="skel" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <SocialSkeleton />
-          </motion.div>
+          <motion.div key="sk" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}><PageSkeleton /></motion.div>
         ) : error ? (
-          <motion.div
-            key="err"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex h-52 flex-col items-center justify-center gap-3 rounded-2xl border border-rose-200 bg-rose-50"
-          >
+          <motion.div key="err" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}}
+            className="flex h-52 flex-col items-center justify-center gap-3 rounded-2xl"
+            style={{ border:`1px solid rgba(239,68,68,0.2)`, background:'rgba(239,68,68,0.04)' }}>
             <span className="text-3xl">⚠️</span>
-            <p className="text-sm text-rose-700 font-medium">{error}</p>
-            <button
-              type="button"
-              onClick={() => { setLoading(true); load(); }}
-              className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 transition-colors"
-            >
-              Retry
-            </button>
+            <p className="text-sm font-medium text-red-500">{error}</p>
+            <button type="button" onClick={()=>{setLoading(true);load();}}
+              className="rounded-xl px-4 py-2 text-sm font-semibold text-white"
+              style={{ background:C.accent }}>Retry</button>
           </motion.div>
         ) : !social ? (
-          <motion.p
-            key="empty"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="py-16 text-center text-sm text-slate-400"
-          >
-            No competition data yet — start earning XP!
+          <motion.p key="empty" initial={{opacity:0}} animate={{opacity:1}}
+            className="py-16 text-center text-sm" style={{ color:C.muted }}>
+            {isArabic?'لا توجد بيانات بعد — ابدأ باكتساب XP!':'No competition data yet — start earning XP!'}
           </motion.p>
         ) : (
-          <motion.div key="content" variants={stagger} initial="hidden" animate="visible" className="space-y-5">
-
-            {/* Competition page header */}
-            <CompetitionPageHeader isArabic={isArabic} />
-
-            {/* Your ranking summary */}
-            <YourRankingSummary myRank={social.myRank} xpRace={social.xpRace} isArabic={isArabic} />
-
-            {/* Vertical leaderboard */}
-            <CompetitionLeaderboard
-              streakBoard={social.streakCompetition}
-              achieveShowcase={social.achievementShowcase}
-              myStudentId={myStudentId}
-              xpRace={social.xpRace}
-              isArabic={isArabic}
-            />
-
-            {/* XP Race + Recent Activity */}
-            <div className="grid gap-4 md:grid-cols-2">
-              <XpRaceWidget xpRace={social.xpRace} />
-              <RecentActivityCard feed={social.socialFeed} isArabic={isArabic} />
-            </div>
-
-            {/* Weekly challenge (secondary) */}
-            {social.weeklyChallenge && (
-              <WeeklyChallengeCard challenge={social.weeklyChallenge} />
-            )}
-
-            <p className="text-center text-[11px] text-slate-400">Refreshes every 30 seconds</p>
-
+          <motion.div key="content" variants={stagger} initial="hidden" animate="visible" className="space-y-6">
+            <Hero          myRank={social.myRank} xpRace={social.xpRace} isArabic={isArabic}
+                           achieveCount={social.achievementShowcase?.myCount ?? 0} />
+            <Leaderboard   board={social.streakCompetition} achieveShowcase={social.achievementShowcase}
+                           myStudentId={myStudentId} xpRace={social.xpRace} weeklyChallenge={social.weeklyChallenge} isArabic={isArabic} />
+            {social.weeklyChallenge && <WeeklyChallenge challenge={social.weeklyChallenge} isArabic={isArabic} />}
+            <ClassFeed     feed={social.socialFeed} isArabic={isArabic} />
           </motion.div>
         )}
       </AnimatePresence>
