@@ -24,9 +24,9 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
 
   const navItems = useMemo(() => ([
     { to: '/dashboard/student', label: t?.student?.title || (isArabic ? 'لوحة الطالب' : 'Student Dashboard'), icon: Home, match: (p) => p === '/dashboard/student' || p === '/dashboard/student/overview' },
+    { to: '/student/social', label: isArabic ? 'المنافسة' : 'Competition', icon: Trophy, match: (p) => p === '/student/social' },
     { to: isSchoolStudent ? '/student/subjects' : '/courses', label: isSchoolStudent ? (isArabic ? 'موادّي' : 'My Subjects') : (t?.student?.courses?.title || (isArabic ? 'الكورسات' : 'Courses')), icon: BookOpen, match: (p) => isSchoolStudent ? p === '/student/subjects' || p.startsWith('/courses/') : p === '/courses' || p.startsWith('/courses/') },
     ...(isSchoolStudent ? [{ to: '/student/marks', label: isArabic ? 'درجاتي' : 'My Marks', icon: BarChart2, match: (p) => p === '/student/marks' }] : []),
-    { to: '/student/social', label: isArabic ? 'المنافسة' : 'Competition', icon: Trophy, match: (p) => p === '/student/social' },
     { to: '/student/chat', label: t?.student?.chat?.title || (isArabic ? 'المحادثات' : 'Chat'), icon: MessageCircle, match: (p) => p === '/student/chat' },
     { to: '/teachers', label: t?.student?.teachers?.title || (isArabic ? 'المدرسين' : 'Teachers'), icon: Users2, match: (p) => p === '/teachers' || p.startsWith('/teachers/') },
     { to: '/student/profile', label: t?.student?.profile?.title || (isArabic ? 'الملف الشخصي' : 'Profile'), icon: UserCircle2, match: (p) => p === '/student/profile' },
