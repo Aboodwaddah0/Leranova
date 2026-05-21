@@ -1811,7 +1811,6 @@ function DashboardHeader({ profile, gamification, currentRank, achievements, avg
     : level >= 5  ? (isArabic ? 'متوسط' : 'Intermediate')
     :               (isArabic ? 'مبتدئ' : 'Beginner');
   const initials = (name.split(' ').slice(0, 2).map(w => w[0]).join('') || 'ST').toUpperCase();
-  const filledSegs = Math.min(5, Math.round((xpInLevel / 100) * 5));
 
   const [avatarHovered, setAvatarHovered] = useState(false);
   const [ringFilled, setRingFilled] = useState(false);
@@ -1980,20 +1979,12 @@ function DashboardHeader({ profile, gamification, currentRank, achievements, avg
             </div>
           </div>
 
-          {/* 5-segment bar */}
-          <div className="relative h-[15px] overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.3)' }}>
-            <div className="absolute inset-[2px] flex gap-[3px]">
-              {[0, 1, 2, 3, 4].map(i => (
-                <div
-                  key={i}
-                  className="flex-1 rounded-[4px] transition-all duration-700"
-                  style={i < filledSegs ? {
-                    background: i % 2 === 0 ? 'linear-gradient(180deg, #14B8A6, #0D9488)' : 'linear-gradient(180deg, #06B6D4, #0891B2)',
-                    boxShadow: '0 0 10px rgba(20,184,166,0.55)',
-                  } : { background: 'rgba(255,255,255,0.07)' }}
-                />
-              ))}
-            </div>
+          {/* Continuous XP bar */}
+          <div className="relative h-[13px] overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.3)' }}>
+            <div
+              className="absolute inset-y-[2px] left-[2px] rounded-full transition-all duration-700"
+              style={{ width: `calc(${xpInLevel}% - 4px)`, background: 'linear-gradient(90deg, #14B8A6, #06B6D4, #6366F1)', boxShadow: '0 0 12px rgba(20,184,166,0.5)' }}
+            />
           </div>
 
           {/* Milestone labels */}
