@@ -24,9 +24,50 @@ import {
 } from '../../services/studentService';
 import { useLanguage } from '../../utils/i18n';
 import { isLessonCompleted, setLessonCompleted, subscribeToProgress } from '../../utils/studentProgress';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export default function StudentSubjectPage() {
   const { isArabic } = useLanguage();
+  const { isDark } = useTheme();
+  const T = {
+    wrap:        isDark ? '#0d0c22'                 : 'rgba(255,255,255,0.85)',
+    wrapBorder:  isDark ? 'rgba(255,255,255,0.08)'  : 'rgba(255,255,255,0.7)',
+    card:        isDark ? '#111029'                 : '#ffffff',
+    cardBorder:  isDark ? 'rgba(255,255,255,0.08)'  : '#e2e8f0',
+    panel:       isDark ? '#111029'                 : 'rgba(255,255,255,0.85)',
+    innerBg:     isDark ? 'rgba(255,255,255,0.04)'  : '#f8fafc',
+    innerBorder: isDark ? 'rgba(255,255,255,0.07)'  : '#e2e8f0',
+    text:        isDark ? '#f1f0f5'                 : '#0f172a',
+    sub:         isDark ? 'rgba(255,255,255,0.5)'   : '#475569',
+    muted:       isDark ? 'rgba(255,255,255,0.32)'  : '#64748b',
+    accent:      isDark ? '#818cf8'                 : '#4f46e5',
+    tabInactive: isDark ? 'rgba(255,255,255,0.07)'  : '#f1f5f9',
+    tabText:     isDark ? 'rgba(255,255,255,0.6)'   : '#374151',
+    divider:     isDark ? 'rgba(255,255,255,0.07)'  : '#f1f5f9',
+    badge:       isDark ? 'rgba(129,140,248,0.15)'  : '#eef2ff',
+    badgeText:   isDark ? '#818cf8'                 : '#4338ca',
+    inputBg:     isDark ? 'rgba(255,255,255,0.05)'  : '#ffffff',
+    inputBorder: isDark ? 'rgba(255,255,255,0.1)'   : '#e2e8f0',
+    lessonActive:isDark ? 'rgba(99,102,241,0.15)'   : '#eef2ff',
+    lessonActiveBorder: isDark ? 'rgba(129,140,248,0.5)' : '#a5b4fc',
+    lessonIconAct: isDark ? '#818cf8'               : '#ffffff',
+    lessonIconActBg: isDark ? 'rgba(129,140,248,0.2)' : '#4f46e5',
+    lessonIconBg:isDark ? 'rgba(255,255,255,0.07)'  : '#f1f5f9',
+    lessonIconTx:isDark ? 'rgba(255,255,255,0.5)'   : '#475569',
+    autoNext:    isDark ? 'rgba(99,102,241,0.12)'   : '#eef2ff',
+    autoNextBorder: isDark ? 'rgba(129,140,248,0.3)' : '#c7d2fe',
+    autoNextText:isDark ? '#818cf8'                 : '#4338ca',
+    errBg:       isDark ? 'rgba(251,191,36,0.08)'   : '#fffbeb',
+    errBorder:   isDark ? 'rgba(251,191,36,0.3)'    : '#fde68a',
+    errText:     isDark ? '#fbbf24'                 : '#92400e',
+    lockBg:      isDark ? 'rgba(251,191,36,0.08)'   : '#fffbeb',
+    lockBorder:  isDark ? 'rgba(251,191,36,0.3)'    : '#fde68a',
+    lockText:    isDark ? '#fbbf24'                 : '#92400e',
+    emptyBorder: isDark ? 'rgba(255,255,255,0.12)'  : '#e2e8f0',
+    emptyText:   isDark ? 'rgba(255,255,255,0.3)'   : '#94a3b8',
+    commentUser: isDark ? '#f1f0f5'                 : '#0f172a',
+    commentBody: isDark ? 'rgba(255,255,255,0.6)'   : '#374151',
+  };
   const navigate = useNavigate();
   const { courseId } = useParams();
   const { subjectId } = useParams();
@@ -374,8 +415,8 @@ export default function StudentSubjectPage() {
   return (
     <StudentLayout>
       {loading ? <div className="ln-skeleton h-64 rounded-[1.75rem]" /> : null}
-      {error ? <div className="mb-5 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{error}</div> : null}
-      <section className="rounded-[2rem] border border-white/70 bg-white/85 p-5 shadow-xl shadow-indigo-500/5 backdrop-blur-xl">
+      {error ? <div className="mb-5 rounded-[1.75rem] px-5 py-4 text-sm" style={{ background: T.errBg, border: `1px solid ${T.errBorder}`, color: T.errText }}>{error}</div> : null}
+      <section className="rounded-[2rem] p-5 shadow-xl shadow-indigo-500/5 backdrop-blur-xl" style={{ border: `1px solid ${T.wrapBorder}`, background: T.wrap }}>
         <div className="relative overflow-hidden rounded-[1.5rem] bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500 p-5 text-white">
           {subject?.imageUrl && (
             <img src={subject.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-20" />
@@ -398,32 +439,27 @@ export default function StudentSubjectPage() {
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">{isArabic ? 'الكورس' : 'Course'}</p>
-            <p className="mt-2 text-sm font-semibold text-slate-900">{courseName}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">{isArabic ? 'المادة' : 'Subject'}</p>
-            <div className="mt-2 flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-semibold text-slate-900">{subject?.name || (isArabic ? 'مادة غير معروفة' : 'Unknown subject')}</p>
-              {subject?.level && (
-                <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${
-                  subject.level === 'BEGINNER'     ? 'bg-emerald-100 text-emerald-700' :
-                  subject.level === 'INTERMEDIATE' ? 'bg-blue-100 text-blue-700'       :
-                  subject.level === 'ADVANCED'     ? 'bg-violet-100 text-violet-700'   :
-                  'bg-rose-100 text-rose-700'
-                }`}>
-                  {isArabic
-                    ? (subject.level === 'BEGINNER' ? 'مبتدئ' : subject.level === 'INTERMEDIATE' ? 'متوسط' : subject.level === 'ADVANCED' ? 'متقدم' : 'خبير')
-                    : subject.level.charAt(0) + subject.level.slice(1).toLowerCase()}
-                </span>
-              )}
+          {[
+            { label: isArabic ? 'الكورس' : 'Course', value: courseName },
+            { label: isArabic ? 'المادة' : 'Subject', value: subject?.name || (isArabic ? 'مادة غير معروفة' : 'Unknown subject'), level: subject?.level },
+            { label: isArabic ? 'الإنجاز' : 'Completion', value: `${lessonProgress.completed}/${lessonProgress.total} (${lessonProgress.percent}%)` },
+          ].map((item) => (
+            <div key={item.label} className="rounded-2xl p-4 shadow-sm" style={{ border: `1px solid ${T.cardBorder}`, background: T.card }}>
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: T.muted }}>{item.label}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <p className="text-sm font-semibold" style={{ color: T.text }}>{item.value}</p>
+                {item.level && (
+                  <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                    item.level === 'BEGINNER' ? 'bg-emerald-100 text-emerald-700' :
+                    item.level === 'INTERMEDIATE' ? 'bg-blue-100 text-blue-700' :
+                    item.level === 'ADVANCED' ? 'bg-violet-100 text-violet-700' : 'bg-rose-100 text-rose-700'
+                  }`}>
+                    {isArabic ? (item.level === 'BEGINNER' ? 'مبتدئ' : item.level === 'INTERMEDIATE' ? 'متوسط' : item.level === 'ADVANCED' ? 'متقدم' : 'خبير') : item.level.charAt(0) + item.level.slice(1).toLowerCase()}
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">{isArabic ? 'الإنجاز' : 'Completion'}</p>
-            <p className="mt-2 text-sm font-semibold text-slate-900">{`${lessonProgress.completed}/${lessonProgress.total} (${lessonProgress.percent}%)`}</p>
-          </div>
+          ))}
         </div>
       </section>
 

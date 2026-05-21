@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import StudentLayout from '../../components/student/StudentLayout';
 import EducationLoading from '../../components/ui/EducationLoading';
 import {
@@ -12,6 +11,7 @@ import {
 } from '../../services/studentService';
 import ProfileHeader from '../../components/student/profile/ProfileHeader';
 import ProfileCards, {
+  AboutProfileCard,
   LogoutSection,
   OrganizationInfoCard,
   QuickStats,
@@ -144,11 +144,6 @@ export default function StudentProfilePage() {
 
   return (
     <StudentLayout>
-      <div className="mb-4">
-        <Link to="/dashboard/student" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:shadow">
-          <ArrowLeft size={16} /> {isArabic ? 'عودة' : 'Back'}
-        </Link>
-      </div>
       {loading ? (
         <EducationLoading
           isArabic={isArabic}
@@ -157,40 +152,37 @@ export default function StudentProfilePage() {
           fullscreen
         />
       ) : (
-        <div className="space-y-5">
-          {error ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{error}</div> : null}
+        <div className="space-y-4">
+          {error ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{error}</div>
+          ) : null}
 
+          {/* Hero — includes back button */}
           <ProfileHeader profile={profile} studentMode={studentMode} />
 
+          {/* Quick stats — 3 equal columns */}
           <QuickStats
             enrolledCoursesCount={courseCount}
             membershipStatus={isArabic ? 'نشط' : 'Active'}
             accountStatus={isArabic ? 'موثق' : 'Verified'}
           />
 
-          <div className="grid gap-4 xl:grid-cols-[1fr_0.85fr]">
-            <ProfileCards
-              onEditProfile={() => setShowEditProfile(true)}
-              onChangePassword={() => setShowChangePassword(true)}
-            />
+          {/* Actions — Personal Info + Change Password */}
+          <ProfileCards
+            onEditProfile={() => setShowEditProfile(true)}
+            onChangePassword={() => setShowChangePassword(true)}
+          />
 
-            <div className="space-y-4">
-              <OrganizationInfoCard
-                organizationName={organizationName}
-                organizationType={String(organizationType || '').toUpperCase()}
-              />
+          {/* Organization info */}
+          <OrganizationInfoCard
+            organizationName={organizationName}
+            organizationType={String(organizationType || '').toUpperCase()}
+          />
 
-              <section className="rounded-[1.75rem] border border-white/70 bg-white/90 p-5 shadow-xl shadow-indigo-500/5 backdrop-blur-sm">
-                <h3 className="text-sm font-extrabold uppercase tracking-[0.18em] text-slate-600">{isArabic ? 'حول هذا الملف' : 'About this profile'}</h3>
-                <p className="mt-3 text-sm leading-7 text-slate-600">
-                  {isArabic
-                    ? 'يتم مزامنة هذا الملف من حسابك في Learnova ويُستخدم عبر لوحات الكورسات والتعليقات وسجل التعلم.'
-                    : 'Your profile is synced from your Learnova account and is used across course dashboards, comments, and learning history.'}
-                </p>
-              </section>
-            </div>
-          </div>
+          {/* About profile */}
+          <AboutProfileCard />
 
+          {/* Logout */}
           <LogoutSection onLogout={onLogout} />
 
           <EditProfileModal
