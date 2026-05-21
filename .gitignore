@@ -10,3 +10,8 @@ coverage/
 .cache/
 config/firebase.json
 test-info.md
+CLAUDE.md
+AGENTS.md
+rank.md
+.claude
+postman

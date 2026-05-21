@@ -154,7 +154,7 @@ export default function StudentDashboardPage() {
               const lp = hasBackend
                 ? { total: lessonIds.length, completed: backendDone, percent: lessonIds.length ? Math.round((backendDone / lessonIds.length) * 100) : 0 }
                 : calculateProgressForLessons(lessonIds);
-              return { ...course, progress: lp.percent, completedLessons: lp.completed, totalLessons: lp.total };
+              return { ...course, progress: lp.percent, completedLessons: lp.completed, totalLessons: lp.total, firstSubjectId: subjects?.[0]?.id ?? null };
             } catch { return course; }
           }),
         );
@@ -364,6 +364,11 @@ export default function StudentDashboardPage() {
           0%, 100% { opacity:1; }
           50%       { opacity:0.3; }
         }
+        @keyframes lnRotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes lnShimmer { 0% { transform: translateX(-100%) skewX(-15deg); } 100% { transform: translateX(200%) skewX(-15deg); } }
+        @keyframes lnPulseGlow { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.6; } }
+        @keyframes lnGradShift { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.55; } }
+        @keyframes lnAccentSlide { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
       `}</style>
 
       {/* ── Global overlays ── */}
@@ -371,29 +376,26 @@ export default function StudentDashboardPage() {
       {achievementModal && <AchievementModal achievement={achievementModal} onClose={() => setAchievementModal(null)} isArabic={isArabic} />}
       <FloatingXPLayer items={floatingXps} />
 
-      <div className="space-y-6 pb-8 ln-page-enter">
+      <div className="space-y-5 pb-8 ln-page-enter">
 
         {/* Streak warning banner */}
         {showStreakBanner && (
           <StreakBanner streak={gamification.currentStreak} onDismiss={dismissStreakBanner} isArabic={isArabic} />
         )}
 
-        {/* ── Skeleton loading state (first load only) ── */}
+        {/* Skeleton (first load) */}
         {loading && enrolledCourses.length === 0 && (
           <div className="space-y-4">
-            <div className="ln-skeleton h-64 rounded-[2rem]" />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {[...Array(4)].map((_, i) => <div key={i} className="ln-skeleton h-20 rounded-2xl" />)}
-            </div>
-            <div className="ln-skeleton h-40 rounded-3xl" />
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="ln-skeleton h-56 rounded-3xl" />
-              <div className="ln-skeleton h-56 rounded-3xl" />
+            <div className="ln-skeleton h-48 rounded-[2rem]" />
+            <div className="ln-skeleton h-48 rounded-3xl" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="ln-skeleton h-52 rounded-3xl" />
+              <div className="ln-skeleton h-52 rounded-3xl" />
             </div>
           </div>
         )}
 
-        {/* Inline loading indicator (subsequent loads / refreshes) */}
+        {/* Inline refresh indicator */}
         {loading && enrolledCourses.length > 0 && (
           <div className="flex items-center gap-2.5 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 backdrop-blur">
             <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-indigo-300 border-t-indigo-600 shrink-0" />
@@ -405,366 +407,59 @@ export default function StudentDashboardPage() {
           <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-medium text-red-800">{error}</div>
         )}
 
-        {/* ─── XP Hero ─── */}
-        <section className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 p-6 text-white shadow-[0_32px_80px_-20px_rgba(99,51,211,0.5)] md:p-8">
-          {/* decorative orbs */}
-          <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/5 blur-2xl" />
-          <div className="pointer-events-none absolute -bottom-12 left-1/3 h-48 w-48 rounded-full bg-fuchsia-400/10 blur-2xl" />
+        {/* ─── Dashboard Header ─── */}
+        <DashboardHeader
+          profile={profile}
+          gamification={gamification}
+          currentRank={currentRank}
+          achievements={achievements}
+          avgMark={avgMark}
+          xpInLevel={xpInLevel}
+          isSchoolStudent={isSchoolStudent}
+          isArabic={isArabic}
+        />
 
-          <div className="relative flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-100 backdrop-blur">
-                <Star size={9} className="fill-amber-300 text-amber-300" />
-                {isArabic ? 'لوحة الطالب' : 'Student Dashboard'}
+        {/* ─── Resume Learning ─── */}
+        {continueLearning.length > 0 && (
+          <section className="space-y-3">
+            <DarkContinueLearningCard
+              course={continueLearning[0]}
+              actionHref={`/student/courses/${continueLearning[0].id}`}
+              isArabic={isArabic}
+            />
+            {continueLearning.length > 1 && (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {continueLearning.slice(1, 4).map((course, i) => (
+                  <CourseCard
+                    key={course.id}
+                    course={course}
+                    index={i + 1}
+                    actionLabel={isArabic ? 'متابعة' : 'Continue'}
+                    actionHref={`/student/courses/${course.id}`}
+                    variant="continue"
+                  />
+                ))}
               </div>
-              <h2 className="mt-3 text-3xl font-black tracking-tight text-white">
-                {isArabic ? 'مرحبًا،' : 'Hey,'} {profile?.name || profile?.fullName || (isArabic ? 'طالب' : 'Student')} 👋
-              </h2>
-              <p className="mt-1 text-sm font-medium text-indigo-200">
-                {isArabic
-                  ? `المستوى ${gamification.level} · الترتيب #${currentRank?.rank ?? '—'} في مؤسستك`
-                  : `Level ${gamification.level} · Rank #${currentRank?.rank ?? '—'} in your org`}
-              </p>
-            </div>
-            {!isSchoolStudent && (
-              <Link
-                to="/dashboard/student/courses"
-                className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-indigo-700 shadow-lg transition hover:shadow-indigo-200 hover:scale-[1.02]"
-              >
-                {isArabic ? 'تخصصاتي' : 'My Specializations'}
-                <ArrowRight size={14} />
-              </Link>
             )}
-          </div>
-
-          {/* XP bar */}
-          <div className="relative mt-6">
-            <div className="mb-2 flex items-center justify-between text-xs font-semibold text-indigo-200">
-              <span className="flex items-center gap-1"><Zap size={11} className="text-amber-300" />{gamification.totalXp} XP</span>
-              <span>{xpInLevel}/100 {isArabic ? 'للمستوى التالي' : 'to next level'}</span>
-            </div>
-            <div className="h-3 overflow-hidden rounded-full bg-white/15 shadow-inner">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-amber-300 via-white to-white/80 shadow-[0_0_12px_rgba(255,255,255,0.4)] transition-all duration-700"
-                style={{ width: `${Math.min(100, xpInLevel)}%` }}
-              />
-            </div>
-          </div>
-
-          {/* 4 stat chips */}
-          <div className="relative mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <HeroStat label={isArabic ? 'الترتيب' : 'Rank'} value={currentRank ? `#${currentRank.rank}` : '—'} icon={Trophy} iconCls="text-amber-300" bg="bg-amber-400/15" />
-            <HeroStat label={isArabic ? 'السلسلة' : 'Streak'} value={`${gamification.currentStreak}d`} icon={Flame} iconCls="text-orange-300" bg="bg-orange-400/15" />
-            <HeroStat label={isArabic ? 'الإنجازات' : 'Achievements'} value={`${achievements.unlocked.length}/11`} icon={Medal} iconCls="text-emerald-300" bg="bg-emerald-400/15" />
-            <HeroStat label={isArabic ? 'متوسط الدرجات' : 'Avg Mark'} value={`${Math.round(avgMark)}%`} icon={TrendingUp} iconCls="text-cyan-300" bg="bg-cyan-400/15" />
-          </div>
-        </section>
-
-        {/* ─── AI Mentor ─── */}
-        {aiMentor && <AIMentorSection mentor={aiMentor} isArabic={isArabic} engagedToday={engagedToday} />}
-
-        {/* ─── Achievements ─── */}
-        <section className="relative overflow-hidden rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 via-indigo-50 to-violet-50 p-6 shadow-sm">
-          <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-violet-200/25 blur-2xl" />
-          <div className="relative flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-violet-700">
-                <Medal size={9} /> {isArabic ? 'الإنجازات' : 'Achievements'}
-              </span>
-              <p className="mt-2 text-4xl font-black text-violet-700">
-                {achievements.unlocked.length}
-                <span className="text-lg font-semibold text-violet-400">/11</span>
-              </p>
-              <p className="text-sm font-semibold text-violet-500">
-                {achievements.locked.length > 0
-                  ? `${achievements.locked.length} ${isArabic ? 'إنجاز متبقٍّ' : 'more to unlock'}`
-                  : (isArabic ? '🎉 أتممت جميع الإنجازات!' : '🎉 All achievements unlocked!')}
-              </p>
-            </div>
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg shadow-violet-200">
-              <Medal size={28} className="text-white" />
-            </div>
-          </div>
-
-          {achievements.latestUnlocked ? (
-            <div className="relative mt-4 flex items-center gap-2.5 rounded-2xl border border-emerald-200 bg-white/70 px-4 py-3 backdrop-blur">
-              <CheckCircle2 size={16} className="shrink-0 text-emerald-500" />
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-500">{isArabic ? 'آخر إنجاز' : 'Latest unlock'}</p>
-                <p className="truncate text-sm font-black text-emerald-800">{achievements.latestUnlocked.label}</p>
-              </div>
-              <span className="rounded-full bg-violet-500 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white shadow">{isArabic ? 'جديد' : 'NEW'}</span>
-            </div>
-          ) : (
-            <div className="relative mt-4 flex items-center gap-2 rounded-2xl bg-violet-100/60 px-4 py-3">
-              <Lock size={13} className="shrink-0 text-violet-400" />
-              <span className="text-xs font-semibold text-violet-500">{isArabic ? 'أكمل دروسًا لفتح الإنجازات' : 'Complete lessons to unlock achievements'}</span>
-            </div>
-          )}
-
-          <div className="relative mt-5">
-            <div className="mb-1.5 flex justify-between text-[10px] font-bold text-violet-600">
-              <span>{isArabic ? 'إجمالي التقدم' : 'Overall progress'}</span>
-              <span>{Math.round((achievements.unlocked.length / 11) * 100)}%</span>
-            </div>
-            <div className="h-3 overflow-hidden rounded-full bg-violet-100">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-violet-400 to-indigo-500 transition-all duration-700"
-                style={{ width: `${Math.round((achievements.unlocked.length / 11) * 100)}%` }}
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* ─── AI Learning Profile ─── */}
-        {learningProfile && <AIProfileSection profile={learningProfile} isArabic={isArabic} />}
-
-        {/* ─── Adaptive Insights ─── */}
-        {(adaptiveInsights || learningProfile) && (
-          <AdaptiveInsightsSection
-            insights={adaptiveInsights}
-            profile={learningProfile}
-            isArabic={isArabic}
-          />
+          </section>
         )}
 
-        {/* ─── Missions ─── */}
-        <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
-          {/* Header */}
-          <div className="border-b border-slate-100 px-6 py-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-md shadow-violet-200">
-                  <Target size={16} className="text-white" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                    {isArabic ? 'المهام' : 'Missions'}
-                    {adaptiveMissions && <span className="ml-1.5 text-violet-500">· AI</span>}
-                  </p>
-                  <h2 className="text-base font-black leading-tight text-slate-900">
-                    {isArabic ? 'مهامك اليومية والأسبوعية' : 'Daily & Weekly Goals'}
-                  </h2>
-                </div>
-              </div>
-              {adaptiveMissions && <TierBadge tier={adaptiveMissions.tier} isArabic={isArabic} />}
-            </div>
-            {adaptiveMissions && (
-              <div className="mt-3 flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50/70 px-3 py-1.5">
-                <Sparkles size={11} className="shrink-0 text-violet-500" />
-                <p className="text-[10px] font-semibold text-violet-600">
-                  {isArabic
-                    ? `مخصص لمستواك · تفاعل ${adaptiveMissions.engagementScore}/100`
-                    : `Personalized for your level · Engagement ${adaptiveMissions.engagementScore}/100`}
-                </p>
-              </div>
-            )}
-          </div>
+        {/* ─── AI Mentor Card ─── */}
+        {aiMentor && <DarkAIMentorCard mentor={aiMentor} engagedToday={engagedToday} isArabic={isArabic} />}
 
-          {/* Two-panel layout */}
-          <div className="grid divide-y divide-slate-100 md:grid-cols-2 md:divide-x md:divide-y-0">
-            {/* Daily panel */}
-            {(() => {
-              const list = adaptiveMissions?.daily ?? missions.daily;
-              const done = list.filter(m => m.completed).length;
-              return (
-                <div className="p-5">
-                  <div className="mb-3 flex items-center gap-2">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm">
-                      <Sun size={11} className="text-white" />
-                    </div>
-                    <span className="text-xs font-black text-slate-700">{isArabic ? 'يومي' : 'Daily'}</span>
-                    <div className="ml-auto flex items-center gap-1.5">
-                      <div className="h-1.5 w-14 overflow-hidden rounded-full bg-slate-100">
-                        <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-400 transition-all duration-700"
-                          style={{ width: list.length ? `${Math.round((done / list.length) * 100)}%` : '0%' }} />
-                      </div>
-                      <span className="text-[10px] font-bold text-amber-600">{done}/{list.length}</span>
-                    </div>
-                  </div>
-                  {list.length === 0
-                    ? <EmptyState title={isArabic ? 'لا توجد مهام' : 'No missions'} description="" icon={Sun} />
-                    : <div className="space-y-2">{list.map(m => <MissionRow key={m.key} mission={m} period="daily" />)}</div>
-                  }
-                </div>
-              );
-            })()}
+        {/* ─── Today's Focus ─── */}
+        <DarkTodaysFocusCard missions={missions} adaptiveMissions={adaptiveMissions} isArabic={isArabic} />
 
-            {/* Weekly panel */}
-            {(() => {
-              const list = adaptiveMissions?.weekly ?? missions.weekly;
-              const done = list.filter(m => m.completed).length;
-              return (
-                <div className="p-5">
-                  <div className="mb-3 flex items-center gap-2">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 shadow-sm">
-                      <CalendarDays size={11} className="text-white" />
-                    </div>
-                    <span className="text-xs font-black text-slate-700">{isArabic ? 'أسبوعي' : 'Weekly'}</span>
-                    <div className="ml-auto flex items-center gap-1.5">
-                      <div className="h-1.5 w-14 overflow-hidden rounded-full bg-slate-100">
-                        <div className="h-full rounded-full bg-gradient-to-r from-indigo-400 to-violet-500 transition-all duration-700"
-                          style={{ width: list.length ? `${Math.round((done / list.length) * 100)}%` : '0%' }} />
-                      </div>
-                      <span className="text-[10px] font-bold text-indigo-600">{done}/{list.length}</span>
-                    </div>
-                  </div>
-                  {list.length === 0
-                    ? <EmptyState title={isArabic ? 'لا توجد مهام' : 'No missions'} description="" icon={CalendarDays} />
-                    : <div className="space-y-2">{list.map(m => <MissionRow key={m.key} mission={m} period="weekly" />)}</div>
-                  }
-                </div>
-              );
-            })()}
-          </div>
-        </section>
+        {/* ─── This Week's Progress ─── */}
+        <DarkWeekProgressCard gamification={gamification} activityFeed={activityFeed} isArabic={isArabic} />
 
-        {/* ─── Leaderboard ─── */}
-        <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-6 py-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700">
-                  <Trophy size={9} className="text-amber-500" />
-                  {isArabic ? 'لوحة الصدارة' : 'Leaderboard'}
-                </div>
-                <h2 className="mt-1.5 text-xl font-black text-slate-900">{isArabic ? 'أفضل الطلاب في مؤسستك' : 'Top students in your org'}</h2>
-              </div>
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-md shadow-amber-200">
-                <Trophy size={18} className="text-white" />
-              </div>
-            </div>
-          </div>
-
-          {leaderboard.length === 0 ? (
-            <div className="px-6 py-6">
-              <EmptyState
-                title={isArabic ? 'لا توجد بيانات بعد' : 'No leaderboard data yet'}
-                description={isArabic ? 'أكمل درسًا أو اجتز اختبارًا لتظهر هنا.' : 'Complete a lesson or pass a quiz to appear here.'}
-                icon={Trophy}
-              />
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-50 px-4 pb-4 pt-2">
-              {leaderboard.map((entry) => {
-                const isMe = entry.studentId === currentStudentId;
-                const medal = entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : null;
-                return (
-                  <div
-                    key={entry.studentId}
-                    className={`flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition ${
-                      isMe
-                        ? 'my-1 border border-indigo-200 bg-gradient-to-r from-indigo-50 to-violet-50 shadow-sm'
-                        : 'hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-sm font-black ${
-                      entry.rank === 1 ? 'bg-amber-100 text-amber-600' :
-                      entry.rank === 2 ? 'bg-slate-100 text-slate-600' :
-                      entry.rank === 3 ? 'bg-orange-100 text-orange-600' :
-                      'bg-slate-50 text-slate-400'
-                    }`}>
-                      {medal || <span className="text-xs">#{entry.rank}</span>}
-                    </div>
-
-                    <span className={`flex-1 truncate font-bold ${isMe ? 'text-indigo-700' : 'text-slate-900'}`}>
-                      {isMe ? (isArabic ? '⚡ أنت' : '⚡ You') : entry.name}
-                    </span>
-
-                    <div className="hidden items-center gap-2 sm:flex">
-                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-500">Lv.{entry.level}</span>
-                      <span className="flex items-center gap-0.5 rounded-full border border-orange-100 bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-500">
-                        <Flame size={9} />{entry.currentStreak}d
-                      </span>
-                      <span className="flex items-center gap-0.5 rounded-full border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600">
-                        <Medal size={9} />{entry.achievementsCount}
-                      </span>
-                    </div>
-
-                    <span className={`shrink-0 text-sm font-black ${isMe ? 'text-indigo-600' : 'text-slate-700'}`}>
-                      {entry.totalXp} <span className="text-[10px] font-semibold opacity-60">XP</span>
-                    </span>
-                  </div>
-                );
-              })}
-
-              {currentStudentId && currentRank && !leaderboard.some((e) => e.studentId === currentStudentId) && (
-                <>
-                  <p className="py-1.5 text-center text-xs font-bold tracking-widest text-slate-300">• • •</p>
-                  <div className="flex items-center gap-3 rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-50 to-violet-50 px-3 py-3 text-sm shadow-sm">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-xs font-black text-indigo-600">#{currentRank.rank}</div>
-                    <span className="flex-1 truncate font-black text-indigo-700">{isArabic ? '⚡ أنت' : '⚡ You'}</span>
-                    <span className="font-black text-indigo-600">{currentRank.totalXp} <span className="text-[10px] font-semibold opacity-60">XP</span></span>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </section>
+        {/* ─── My Specializations (not started) ─── */}
+        {myCourses.length > 0 && (
+          <DarkEnrolledTracksSection courses={myCourses} isArabic={isArabic} />
+        )}
 
         {/* ─── Activity Feed ─── */}
-        {activityFeed.length > 0 && <ActivityFeedSection feed={activityFeed} isArabic={isArabic} />}
-
-        {/* ─── Continue Learning ─── */}
-        <section>
-          <SectionHeader
-            icon={Play}
-            iconBg="from-indigo-500 to-violet-500"
-            badge={isArabic ? 'متابعة التعلم' : 'Continue Learning'}
-            title={isArabic ? 'أكمل من حيث توقفت' : 'Resume where you left off'}
-            count={continueLearning.length}
-          />
-          {continueLearning.length ? (
-            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {continueLearning.slice(0, 6).map((course, i) => (
-                <CourseCard
-                  key={course.id}
-                  course={course}
-                  index={i}
-                  actionLabel={isArabic ? 'متابعة' : 'Continue'}
-                  actionHref={`/student/courses/${course.id}`}
-                  variant="continue"
-                  priority={adaptiveInsights?.nextLesson && i === 0}
-                  priorityLabel={adaptiveInsights?.nextLesson?.subjectName}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="mt-4">
-              <EmptyState
-                title={isArabic ? 'لا توجد كورسات بدأت بها بعد' : 'No started courses yet'}
-                description={isArabic ? 'عند بدء أول درس ستظهر هنا تلقائيًا.' : 'Once you start your first lesson, it will appear here automatically.'}
-                icon={Play}
-              />
-            </div>
-          )}
-        </section>
-
-        {/* ─── My Courses ─── */}
-        <section>
-          <SectionHeader
-            icon={BookOpen}
-            iconBg="from-violet-500 to-fuchsia-500"
-            badge={isArabic ? 'تخصصاتي' : 'My Specializations'}
-            title={isArabic ? 'المسارات المسجلة' : 'Enrolled tracks'}
-            count={myCourses.length}
-          />
-          {myCourses.length ? (
-            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {myCourses.slice(0, 6).map((course, i) => (
-                <CourseCard key={course.id} course={course} index={i} actionLabel={isArabic ? 'ابدأ الآن' : 'Start now'} actionHref={`/student/courses/${course.id}`} variant="start" />
-              ))}
-            </div>
-          ) : (
-            <div className="mt-4">
-              <EmptyState
-                title={isArabic ? 'لا توجد كورسات هنا' : 'Nothing here yet'}
-                description={isArabic ? 'كل كورساتك تحت Continue Learning.' : 'All your enrolled courses have progress and appear above.'}
-                icon={GraduationCap}
-              />
-            </div>
-          )}
-        </section>
+        {activityFeed.length > 0 && <DarkActivityFeedSection feed={activityFeed} isArabic={isArabic} />}
 
       </div>
     </StudentLayout>
@@ -1761,6 +1456,969 @@ function ActivityFeedSection({ feed, isArabic }) {
           );
         })}
       </div>
+    </section>
+  );
+}
+
+/* ─────────────── Compact AI Mentor Card (Dashboard widget) ─────────────── */
+
+function CompactAIMentorCard({ mentor, isArabic, engagedToday }) {
+  const isStreakWarn = mentor.urgentWarning && STREAK_WARN_TYPES.has(mentor.urgentWarning.type);
+  const rawAction = mentor.nextBestAction;
+  const isStreakAction = rawAction?.icon === 'FLAME';
+  const nextBestAction = engagedToday && isStreakAction ? ENGAGED_ACTION(isArabic) : rawAction;
+  const urgCfg = URGENCY_CONFIG[nextBestAction?.urgency] || URGENCY_CONFIG.LOW;
+  const ActionIcon = MENTOR_ACTION_ICONS[nextBestAction?.icon] || Target;
+  const successHighlight = engagedToday && isStreakWarn ? ENGAGED_SUCCESS(isArabic) : mentor.successHighlight;
+  const firstSentence = _splitNarrative(mentor.narrative)[0] || '';
+
+  return (
+    <section className="relative flex flex-col overflow-hidden rounded-3xl border border-violet-300/20 bg-gradient-to-br from-slate-900 via-violet-950 to-fuchsia-950 shadow-[0_16px_40px_-12px_rgba(139,92,246,0.35)]">
+      <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-violet-500/8 blur-3xl" />
+
+      {/* Header */}
+      <div className="flex items-center gap-3 border-b border-white/8 px-5 py-3.5">
+        <div className="relative shrink-0">
+          <div className="absolute inset-0 animate-ping rounded-full bg-violet-400/20" style={{ animationDuration: '3s' }} />
+          <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-[0_0_14px_rgba(167,139,250,0.45)]">
+            <Brain size={15} className="text-white" />
+          </div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-violet-400">{isArabic ? 'المرشد الذكي' : 'AI Mentor'}</p>
+          <h2 className="text-xs font-black text-white">{isArabic ? 'تحليل مخصص لك' : 'Your coaching report'}</h2>
+        </div>
+        {mentor.aiPowered && (
+          <span className="shrink-0 flex items-center gap-1 rounded-full border border-violet-400/25 bg-violet-500/15 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-violet-300">
+            <Sparkles size={7} /> AI
+          </span>
+        )}
+      </div>
+
+      <div className="relative flex flex-1 flex-col gap-3 p-4">
+        {/* Narrative */}
+        {firstSentence && (
+          <div className="rounded-xl border border-white/8 bg-white/4 px-3.5 py-3">
+            <p className="text-[11px] font-medium leading-relaxed text-violet-100">&ldquo;{firstSentence}&rdquo;</p>
+          </div>
+        )}
+
+        {/* Next best action */}
+        {nextBestAction && (
+          <div className={`overflow-hidden rounded-xl border ${urgCfg.border} bg-gradient-to-r ${urgCfg.bg}`}>
+            <div className="flex items-center gap-2.5 px-3 py-2.5">
+              <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${urgCfg.badge} shadow-sm`}>
+                <ActionIcon size={13} className="text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1 flex-wrap">
+                  <p className="text-[8px] font-black uppercase tracking-[0.18em] text-slate-400">{isArabic ? 'الخطوة التالية' : 'Next action'}</p>
+                  <span className={`rounded-full ${urgCfg.badge} px-1.5 py-px text-[7px] font-black uppercase tracking-wider text-white`}>
+                    {isArabic ? urgCfg.labelAr : urgCfg.label}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-[11px] font-black leading-tight text-slate-800">{nextBestAction.action}</p>
+                <p className="text-[9px] font-medium text-slate-500">{nextBestAction.reason}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Success highlight */}
+        {successHighlight && (
+          <div className="flex items-start gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/8 px-3 py-2.5">
+            <CheckCircle2 size={11} className="mt-0.5 shrink-0 text-emerald-300" />
+            <p className="text-[10px] font-semibold leading-snug text-emerald-100">{successHighlight.message}</p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────── Achievement Preview Card (Dashboard widget) ─────────────── */
+
+function AchievementPreviewCard({ achievements, isArabic }) {
+  const pct = Math.round((achievements.unlocked.length / 11) * 100);
+  return (
+    <section className="flex flex-col overflow-hidden rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 via-indigo-50 to-violet-50 shadow-sm">
+      <div className="flex items-center justify-between border-b border-violet-100 px-5 py-3.5">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-md shadow-violet-100">
+            <Medal size={15} className="text-white" />
+          </div>
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-violet-400">{isArabic ? 'الإنجازات' : 'Achievements'}</p>
+            <h3 className="text-sm font-black text-violet-900">
+              {achievements.unlocked.length}<span className="text-xs font-semibold text-violet-400">/11</span> {isArabic ? 'مفتوح' : 'unlocked'}
+            </h3>
+          </div>
+        </div>
+        <span className="text-lg font-black text-violet-600">{pct}%</span>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        {/* Overall progress bar */}
+        <div className="h-2 overflow-hidden rounded-full bg-violet-100">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-violet-400 to-indigo-500 transition-all duration-700"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+
+        {/* Latest unlock */}
+        {achievements.latestUnlocked ? (
+          <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-white/80 px-3 py-2.5 backdrop-blur">
+            <CheckCircle2 size={14} className="shrink-0 text-emerald-500" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-500">{isArabic ? 'آخر إنجاز' : 'Latest unlock'}</p>
+              <p className="truncate text-xs font-black text-emerald-800">{achievements.latestUnlocked.label}</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-violet-500 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-white shadow">NEW</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 rounded-xl bg-violet-100/60 px-3 py-2.5">
+            <Lock size={12} className="shrink-0 text-violet-400" />
+            <span className="text-[11px] font-semibold text-violet-500">
+              {isArabic ? 'أكمل دروسًا لفتح الإنجازات' : 'Complete lessons to unlock achievements'}
+            </span>
+          </div>
+        )}
+
+        {achievements.locked.length > 0 && (
+          <p className="text-center text-[10px] font-semibold text-violet-400">
+            {achievements.locked.length} {isArabic ? 'إنجاز متبقٍّ للفتح' : 'more to unlock'}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────── Leaderboard Preview Card (Dashboard widget) ─────────────── */
+
+function LeaderboardPreviewCard({ leaderboard, currentStudentId, currentRank, isArabic }) {
+  const LB_MEDALS = ['🥇', '🥈', '🥉'];
+  const preview = leaderboard.slice(0, 5);
+  const meInTop = preview.some(e => e.studentId === currentStudentId);
+
+  return (
+    <section className="flex flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-md shadow-amber-100">
+            <Trophy size={15} className="text-white" />
+          </div>
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">{isArabic ? 'لوحة الصدارة' : 'Leaderboard'}</p>
+            <h3 className="text-sm font-black text-slate-900">{isArabic ? 'أفضل الطلاب' : 'Top Students'}</h3>
+          </div>
+        </div>
+        <Link to="/student/social" className="flex items-center gap-1 text-[10px] font-bold text-violet-600 transition-colors hover:text-violet-800">
+          {isArabic ? 'المنافسة' : 'Competition'} <ChevronRight size={11} />
+        </Link>
+      </div>
+
+      <div className="flex-1 px-3 pb-3 pt-2">
+        {preview.length === 0 ? (
+          <EmptyState title={isArabic ? 'لا توجد بيانات بعد' : 'No data yet'} description="" icon={Trophy} />
+        ) : (
+          <div className="space-y-1">
+            {preview.map((entry) => {
+              const isMe = entry.studentId === currentStudentId;
+              const medal = entry.rank <= 3 ? LB_MEDALS[entry.rank - 1] : null;
+              return (
+                <div
+                  key={entry.studentId}
+                  className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs transition ${
+                    isMe ? 'border border-indigo-200 bg-gradient-to-r from-indigo-50 to-violet-50' : 'hover:bg-slate-50'
+                  }`}
+                >
+                  <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg font-black ${
+                    entry.rank === 1 ? 'bg-amber-100 text-amber-600' :
+                    entry.rank === 2 ? 'bg-slate-100 text-slate-600' :
+                    entry.rank === 3 ? 'bg-orange-100 text-orange-600' : 'bg-slate-50 text-slate-400'
+                  }`}>
+                    {medal || <span className="text-[9px]">#{entry.rank}</span>}
+                  </div>
+                  <span className={`flex-1 truncate font-semibold ${isMe ? 'text-indigo-700' : 'text-slate-800'}`}>
+                    {isMe ? (isArabic ? '⚡ أنت' : '⚡ You') : entry.name}
+                  </span>
+                  <div className="hidden items-center gap-1.5 sm:flex">
+                    <span className="rounded-full border border-slate-100 bg-slate-50 px-1.5 py-0.5 text-[9px] font-bold text-slate-400">Lv.{entry.level}</span>
+                    <span className="flex items-center gap-0.5 rounded-full border border-orange-100 bg-orange-50 px-1.5 py-0.5 text-[9px] font-bold text-orange-500">
+                      <Flame size={8} />{entry.currentStreak}d
+                    </span>
+                  </div>
+                  <span className={`shrink-0 text-xs font-black ${isMe ? 'text-indigo-600' : 'text-slate-600'}`}>
+                    {entry.totalXp} <span className="text-[9px] opacity-50">XP</span>
+                  </span>
+                </div>
+              );
+            })}
+            {currentStudentId && currentRank && !meInTop && (
+              <>
+                <p className="py-1 text-center text-[9px] font-bold tracking-widest text-slate-200">• • •</p>
+                <div className="flex items-center gap-2.5 rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-50 to-violet-50 px-2.5 py-2 text-xs">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-[9px] font-black text-indigo-600">#{currentRank.rank}</div>
+                  <span className="flex-1 truncate font-black text-indigo-700">{isArabic ? '⚡ أنت' : '⚡ You'}</span>
+                  <span className="font-black text-indigo-600">{currentRank.totalXp} <span className="text-[9px] font-semibold opacity-50">XP</span></span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────── Dark Continue Learning Card ─────────────── */
+
+function DarkContinueLearningCard({ course, actionHref, isArabic }) {
+  const initial = (course.name || 'C').charAt(0).toUpperCase();
+  const totalSegs = 8;
+  const filledSegs = Math.max(0, Math.min(totalSegs, Math.round((course.progress / 100) * totalSegs)));
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-2xl text-white"
+      style={{ background: 'rgba(25,35,55,0.65)', backdropFilter: 'blur(20px)', border: '1px solid rgba(99,102,241,0.4)', boxShadow: '0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05)' }}
+    >
+      {/* Animated top accent line */}
+      <div className="absolute left-0 right-0 top-0 h-[2px] overflow-hidden">
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, transparent, #6366F1, #8B5CF6, transparent)', animation: 'lnAccentSlide 3s linear infinite' }} />
+      </div>
+      {/* Right radial glow */}
+      <div className="pointer-events-none absolute top-0 h-full w-[420px]" style={{ right: '-110px', background: 'radial-gradient(circle at center, rgba(99,102,241,0.14), transparent 60%)' }} />
+
+      <div className="relative z-10 p-5">
+        {/* Header row */}
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-2 rounded-full bg-teal-400" style={{ boxShadow: '0 0 10px #14B8A6', animation: 'livePulse 2s infinite' }} />
+            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-white/60">
+              {isArabic ? 'متابعة التعلم' : 'Continue Learning'}
+            </span>
+          </div>
+          {course.progress > 0 && (
+            <span className="text-[10px] font-semibold text-white/30">{course.progress}%</span>
+          )}
+        </div>
+
+        {/* Course row */}
+        <div className="flex items-center gap-4">
+          {/* 3D icon */}
+          <div className="relative shrink-0">
+            <div className="absolute rounded-2xl opacity-40" style={{ inset: '-3px', background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', filter: 'blur(10px)', animation: 'lnGradShift 3s ease-in-out infinite' }} />
+            <div
+              className="relative flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-2xl text-3xl font-black"
+              style={{ background: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)', boxShadow: '0 8px 24px rgba(99,102,241,0.5), inset 0 2px 4px rgba(255,255,255,0.15)', transform: 'perspective(1000px) rotateY(-4deg)' }}
+            >
+              {course.cover ? <img src={course.cover} alt="" className="h-full w-full object-cover" /> : initial}
+              {course.completedLessons != null && (
+                <div
+                  className="absolute -right-1.5 -top-1.5 flex h-[24px] w-[24px] items-center justify-center rounded-full text-[10px] font-black"
+                  style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)', border: '2px solid rgba(12,11,35,0.9)', boxShadow: '0 3px 8px rgba(245,158,11,0.5)' }}
+                >
+                  {course.completedLessons}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <h3 className="truncate text-[17px] font-bold" style={{ letterSpacing: '-0.3px' }}>{course.name}</h3>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              {course.totalLessons != null && (
+                <span className="text-xs text-white/45">
+                  {isArabic ? 'الدرس ' : 'Lesson '}<strong className="text-white/80">{course.completedLessons ?? 0}</strong>
+                  {isArabic ? ' من ' : ' of '}<strong className="text-white/80">{course.totalLessons}</strong>
+                </span>
+              )}
+              {course.progress > 0 && (
+                <>
+                  <span className="text-white/20">|</span>
+                  <span className="inline-flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-[11px] font-semibold" style={{ background: 'rgba(99,102,241,0.2)', borderColor: 'rgba(99,102,241,0.38)', color: '#A78BFA' }}>
+                    <span className="h-1.5 w-1.5 rounded-full bg-violet-400" style={{ boxShadow: '0 0 5px #8B5CF6' }} />
+                    {course.progress}% {isArabic ? 'مكتمل' : 'complete'}
+                  </span>
+                </>
+              )}
+            </div>
+            {/* Segmented bar */}
+            <div className="mt-2.5 flex h-[9px] gap-[3px]">
+              {Array.from({ length: totalSegs }, (_, i) => (
+                <div
+                  key={i}
+                  className="flex-1 rounded-[3px]"
+                  style={i < filledSegs ? {
+                    background: i < filledSegs - 1 ? 'linear-gradient(180deg, #6366F1, #4F46E5)' : 'linear-gradient(180deg, #8B5CF6, #7C3AED)',
+                    boxShadow: '0 1px 6px rgba(99,102,241,0.45)',
+                  } : { background: 'rgba(255,255,255,0.08)' }}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Resume button */}
+          <Link
+            to={actionHref}
+            className="relative shrink-0 overflow-hidden rounded-[13px] px-5 py-3 text-sm font-bold text-white"
+            style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', boxShadow: '0 6px 20px rgba(99,102,241,0.4), inset 0 1px 0 rgba(255,255,255,0.18)' }}
+          >
+            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent)', animation: 'lnShimmer 3s infinite' }} />
+            </div>
+            <span className="relative z-10">{isArabic ? 'متابعة' : 'Resume'}</span>
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────── Dashboard Header (dark glassmorphism) ─────────────── */
+
+function _getGreeting(isArabic) {
+  const h = new Date().getHours();
+  if (isArabic) return 'مرحبًا';
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function DashboardHeader({ profile, gamification, currentRank, achievements, avgMark, xpInLevel, isSchoolStudent, isArabic }) {
+  const name = profile?.name || profile?.fullName || (isArabic ? 'طالب' : 'Student');
+  const greeting = _getGreeting(isArabic);
+  const level = gamification.level;
+  const tierLabel = level >= 15 ? (isArabic ? 'خبير' : 'Expert')
+    : level >= 10 ? (isArabic ? 'متقدم' : 'Advanced')
+    : level >= 5  ? (isArabic ? 'متوسط' : 'Intermediate')
+    :               (isArabic ? 'مبتدئ' : 'Beginner');
+  const initials = (name.split(' ').slice(0, 2).map(w => w[0]).join('') || 'ST').toUpperCase();
+  const filledSegs = Math.min(5, Math.round((xpInLevel / 100) * 5));
+  const xpToNext = 100 - xpInLevel;
+  const levelBase = (level - 1) * 100;
+
+  return (
+    <section
+      className="relative overflow-hidden rounded-3xl text-white shadow-2xl"
+      style={{ padding: '24px', background: 'linear-gradient(135deg, rgba(12,11,35,0.97) 0%, rgba(18,16,48,0.99) 100%)', border: '1px solid rgba(255,255,255,0.07)' }}
+    >
+      {/* Animated gradient glow */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{ background: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 50%, #EC4899 100%)', opacity: 0.38, filter: 'blur(48px)', animation: 'lnGradShift 8s ease infinite' }}
+      />
+      {/* Subtle grid overlay */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{ opacity: 0.025, backgroundImage: 'linear-gradient(rgba(255,255,255,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.15) 1px, transparent 1px)', backgroundSize: '22px 22px' }}
+      />
+
+      <div className="relative z-10">
+        {/* ── Top row ── */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-4">
+            {/* Avatar with spinning conic ring */}
+            <div className="relative shrink-0">
+              <div
+                className="absolute rounded-full"
+                style={{ inset: '-5px', background: 'conic-gradient(from 180deg at 50% 50%, #14B8A6, #06B6D4, #6366F1, #8B5CF6, #14B8A6)', opacity: 0.85, animation: 'lnRotate 4s linear infinite' }}
+              />
+              <div
+                className="relative flex h-[68px] w-[68px] items-center justify-center rounded-full text-xl font-black"
+                style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', border: '2.5px solid rgba(255,255,255,0.9)', boxShadow: '0 8px 24px rgba(0,0,0,0.35), inset 0 2px 4px rgba(255,255,255,0.35)' }}
+              >
+                {initials}
+              </div>
+            </div>
+
+            {/* Greeting + badges */}
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-white/35">
+                {isArabic ? 'لوحة الطالب' : 'Student Dashboard'}
+              </p>
+              <h1
+                className="mt-0.5 text-[22px] font-bold tracking-tight"
+                style={{ background: 'linear-gradient(135deg, #ffffff, #d0d0d0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '-0.4px' }}
+              >
+                {greeting}, {name}!
+              </h1>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <span className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-[5px] text-[11px] font-semibold" style={{ background: 'rgba(255,255,255,0.11)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.17)' }}>
+                  <Zap size={10} className="text-amber-400" />
+                  {isArabic ? `المستوى ${level}` : `Level ${level}`}
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-[5px] text-[11px] font-semibold" style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)', boxShadow: '0 3px 10px rgba(245,158,11,0.35)', border: '1px solid rgba(255,255,255,0.18)' }}>
+                  <Trophy size={10} className="text-white" />
+                  {tierLabel}
+                </span>
+                {currentRank?.rank && (
+                  <span className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-[5px] text-[11px] font-semibold" style={{ background: 'rgba(255,255,255,0.09)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.13)' }}>
+                    <Medal size={10} className="text-violet-300" />
+                    #{currentRank.rank}
+                  </span>
+                )}
+                {gamification.currentStreak > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-xl px-2.5 py-[5px] text-[11px] font-semibold" style={{ background: 'rgba(255,255,255,0.09)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.13)' }}>
+                    🔥 {gamification.currentStreak}d
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Progress % mini card */}
+          <div className="shrink-0 rounded-2xl px-4 py-3 text-center" style={{ background: 'rgba(255,255,255,0.07)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.09)', minWidth: '72px' }}>
+            <div className="text-[22px] font-bold leading-none">
+              {Math.round(avgMark)}<span className="text-sm font-normal text-white/35">%</span>
+            </div>
+            <div className="mt-0.5 text-[9px] font-semibold uppercase tracking-wider text-white/35">
+              {isArabic ? 'التقدم' : 'Progress'}
+            </div>
+          </div>
+        </div>
+
+        {/* ── XP progress bar ── */}
+        <div className="mt-5">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[17px] font-bold">{gamification.totalXp.toLocaleString()}</span>
+              <span className="text-[12px] text-white/35">/ {(level * 100).toLocaleString()} XP</span>
+            </div>
+            <div className="flex items-center gap-1 rounded-lg px-2 py-0.5 text-[11px] font-semibold" style={{ background: 'rgba(20,184,166,0.17)', border: '1px solid rgba(20,184,166,0.28)', color: '#5EEAD4' }}>
+              <TrendingUp size={9} />
+              +{xpToNext} {isArabic ? 'للتالي' : 'to go'}
+            </div>
+          </div>
+
+          {/* 5-segment bar */}
+          <div className="relative h-[15px] overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.3)' }}>
+            <div className="absolute inset-[2px] flex gap-[3px]">
+              {[0, 1, 2, 3, 4].map(i => (
+                <div
+                  key={i}
+                  className="flex-1 rounded-[4px] transition-all duration-700"
+                  style={i < filledSegs ? {
+                    background: i % 2 === 0 ? 'linear-gradient(180deg, #14B8A6, #0D9488)' : 'linear-gradient(180deg, #06B6D4, #0891B2)',
+                    boxShadow: '0 0 10px rgba(20,184,166,0.55)',
+                  } : { background: 'rgba(255,255,255,0.07)' }}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Milestone labels */}
+          <div className="mt-1.5 flex justify-between px-0.5">
+            {[levelBase, levelBase + 25, levelBase + 50, levelBase + 75, level * 100].map((v, i) => (
+              <span key={i} className="text-[10px]" style={{ color: i >= 3 ? 'rgba(255,255,255,0.42)' : 'rgba(255,255,255,0.22)' }}>
+                {v.toLocaleString()}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Optional CTA */}
+        {!isSchoolStudent && (
+          <div className="mt-4 border-t border-white/[0.08] pt-3">
+            <Link
+              to="/dashboard/student/courses"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-300 transition hover:text-indigo-200"
+            >
+              {isArabic ? 'عرض جميع تخصصاتي' : 'View all my specializations'}
+              <ArrowRight size={12} />
+            </Link>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────── Today's Tasks Card (compact daily checklist) ─────────────── */
+
+function TodayTasksCard({ missions, adaptiveMissions, isArabic }) {
+  const daily = adaptiveMissions?.daily ?? missions.daily;
+  const weekly = adaptiveMissions?.weekly ?? missions.weekly;
+  const list = daily.slice(0, 5);
+  const done = list.filter(m => m.completed).length;
+  const weeklyDone = weekly.filter(m => m.completed).length;
+
+  return (
+    <section className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-6 w-6 items-center justify-center rounded-lg border border-slate-200 bg-slate-50">
+            <Target size={12} className="text-slate-500" />
+          </div>
+          <span className="text-sm font-semibold text-slate-800">
+            {isArabic ? 'مهام اليوم' : "Today's tasks"}
+            {adaptiveMissions && (
+              <span className="ml-1.5 rounded-full bg-violet-50 border border-violet-100 px-1.5 py-0.5 text-[9px] font-bold text-violet-500">AI</span>
+            )}
+          </span>
+        </div>
+        <span className="text-xs font-semibold text-slate-400">{done}/{list.length}</span>
+      </div>
+
+      {/* Task list */}
+      <div className="flex-1 divide-y divide-slate-50">
+        {list.length === 0 ? (
+          <p className="px-4 py-6 text-center text-xs text-slate-400">
+            {isArabic ? 'لا توجد مهام لليوم' : 'No tasks for today'}
+          </p>
+        ) : (
+          list.map((m) => (
+            <div key={m.key} className={`flex items-center gap-3 px-4 py-2.5 transition ${m.completed ? 'opacity-50' : 'hover:bg-slate-50/60'}`}>
+              <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition ${
+                m.completed ? 'border-emerald-400 bg-emerald-400' : 'border-slate-300 bg-white'
+              }`}>
+                {m.completed && <CheckCircle2 size={10} className="text-white" strokeWidth={3} />}
+              </div>
+              <span className={`flex-1 min-w-0 truncate text-xs font-medium ${
+                m.completed ? 'text-slate-400 line-through' : 'text-slate-700'
+              }`}>
+                {m.label}
+              </span>
+              <span className="shrink-0 text-[9px] font-bold text-slate-300">+{m.xp} XP</span>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Weekly footer peek */}
+      {weekly.length > 0 && (
+        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2.5">
+          <span className="text-[10px] font-medium text-slate-400">
+            {isArabic ? `الأسبوعي: ${weeklyDone}/${weekly.length}` : `Weekly: ${weeklyDone}/${weekly.length} done`}
+          </span>
+          <div className="h-1 w-16 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-indigo-300 transition-all duration-700"
+              style={{ width: weekly.length ? `${Math.round((weeklyDone / weekly.length) * 100)}%` : '0%' }}
+            />
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ─────────────── AI Insight Card (quiet, minimal) ─────────────── */
+
+function AIInsightCard({ mentor, isArabic, engagedToday }) {
+  const isStreakWarn = mentor.urgentWarning && STREAK_WARN_TYPES.has(mentor.urgentWarning.type);
+  const rawAction = mentor.nextBestAction;
+  const nextBestAction = engagedToday && rawAction?.icon === 'FLAME' ? ENGAGED_ACTION(isArabic) : rawAction;
+  const successHighlight = engagedToday && isStreakWarn ? ENGAGED_SUCCESS(isArabic) : mentor.successHighlight;
+  const urgCfg = URGENCY_CONFIG[nextBestAction?.urgency] || URGENCY_CONFIG.LOW;
+  const ActionIcon = MENTOR_ACTION_ICONS[nextBestAction?.icon] || Target;
+  const firstSentence = _splitNarrative(mentor.narrative)[0] || '';
+
+  return (
+    <section className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      {/* Header */}
+      <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
+        <div className="flex h-6 w-6 items-center justify-center rounded-lg border border-violet-100 bg-violet-50">
+          <Brain size={12} className="text-violet-500" />
+        </div>
+        <span className="text-sm font-semibold text-slate-800">{isArabic ? 'رؤية ذكية' : 'AI insight'}</span>
+        {mentor.aiPowered && (
+          <span className="ml-auto rounded-full border border-violet-100 bg-violet-50 px-2 py-0.5 text-[9px] font-bold text-violet-500">
+            Groq AI
+          </span>
+        )}
+      </div>
+
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        {/* Narrative sentence */}
+        {firstSentence && (
+          <p className="text-xs font-medium leading-relaxed text-slate-600">
+            {firstSentence}
+          </p>
+        )}
+
+        {/* Next action */}
+        {nextBestAction && (
+          <div className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 bg-gradient-to-r ${urgCfg.bg} ${urgCfg.border}`}>
+            <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-lg ${urgCfg.badge}`}>
+              <ActionIcon size={10} className="text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-slate-800 leading-snug">{nextBestAction.action}</p>
+              {nextBestAction.reason && (
+                <p className="mt-0.5 text-[10px] text-slate-500">{nextBestAction.reason}</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Success note */}
+        {successHighlight && (
+          <div className="flex items-start gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
+            <CheckCircle2 size={12} className="mt-0.5 shrink-0 text-emerald-500" />
+            <p className="text-[11px] font-medium text-emerald-700 leading-snug">{successHighlight.message}</p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────── Dark AI Mentor Card ─────────────── */
+
+function DarkAIMentorCard({ mentor, engagedToday, isArabic }) {
+  const isStreakWarn = mentor.urgentWarning && STREAK_WARN_TYPES.has(mentor.urgentWarning.type);
+  const successHighlight = engagedToday && isStreakWarn ? ENGAGED_SUCCESS(isArabic) : mentor.successHighlight;
+  const narrative = mentor.narrative || '';
+
+  return (
+    <section
+      className="rounded-2xl p-6"
+      style={{ background: 'linear-gradient(135deg, rgba(17,24,39,0.97), rgba(30,27,75,0.95))', border: '1px solid rgba(139,92,246,0.3)', borderLeft: '4px solid #8B5CF6' }}
+    >
+      {/* Header */}
+      <div className="mb-4 flex items-center gap-3">
+        <Brain size={22} className="shrink-0 text-violet-400" />
+        <h2 className="text-base font-semibold text-white">{isArabic ? 'المرشد الذكي' : 'AI mentor'}</h2>
+        <span
+          className="ml-auto rounded-lg px-2.5 py-1 text-[11px] font-medium"
+          style={{ background: 'rgba(34,197,94,0.15)', color: '#22C55E' }}
+        >
+          {isArabic ? 'رؤية اليوم' : "Today's insight"}
+        </span>
+      </div>
+      {/* Narrative */}
+      {narrative && (
+        <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.82)' }}>
+          {narrative}
+        </p>
+      )}
+      {/* Success highlight */}
+      {successHighlight && (
+        <div className="mt-3 flex items-start gap-2 rounded-xl p-3" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.15)' }}>
+          <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-emerald-400" />
+          <p className="text-[12px] leading-snug" style={{ color: 'rgba(255,255,255,0.7)' }}>{successHighlight.message}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ─────────────── Dark Today's Focus Card ─────────────── */
+
+const _FOCUS_ICON_STYLES = [
+  { bg: '#FEF3C7', color: '#D97706' },
+  { bg: '#DBEAFE', color: '#2563EB' },
+  { bg: '#D1FAE5', color: '#059669' },
+  { bg: '#EDE9FE', color: '#7C3AED' },
+  { bg: '#FEE2E2', color: '#DC2626' },
+];
+
+function _getFocusIcon(key = '') {
+  const k = key.toLowerCase();
+  if (k.includes('lesson'))    return BookOpen;
+  if (k.includes('quiz'))      return CheckCircle2;
+  if (k.includes('flash'))     return Layers;
+  if (k.includes('chat'))      return MessageSquare;
+  return Target;
+}
+
+function DarkTodaysFocusCard({ missions, adaptiveMissions, isArabic }) {
+  const daily = adaptiveMissions?.daily ?? missions.daily;
+  const list  = daily.slice(0, 5);
+
+  return (
+    <section
+      className="rounded-2xl p-7"
+      style={{ background: 'linear-gradient(135deg, rgba(17,24,39,0.97), rgba(30,27,75,0.95))', border: '1px solid rgba(99,102,241,0.2)' }}
+    >
+      <h2 className="mb-5 text-[17px] font-semibold text-white">{isArabic ? 'تركيز اليوم' : "Today's focus"}</h2>
+
+      {list.length === 0 ? (
+        <p className="py-6 text-center text-sm" style={{ color: 'rgba(167,139,250,0.6)' }}>
+          {isArabic ? 'لا توجد مهام لليوم' : 'No tasks for today — enjoy your progress!'}
+        </p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {list.map((m, i) => {
+            const Icon = _getFocusIcon(m.key);
+            const iconStyle = _FOCUS_ICON_STYLES[i % _FOCUS_ICON_STYLES.length];
+            return (
+              <div
+                key={m.key}
+                className="flex items-center gap-4 rounded-xl p-4 transition-all duration-200 hover:scale-[1.01]"
+                style={{
+                  background: m.completed ? 'rgba(99,102,241,0.04)' : 'rgba(99,102,241,0.07)',
+                  border: '1px solid rgba(99,102,241,0.18)',
+                  opacity: m.completed ? 0.6 : 1,
+                }}
+              >
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl" style={{ background: iconStyle.bg }}>
+                  <Icon size={22} style={{ color: iconStyle.color }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-[15px] font-semibold text-white ${m.completed ? 'line-through opacity-60' : ''}`}>
+                    {m.label}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-lg px-3 py-1.5 text-[13px] font-semibold" style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B' }}>
+                  +{m.xp} XP
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ─────────────── Dark This Week's Progress Card ─────────────── */
+
+function DarkWeekProgressCard({ gamification, activityFeed, isArabic }) {
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const weekFeed = activityFeed.filter(item => new Date(item.occurredAt).getTime() > weekAgo);
+  const lessonsThisWeek = weekFeed.filter(item => item.eventType === 'LESSON_COMPLETE').length;
+  const xpThisWeek = weekFeed.reduce((sum, item) => sum + (item.xpAwarded || 0), 0);
+
+  const stats = [
+    { icon: '🔥', value: gamification.currentStreak, label: isArabic ? 'سلسلة أيام' : 'Day streak' },
+    { icon: '📚', value: lessonsThisWeek, label: isArabic ? 'دروس مكتملة' : 'Lessons done' },
+    { icon: '🏆', value: xpThisWeek, label: isArabic ? 'XP مكتسب' : 'XP earned' },
+  ];
+
+  return (
+    <section
+      className="rounded-2xl p-7"
+      style={{ background: 'linear-gradient(135deg, rgba(17,24,39,0.97), rgba(30,27,75,0.95))', border: '1px solid rgba(99,102,241,0.2)' }}
+    >
+      <h2 className="mb-5 text-[17px] font-semibold text-white">{isArabic ? 'تقدم هذا الأسبوع' : "This week's progress"}</h2>
+      <div className="grid grid-cols-3 gap-4">
+        {stats.map((s, i) => (
+          <div key={i} className="rounded-xl p-6 text-center" style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)' }}>
+            <div className="mb-3 text-3xl">{s.icon}</div>
+            <div className="text-[32px] font-bold text-white">{s.value.toLocaleString()}</div>
+            <div className="mt-1 text-[13px]" style={{ color: 'rgba(167,139,250,0.85)' }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────── Dark Enrolled Tracks Section ─────────────── */
+
+const _TRACK_GRADIENTS = [
+  'linear-gradient(135deg, #6366F1, #8B5CF6)',
+  'linear-gradient(135deg, #14B8A6, #0D9488)',
+  'linear-gradient(135deg, #F59E0B, #D97706)',
+  'linear-gradient(135deg, #EC4899, #DB2777)',
+  'linear-gradient(135deg, #06B6D4, #0891B2)',
+  'linear-gradient(135deg, #22C55E, #16A34A)',
+];
+const _TRACK_EMOJIS = ['🎓', '🤖', '📱', '💻', '🔬', '📊'];
+
+function DarkEnrolledTracksSection({ courses, isArabic }) {
+  return (
+    <section
+      className="rounded-2xl p-7"
+      style={{ background: 'linear-gradient(135deg, rgba(17,24,39,0.97), rgba(30,27,75,0.95))', border: '1px solid rgba(99,102,241,0.2)' }}
+    >
+      <h2 className="mb-5 text-[17px] font-semibold text-white">{isArabic ? 'تخصصاتي' : 'My specializations'}</h2>
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {courses.slice(0, 6).map((course, i) => (
+          <Link
+            key={course.id}
+            to={course.firstSubjectId ? `/courses/${course.id}/subjects/${course.firstSubjectId}` : `/student/courses/${course.id}`}
+            className="group block overflow-hidden rounded-2xl transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+            style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.22)' }}
+          >
+            {/* Banner */}
+            <div
+              className="relative flex h-[140px] items-center justify-center overflow-hidden"
+              style={{ background: _TRACK_GRADIENTS[i % _TRACK_GRADIENTS.length] }}
+            >
+              {course.cover ? (
+                <img src={course.cover} alt="" className="h-full w-full object-cover opacity-40" />
+              ) : (
+                <span className="text-6xl opacity-30">{_TRACK_EMOJIS[i % _TRACK_EMOJIS.length]}</span>
+              )}
+              <div
+                className="absolute left-3 top-3 rounded-lg px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-white"
+                style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)' }}
+              >
+                {course.category || 'Track'}
+              </div>
+            </div>
+            {/* Content */}
+            <div className="p-5">
+              <h3 className="mb-4 truncate text-[16px] font-semibold text-white">{course.name}</h3>
+              <div
+                className="flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-all duration-200"
+                style={{ border: '1px solid rgba(99,102,241,0.35)', color: 'rgba(167,139,250,0.9)' }}
+              >
+                {isArabic ? 'ابدأ الآن' : 'Start now'}
+                <ArrowRight size={15} />
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────── Dark Activity Feed Section ─────────────── */
+
+const _FEED_ICON_MAP = {
+  DAILY_LOGIN:       { bg: 'linear-gradient(135deg, #06B6D4, #0891B2)', Icon: Sun },
+  QUIZ_PASS:         { bg: 'linear-gradient(135deg, #22C55E, #16A34A)', Icon: CheckCircle2 },
+  QUIZ_PERFECT:      { bg: 'linear-gradient(135deg, #14B8A6, #0D9488)', Icon: Star },
+  LESSON_COMPLETE:   { bg: 'linear-gradient(135deg, #6366F1, #4F46E5)', Icon: BookOpen },
+  FLASHCARD_SESSION: { bg: 'linear-gradient(135deg, #8B5CF6, #7C3AED)', Icon: Layers },
+  MINDMAP_SESSION:   { bg: 'linear-gradient(135deg, #F59E0B, #D97706)', Icon: MapPin },
+  CHATBOT_SESSION:   { bg: 'linear-gradient(135deg, #EC4899, #DB2777)', Icon: MessageSquare },
+};
+const _FEED_FALLBACK = { bg: 'linear-gradient(135deg, #14B8A6, #0D9488)', Icon: Zap };
+
+function DarkActivityFeedSection({ feed, isArabic }) {
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [pickerDate, setPickerDate] = useState('');
+
+  const filteredFeed = useMemo(() => {
+    if (pickerDate) {
+      const [y, mo, d] = pickerDate.split('-').map(Number);
+      const start = new Date(y, mo - 1, d).getTime();
+      const end   = start + 86400000;
+      return feed.filter(item => {
+        const t = new Date(item.occurredAt).getTime();
+        return t >= start && t < end;
+      });
+    }
+    const now = Date.now();
+    return feed.filter(item => {
+      const t = new Date(item.occurredAt).getTime();
+      if (activeFilter === 'today')     return t > now - 86400000;
+      if (activeFilter === 'yesterday') {
+        const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+        const e = todayStart.getTime();
+        return t >= e - 86400000 && t < e;
+      }
+      if (activeFilter === 'week')  return t > now - 7 * 86400000;
+      if (activeFilter === 'month') return t > now - 30 * 86400000;
+      return true; // 'all'
+    });
+  }, [feed, activeFilter, pickerDate]);
+
+  const filters = [
+    { key: 'all',       label: isArabic ? 'الكل'        : 'All'        },
+    { key: 'today',     label: isArabic ? 'اليوم'        : 'Today'      },
+    { key: 'yesterday', label: isArabic ? 'أمس'          : 'Yesterday'  },
+    { key: 'week',      label: isArabic ? 'هذا الأسبوع'  : 'This week'  },
+    { key: 'month',     label: isArabic ? 'هذا الشهر'    : 'This month' },
+  ];
+
+  const timeAgoLocal = (iso) => {
+    if (!iso) return '—';
+    const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+    if (m < 1)  return isArabic ? 'الآن'              : 'just now';
+    if (m < 60) return isArabic ? `${m}د`             : `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return isArabic ? `${h}س`             : `${h}h ago`;
+    return isArabic ? `${Math.floor(h / 24)}ي`        : `${Math.floor(h / 24)}d ago`;
+  };
+
+  const handleFilterClick = (key) => {
+    setActiveFilter(key);
+    setPickerDate('');
+  };
+
+  const handleDateChange = (e) => {
+    setPickerDate(e.target.value);
+    setActiveFilter('');
+  };
+
+  return (
+    <section
+      className="rounded-2xl p-7"
+      style={{ background: 'linear-gradient(135deg, rgba(17,24,39,0.97), rgba(30,27,75,0.95))', border: '1px solid rgba(99,102,241,0.2)' }}
+    >
+      {/* Header */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-[17px] font-semibold text-white">{isArabic ? 'النشاط الأخير' : 'Recent activity'}</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          {filters.map(f => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => handleFilterClick(f.key)}
+              className="rounded-lg px-3 py-1.5 text-[13px] font-medium transition-all duration-150"
+              style={activeFilter === f.key && !pickerDate ? {
+                background: 'rgba(99,102,241,0.25)',
+                border: '1px solid rgba(99,102,241,0.45)',
+                color: '#A78BFA',
+              } : {
+                background: 'rgba(99,102,241,0.06)',
+                border: '1px solid rgba(99,102,241,0.2)',
+                color: 'rgba(167,139,250,0.7)',
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+          {/* Date picker */}
+          <input
+            type="date"
+            value={pickerDate}
+            onChange={handleDateChange}
+            className="rounded-lg px-3 py-1.5 text-[13px] font-medium transition-all duration-150 outline-none"
+            style={{
+              background: pickerDate ? 'rgba(99,102,241,0.25)' : 'rgba(99,102,241,0.06)',
+              border: pickerDate ? '1px solid rgba(99,102,241,0.45)' : '1px solid rgba(99,102,241,0.2)',
+              color: pickerDate ? '#A78BFA' : 'rgba(167,139,250,0.7)',
+              colorScheme: 'dark',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Feed items */}
+      {filteredFeed.length === 0 ? (
+        <p className="py-6 text-center text-sm" style={{ color: 'rgba(167,139,250,0.6)' }}>
+          {isArabic ? 'لا يوجد نشاط في هذه الفترة' : 'No activity in this period'}
+        </p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {filteredFeed.slice(0, 20).map((item, i) => {
+            const { bg, Icon } = _FEED_ICON_MAP[item.eventType] || _FEED_FALLBACK;
+            return (
+              <div
+                key={i}
+                className="flex items-center gap-4 rounded-xl p-4"
+                style={{ background: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.15)' }}
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style={{ background: bg }}>
+                  <Icon size={17} className="text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white">{item.label}</p>
+                  <p className="mt-0.5 text-[12px]" style={{ color: 'rgba(167,139,250,0.65)' }}>{timeAgoLocal(item.occurredAt)}</p>
+                </div>
+                {item.xpAwarded > 0 && (
+                  <span className="shrink-0 rounded-lg px-2.5 py-1 text-[13px] font-semibold" style={{ background: 'rgba(34,197,94,0.15)', color: '#22C55E' }}>
+                    +{item.xpAwarded}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
