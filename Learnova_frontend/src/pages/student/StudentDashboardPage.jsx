@@ -369,6 +369,17 @@ export default function StudentDashboardPage() {
         @keyframes lnPulseGlow { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.6; } }
         @keyframes lnGradShift { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.55; } }
         @keyframes lnAccentSlide { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        @keyframes lnBurst {
+          0%   { transform: translate(0,0) scale(1); opacity: 1; }
+          60%  { opacity: 0.85; }
+          100% { transform: translate(var(--tx), var(--ty)) scale(0.25); opacity: 0; }
+        }
+        .ln-rain-particle {
+          position: absolute; pointer-events: none; user-select: none;
+          animation: lnBurst 0.75s cubic-bezier(0.2,0.8,0.4,1) forwards;
+          font-size: 18px; line-height: 1; z-index: 10;
+          left: calc(50% - 9px); top: calc(32% - 9px);
+        }
       `}</style>
 
       {/* ── Global overlays ── */}
@@ -2180,6 +2191,50 @@ function DarkTodaysFocusCard({ missions, adaptiveMissions, isArabic }) {
 
 /* ─────────────── Dark This Week's Progress Card ─────────────── */
 
+function _StatCard({ icon, value, label }) {
+  const [particles, setParticles] = useState([]);
+  const timerRef = useRef(null);
+
+  const triggerRain = () => {
+    const newParticles = Array.from({ length: 9 }, (_, k) => {
+      const angle = (-150 + k * 37.5) * (Math.PI / 180); // arc -150° → +150°
+      const dist  = 38 + Math.random() * 22;
+      return {
+        id:    Date.now() + k,
+        tx:    Math.cos(angle) * dist,
+        ty:    Math.sin(angle) * dist,
+        delay: k * 0.04,
+      };
+    });
+    setParticles(prev => [...prev, ...newParticles]);
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setParticles([]), 1200);
+  };
+
+  return (
+    <div
+      className="rounded-xl p-6 text-center cursor-default select-none"
+      style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', position: 'relative', overflow: 'hidden', transition: 'transform 0.2s, box-shadow 0.2s' }}
+      onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(99,102,241,0.2)'; triggerRain(); }}
+      onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+    >
+      {/* Rain particles */}
+      {particles.map(p => (
+        <span
+          key={p.id}
+          className="ln-rain-particle"
+          style={{ '--tx': `${p.tx}px`, '--ty': `${p.ty}px`, animationDelay: `${p.delay}s` }}
+        >
+          {icon}
+        </span>
+      ))}
+      <div className="mb-3 text-3xl relative z-0">{icon}</div>
+      <div className="text-[32px] font-bold" style={{ color: 'var(--ln-sec-text)' }}>{value.toLocaleString()}</div>
+      <div className="mt-1 text-[13px]" style={{ color: 'var(--ln-sec-subtext)' }}>{label}</div>
+    </div>
+  );
+}
+
 function DarkWeekProgressCard({ gamification, activityFeed, isArabic }) {
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const weekFeed = activityFeed.filter(item => new Date(item.createdAt).getTime() > weekAgo);
@@ -2199,13 +2254,7 @@ function DarkWeekProgressCard({ gamification, activityFeed, isArabic }) {
     >
       <h2 className="mb-5 text-[17px] font-semibold" style={{ color: 'var(--ln-sec-text)' }}>{isArabic ? 'تقدم هذا الأسبوع' : "This week's progress"}</h2>
       <div className="grid grid-cols-3 gap-4">
-        {stats.map((s, i) => (
-          <div key={i} className="rounded-xl p-6 text-center" style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)' }}>
-            <div className="mb-3 text-3xl">{s.icon}</div>
-            <div className="text-[32px] font-bold" style={{ color: 'var(--ln-sec-text)' }}>{s.value.toLocaleString()}</div>
-            <div className="mt-1 text-[13px]" style={{ color: 'var(--ln-sec-subtext)' }}>{s.label}</div>
-          </div>
-        ))}
+        {stats.map((s, i) => <_StatCard key={i} icon={s.icon} value={s.value} label={s.label} />)}
       </div>
     </section>
   );
