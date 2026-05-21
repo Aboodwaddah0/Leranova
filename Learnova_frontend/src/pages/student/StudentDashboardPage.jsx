@@ -365,6 +365,8 @@ export default function StudentDashboardPage() {
           50%       { opacity:0.3; }
         }
         @keyframes lnRotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes lnFadeIn { from { opacity: 0; transform: translateX(-50%) translateY(4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+        @keyframes lnAvatarFlip { 0% { transform: scale(1) rotate(0deg); } 35% { transform: scale(0.82) rotate(180deg); } 70% { transform: scale(1.1) rotate(330deg); } 100% { transform: scale(1) rotate(360deg); } }
         @keyframes lnShimmer { 0% { transform: translateX(-100%) skewX(-15deg); } 100% { transform: translateX(200%) skewX(-15deg); } }
         @keyframes lnPulseGlow { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.6; } }
         @keyframes lnGradShift { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.55; } }
@@ -1810,6 +1812,30 @@ function DashboardHeader({ profile, gamification, currentRank, achievements, avg
     :               (isArabic ? 'مبتدئ' : 'Beginner');
   const initials = (name.split(' ').slice(0, 2).map(w => w[0]).join('') || 'ST').toUpperCase();
   const filledSegs = Math.min(5, Math.round((xpInLevel / 100) * 5));
+
+  const [avatarHovered, setAvatarHovered] = useState(false);
+  const [ringFilled, setRingFilled] = useState(false);
+  const [avatarFlip, setAvatarFlip] = useState(false);
+  const _XP_R = 36;
+  const _XP_C = +(2 * Math.PI * _XP_R).toFixed(3);
+  const _xpOffset = +(_XP_C * (1 - Math.min(99, xpInLevel) / 100)).toFixed(3);
+  const _flipTimer = useRef(null);
+
+  const _onAvatarEnter = () => {
+    setAvatarHovered(true);
+    setAvatarFlip(false);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      setRingFilled(true);
+      clearTimeout(_flipTimer.current);
+      _flipTimer.current = setTimeout(() => setAvatarFlip(true), 950);
+    }));
+  };
+  const _onAvatarLeave = () => {
+    setAvatarHovered(false);
+    setRingFilled(false);
+    setAvatarFlip(false);
+    clearTimeout(_flipTimer.current);
+  };
   const xpToNext = 100 - xpInLevel;
   const levelBase = (level - 1) * 100;
 
@@ -1833,15 +1859,63 @@ function DashboardHeader({ profile, gamification, currentRank, achievements, avg
         {/* ── Top row ── */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-4">
-            {/* Avatar with spinning conic ring */}
-            <div className="relative shrink-0">
+            {/* Avatar with spinning conic ring + XP progress ring on hover */}
+            <div
+              className="relative shrink-0 cursor-pointer select-none"
+              onMouseEnter={_onAvatarEnter}
+              onMouseLeave={_onAvatarLeave}
+            >
+              {/* Always-on spinning conic ring — fades on hover */}
               <div
-                className="absolute rounded-full"
-                style={{ inset: '-5px', background: 'conic-gradient(from 180deg at 50% 50%, #14B8A6, #06B6D4, #6366F1, #8B5CF6, #14B8A6)', opacity: 0.85, animation: 'lnRotate 4s linear infinite' }}
+                className="absolute rounded-full pointer-events-none"
+                style={{ inset: '-5px', background: 'conic-gradient(from 180deg at 50% 50%, #14B8A6, #06B6D4, #6366F1, #8B5CF6, #14B8A6)', opacity: avatarHovered ? 0 : 0.85, animation: 'lnRotate 4s linear infinite', transition: 'opacity 0.3s ease' }}
               />
+
+              {/* XP progress ring (SVG) — appears on hover */}
+              <svg
+                className="absolute pointer-events-none"
+                style={{ inset: '-9px', width: 'calc(100% + 18px)', height: 'calc(100% + 18px)', overflow: 'visible', opacity: avatarHovered ? 1 : 0, transition: 'opacity 0.25s ease' }}
+                viewBox="0 0 86 86"
+              >
+                <defs>
+                  <linearGradient id="xpRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#14B8A6" />
+                    <stop offset="45%" stopColor="#6366F1" />
+                    <stop offset="100%" stopColor="#EC4899" />
+                  </linearGradient>
+                  <filter id="xpRingGlow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="2.5" result="blur" />
+                    <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                  </filter>
+                </defs>
+                {/* Track */}
+                <circle cx="43" cy="43" r={_XP_R} fill="none" stroke="rgba(255,255,255,0.13)" strokeWidth="4" />
+                {/* XP fill arc */}
+                <circle
+                  cx="43" cy="43" r={_XP_R}
+                  fill="none"
+                  stroke="url(#xpRingGrad)"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeDasharray={_XP_C}
+                  strokeDashoffset={ringFilled ? _xpOffset : _XP_C}
+                  style={{ transform: 'rotate(-90deg)', transformOrigin: '43px 43px', transition: 'stroke-dashoffset 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94)', filter: 'url(#xpRingGlow)' }}
+                />
+              </svg>
+
+              {/* XP label that appears at bottom of ring on hover */}
+              {avatarHovered && (
+                <div
+                  className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-bold"
+                  style={{ color: '#a78bfa', textShadow: '0 0 8px rgba(139,92,246,0.8)', animation: 'lnFadeIn 0.3s ease forwards' }}
+                >
+                  {xpInLevel}/100 XP
+                </div>
+              )}
+
               <div
                 className="relative flex h-[68px] w-[68px] items-center justify-center rounded-full text-xl font-black"
-                style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', border: '2.5px solid rgba(255,255,255,0.9)', boxShadow: '0 8px 24px rgba(0,0,0,0.35), inset 0 2px 4px rgba(255,255,255,0.35)' }}
+                style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', border: '2.5px solid rgba(255,255,255,0.9)', boxShadow: '0 8px 24px rgba(0,0,0,0.35), inset 0 2px 4px rgba(255,255,255,0.35)', animation: avatarFlip ? 'lnAvatarFlip 0.55s cubic-bezier(0.34,1.56,0.64,1) forwards' : 'none' }}
               >
                 {initials}
               </div>
