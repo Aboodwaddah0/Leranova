@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { io } from 'socket.io-client';
 import StudentLayout from '../../components/student/StudentLayout';
 import { useLanguage } from '../../utils/i18n';
+import { useTheme } from '../../contexts/ThemeContext';
 import {
   clearStudentChat,
   deleteStudentChatMessage,
@@ -71,6 +72,24 @@ export default function StudentChatPage() {
   const { isArabic } = useLanguage();
   const currentUser = useSelector((state) => state.auth?.user);
   const currentUserId = Number(currentUser?.id || currentUser?.userId);
+
+  const { isDark } = useTheme();
+
+  const handleDownloadFile = async (url, fileName) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = fileName || 'file';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    } catch {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
 
   const [chats, setChats] = useState([]);
   const [selectedChatId, setSelectedChatId] = useState(null);
@@ -763,27 +782,27 @@ export default function StudentChatPage() {
   return (
     <StudentLayout>
       {error ? (
-        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className={`mb-4 rounded-2xl border px-4 py-3 text-sm ${isDark ? 'border-amber-500/30 bg-amber-900/20 text-amber-300' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
           {error}
         </div>
       ) : null}
 
-      <div className={`grid h-[calc(100vh-188px)] min-h-0 gap-4 overflow-hidden rounded-[1.5rem] border border-white/70 bg-white/80 p-3 shadow-xl shadow-indigo-500/5 backdrop-blur-xl transition lg:h-[calc(100vh-118px)] ${editingMessageId ? 'ring-2 ring-indigo-400' : ''} md:grid-cols-[320px_1fr]`}>
-        <aside className="flex min-h-0 flex-col rounded-3xl border border-slate-200 bg-slate-50/80 p-3">
-          <div className="mb-3 flex items-center gap-2 px-2 text-sm font-bold text-slate-700">
+      <div className={`grid h-[calc(100vh-188px)] min-h-0 gap-4 overflow-hidden rounded-[1.5rem] border p-3 shadow-xl shadow-indigo-500/5 backdrop-blur-xl transition lg:h-[calc(100vh-118px)] ${editingMessageId ? 'ring-2 ring-indigo-400' : ''} md:grid-cols-[320px_1fr] ${isDark ? 'border-white/[0.08] bg-[#0d0c22]/95' : 'border-white/70 bg-white/80'}`}>
+        <aside className={`flex min-h-0 flex-col rounded-3xl border p-3 ${isDark ? 'border-white/[0.08] bg-[#111029]' : 'border-slate-200 bg-slate-50/80'}`}>
+          <div className={`mb-3 flex items-center gap-2 px-2 text-sm font-bold ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
             <MessageCircle size={16} className="text-indigo-600" />
             <span>{isArabic ? 'قائمة الدردشات' : 'Chat list'}</span>
           </div>
 
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
             {loading ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-3 py-4 text-sm text-slate-500">
+              <div className={`rounded-2xl border border-dashed px-3 py-4 text-sm ${isDark ? 'border-white/[0.08] bg-white/[0.03] text-white/40' : 'border-slate-300 bg-white text-slate-500'}`}>
                 {isArabic ? 'جاري تحميل الدردشات...' : 'Loading chats...'}
               </div>
             ) : null}
 
             {!loading && chats.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-3 py-4 text-sm text-slate-500">
+              <div className={`rounded-2xl border border-dashed px-3 py-4 text-sm ${isDark ? 'border-white/[0.08] bg-white/[0.03] text-white/40' : 'border-slate-300 bg-white text-slate-500'}`}>
                 {isArabic ? 'لا توجد دردشات متاحة.' : 'No chats available.'}
               </div>
             ) : chats.map((chat) => {
@@ -796,20 +815,22 @@ export default function StudentChatPage() {
                   onClick={() => handleSelectChat(chat.id)}
                   className={`w-full rounded-2xl border px-3 py-3 text-start transition ${
                     active
-                      ? 'border-indigo-600 bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
-                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                      ? 'border-indigo-500 bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                      : isDark
+                        ? 'border-white/[0.08] bg-[#1a1836] text-white/80 hover:bg-white/[0.07]'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className={`text-sm ${chat.unreadCount ? 'font-black' : 'font-bold'}`}>{getChatLabel(chat, isArabic)}</p>
-                    <span className={`text-[11px] ${active ? 'text-indigo-100' : 'text-slate-500'}`}>
+                    <span className={`text-[11px] ${active ? 'text-indigo-100' : isDark ? 'text-white/35' : 'text-slate-500'}`}>
                       {formatMessageTime(chat.lastMessageAt)}
                     </span>
                   </div>
-                  <p className={`mt-1 line-clamp-1 text-xs ${active ? 'text-indigo-100' : 'text-slate-500'}`}>
+                  <p className={`mt-1 line-clamp-1 text-xs ${active ? 'text-indigo-100' : isDark ? 'text-white/45' : 'text-slate-500'}`}>
                     {chat.lastMessage?.content || (isArabic ? 'لا توجد رسائل بعد' : 'No messages yet')}
                   </p>
-                  <p className={`mt-1 text-[11px] ${active ? 'text-indigo-100' : 'text-slate-500'}`}>
+                  <p className={`mt-1 text-[11px] ${active ? 'text-indigo-100' : isDark ? 'text-white/35' : 'text-slate-500'}`}>
                     {String(chat.type || '').toUpperCase() === 'CLASS'
                       ? (isArabic ? 'دردشة الصف' : 'Class chat')
                       : (isArabic ? 'دردشة المادة' : 'Material chat')}
@@ -825,16 +846,16 @@ export default function StudentChatPage() {
           </div>
         </aside>
 
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-2.5">
-            <p className="text-sm font-black text-slate-900">
+        <section className={`flex min-h-0 flex-col overflow-hidden rounded-3xl border ${isDark ? 'border-white/[0.08] bg-[#111029]' : 'border-slate-200 bg-white'}`}>
+          <div className={`flex items-center justify-between gap-3 border-b px-4 py-2.5 ${isDark ? 'border-white/[0.07]' : 'border-slate-200'}`}>
+            <p className={`text-sm font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
               {selectedChat ? getChatLabel(selectedChat, isArabic) : (isArabic ? 'اختر دردشة' : 'Select a chat')}
             </p>
             <button
               type="button"
               onClick={handleClearChat}
               disabled={!selectedChatId || clearingChat || messages.length === 0}
-              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className={`inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${isDark ? 'border-white/[0.08] bg-white/[0.04] text-white/60 hover:bg-white/10' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'}`}
             >
               <Trash2 size={14} />
               {clearingChat
@@ -843,15 +864,15 @@ export default function StudentChatPage() {
             </button>
           </div>
 
-          <div ref={messagesBoxRef} className={`min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 transition ${editingMessageId ? 'bg-slate-900/5' : 'bg-slate-50/70'}`} onClick={closeTransientPopups}>
+          <div ref={messagesBoxRef} className={`min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 transition ${isDark ? (editingMessageId ? 'bg-black/30' : 'bg-[#0d0c22]') : (editingMessageId ? 'bg-slate-900/5' : 'bg-slate-50/70')}`} onClick={closeTransientPopups}>
             {!selectedChat ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-6 text-sm text-slate-500">
+              <div className={`rounded-2xl border border-dashed px-4 py-6 text-sm ${isDark ? 'border-white/[0.08] bg-white/[0.03] text-white/40' : 'border-slate-300 bg-white text-slate-500'}`}>
                 {isArabic ? 'اختر دردشة لعرض الرسائل.' : 'Choose a chat to view messages.'}
               </div>
             ) : null}
 
             {selectedChat && messages.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-6 text-sm text-slate-500">
+              <div className={`rounded-2xl border border-dashed px-4 py-6 text-sm ${isDark ? 'border-white/[0.08] bg-white/[0.03] text-white/40' : 'border-slate-300 bg-white text-slate-500'}`}>
                 {isArabic ? 'لا توجد رسائل بعد.' : 'No messages yet.'}
               </div>
             ) : messages.map((message) => {
@@ -880,7 +901,7 @@ export default function StudentChatPage() {
                     className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
                       mine
                         ? 'bg-indigo-600 text-white'
-                        : 'border border-slate-200 bg-white text-slate-800'
+                        : isDark ? 'border border-white/[0.1] bg-[#1e1c38] text-white' : 'border border-slate-200 bg-white text-slate-800'
                     }`}
                   >
                     {!mine ? (
@@ -889,8 +910,8 @@ export default function StudentChatPage() {
                       </p>
                     ) : null}
                     {!message.isDeleted && message.replyTo ? (
-                      <div className="mb-[6px] rounded-lg border-l-[3px] border-indigo-400 bg-slate-100 px-3 py-1.5 text-xs text-slate-600">
-                        <p className="mb-0.5 inline-flex items-center gap-1 text-[11px] font-bold text-slate-700">
+                      <div className={`mb-[6px] rounded-lg border-l-[3px] border-indigo-400 px-3 py-1.5 text-xs ${isDark ? 'bg-white/[0.06] text-white/50' : 'bg-slate-100 text-slate-600'}`}>
+                        <p className={`mb-0.5 inline-flex items-center gap-1 text-[11px] font-bold ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
                           <CornerUpLeft size={12} />
                           {mine
                             ? `${isArabic ? 'أنت رديت على' : 'You replied to'} ${message.replyTo.senderName || (isArabic ? 'عضو' : 'Member')}`
@@ -921,24 +942,23 @@ export default function StudentChatPage() {
                                   <img src={att.fileUrl} alt={att.fileName} className="max-h-48 w-full rounded-xl object-cover" loading="lazy" />
                                 </a>
                               ) : (
-                                <a
+                                <button
                                   key={att.id}
-                                  href={att.fileUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition ${mine ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
+                                  type="button"
+                                  onClick={() => handleDownloadFile(att.fileUrl, att.fileName)}
+                                  className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition ${mine ? 'bg-white/20 hover:bg-white/30 text-white' : isDark ? 'bg-white/[0.07] hover:bg-white/[0.12] text-white/80' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
                                 >
                                   <FileText size={14} className="shrink-0" />
-                                  <span className="truncate flex-1">{att.fileName}</span>
+                                  <span className="truncate flex-1 text-start">{att.fileName}</span>
                                   <Download size={13} className="shrink-0 opacity-70" />
-                                </a>
+                                </button>
                               );
                             })}
                           </div>
                         )}
                       </>
                     )}
-                    <div className={`mt-2 flex items-center gap-2 text-[11px] ${mine ? 'text-indigo-100' : 'text-slate-500'}`}>
+                    <div className={`mt-2 flex items-center gap-2 text-[11px] ${mine ? 'text-indigo-200' : isDark ? 'text-white/35' : 'text-slate-500'}`}>
                       <span>{formatMessageTime(message.createdAt)}</span>
                       {message.isEdited ? <span>{isArabic ? 'معدل' : 'Edited'}</span> : null}
                       {mine ? <span>{message.isSeen ? '✔✔' : '✔'}</span> : null}
@@ -958,7 +978,7 @@ export default function StudentChatPage() {
                             <EllipsisVertical size={13} />
                           </button>
                           {messageMenuId === Number(message.id) ? (
-                            <div className="absolute end-0 top-7 z-10 min-w-[110px] rounded-lg border border-slate-200 bg-white p-1 text-slate-700 shadow-lg" onClick={(e) => e.stopPropagation()}>
+                            <div className={`absolute end-0 bottom-full mb-1 z-10 min-w-[110px] rounded-lg border p-1 shadow-lg ${isDark ? 'border-white/[0.1] bg-[#1e1c3a] text-white/80' : 'border-slate-200 bg-white text-slate-700'}`} onClick={(e) => e.stopPropagation()}>
                               <button
                                 type="button"
                                 onClick={() => handleStartEditMessage(message)}
@@ -993,7 +1013,7 @@ export default function StudentChatPage() {
                             <Smile size={13} />
                           </button>
                           {reactionPickerForMessageId === Number(message.id) ? (
-                            <div className={`absolute top-7 z-10 flex w-[220px] max-w-[220px] flex-nowrap items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white px-2 py-1 shadow-lg ${mine ? 'end-0' : 'start-0'}`} onClick={(e) => e.stopPropagation()}>
+                            <div className={`absolute bottom-full mb-1 z-10 flex w-[220px] max-w-[220px] flex-nowrap items-center gap-1 overflow-x-auto rounded-xl border px-2 py-1 shadow-lg ${mine ? 'end-0' : 'start-0'} ${isDark ? 'border-white/[0.1] bg-[#1e1c3a]' : 'border-slate-200 bg-white'}`} onClick={(e) => e.stopPropagation()}>
                               {REACTION_EMOJIS.map((emoji) => (
                                 <button
                                   key={emoji}
@@ -1022,7 +1042,7 @@ export default function StudentChatPage() {
                               type="button"
                               onClick={() => handleReactToMessage(message, reaction.emoji)}
                               disabled={reactingMessageId === Number(message.id)}
-                              className={`inline-flex shrink-0 items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] transition ${active ? 'border-indigo-300 bg-indigo-100 text-indigo-700' : 'border-slate-200 bg-white/70 text-slate-700'}`}
+                              className={`inline-flex shrink-0 items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] transition ${reaction.reactedByMe ? 'border-indigo-300 bg-indigo-100 text-indigo-700' : isDark ? 'border-white/[0.1] bg-white/5 text-white/60' : 'border-slate-200 bg-white/70 text-slate-700'}`}
                             >
                               <span className="text-xs">{reaction.emoji}</span>
                               <span className="font-semibold">{reaction.count}</span>
@@ -1041,7 +1061,15 @@ export default function StudentChatPage() {
               );
             })}
             {selectedChatTyping ? (
-              <div className="text-xs font-semibold text-slate-500">{isArabic ? 'جاري الكتابة...' : 'Typing...'}</div>
+              <div className={`flex items-center gap-1.5 text-xs ${isDark ? 'text-white/45' : 'text-slate-500'}`}>
+                <span className="flex gap-0.5">
+                  {[0, 0.15, 0.3].map((d, i) => (
+                    <span key={i} className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-500" style={{ animationDelay:`${d}s` }} />
+                  ))}
+                </span>
+                <span className="font-semibold text-indigo-500">{selectedChatTyping}</span>
+                <span>{isArabic ? 'يكتب...' : 'is typing...'}</span>
+              </div>
             ) : null}
           </div>
 
@@ -1059,10 +1087,10 @@ export default function StudentChatPage() {
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+                className={`w-full max-w-md rounded-2xl p-6 shadow-2xl ${isDark ? 'bg-[#111029] border border-white/[0.08]' : 'bg-white'}`}
                 onClick={(e) => e.stopPropagation()}
               >
-                <h2 className="mb-4 text-lg font-bold text-slate-800">
+                <h2 className={`mb-4 text-lg font-bold ${isDark ? 'text-white' : 'text-slate-800'}`}>
                   {isArabic ? 'تعديل الرسالة' : 'Edit Message'}
                 </h2>
                 
@@ -1070,7 +1098,7 @@ export default function StudentChatPage() {
                   ref={editInputRef}
                   value={editingText}
                   onChange={(event) => setEditingText(event.target.value)}
-                  className="mb-4 w-full min-h-[100px] resize-none rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm outline-none focus:border-indigo-400 focus:bg-white"
+                  className={`mb-4 w-full min-h-[100px] resize-none rounded-lg border p-3 text-sm outline-none ${isDark ? 'border-white/[0.1] bg-[#1a1836] text-white placeholder:text-white/30 focus:border-indigo-400' : 'border-slate-200 bg-slate-50 text-slate-800 focus:border-indigo-400 focus:bg-white'}`}
                   placeholder={isArabic ? 'عدّل الرسالة...' : 'Edit message...'}
                   autoFocus
                 />
@@ -1080,7 +1108,7 @@ export default function StudentChatPage() {
                   <p className="mb-2 text-xs font-semibold text-slate-600">
                     {isArabic ? 'أضف إيموجي:' : 'Add Emoji:'}
                   </p>
-                  <div className="grid grid-cols-8 gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 max-h-[150px] overflow-y-auto">
+                  <div className={`grid grid-cols-8 gap-2 rounded-lg border p-3 max-h-[150px] overflow-y-auto ${isDark ? 'border-white/[0.08] bg-[#1a1836]' : 'border-slate-200 bg-slate-50'}`}>
                     {COMPOSER_EMOJIS.map((emoji) => (
                       <button
                         key={emoji}
@@ -1100,7 +1128,7 @@ export default function StudentChatPage() {
                   <button
                     type="button"
                     onClick={handleCancelEdit}
-                    className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                    className={`rounded-lg border px-4 py-2 text-sm font-semibold transition ${isDark ? 'border-white/[0.1] bg-white/[0.06] text-white/70 hover:bg-white/10' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'}`}
                   >
                     {isArabic ? 'إلغاء' : 'Cancel'}
                   </button>
@@ -1122,14 +1150,14 @@ export default function StudentChatPage() {
             </div>
           ) : null}
 
-          <div className="border-t border-slate-200 bg-white px-4 py-3">
+          <div className={`border-t px-4 py-3 ${isDark ? 'border-white/[0.07] bg-[#111029]' : 'border-slate-200 bg-white'}`}>
             {attachedFiles.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
                 {attachedFiles.map((file, idx) => {
                   const isImage = file.type.startsWith('image/');
                   const preview = isImage ? URL.createObjectURL(file) : null;
                   return (
-                    <div key={idx} className="relative flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-700">
+                    <div key={idx} className={`relative flex items-center gap-1.5 rounded-xl border px-2 py-1.5 text-xs font-semibold ${isDark ? 'border-white/[0.1] bg-[#1a1836] text-white/70' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
                       {isImage && preview ? (
                         <img src={preview} alt={file.name} className="h-8 w-8 rounded-lg object-cover" />
                       ) : (
@@ -1149,7 +1177,7 @@ export default function StudentChatPage() {
               </div>
             )}
             {replyToMessage ? (
-              <div className="mb-2 flex items-start justify-between gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
+              <div className={`mb-2 flex items-start justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${isDark ? 'border-indigo-400/30 bg-indigo-500/10 text-indigo-300' : 'border-indigo-200 bg-indigo-50 text-indigo-800'}`}>
                 <div>
                   <p className="font-bold">{isArabic ? 'الرد على:' : 'Replying to:'} {replyToMessage.sender?.name || (isArabic ? 'عضو' : 'Member')}</p>
                   <p className="mt-1">{compactText(replyToMessage.content, 120)}</p>
@@ -1186,7 +1214,7 @@ export default function StudentChatPage() {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={Boolean(editingMessageId)}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 transition hover:bg-slate-100 disabled:opacity-40"
+                className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl border transition disabled:opacity-40 ${isDark ? 'border-white/[0.1] bg-[#1a1836] text-white/60 hover:bg-white/10' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
                 aria-label={isArabic ? 'إرفاق ملف' : 'Attach file'}
               >
                 <Paperclip size={17} />
@@ -1201,14 +1229,14 @@ export default function StudentChatPage() {
                     setReactionPickerForMessageId(null);
                     setMessageMenuId(null);
                   }}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 transition hover:bg-slate-100"
+                  className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl border transition ${isDark ? 'border-white/[0.1] bg-[#1a1836] text-white/60 hover:bg-white/10' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
                   aria-label={isArabic ? 'اختيار إيموجي' : 'Pick emoji'}
                 >
                   <Smile size={18} />
                 </button>
                 {showComposerEmojiPicker ? (
-                  <div className="absolute bottom-full start-0 z-20 mb-2 w-[320px] max-w-[min(320px,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-3 shadow-xl" onClick={(e) => e.stopPropagation()}>
-                    <div className="mb-2 text-[11px] font-semibold text-slate-500">
+                  <div className={`absolute bottom-full start-0 z-20 mb-2 w-[320px] max-w-[min(320px,calc(100vw-2rem))] rounded-2xl border p-3 shadow-xl ${isDark ? 'border-white/[0.1] bg-[#1e1c3a]' : 'border-slate-200 bg-white'}`} onClick={(e) => e.stopPropagation()}>
+                    <div className={`mb-2 text-[11px] font-semibold ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
                       {isArabic ? 'لوحة الإيموجي' : 'Emoji keyboard'}
                     </div>
                     <div className="grid max-h-52 grid-cols-8 gap-1 overflow-y-auto">
@@ -1217,7 +1245,7 @@ export default function StudentChatPage() {
                           key={emoji}
                           type="button"
                           onClick={() => insertComposerEmoji(emoji)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-lg transition hover:bg-slate-100"
+                          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-lg transition ${isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100'}`}
                         >
                           {emoji}
                         </button>
@@ -1240,7 +1268,7 @@ export default function StudentChatPage() {
                 rows={2}
                 placeholder={isArabic ? 'اكتب رسالتك...' : 'Write your message...'}
                 disabled={Boolean(editingMessageId)}
-                className="min-h-[54px] flex-1 resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none transition focus:border-indigo-400 focus:bg-white"
+                className={`min-h-[54px] flex-1 resize-none rounded-2xl border px-3 py-2 text-sm outline-none transition ${isDark ? 'border-white/[0.1] bg-[#1a1836] text-white placeholder:text-white/30 focus:border-indigo-400' : 'border-slate-200 bg-slate-50 text-slate-800 focus:border-indigo-400 focus:bg-white'}`}
               />
               <button
                 type="button"
@@ -1263,9 +1291,9 @@ export default function StudentChatPage() {
 
       {confirmDeleteMessageId ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 px-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
-            <h3 className="text-base font-black text-slate-900">{isArabic ? 'تأكيد الحذف' : 'Confirm delete'}</h3>
-            <p className="mt-2 text-sm text-slate-600">
+          <div className={`w-full max-w-sm rounded-2xl p-5 shadow-2xl ${isDark ? 'bg-[#111029] border border-white/[0.08]' : 'bg-white'}`}>
+            <h3 className={`text-base font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>{isArabic ? 'تأكيد الحذف' : 'Confirm delete'}</h3>
+            <p className={`mt-2 text-sm ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
               {isArabic
                 ? 'هل أنت متأكد أنك تريد حذف هذه الرسالة؟'
                 : 'Are you sure you want to delete this message?'}
@@ -1274,7 +1302,7 @@ export default function StudentChatPage() {
               <button
                 type="button"
                 onClick={handleCancelDelete}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700"
+                className={`rounded-lg border px-3 py-1.5 text-sm font-semibold ${isDark ? 'border-white/[0.1] text-white/70 hover:bg-white/10' : 'border-slate-200 text-slate-700'}`}
               >
                 {isArabic ? 'إلغاء' : 'Cancel'}
               </button>
