@@ -424,7 +424,7 @@ export default function StudentDashboardPage() {
           <section className="space-y-3">
             <DarkContinueLearningCard
               course={continueLearning[0]}
-              actionHref={`/student/courses/${continueLearning[0].id}`}
+              actionHref={continueLearning[0].firstSubjectId ? `/courses/${continueLearning[0].id}/subjects/${continueLearning[0].firstSubjectId}` : `/student/courses/${continueLearning[0].id}`}
               isArabic={isArabic}
             />
             {continueLearning.length > 1 && (
@@ -435,7 +435,7 @@ export default function StudentDashboardPage() {
                     course={course}
                     index={i + 1}
                     actionLabel={isArabic ? 'متابعة' : 'Continue'}
-                    actionHref={`/student/courses/${course.id}`}
+                    actionHref={course.firstSubjectId ? `/courses/${course.id}/subjects/${course.firstSubjectId}` : `/student/courses/${course.id}`}
                     variant="continue"
                   />
                 ))}

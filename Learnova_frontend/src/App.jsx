@@ -1,4 +1,5 @@
-﻿import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
+﻿import { BrowserRouter, Navigate, Route, Routes, useParams, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import AdminProtectedRoute from "./routes/AdminProtectedRoute";
 import OrganizationProtectedRoute from "./routes/OrganizationProtectedRoute";
@@ -45,6 +46,12 @@ import { GooeyToaster } from "goey-toast";
 import { LEARNOVA_TOASTER_PROPS } from "./lib/notify";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  return null;
+}
+
 function LegacyStudentCourseRedirect() {
   const { courseId } = useParams();
   return <Navigate to={`/courses/${courseId}`} replace />;
@@ -59,6 +66,7 @@ function App() {
   return (
     <ThemeProvider>
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
