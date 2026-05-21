@@ -2079,12 +2079,12 @@ function DarkAIMentorCard({ mentor, engagedToday, isArabic }) {
   return (
     <section
       className="rounded-2xl p-6"
-      style={{ background: 'linear-gradient(135deg, rgba(17,24,39,0.97), rgba(30,27,75,0.95))', border: '1px solid rgba(139,92,246,0.3)', borderLeft: '4px solid #8B5CF6' }}
+      style={{ background: 'var(--ln-sec-bg)', border: '1px solid rgba(139,92,246,0.3)', borderLeft: '4px solid #8B5CF6' }}
     >
       {/* Header */}
       <div className="mb-4 flex items-center gap-3">
         <Brain size={22} className="shrink-0 text-violet-400" />
-        <h2 className="text-base font-semibold text-white">{isArabic ? 'المرشد الذكي' : 'AI mentor'}</h2>
+        <h2 className="text-base font-semibold" style={{ color: 'var(--ln-sec-text)' }}>{isArabic ? 'المرشد الذكي' : 'AI mentor'}</h2>
         <span
           className="ml-auto rounded-lg px-2.5 py-1 text-[11px] font-medium"
           style={{ background: 'rgba(34,197,94,0.15)', color: '#22C55E' }}
@@ -2094,7 +2094,7 @@ function DarkAIMentorCard({ mentor, engagedToday, isArabic }) {
       </div>
       {/* Narrative */}
       {narrative && (
-        <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.82)' }}>
+        <p className="text-sm leading-relaxed" style={{ color: 'var(--ln-sec-text)' }}>
           {narrative}
         </p>
       )}
@@ -2102,7 +2102,7 @@ function DarkAIMentorCard({ mentor, engagedToday, isArabic }) {
       {successHighlight && (
         <div className="mt-3 flex items-start gap-2 rounded-xl p-3" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.15)' }}>
           <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-emerald-400" />
-          <p className="text-[12px] leading-snug" style={{ color: 'rgba(255,255,255,0.7)' }}>{successHighlight.message}</p>
+          <p className="text-[12px] leading-snug" style={{ color: 'var(--ln-sec-subtext)' }}>{successHighlight.message}</p>
         </div>
       )}
     </section>
@@ -2135,9 +2135,9 @@ function DarkTodaysFocusCard({ missions, adaptiveMissions, isArabic }) {
   return (
     <section
       className="rounded-2xl p-7"
-      style={{ background: 'linear-gradient(135deg, rgba(17,24,39,0.97), rgba(30,27,75,0.95))', border: '1px solid rgba(99,102,241,0.2)' }}
+      style={{ background: 'var(--ln-sec-bg)', border: '1px solid var(--ln-sec-border)' }}
     >
-      <h2 className="mb-5 text-[17px] font-semibold text-white">{isArabic ? 'تركيز اليوم' : "Today's focus"}</h2>
+      <h2 className="mb-5 text-[17px] font-semibold" style={{ color: 'var(--ln-sec-text)' }}>{isArabic ? 'تركيز اليوم' : "Today's focus"}</h2>
 
       {list.length === 0 ? (
         <p className="py-6 text-center text-sm" style={{ color: 'rgba(167,139,250,0.6)' }}>
@@ -2153,8 +2153,8 @@ function DarkTodaysFocusCard({ missions, adaptiveMissions, isArabic }) {
                 key={m.key}
                 className="flex items-center gap-4 rounded-xl p-4 transition-all duration-200 hover:scale-[1.01]"
                 style={{
-                  background: m.completed ? 'rgba(99,102,241,0.04)' : 'rgba(99,102,241,0.07)',
-                  border: '1px solid rgba(99,102,241,0.18)',
+                  background: 'var(--ln-item-bg)',
+                  border: '1px solid var(--ln-item-border)',
                   opacity: m.completed ? 0.6 : 1,
                 }}
               >
@@ -2162,7 +2162,7 @@ function DarkTodaysFocusCard({ missions, adaptiveMissions, isArabic }) {
                   <Icon size={22} style={{ color: iconStyle.color }} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-[15px] font-semibold text-white ${m.completed ? 'line-through opacity-60' : ''}`}>
+                  <p className={`text-[15px] font-semibold ${m.completed ? 'line-through opacity-60' : ''}`} style={{ color: 'var(--ln-sec-text)' }}>
                     {m.label}
                   </p>
                 </div>
@@ -2182,9 +2182,9 @@ function DarkTodaysFocusCard({ missions, adaptiveMissions, isArabic }) {
 
 function DarkWeekProgressCard({ gamification, activityFeed, isArabic }) {
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const weekFeed = activityFeed.filter(item => new Date(item.occurredAt).getTime() > weekAgo);
-  const lessonsThisWeek = weekFeed.filter(item => item.eventType === 'LESSON_COMPLETE').length;
-  const xpThisWeek = weekFeed.reduce((sum, item) => sum + (item.xpAwarded || 0), 0);
+  const weekFeed = activityFeed.filter(item => new Date(item.createdAt).getTime() > weekAgo);
+  const lessonsThisWeek = weekFeed.filter(item => item.type === 'LESSON_COMPLETE').length;
+  const xpThisWeek = weekFeed.reduce((sum, item) => sum + (item.xp || 0), 0);
 
   const stats = [
     { icon: '🔥', value: gamification.currentStreak, label: isArabic ? 'سلسلة أيام' : 'Day streak' },
@@ -2195,15 +2195,15 @@ function DarkWeekProgressCard({ gamification, activityFeed, isArabic }) {
   return (
     <section
       className="rounded-2xl p-7"
-      style={{ background: 'linear-gradient(135deg, rgba(17,24,39,0.97), rgba(30,27,75,0.95))', border: '1px solid rgba(99,102,241,0.2)' }}
+      style={{ background: 'var(--ln-sec-bg)', border: '1px solid var(--ln-sec-border)' }}
     >
-      <h2 className="mb-5 text-[17px] font-semibold text-white">{isArabic ? 'تقدم هذا الأسبوع' : "This week's progress"}</h2>
+      <h2 className="mb-5 text-[17px] font-semibold" style={{ color: 'var(--ln-sec-text)' }}>{isArabic ? 'تقدم هذا الأسبوع' : "This week's progress"}</h2>
       <div className="grid grid-cols-3 gap-4">
         {stats.map((s, i) => (
           <div key={i} className="rounded-xl p-6 text-center" style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)' }}>
             <div className="mb-3 text-3xl">{s.icon}</div>
-            <div className="text-[32px] font-bold text-white">{s.value.toLocaleString()}</div>
-            <div className="mt-1 text-[13px]" style={{ color: 'rgba(167,139,250,0.85)' }}>{s.label}</div>
+            <div className="text-[32px] font-bold" style={{ color: 'var(--ln-sec-text)' }}>{s.value.toLocaleString()}</div>
+            <div className="mt-1 text-[13px]" style={{ color: 'var(--ln-sec-subtext)' }}>{s.label}</div>
           </div>
         ))}
       </div>
@@ -2227,9 +2227,9 @@ function DarkEnrolledTracksSection({ courses, isArabic }) {
   return (
     <section
       className="rounded-2xl p-7"
-      style={{ background: 'linear-gradient(135deg, rgba(17,24,39,0.97), rgba(30,27,75,0.95))', border: '1px solid rgba(99,102,241,0.2)' }}
+      style={{ background: 'var(--ln-sec-bg)', border: '1px solid var(--ln-sec-border)' }}
     >
-      <h2 className="mb-5 text-[17px] font-semibold text-white">{isArabic ? 'تخصصاتي' : 'My specializations'}</h2>
+      <h2 className="mb-5 text-[17px] font-semibold" style={{ color: 'var(--ln-sec-text)' }}>{isArabic ? 'تخصصاتي' : 'My specializations'}</h2>
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {courses.slice(0, 6).map((course, i) => (
           <Link
@@ -2257,7 +2257,7 @@ function DarkEnrolledTracksSection({ courses, isArabic }) {
             </div>
             {/* Content */}
             <div className="p-5">
-              <h3 className="mb-4 truncate text-[16px] font-semibold text-white">{course.name}</h3>
+              <h3 className="mb-4 truncate text-[16px] font-semibold" style={{ color: 'var(--ln-sec-text)' }}>{course.name}</h3>
               <div
                 className="flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-all duration-200"
                 style={{ border: '1px solid rgba(99,102,241,0.35)', color: 'rgba(167,139,250,0.9)' }}
@@ -2296,13 +2296,13 @@ function DarkActivityFeedSection({ feed, isArabic }) {
       const start = new Date(y, mo - 1, d).getTime();
       const end   = start + 86400000;
       return feed.filter(item => {
-        const t = new Date(item.occurredAt).getTime();
+        const t = new Date(item.createdAt).getTime();
         return t >= start && t < end;
       });
     }
     const now = Date.now();
     return feed.filter(item => {
-      const t = new Date(item.occurredAt).getTime();
+      const t = new Date(item.createdAt).getTime();
       if (activeFilter === 'today')     return t > now - 86400000;
       if (activeFilter === 'yesterday') {
         const todayStart = new Date(); todayStart.setHours(0,0,0,0);
@@ -2346,7 +2346,7 @@ function DarkActivityFeedSection({ feed, isArabic }) {
   return (
     <section
       className="rounded-2xl p-7"
-      style={{ background: 'linear-gradient(135deg, rgba(17,24,39,0.97), rgba(30,27,75,0.95))', border: '1px solid rgba(99,102,241,0.2)' }}
+      style={{ background: 'var(--ln-sec-bg)', border: '1px solid var(--ln-sec-border)' }}
     >
       {/* Header */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -2389,29 +2389,29 @@ function DarkActivityFeedSection({ feed, isArabic }) {
 
       {/* Feed items */}
       {filteredFeed.length === 0 ? (
-        <p className="py-6 text-center text-sm" style={{ color: 'rgba(167,139,250,0.6)' }}>
+        <p className="py-6 text-center text-sm" style={{ color: 'var(--ln-sec-subtext)' }}>
           {isArabic ? 'لا يوجد نشاط في هذه الفترة' : 'No activity in this period'}
         </p>
       ) : (
         <div className="flex flex-col gap-3">
           {filteredFeed.slice(0, 20).map((item, i) => {
-            const { bg, Icon } = _FEED_ICON_MAP[item.eventType] || _FEED_FALLBACK;
+            const { bg, Icon } = _FEED_ICON_MAP[item.type] || _FEED_FALLBACK;
             return (
               <div
                 key={i}
                 className="flex items-center gap-4 rounded-xl p-4"
-                style={{ background: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.15)' }}
+                style={{ background: 'var(--ln-item-bg)', border: '1px solid var(--ln-item-border)' }}
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style={{ background: bg }}>
                   <Icon size={17} className="text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white">{item.label}</p>
-                  <p className="mt-0.5 text-[12px]" style={{ color: 'rgba(167,139,250,0.65)' }}>{timeAgoLocal(item.occurredAt)}</p>
+                  <p className="text-sm" style={{ color: 'var(--ln-sec-text)' }}>{item.label}</p>
+                  <p className="mt-0.5 text-[12px]" style={{ color: 'var(--ln-sec-subtext)' }}>{timeAgoLocal(item.createdAt)}</p>
                 </div>
-                {item.xpAwarded > 0 && (
+                {item.xp > 0 && (
                   <span className="shrink-0 rounded-lg px-2.5 py-1 text-[13px] font-semibold" style={{ background: 'rgba(34,197,94,0.15)', color: '#22C55E' }}>
-                    +{item.xpAwarded}
+                    +{item.xp}
                   </span>
                 )}
               </div>

@@ -24,6 +24,14 @@
 }
 
 /* ── Button press micro-feedback ───────────────────────────────────────────── */
+/* ── Theme: light mode date input ──────────────────────────────────────────── */
+[data-theme="light"] input[type="date"] {
+  color-scheme: light;
+}
+[data-theme="dark"] input[type="date"] {
+  color-scheme: dark;
+}
+
 .ln-btn-press {
   transition: transform 0.1s ease, opacity 0.1s ease;
 }

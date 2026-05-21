@@ -44,17 +44,17 @@ function _weeklyStart() {
 }
 
 export async function getEngagementFeed(studentId) {
-  const d7          = new Date(Date.now() - 7 * 86_400_000);
+  const d90         = new Date(Date.now() - 90 * 86_400_000);
   const weeklyStart = _weeklyStart();
 
   const [xpRow, streakRow, recentEvents, recentAchievements, missionStats] = await Promise.all([
     prisma.student_xp_summary.findUnique({ where: { studentId } }),
     prisma.student_streak.findUnique({ where: { studentId } }),
     prisma.xp_event.findMany({
-      where:   { studentId, createdAt: { gte: d7 } },
+      where:   { studentId, createdAt: { gte: d90 } },
       orderBy: { createdAt: 'desc' },
-      take:    20,
-      select:  { eventType: true, createdAt: true },
+      take:    200,
+      select:  { eventType: true, xpAwarded: true, createdAt: true },
     }),
     prisma.student_achievement.findMany({
       where:   { studentId, unlockedAt: { gte: d7 } },
@@ -88,7 +88,7 @@ export async function getEngagementFeed(studentId) {
     feed: recentEvents.map(e => ({
       type:      e.eventType,
       label:     EVENT_LABELS[e.eventType] || e.eventType,
-      xp:        XP_VALUES[e.eventType]   || 0,
+      xp:        e.xpAwarded ?? XP_VALUES[e.eventType] ?? 0,
       createdAt: e.createdAt.toISOString(),
     })),
     recentAchievements: recentAchievements.map(a => ({

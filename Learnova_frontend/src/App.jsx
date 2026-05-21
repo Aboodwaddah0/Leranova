@@ -43,6 +43,7 @@ import VerifyEmailPage from "./pages/VerifyEmailPage";
 import ForceChangePasswordPage from "./pages/ForceChangePasswordPage";
 import { GooeyToaster } from "goey-toast";
 import { LEARNOVA_TOASTER_PROPS } from "./lib/notify";
+import { ThemeProvider } from "./contexts/ThemeContext";
 
 function LegacyStudentCourseRedirect() {
   const { courseId } = useParams();
@@ -56,6 +57,7 @@ function LegacyStudentLessonRedirect() {
 
 function App() {
   return (
+    <ThemeProvider>
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
@@ -126,6 +128,7 @@ function App() {
       </Routes>
       <GooeyToaster {...LEARNOVA_TOASTER_PROPS} />
     </BrowserRouter>
+    </ThemeProvider>
   );
 }
 
