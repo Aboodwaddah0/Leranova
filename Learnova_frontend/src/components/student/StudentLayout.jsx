@@ -10,7 +10,7 @@ import AIAssistantSidebar from './AIAssistantSidebar';
 
 const getInitial = (name = 'L') => String(name).trim().charAt(0).toUpperCase() || 'L';
 
-export default function StudentLayout({ title, subtitle, children, actions, aside, contentClassName = '', showAIAssistant = false }) {
+export default function StudentLayout({ title, subtitle, children, actions, aside, contentClassName = '', showAIAssistant = false, fullWidth = false }) {
   const { t, isArabic, lang } = useLanguage();
   const { isDark, toggleTheme } = useTheme();
   const location = useLocation();
@@ -232,7 +232,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
 
       {/* ── Main content ── */}
       <main className={`px-4 py-6 pb-24 lg:px-8 lg:pb-6 ${isRtl ? 'lg:mr-64' : 'lg:ml-64'}`}>
-        <div className="mx-auto flex max-w-[1600px] gap-8">
+        <div className={`mx-auto flex ${fullWidth ? 'max-w-none' : 'max-w-[1600px]'} gap-8`}>
           <div className="min-w-0 flex-1">
             {(title || subtitle || actions) ? (
               <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
