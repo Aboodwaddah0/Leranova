@@ -1,16 +1,18 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { Home, BookOpen, UserCircle2, LogOut, MessageCircle, Users2, BarChart2, Trophy } from 'lucide-react';
+import { Home, BookOpen, UserCircle2, LogOut, MessageCircle, Users2, BarChart2, Trophy, Sun, Moon } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { logout } from '../../redux/slices/authSlice';
 import { useLanguage } from '../../utils/i18n';
+import { useTheme } from '../../contexts/ThemeContext';
 import AIAssistantSidebar from './AIAssistantSidebar';
 
 const getInitial = (name = 'L') => String(name).trim().charAt(0).toUpperCase() || 'L';
 
 export default function StudentLayout({ title, subtitle, children, actions, aside, contentClassName = '', showAIAssistant = false }) {
   const { t, isArabic, lang, setLang } = useLanguage();
+  const { isDark, toggleTheme } = useTheme();
   const location = useLocation();
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth?.user);
@@ -71,21 +73,56 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
   const avatar = user?.avatarUrl || user?.avatar || '';
   const activeNavItem = navItems.find((item) => item.match(location.pathname)) || null;
 
+  /* ── CSS variables cascaded to all child pages ── */
+  const themeVars = isDark ? {
+    '--ln-sec-bg':      'linear-gradient(135deg, rgba(17,24,39,0.97), rgba(30,27,75,0.95))',
+    '--ln-sec-border':  'rgba(99,102,241,0.2)',
+    '--ln-sec-text':    '#f5f3f7',
+    '--ln-sec-subtext': 'rgba(167,139,250,0.7)',
+    '--ln-item-bg':     'rgba(99,102,241,0.08)',
+    '--ln-item-border': 'rgba(99,102,241,0.18)',
+  } : {
+    '--ln-sec-bg':      '#ffffff',
+    '--ln-sec-border':  'rgba(0,0,0,0.08)',
+    '--ln-sec-text':    '#1a1a2e',
+    '--ln-sec-subtext': '#5a5f73',
+    '--ln-item-bg':     'rgba(107,92,231,0.05)',
+    '--ln-item-border': 'rgba(107,92,231,0.12)',
+  };
+
+  const sidebarHover = (e, on) => { e.currentTarget.style.background = on ? (isDark ? '#2d2538' : '#f1f3f7') : 'transparent'; };
+
   return (
     <div
+      data-theme={isDark ? 'dark' : 'light'}
       dir={isRtl ? 'rtl' : 'ltr'}
       lang={lang}
-      className={`min-h-screen bg-[radial-gradient(circle_at_top_right,_#e1e0ff_0%,_#f7f9fb_42%,_#c9e6ff_100%)] text-slate-900 ${isRtl ? 'lang-ar' : 'lang-en'}`}
+      className={`min-h-screen ${isRtl ? 'lang-ar' : 'lang-en'}`}
+      style={{ background: isDark ? '#1a1625' : 'radial-gradient(circle at top right, #e1e0ff 0%, #f7f9fb 42%, #c9e6ff 100%)', color: isDark ? '#f5f3f7' : '#1a1a2e', ...themeVars }}
     >
-      <header className="sticky top-0 z-50 border-b border-white/60 bg-white/75 backdrop-blur-xl shadow-sm">
+      {/* ── Top header ── */}
+      <header
+        className="sticky top-0 z-50 shadow-sm"
+        style={{
+          background: isDark ? 'rgba(35,29,46,0.95)' : 'rgba(255,255,255,0.75)',
+          borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.6)'}`,
+          backdropFilter: 'blur(20px)',
+        }}
+      >
         <div className="mx-auto flex max-w-[1700px] items-center justify-between gap-4 px-4 py-3 lg:px-6">
           <div className="flex items-center gap-4">
             <Link to="/dashboard/student" className="text-2xl font-black tracking-tight text-transparent bg-gradient-to-r from-indigo-500 to-purple-600 bg-clip-text">
               Learnova
             </Link>
-            <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-slate-500">
+            <nav className="hidden md:flex items-center gap-6 text-sm font-semibold" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
               {navItems.map((item) => (
-                <NavLink key={item.to} end={item.to === '/dashboard/student' || item.to === '/student/profile'} to={item.to} className={({ isActive }) => (isActive ? 'text-indigo-600' : 'hover:text-slate-800')}>
+                <NavLink
+                  key={item.to}
+                  end={item.to === '/dashboard/student' || item.to === '/student/profile'}
+                  to={item.to}
+                  className={({ isActive }) => isActive ? 'text-indigo-400' : ''}
+                  style={({ isActive }) => isActive ? {} : { color: isDark ? '#94a3b8' : '#64748b' }}
+                >
                   {item.label}
                 </NavLink>
               ))}
@@ -93,36 +130,60 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="flex items-center rounded-full border border-slate-200 bg-white p-1 shadow-sm">
-              <button
-                type="button"
-                onClick={() => setLang('en')}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${lang === 'en' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-              >
-                EN
-              </button>
-              <button
-                type="button"
-                onClick={() => setLang('ar')}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${lang === 'ar' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-              >
-                العربية
-              </button>
+            {/* Theme toggle */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200"
+              style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(99,102,241,0.1)', color: isDark ? '#fbbf24' : '#6366f1' }}
+              title={isDark ? (isArabic ? 'الوضع الفاتح' : 'Light mode') : (isArabic ? 'الوضع الداكن' : 'Dark mode')}
+            >
+              {isDark ? <Sun size={17} /> : <Moon size={17} />}
+            </button>
+
+            {/* Language switcher */}
+            <div
+              className="flex items-center rounded-full p-1"
+              style={{ background: isDark ? 'rgba(255,255,255,0.06)' : '#ffffff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'}` }}
+            >
+              <button type="button" onClick={() => setLang('en')}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${lang === 'en' ? 'bg-indigo-600 text-white' : ''}`}
+                style={lang !== 'en' ? { color: isDark ? '#94a3b8' : '#475569' } : {}}
+              >EN</button>
+              <button type="button" onClick={() => setLang('ar')}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${lang === 'ar' ? 'bg-indigo-600 text-white' : ''}`}
+                style={lang !== 'ar' ? { color: isDark ? '#94a3b8' : '#475569' } : {}}
+              >العربية</button>
             </div>
-            <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm">
+
+            {/* User card */}
+            <div
+              className="flex items-center gap-3 rounded-full px-3 py-1.5"
+              style={{ background: isDark ? 'rgba(255,255,255,0.06)' : '#ffffff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'}` }}
+            >
               <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 text-sm font-black text-white">
                 {avatar ? <img src={avatar} alt={displayName} className="h-full w-full object-cover" /> : getInitial(displayName)}
               </div>
               <div className="hidden sm:block">
-                <p className="text-xs font-semibold text-slate-500">{isArabic ? 'طالب أكاديمية' : 'Academy Student'}</p>
-                <p className="text-sm font-bold text-slate-800">{displayName}</p>
+                <p className="text-xs font-semibold" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>{isArabic ? 'طالب أكاديمية' : 'Academy Student'}</p>
+                <p className="text-sm font-bold" style={{ color: isDark ? '#f5f3f7' : '#1e293b' }}>{displayName}</p>
               </div>
             </div>
           </div>
         </div>
       </header>
 
-      <aside className={`fixed top-0 hidden h-full w-64 flex-col bg-white/75 px-4 pb-6 pt-20 shadow-2xl shadow-indigo-500/5 backdrop-blur-2xl lg:flex ${isRtl ? 'right-0 rounded-l-[2rem] border-l border-white/70' : 'left-0 rounded-r-[2rem] border-r border-white/70'}`}>
+      {/* ── Sidebar ── */}
+      <aside
+        className={`fixed top-0 hidden h-full w-64 flex-col px-4 pb-6 pt-20 lg:flex ${isRtl ? 'right-0' : 'left-0'}`}
+        style={{
+          background: isDark ? '#231d2e' : 'rgba(255,255,255,0.78)',
+          [isRtl ? 'borderLeft' : 'borderRight']: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.7)'}`,
+          backdropFilter: isDark ? 'none' : 'blur(20px)',
+          boxShadow: isDark ? 'none' : '2px 0 20px rgba(99,102,241,0.05)',
+          borderRadius: isRtl ? '2rem 0 0 2rem' : '0 2rem 2rem 0',
+        }}
+      >
         <div className="mb-6 rounded-3xl bg-gradient-to-br from-indigo-600 to-cyan-500 p-4 text-white shadow-lg">
           <p className="text-xs uppercase tracking-[0.25em] text-blue-100">{isArabic ? 'تعلم متقدم' : 'Premium Learning'}</p>
           <h2 className="mt-2 text-xl font-black">{title || (isArabic ? 'مساحة الطالب' : 'Student space')}</h2>
@@ -137,7 +198,10 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
               <NavLink
                 key={item.to}
                 to={item.to}
-                className={() => `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${active ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                className={() => `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${active ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/20' : ''}`}
+                style={!active ? { color: isDark ? '#b8b3c3' : '#475569' } : undefined}
+                onMouseEnter={(e) => { if (!active) sidebarHover(e, true); }}
+                onMouseLeave={(e) => { if (!active) sidebarHover(e, false); }}
               >
                 <Icon size={18} />
                 <span>{item.label}</span>
@@ -146,11 +210,14 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
           })}
         </nav>
 
-        <div className="mt-4 border-t border-slate-200 pt-4">
+        <div className="mt-4 pt-4" style={{ borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}` }}>
           <button
             type="button"
             onClick={() => dispatch(logout())}
-            className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+            className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition"
+            style={{ color: isDark ? '#b8b3c3' : '#475569' }}
+            onMouseEnter={(e) => sidebarHover(e, true)}
+            onMouseLeave={(e) => sidebarHover(e, false)}
           >
             <LogOut size={18} />
             {isArabic ? 'تسجيل الخروج' : 'Logout'}
@@ -158,6 +225,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
         </div>
       </aside>
 
+      {/* ── Main content ── */}
       <main className={`px-4 py-6 pb-24 lg:px-8 lg:pb-6 ${isRtl ? 'lg:mr-64' : 'lg:ml-64'}`}>
         <div className="mx-auto flex max-w-[1600px] gap-8">
           <div className="min-w-0 flex-1">
@@ -166,26 +234,36 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
-                className="mb-6 overflow-hidden rounded-[2rem] border border-white/70 bg-white/75 p-6 shadow-xl backdrop-blur-2xl"
+                className="mb-6 overflow-hidden rounded-[2rem] p-6 shadow-xl backdrop-blur-2xl"
+                style={{
+                  background: isDark ? 'rgba(45,37,56,0.95)' : 'rgba(255,255,255,0.75)',
+                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.7)'}`,
+                }}
               >
                 <div className="flex flex-col items-start gap-4">
                   <div>
-                    {title ? <p className="text-xs font-bold uppercase tracking-[0.25em] text-indigo-600">{title}</p> : null}
-                    {subtitle ? <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-900">{subtitle}</h1> : null}
+                    {title ? <p className="text-xs font-bold uppercase tracking-[0.25em] text-indigo-400">{title}</p> : null}
+                    {subtitle ? <h1 className="mt-2 text-3xl font-black tracking-tight" style={{ color: isDark ? '#f5f3f7' : '#0f172a' }}>{subtitle}</h1> : null}
                   </div>
                   {actions ? <div className="flex flex-wrap items-start justify-start gap-3">{actions}</div> : null}
                 </div>
               </motion.section>
             ) : null}
-
             <div className={contentClassName}>{children}</div>
           </div>
-
           {aside ? <div className="hidden xl:block w-[360px] shrink-0">{aside}</div> : null}
         </div>
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/60 bg-white/85 pb-safe px-2 pt-2 backdrop-blur-xl lg:hidden">
+      {/* ── Bottom nav (mobile) ── */}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-50 pb-safe px-2 pt-2 lg:hidden"
+        style={{
+          background: isDark ? 'rgba(35,29,46,0.97)' : 'rgba(255,255,255,0.88)',
+          borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.6)'}`,
+          backdropFilter: 'blur(20px)',
+        }}
+      >
         <div className="mx-auto flex max-w-md items-center justify-around">
           {navItems.slice(0, 5).map((item) => {
             const Icon = item.icon;
@@ -194,8 +272,8 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
               <NavLink
                 key={item.to}
                 to={item.to}
-                className={() => `flex flex-col items-center gap-0.5 rounded-xl px-2.5 py-2 text-[10px] font-bold uppercase tracking-wider transition-all
-                  ${active ? 'text-indigo-600 bg-indigo-50 scale-105' : 'text-slate-400 hover:text-slate-700'}`}
+                className={() => `flex flex-col items-center gap-0.5 rounded-xl px-2.5 py-2 text-[10px] font-bold uppercase tracking-wider transition-all ${active ? 'scale-105' : ''}`}
+                style={{ color: active ? '#6366f1' : (isDark ? '#94a3b8' : '#64748b'), background: active ? (isDark ? 'rgba(99,102,241,0.15)' : '#eef2ff') : 'transparent' }}
               >
                 <Icon size={20} />
                 <span className="mt-0.5 max-w-[56px] truncate text-center">{item.label}</span>
