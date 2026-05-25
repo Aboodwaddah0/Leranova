@@ -464,7 +464,7 @@ export default function StudentSubjectPage() {
       </section>
 
       {studentContext?.mode === 'ACADEMY' && isLocked ? (
-        <div className="mt-6 rounded-[1.75rem] border border-amber-200 bg-amber-50 p-6 text-amber-900">
+        <div className="mt-6 rounded-[1.75rem] p-6" style={{ background: T.lockBg, border: `1px solid ${T.lockBorder}`, color: T.lockText }}>
           <div className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.18em]">
             <Lock size={16} /> {isArabic ? 'المادة مقفلة' : 'Subject Locked'}
           </div>
@@ -475,7 +475,7 @@ export default function StudentSubjectPage() {
             type="button"
             onClick={handleBuySubject}
             disabled={isPurchasing}
-            className="mt-4 inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-2 text-sm font-bold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <CreditCard size={16} />
             {isPurchasing
@@ -487,7 +487,7 @@ export default function StudentSubjectPage() {
 
       {!(studentContext?.mode === 'ACADEMY' && isLocked) ? (
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <section className="space-y-6 overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/85 p-0 shadow-xl shadow-indigo-500/5 backdrop-blur-xl">
+        <section className="space-y-6 overflow-hidden rounded-[1.75rem] p-0 shadow-xl shadow-indigo-500/5 backdrop-blur-xl" style={{ border: `1px solid ${T.wrapBorder}`, background: T.panel }}>
           <div className="bg-slate-950">
             {selectedLessonVideoUrl ? (
               <video
@@ -510,13 +510,13 @@ export default function StudentSubjectPage() {
           </div>
 
           <div className="p-5">
-            <p className="text-xs font-bold uppercase tracking-[0.25em] text-indigo-600">{isArabic ? 'الدرس الحالي' : 'Current lesson'}</p>
-            <h3 className="mt-2 text-2xl font-black text-slate-900">{selectedLesson?.title || selectedLesson?.name || (isArabic ? 'اختر درسًا' : 'Select a lesson')}</h3>
-            <p className="mt-2 text-sm leading-7 text-slate-600">
+            <p className="text-xs font-bold uppercase tracking-[0.25em]" style={{ color: T.accent }}>{isArabic ? 'الدرس الحالي' : 'Current lesson'}</p>
+            <h3 className="mt-2 text-2xl font-black" style={{ color: T.text }}>{selectedLesson?.title || selectedLesson?.name || (isArabic ? 'اختر درسًا' : 'Select a lesson')}</h3>
+            <p className="mt-2 text-sm leading-7" style={{ color: T.sub }}>
               {selectedLesson?.description || (isArabic ? 'سيظهر وصف الدرس هنا بعد الاختيار.' : 'Lesson details will appear here after selection.')}
             </p>
             {autoNextCountdown ? (
-              <p className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700">
+              <p className="mt-3 rounded-xl px-3 py-2 text-xs font-semibold" style={{ border: `1px solid ${T.autoNextBorder}`, background: T.autoNext, color: T.autoNextText }}>
                 {isArabic
                   ? `سيتم تشغيل المحاضرة التالية تلقائيًا خلال ${autoNextCountdown} ثوانٍ...`
                   : `Next lesson will autoplay in ${autoNextCountdown}s...`}
@@ -525,50 +525,39 @@ export default function StudentSubjectPage() {
           </div>
 
           <div className="px-5 pb-5">
-            <div className="flex flex-wrap gap-2 border-b border-slate-100 pb-4">
-              <button
-                type="button"
-                onClick={() => setLessonTab('attachments')}
-                className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition ${lessonTab === 'attachments' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-              >
-                <FileText size={15} /> {isArabic ? 'المرفقات' : 'Attachments'}
-                <span className={`rounded-full px-2 py-0.5 text-[11px] ${lessonTab === 'attachments' ? 'bg-white/20 text-white' : 'bg-white text-indigo-700'}`}>{selectedAttachments.length}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setLessonTab('comments')}
-                className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition ${lessonTab === 'comments' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-              >
-                <MessageCircle size={15} /> {isArabic ? 'التعليقات' : 'Comments'}
-                <span className={`rounded-full px-2 py-0.5 text-[11px] ${lessonTab === 'comments' ? 'bg-white/20 text-white' : 'bg-white text-indigo-700'}`}>{comments.length}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setLessonTab('flashcards')}
-                className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition ${lessonTab === 'flashcards' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-              >
-                <Brain size={15} /> {isArabic ? 'البطاقات التعليمية' : 'Flashcards'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setLessonTab('mindmap')}
-                className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition ${lessonTab === 'mindmap' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-              >
-                <Map size={15} /> {isArabic ? 'الخريطة الذهنية' : 'Mind Map'}
-              </button>
-              {lessonQuiz ? (
-                <button
-                  type="button"
-                  onClick={() => setLessonTab('quiz')}
-                  className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition ${lessonTab === 'quiz' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-                >
-                  <ClipboardList size={15} /> 🧠 {isArabic ? 'الاختبار' : 'Quiz'}
-                </button>
-              ) : null}
+            <div className="flex flex-wrap gap-2 pb-4" style={{ borderBottom: `1px solid ${T.divider}` }}>
+              {[
+                { key: 'attachments', icon: <FileText size={15}/>, label: isArabic ? 'المرفقات' : 'Attachments', badge: selectedAttachments.length },
+                { key: 'comments',    icon: <MessageCircle size={15}/>, label: isArabic ? 'التعليقات' : 'Comments', badge: comments.length },
+                { key: 'flashcards',  icon: <Brain size={15}/>, label: isArabic ? 'البطاقات التعليمية' : 'Flashcards' },
+                { key: 'mindmap',     icon: <Map size={15}/>, label: isArabic ? 'الخريطة الذهنية' : 'Mind Map' },
+                ...(lessonQuiz ? [{ key: 'quiz', icon: <ClipboardList size={15}/>, label: `🧠 ${isArabic ? 'الاختبار' : 'Quiz'}` }] : []),
+              ].map((tab) => {
+                const active = lessonTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setLessonTab(tab.key)}
+                    className="inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition"
+                    style={active
+                      ? { background: '#4f46e5', color: '#fff' }
+                      : { background: T.tabInactive, color: T.tabText }}
+                  >
+                    {tab.icon} {tab.label}
+                    {tab.badge !== undefined && (
+                      <span className="rounded-full px-2 py-0.5 text-[11px]"
+                        style={active ? { background: 'rgba(255,255,255,0.2)', color: '#fff' } : { background: T.badge, color: T.badgeText }}>
+                        {tab.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             {lessonTab === 'attachments' ? (
-              <article className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <article className="mt-4 rounded-3xl p-4" style={{ border: `1px solid ${T.innerBorder}`, background: T.innerBg }}>
                 <div className="space-y-3 max-h-64 overflow-auto pr-1">
                   {selectedAttachments.length ? selectedAttachments.map((attachment) => (
                     <a
@@ -576,31 +565,33 @@ export default function StudentSubjectPage() {
                       href={attachment.url || attachment.fileUrl || '#'}
                       target="_blank"
                       rel="noreferrer"
-                      className="block rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm transition hover:bg-slate-50"
+                      className="block rounded-2xl px-4 py-3 text-sm transition"
+                      style={{ border: `1px solid ${T.cardBorder}`, background: T.card }}
                     >
-                      <p className="font-bold text-slate-900">{attachment.name || attachment.originalName || (isArabic ? 'مرفق' : 'Attachment')}</p>
-                      <p className="mt-1 text-xs text-slate-500">{attachment.mimeType || attachment.fileType || attachment.type || (isArabic ? 'ملف' : 'file')}</p>
+                      <p className="font-bold" style={{ color: T.text }}>{attachment.name || attachment.originalName || (isArabic ? 'مرفق' : 'Attachment')}</p>
+                      <p className="mt-1 text-xs" style={{ color: T.muted }}>{attachment.mimeType || attachment.fileType || attachment.type || (isArabic ? 'ملف' : 'file')}</p>
                     </a>
                   )) : (
-                    <p className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">{isArabic ? 'لا توجد مرفقات لهذا الدرس.' : 'No attachments for this lesson.'}</p>
+                    <p className="rounded-2xl px-4 py-3 text-sm" style={{ background: T.card, color: T.sub }}>{isArabic ? 'لا توجد مرفقات لهذا الدرس.' : 'No attachments for this lesson.'}</p>
                   )}
                 </div>
               </article>
             ) : null}
 
             {lessonTab === 'comments' ? (
-              <article className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <article className="mt-4 rounded-3xl p-4" style={{ border: `1px solid ${T.innerBorder}`, background: T.innerBg }}>
                 <div className="flex gap-2">
                   <input
                     value={commentText}
                     onChange={(event) => setCommentText(event.target.value)}
                     placeholder={isArabic ? 'اكتب تعليق...' : 'Write a comment...'}
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-400"
+                    className="h-10 w-full rounded-xl px-3 text-sm outline-none"
+                    style={{ border: `1px solid ${T.inputBorder}`, background: T.inputBg, color: T.text }}
                   />
                   <button
                     type="button"
                     onClick={onPostComment}
-                    className="inline-flex h-10 items-center justify-center rounded-xl bg-slate-900 px-3 text-white transition hover:opacity-90"
+                    className="inline-flex h-10 items-center justify-center rounded-xl bg-indigo-600 px-3 text-white transition hover:bg-indigo-500"
                     aria-label={isArabic ? 'إرسال التعليق' : 'Send comment'}
                   >
                     <SendHorizontal size={16} />
@@ -609,14 +600,14 @@ export default function StudentSubjectPage() {
 
                 <div className="mt-3 space-y-2 max-h-64 overflow-auto pr-1">
                   {commentsLoading ? (
-                    <p className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">{isArabic ? 'جاري تحميل التعليقات...' : 'Loading comments...'}</p>
+                    <p className="rounded-2xl px-4 py-3 text-sm" style={{ background: T.card, color: T.sub }}>{isArabic ? 'جاري تحميل التعليقات...' : 'Loading comments...'}</p>
                   ) : comments.length ? comments.map((comment) => (
-                    <article key={comment.id} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm">
-                      <p className="font-semibold text-slate-900">{comment.user?.name || comment.userName || (isArabic ? 'مستخدم' : 'User')}</p>
-                      <p className="mt-1 text-slate-700">{comment.content}</p>
+                    <article key={comment.id} className="rounded-2xl px-4 py-3 text-sm" style={{ border: `1px solid ${T.cardBorder}`, background: T.card }}>
+                      <p className="font-semibold" style={{ color: T.commentUser }}>{comment.user?.name || comment.userName || (isArabic ? 'مستخدم' : 'User')}</p>
+                      <p className="mt-1" style={{ color: T.commentBody }}>{comment.content}</p>
                     </article>
                   )) : (
-                    <p className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">{isArabic ? 'لا توجد تعليقات بعد.' : 'No comments yet.'}</p>
+                    <p className="rounded-2xl px-4 py-3 text-sm" style={{ background: T.card, color: T.sub }}>{isArabic ? 'لا توجد تعليقات بعد.' : 'No comments yet.'}</p>
                   )}
                 </div>
               </article>
@@ -666,13 +657,13 @@ export default function StudentSubjectPage() {
           </div>
         </section>
 
-        <aside className="rounded-[1.75rem] border border-white/70 bg-white/85 p-5 shadow-xl shadow-indigo-500/5 backdrop-blur-xl">
+        <aside className="rounded-[1.75rem] p-5 shadow-xl shadow-indigo-500/5 backdrop-blur-xl" style={{ border: `1px solid ${T.wrapBorder}`, background: T.panel }}>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.25em] text-indigo-600">{isArabic ? 'المحاضرات' : 'Lessons'}</p>
-              <h3 className="mt-2 text-xl font-black text-slate-900">{subject?.name || (isArabic ? 'دروس المادة' : 'Subject lessons')}</h3>
+              <p className="text-xs font-bold uppercase tracking-[0.25em]" style={{ color: T.accent }}>{isArabic ? 'المحاضرات' : 'Lessons'}</p>
+              <h3 className="mt-2 text-xl font-black" style={{ color: T.text }}>{subject?.name || (isArabic ? 'دروس المادة' : 'Subject lessons')}</h3>
             </div>
-            <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">{lessonItems.length}</span>
+            <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: T.badge, color: T.badgeText }}>{lessonItems.length}</span>
           </div>
 
           <div className="mt-4 space-y-3 max-h-[58vh] overflow-auto pr-1">
@@ -687,7 +678,10 @@ export default function StudentSubjectPage() {
                     setSelectedLessonId(String(lesson.id));
                     setLessonTab('attachments');
                   }}
-                  className={`group flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition ${active ? 'border-indigo-300 bg-indigo-50 shadow-sm' : 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50'}`}
+                  className="group flex w-full items-start gap-3 rounded-2xl px-4 py-3 text-left transition"
+                  style={active
+                    ? { border: `1px solid ${T.lessonActiveBorder}`, background: T.lessonActive }
+                    : { border: `1px solid ${T.cardBorder}`, background: T.card }}
                 >
                   <div className="mt-1">
                     <input
@@ -701,17 +695,18 @@ export default function StudentSubjectPage() {
                       className="h-4 w-4 cursor-pointer"
                     />
                   </div>
-                  <div className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full ${active ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full"
+                    style={active
+                      ? { background: T.lessonIconActBg, color: T.lessonIconAct }
+                      : { background: T.lessonIconBg, color: T.lessonIconTx }}>
                     <PlayCircle size={16} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-1.5">
-                        <p className={`truncate text-sm font-bold ${active ? 'text-indigo-700' : 'text-slate-900'}`}>{lesson.title || lesson.name}</p>
-                        {lesson.quiz?.isPublished ? <span className="flex-shrink-0 text-xs" title={isArabic ? 'يحتوي على اختبار' : 'Has quiz'}>🧠</span> : null}
-                      </div>
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate text-sm font-bold" style={{ color: active ? T.accent : T.text }}>{lesson.title || lesson.name}</p>
+                      {lesson.quiz?.isPublished ? <span className="flex-shrink-0 text-xs" title={isArabic ? 'يحتوي على اختبار' : 'Has quiz'}>🧠</span> : null}
                     </div>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+                    <div className="mt-1 flex items-center gap-2 text-xs" style={{ color: T.muted }}>
                       <Clock3 size={13} />
                       <span>{lesson.duration || (isArabic ? `محاضرة ${index + 1}` : `Lesson ${index + 1}`)}</span>
                     </div>
@@ -719,7 +714,7 @@ export default function StudentSubjectPage() {
                 </button>
               );
             }) : (
-              <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">{isArabic ? 'لا توجد دروس متاحة بعد.' : 'No lessons are available yet.'}</div>
+              <div className="rounded-2xl px-4 py-8 text-center text-sm" style={{ border: `1.5px dashed ${T.emptyBorder}`, color: T.emptyText }}>{isArabic ? 'لا توجد دروس متاحة بعد.' : 'No lessons are available yet.'}</div>
             )}
           </div>
         </aside>

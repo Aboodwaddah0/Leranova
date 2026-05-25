@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useTheme } from '../../contexts/ThemeContext';
 
 // One vibrant color scheme per card position (cycles if more cards than colors)
 const PALETTE = [
@@ -12,29 +13,36 @@ const PALETTE = [
 ];
 
 export default function Flashcards({ cards, isArabic, loading, error, published }) {
+  const { isDark } = useTheme();
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
 
   useEffect(() => { setIndex(0); setFlipped(false); }, [cards]);
 
+  const navBtn = {
+    border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0'}`,
+    background: isDark ? 'rgba(255,255,255,0.05)' : '#ffffff',
+    color: isDark ? 'rgba(255,255,255,0.6)' : '#475569',
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center gap-3 py-12">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
-        <p className="text-sm text-slate-500">{isArabic ? 'جارٍ توليد البطاقات...' : 'Generating flashcards...'}</p>
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+        <p className="text-sm" style={{ color: isDark ? 'rgba(255,255,255,0.4)' : '#64748b' }}>{isArabic ? 'جارٍ توليد البطاقات...' : 'Generating flashcards...'}</p>
       </div>
     );
   }
 
   if (error) {
-    return <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</p>;
+    return <p className="rounded-xl px-4 py-3 text-sm" style={{ background: isDark ? 'rgba(251,191,36,0.08)' : '#fffbeb', color: isDark ? '#fbbf24' : '#92400e' }}>{error}</p>;
   }
 
   if (!published || !cards || cards.length === 0) {
     return (
       <div className="flex flex-col items-center gap-4 py-12 text-center">
         <span className="text-4xl">🃏</span>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm" style={{ color: isDark ? 'rgba(255,255,255,0.35)' : '#64748b' }}>
           {isArabic ? 'لم ينشر المدرس البطاقات التعليمية بعد.' : "Your instructor hasn't published flashcards yet."}
         </p>
       </div>
@@ -52,11 +60,11 @@ export default function Flashcards({ cards, isArabic, loading, error, published 
     <div className="flex flex-col items-center gap-4">
       {/* Progress row */}
       <div className="flex w-full items-center justify-between">
-        <span className="text-xs font-bold text-slate-500">{index + 1} / {total}</span>
+        <span className="text-xs font-bold" style={{ color: isDark ? 'rgba(255,255,255,0.4)' : '#64748b' }}>{index + 1} / {total}</span>
       </div>
 
       {/* Progress bar */}
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+      <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: isDark ? 'rgba(255,255,255,0.08)' : '#f1f5f9' }}>
         <div className="h-full rounded-full transition-all duration-300" style={{ width: `${((index + 1) / total) * 100}%`, background: colors.front }} />
       </div>
 
@@ -109,33 +117,24 @@ export default function Flashcards({ cards, isArabic, loading, error, published 
 
       {/* Navigation */}
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={goPrev}
-          disabled={index === 0}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:opacity-30"
-        >
+        <button type="button" onClick={goPrev} disabled={index === 0}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-xl shadow-sm transition disabled:opacity-30"
+          style={navBtn}>
           <ChevronLeft size={18} />
         </button>
 
         <div className="flex gap-1.5">
           {cards.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => { setIndex(i); setFlipped(false); }}
-              style={i === index ? { background: colors.front } : {}}
-              className={`h-2 rounded-full transition-all duration-300 ${i === index ? 'w-6' : 'w-2 bg-slate-200 hover:bg-slate-300'}`}
+            <button key={i} type="button" onClick={() => { setIndex(i); setFlipped(false); }}
+              style={i === index ? { background: colors.front } : { background: isDark ? 'rgba(255,255,255,0.15)' : '#e2e8f0' }}
+              className={`h-2 rounded-full transition-all duration-300 ${i === index ? 'w-6' : 'w-2'}`}
             />
           ))}
         </div>
 
-        <button
-          type="button"
-          onClick={goNext}
-          disabled={index === total - 1}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:opacity-30"
-        >
+        <button type="button" onClick={goNext} disabled={index === total - 1}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-xl shadow-sm transition disabled:opacity-30"
+          style={navBtn}>
           <ChevronRight size={18} />
         </button>
       </div>
