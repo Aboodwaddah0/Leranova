@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Sparkles, X, SendHorizontal, Bot, MessageCircle } from 'lucide-react';
 import { useLocation, useParams } from 'react-router-dom';
 import { askStudentTutor, fetchLessonDetails } from '../../services/studentService';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const STORAGE_KEY = 'learnova_student_ai_sidebar_open';
 const CHAT_STORAGE_PREFIX = 'learnova_student_ai_chat_v1';
@@ -54,6 +55,36 @@ function SourceBadge({ source, isArabic }) {
 }
 
 export default function AIAssistantSidebar({ isArabic, lessonId: lessonIdProp }) {
+  const { isDark } = useTheme();
+  const A = {
+    panel:       isDark ? '#111029'                : 'rgba(255,255,255,0.97)',
+    panelBorder: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.7)',
+    header:      isDark ? '#111029'                : '#ffffff',
+    headerBorder:isDark ? 'rgba(255,255,255,0.07)' : '#f1f5f9',
+    body:        isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc',
+    emptyBorder: isDark ? 'rgba(255,255,255,0.1)'  : '#e2e8f0',
+    emptyBg:     isDark ? 'rgba(255,255,255,0.03)' : '#ffffff',
+    emptyText:   isDark ? 'rgba(255,255,255,0.35)' : '#64748b',
+    botBubble:   isDark ? '#1e1c38'                : '#ffffff',
+    botBubbleBrd:isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0',
+    botText:     isDark ? 'rgba(255,255,255,0.75)' : '#374151',
+    botLabel:    isDark ? 'rgba(255,255,255,0.35)' : '#94a3b8',
+    thinkBg:     isDark ? '#1e1c38'                : '#ffffff',
+    thinkBorder: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0',
+    thinkText:   isDark ? 'rgba(255,255,255,0.4)'  : '#64748b',
+    suggBorder:  isDark ? 'rgba(129,140,248,0.2)'  : '#e0e7ff',
+    suggBg:      isDark ? 'rgba(99,102,241,0.07)'  : '#ffffff',
+    suggText:    isDark ? 'rgba(255,255,255,0.6)'  : '#374151',
+    footer:      isDark ? '#111029'                : '#ffffff',
+    footerBorder:isDark ? 'rgba(255,255,255,0.07)' : '#f1f5f9',
+    inputBg:     isDark ? 'rgba(255,255,255,0.05)' : '#f8fafc',
+    inputBorder: isDark ? 'rgba(255,255,255,0.1)'  : '#e2e8f0',
+    inputText:   isDark ? '#f1f0f5'                : '#0f172a',
+    btnBg:       isDark ? 'rgba(255,255,255,0.07)' : '#f1f5f9',
+    btnText:     isDark ? 'rgba(255,255,255,0.55)' : '#475569',
+    btnBorder:   isDark ? 'rgba(255,255,255,0.1)'  : '#e2e8f0',
+    titleText:   isDark ? '#f1f0f5'                : '#0f172a',
+  };
   const location = useLocation();
   const params = useParams();
   const currentUser = useSelector((state) => state.auth?.user);
@@ -330,35 +361,30 @@ export default function AIAssistantSidebar({ isArabic, lessonId: lessonIdProp })
               animate={{ x: 0 }}
               exit={{ x: 420 }}
               transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-              className="fixed right-0 top-0 z-[90] h-screen w-full max-w-[360px] border-l border-white/70 bg-white/95 shadow-2xl shadow-slate-900/20 backdrop-blur-xl"
+              className="fixed right-0 top-0 z-[90] h-screen w-full max-w-[360px] shadow-2xl shadow-slate-900/30 backdrop-blur-xl"
+              style={{ borderLeft: `1px solid ${A.panelBorder}`, background: A.panel }}
             >
               <div className="flex h-full flex-col">
-                <header className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
-                  <div>
-                    <h2 className="text-lg font-black text-slate-900">{isArabic ? 'المساعد الذكي' : 'AI Assistant'}</h2>
-                  </div>
+                <header className="flex items-center justify-between px-4 py-4" style={{ borderBottom: `1px solid ${A.headerBorder}`, background: A.header }}>
+                  <h2 className="text-lg font-black" style={{ color: A.titleText }}>{isArabic ? 'المساعد الذكي' : 'AI Assistant'}</h2>
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={clearConversation}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
-                    >
+                    <button type="button" onClick={clearConversation}
+                      className="rounded-xl px-3 py-2 text-xs font-semibold transition"
+                      style={{ border: `1px solid ${A.btnBorder}`, background: A.btnBg, color: A.btnText }}>
                       {isArabic ? 'محادثة جديدة' : 'New chat'}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsOpen(false)}
-                      className="rounded-xl border border-slate-200 bg-white p-2 text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
-                      aria-label={isArabic ? 'إغلاق' : 'Close'}
-                    >
+                    <button type="button" onClick={() => setIsOpen(false)}
+                      className="rounded-xl p-2 transition"
+                      style={{ border: `1px solid ${A.btnBorder}`, background: A.btnBg, color: A.btnText }}
+                      aria-label={isArabic ? 'إغلاق' : 'Close'}>
                       <X size={18} />
                     </button>
                   </div>
                 </header>
 
-                <div ref={listRef} className="flex-1 space-y-3 overflow-auto bg-slate-50/70 px-4 py-4">
+                <div ref={listRef} className="flex-1 space-y-3 overflow-auto px-4 py-4" style={{ background: A.body }}>
                   {messages.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-5 text-sm text-slate-500">
+                    <div className="rounded-2xl border-dashed px-4 py-5 text-sm" style={{ border: `1.5px dashed ${A.emptyBorder}`, background: A.emptyBg, color: A.emptyText }}>
                       {isArabic ? 'اسأل أي سؤال متعلق بالكورس أو الدرس.' : 'Ask anything related to your course or lesson.'}
                     </div>
                   ) : null}
@@ -366,11 +392,13 @@ export default function AIAssistantSidebar({ isArabic, lessonId: lessonIdProp })
                   {messages.map((message) => {
                     const mine = message.role === 'user';
                     return (
-                      <article
-                        key={message.id}
-                        className={`rounded-2xl px-4 py-3 text-sm leading-6 ${mine ? 'ml-8 bg-indigo-600 text-white' : 'mr-8 border border-slate-200 bg-white text-slate-700'}`}
-                      >
-                        <div className="mb-1 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em]">
+                      <article key={message.id}
+                        className="rounded-2xl px-4 py-3 text-sm leading-6"
+                        style={mine
+                          ? { marginLeft: 32, background: '#4f46e5', color: '#ffffff' }
+                          : { marginRight: 32, border: `1px solid ${A.botBubbleBrd}`, background: A.botBubble, color: A.botText }}>
+                        <div className="mb-1 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em]"
+                          style={{ color: mine ? 'rgba(255,255,255,0.7)' : A.botLabel }}>
                           {mine ? <MessageCircle size={12} /> : <Bot size={12} />}
                           <span>{mine ? (isArabic ? 'أنت' : 'You') : (isArabic ? 'المساعد' : 'Assistant')}</span>
                         </div>
@@ -381,7 +409,7 @@ export default function AIAssistantSidebar({ isArabic, lessonId: lessonIdProp })
                   })}
 
                   {thinking ? (
-                    <div className="mr-8 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-500">
+                    <div className="mr-8 rounded-2xl px-4 py-3 text-sm font-semibold" style={{ border: `1px solid ${A.thinkBorder}`, background: A.thinkBg, color: A.thinkText }}>
                       {isArabic ? 'جاري التفكير...' : 'Thinking...'}
                     </div>
                   ) : null}
@@ -389,12 +417,9 @@ export default function AIAssistantSidebar({ isArabic, lessonId: lessonIdProp })
                   {messages.length === 0 ? (
                     <div className="space-y-2 pt-1">
                       {suggestions.map((item) => (
-                        <button
-                          key={item}
-                          type="button"
-                          onClick={() => submitQuestion(item)}
-                          className="w-full rounded-xl border border-indigo-100 bg-white px-3 py-2 text-start text-xs font-semibold text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50"
-                        >
+                        <button key={item} type="button" onClick={() => submitQuestion(item)}
+                          className="w-full rounded-xl px-3 py-2 text-start text-xs font-semibold transition"
+                          style={{ border: `1px solid ${A.suggBorder}`, background: A.suggBg, color: A.suggText }}>
                           {item}
                         </button>
                       ))}
@@ -402,20 +427,18 @@ export default function AIAssistantSidebar({ isArabic, lessonId: lessonIdProp })
                   ) : null}
                 </div>
 
-                <footer className="border-t border-slate-200 bg-white px-4 py-3">
+                <footer className="px-4 py-3" style={{ borderTop: `1px solid ${A.footerBorder}`, background: A.footer }}>
                   <form onSubmit={onSubmit} className="flex items-center gap-2">
                     <input
                       type="text"
                       value={question}
                       onChange={(event) => setQuestion(event.target.value)}
                       placeholder={isArabic ? 'اكتب سؤالك...' : 'Ask a question'}
-                      className="h-11 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none transition focus:border-indigo-400 focus:bg-white"
+                      className="h-11 flex-1 rounded-xl px-3 text-sm outline-none transition"
+                      style={{ border: `1px solid ${A.inputBorder}`, background: A.inputBg, color: A.inputText }}
                     />
-                    <button
-                      type="submit"
-                      disabled={!question.trim() || thinking}
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
+                    <button type="submit" disabled={!question.trim() || thinking}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60">
                       <SendHorizontal size={15} />
                     </button>
                   </form>

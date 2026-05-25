@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { useTheme } from '../../contexts/ThemeContext';
 
 /* ─── Canvas constants ───────────────────────────────────────────────────────
    All node centres are computed inside a fixed CW×CH rectangle.
@@ -51,6 +52,7 @@ function buildLayout(mindmap) {
 }
 
 export default function MindMap({ mindmap, lessonTitle, isArabic, loading, error, published }) {
+  const { isDark } = useTheme();
   const [pos, setPos] = useState(() => (mindmap ? buildLayout(mindmap) : {}));
   const dragRef  = useRef(null);
   const canvasEl = useRef(null);
@@ -89,21 +91,23 @@ export default function MindMap({ mindmap, lessonTitle, isArabic, loading, error
   const onEnd = useCallback(() => { dragRef.current = null; }, []);
 
   /* ─── states ─────────────────────────────────────────────────────────── */
+  const mutedClr = isDark ? 'rgba(255,255,255,0.35)' : '#64748b';
+
   if (loading) return (
     <div className="flex items-center justify-center gap-3 py-12">
-      <div className="h-5 w-5 animate-spin rounded-full border-2 border-purple-600 border-t-transparent" />
-      <p className="text-sm text-slate-500">{isArabic ? 'جارٍ توليد الخريطة...' : 'Generating mind map…'}</p>
+      <div className="h-5 w-5 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
+      <p className="text-sm" style={{ color: mutedClr }}>{isArabic ? 'جارٍ توليد الخريطة...' : 'Generating mind map…'}</p>
     </div>
   );
 
   if (error) return (
-    <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</p>
+    <p className="rounded-xl px-4 py-3 text-sm" style={{ background: isDark ? 'rgba(251,191,36,0.08)' : '#fffbeb', color: isDark ? '#fbbf24' : '#92400e' }}>{error}</p>
   );
 
   if (!published || !mindmap) return (
     <div className="flex flex-col items-center gap-4 py-12 text-center">
       <span className="text-4xl">🗺️</span>
-      <p className="text-sm text-slate-500">
+      <p className="text-sm" style={{ color: mutedClr }}>
         {isArabic ? 'لم ينشر المدرس الخريطة الذهنية بعد.' : "Your instructor hasn't published the mind map yet."}
       </p>
     </div>
@@ -116,20 +120,18 @@ export default function MindMap({ mindmap, lessonTitle, isArabic, loading, error
     <div className="space-y-2">
       {/* Toolbar */}
       <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-400">
+        <p className="text-xs" style={{ color: mutedClr }}>
           {isArabic ? 'اسحب أي عقدة لتحريكها' : 'Drag any node to move it'}
         </p>
-        <div className="flex gap-2">
-          <button type="button" onClick={resetLayout}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-50">
-            {isArabic ? 'إعادة الترتيب' : 'Reset'}
-          </button>
-        </div>
+        <button type="button" onClick={resetLayout}
+          className="rounded-lg px-3 py-1 text-xs font-semibold transition"
+          style={{ border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0'}`, background: isDark ? 'rgba(255,255,255,0.05)' : '#ffffff', color: mutedClr }}>
+          {isArabic ? 'إعادة الترتيب' : 'Reset'}
+        </button>
       </div>
 
-      {/* Scrollable shell — lets the canvas overflow on very small screens */}
-      <div className="overflow-auto rounded-2xl border border-slate-200">
-        {/* Fixed-size canvas — positions are absolute inside here */}
+      {/* Scrollable shell */}
+      <div className="overflow-auto rounded-2xl" style={{ border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'}` }}>
         <div
           ref={canvasEl}
           onMouseMove={onMove}  onMouseUp={onEnd}  onMouseLeave={onEnd}
@@ -138,7 +140,9 @@ export default function MindMap({ mindmap, lessonTitle, isArabic, loading, error
             position: 'relative',
             width:  CW,
             height: CH,
-            background: 'radial-gradient(ellipse at 50% 30%, #eef2ff 0%, #f8fafc 55%, #f0fdf4 100%)',
+            background: isDark
+              ? 'radial-gradient(ellipse at 50% 30%, #1a1836 0%, #0d0c22 55%, #111029 100%)'
+              : 'radial-gradient(ellipse at 50% 30%, #eef2ff 0%, #f8fafc 55%, #f0fdf4 100%)',
             userSelect:  'none',
             touchAction: 'none',
             flexShrink: 0,
