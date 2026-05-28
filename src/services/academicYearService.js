@@ -87,6 +87,28 @@ export const getAcademicYearById = async (orgId, yearId) => {
   return toAcademicYearDto(year);
 };
 
+export const activateAcademicYear = async (orgId, yearId) => {
+  await ensureSchoolOrg(orgId);
+
+  const year = await prisma.academic_year.findFirst({
+    where: { id: yearId, OrgId: orgId },
+  });
+  if (!year) throw new AppError('Session not found', 404);
+
+  await prisma.academic_year.updateMany({
+    where: { OrgId: orgId, isActive: true },
+    data: { isActive: false },
+  });
+
+  const updated = await prisma.academic_year.update({
+    where: { id: yearId },
+    data: { isActive: true },
+    include: { terms: { orderBy: { termNumber: 'asc' } } },
+  });
+
+  return toAcademicYearDto(updated);
+};
+
 export const updateAcademicYear = async (orgId, yearId, data) => {
   await ensureSchoolOrg(orgId);
 

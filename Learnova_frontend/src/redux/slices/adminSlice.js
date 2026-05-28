@@ -63,11 +63,6 @@ const adminSlice = createSlice({
       .addCase(fetchOrganizationsThunk.fulfilled, (state, action) => {
         state.loading = false;
         state.organizations = action.payload?.organizations || [];
-        state.organizationFilters = {
-          ...state.organizationFilters,
-          skip: action.payload?.skip ?? state.organizationFilters.skip,
-          limit: action.payload?.limit ?? state.organizationFilters.limit,
-        };
       })
       .addCase(fetchOrganizationsThunk.rejected, setFailure)
       .addCase(fetchRevenueThunk.pending, setLoading)

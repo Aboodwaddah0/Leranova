@@ -11,6 +11,8 @@ import lessonAttachmentRoutes from './routes/lessonAttachmentRoutes.js';
 import lessonProgressRoutes from './routes/lessonProgressRoutes.js';
 import commentRoutes from './routes/commentRoutes.js';
 import chatbotRoutes from './routes/chatbotRoutes.js';
+import orgAIRoutes from './routes/orgAIRoutes.js';
+import instructorAIRoutes from './routes/instructorAIRoutes.js';
 import lessonAiContentRoutes from './routes/lessonAiContentRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import organizationRoutes from './routes/organizationRoutes.js';
@@ -27,6 +29,12 @@ import academicYearRoutes from './routes/academicYearRoutes.js';
 import quizRoutes from './routes/quizRoutes.js';
 import noteRoutes from './routes/noteRoutes.js';
 import parentRoutes from './routes/parentRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
+import calendarRoutes from './routes/calendarRoutes.js';
+import attendanceRoutes from './routes/attendanceRoutes.js';
+import assessmentComponentRoutes from './routes/assessmentComponentRoutes.js';
+import gradeScaleRoutes from './routes/gradeScaleRoutes.js';
+import computedGradeRoutes from './routes/computedGradeRoutes.js';
 
 import userRoutes from './routes/userRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
@@ -79,12 +87,20 @@ app.use('/api/admin/analytics', adminAnalyticsRoutes);
 app.use('/api/school-settings', schoolSettingsRoutes);
 app.use('/api/academic-years', academicYearRoutes);
 app.use('/api/chatbot', chatbotRoutes);
+app.use('/api/org-ai', orgAIRoutes);
+app.use('/api/instructor-ai', instructorAIRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/student/gamification', gamificationRoutes);
 app.use('/api/student', studentExperienceRoutes);
 
 app.use('/api/notes', noteRoutes);
 app.use('/api/parent', parentRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/school-calendar', calendarRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/assessment-components', assessmentComponentRoutes);
+app.use('/api/grade-scale', gradeScaleRoutes);
+app.use('/api/computed-grades', computedGradeRoutes);
 
 // auth routes
 app.use('/api/auth', authRoutes);

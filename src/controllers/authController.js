@@ -186,3 +186,13 @@ export const verifyOrgEmailController = async (req, res, next) => {
     return next(error);
   }
 };
+
+export const stripeStatusController = (req, res) => {
+  return res.status(200).json({
+    success: true,
+    status: 200,
+    data: { stripeEnabled: Boolean(process.env.STRIPE_SECRET_KEY) },
+    error: null,
+    timestamp: new Date().toISOString(),
+  });
+};

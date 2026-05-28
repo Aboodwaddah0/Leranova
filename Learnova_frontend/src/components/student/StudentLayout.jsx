@@ -1,5 +1,6 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Home, BookOpen, UserCircle2, LogOut, MessageCircle, Users2, BarChart2, Trophy, Sun, Moon, Menu, X } from 'lucide-react';
+import NotificationDropdown from '../shared/NotificationDropdown';
 import { useDispatch, useSelector } from 'react-redux';
 import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -73,9 +74,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
       </nav>
       <div className="mt-4 pt-4" style={{ borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}` }}>
         <button type="button" onClick={() => dispatch(logout())}
-          className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition"
-          style={{ color: isDark ? '#b8b3c3' : '#475569' }}
-          onMouseEnter={(e) => sidebarHover(e, true)} onMouseLeave={(e) => sidebarHover(e, false)}
+          className="flex w-full items-center gap-3 rounded-2xl border border-transparent bg-transparent px-4 py-3 text-sm font-semibold text-red-500 transition-all duration-200 hover:border-red-500 hover:bg-red-500 hover:text-white hover:shadow-md"
         >
           <LogOut size={18} />{isArabic ? 'تسجيل الخروج' : 'Logout'}
         </button>
@@ -151,8 +150,9 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
           </nav>
         </div>
 
-        {/* Right: Theme + User */}
+        {/* Right: Notifications + Theme + User */}
         <div className="flex items-center gap-2 shrink-0">
+          <NotificationDropdown />
           <button type="button" onClick={toggleTheme}
             className="flex h-9 w-9 items-center justify-center rounded-[10px] transition-all duration-200"
             style={{ background: isDark ? 'rgba(124,92,224,0.1)' : 'rgba(107,92,231,0.08)', border: `1px solid ${isDark ? 'rgba(124,92,224,0.2)' : 'rgba(107,92,231,0.15)'}`, color: isDark ? '#fbbf24' : '#6b5ce7' }}

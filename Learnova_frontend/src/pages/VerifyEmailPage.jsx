@@ -25,9 +25,13 @@ export default function VerifyEmailPage() {
         setAutoApproved(Boolean(res.data?.autoApproved));
         setMessage(res.data?.message || "");
       })
-      .catch(() => {
+      .catch((err) => {
         setStatus("error");
-        setMessage(t.signup.verifyEmail.error);
+        const backendMsg =
+          err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          null;
+        setMessage(backendMsg || t.signup.verifyEmail.error);
       });
   }, [token]);
 
@@ -101,12 +105,20 @@ export default function VerifyEmailPage() {
             <p className="mb-6 text-sm text-slate-500">
               {message || t.signup.verifyEmail.error}
             </p>
-            <Link
-              to="/signup"
-              className="inline-block rounded-2xl border border-slate-200 px-6 py-3 text-sm font-bold text-slate-700 hover:border-indigo-200"
-            >
-              {t.signup.verifyEmail.tryAgain}
-            </Link>
+            <div className="flex flex-col items-center gap-3">
+              <Link
+                to="/login"
+                className="inline-block rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white hover:bg-indigo-700"
+              >
+                {isArabic ? "تسجيل الدخول" : "Go to Login"}
+              </Link>
+              <Link
+                to="/signup"
+                className="text-xs text-slate-400 hover:text-slate-600"
+              >
+                {t.signup.verifyEmail.tryAgain}
+              </Link>
+            </div>
           </>
         )}
       </div>

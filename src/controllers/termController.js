@@ -4,6 +4,7 @@ import {
   getTermById,
   updateTerm,
   reopenTerm,
+  activateTerm,
   listTermAuditLogs,
 } from '../services/termService.js';
 import {
@@ -125,6 +126,19 @@ export const reopenTermController = async (req, res, next) => {
 
     const data = await reopenTerm(orgId, yearId, termId, req.user.id, value.changeReason);
     return res.status(200).json({ message: 'Term reopened successfully', data });
+  } catch (err) { next(err); }
+};
+
+export const activateTermController = async (req, res, next) => {
+  try {
+    const yearId = parseYearId(req, next);
+    if (yearId === null) return;
+    const termId = parseTermId(req, next);
+    if (termId === null) return;
+
+    const orgId = await getOrgIdForUser(req.user.id, req.user.role);
+    const data = await activateTerm(orgId, yearId, termId, req.user.id);
+    return res.status(200).json({ message: 'Term activated successfully', data });
   } catch (err) { next(err); }
 };
 

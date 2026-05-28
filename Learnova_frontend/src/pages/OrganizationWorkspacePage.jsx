@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { BadgeCheck, Bell, ChevronDown, ChevronRight, Eye, FolderOpen, Search, UserCircle2, Trash2, Pencil } from "lucide-react";
+import { BadgeCheck, Bell, CalendarDays, CalendarRange, BookOpen, Building2, ChevronDown, ChevronRight, Eye, FolderOpen, GraduationCap, Search, UserCircle2, Users, UserCheck, Trash2, Pencil } from "lucide-react";
+import NotificationDropdown from "../components/shared/NotificationDropdown";
 import { useDispatch, useSelector } from "react-redux";
 import { logout, setAuthSession } from "../redux/slices/authSlice";
 import {
@@ -39,7 +40,19 @@ import {
   createTerm,
   updateTerm,
   reopenTerm,
+  activateSession,
+  activateTermManually,
   fetchOrganizationMarks,
+  fetchAssessmentComponents,
+  createAssessmentComponent,
+  updateAssessmentComponent,
+  deleteAssessmentComponent,
+  fetchGradeScale,
+  upsertGradeScale,
+  deleteGradeScale,
+  computeGrades,
+  fetchComputedGrades,
+  fetchGradeRankings,
 } from "../services/organizationService";
 import { useLanguage, getSubjectLabels } from "../utils/i18n";
 import { notifyError, notifySuccess } from "../lib/notify";
@@ -47,6 +60,10 @@ import { formatGradeName } from "../utils/gradeHelpers";
 import QuantumMeshBackground from "../components/ui/QuantumMeshBackground";
 import Modal from "../components/ui/Modal";
 import Pagination from "../components/ui/Pagination";
+import OrgAIChat from "../components/organization/OrgAIChat";
+import SchoolCalendar from "../components/organization/SchoolCalendar";
+import AttendanceTracker from "../components/organization/AttendanceTracker";
+import OrgOnboardingWizard from "../components/organization/OrgOnboardingWizard";
 
 /* ─── Read-only lesson viewer used by org admins ──────────────────────── */
 function LessonsViewModal({ open, subject, lessons, loading, isArabic, onClose }) {
@@ -214,6 +231,8 @@ const TABS = {
   MARKS: "marks",
   SCHOOL: "school",
   FINANCE: "finance",
+  CALENDAR: "calendar",
+  ATTENDANCE: "attendance",
 };
 
 const AUTO_GRADE_RE = /^Auto-created grade course for level (\d+)$/i;
@@ -381,6 +400,7 @@ export default function OrganizationWorkspacePage() {
   const organizationType = String((organizationProfile?.type || organization?.type || organizationProfile?.Role || organization?.Role) || "").toUpperCase();
   const isSchool = organizationType === "SCHOOL";
   const isAcademy = organizationType === "ACADEMY";
+  const orgKey = organizationProfile?.subdomain || organization?.subdomain || "default";
   const canManageCourses = isSchool || isAcademy;
   const sl = getSubjectLabels(isAcademy, isArabic);
 
@@ -456,7 +476,8 @@ export default function OrganizationWorkspacePage() {
 
   const [teacherForm, setTeacherForm] = useState({
     id: null,
-    name: "",
+    firstName: "",
+    lastName: "",
     email: "",
     password: "",
     specialization: "",
@@ -495,7 +516,8 @@ export default function OrganizationWorkspacePage() {
 
   const [studentForm, setStudentForm] = useState({
     id: null,
-    name: "",
+    firstName: "",
+    lastName: "",
     email: "",
     password: "",
     age: "",
@@ -508,7 +530,8 @@ export default function OrganizationWorkspacePage() {
 
   const [parentForm, setParentForm] = useState({
     id: null,
-    name: "",
+    firstName: "",
+    lastName: "",
     email: "",
     password: "",
     address: "",
@@ -553,15 +576,51 @@ export default function OrganizationWorkspacePage() {
         endGradeLevel: 5,
       },
     ],
+    maxFailedSubjects: 0,
+    allowConditionalPromotion: false,
+    conditionalMaxFailed: 1,
+    requiredSubjectIds: [],
   });
   const [schoolSettingsModalOpen, setSchoolSettingsModalOpen] = useState(false);
   const [showPromotionConfirm, setShowPromotionConfirm] = useState(false);
+  const [schoolSubTab, setSchoolSubTab] = useState('settings');
+  const [schoolSubNavOpen, setSchoolSubNavOpen] = useState(false);
+  // ── Promote Students page ──────────────────────────────────────────────────
+  const [showPromotePage, setShowPromotePage] = useState(false);
+  const [promoteSrcYearId, setPromoteSrcYearId] = useState('');
+  const [promoteTgtYearId, setPromoteTgtYearId] = useState('');
+  const [promotionRunning, setPromotionRunning] = useState(false);
+  const [promotionResult, setPromotionResult] = useState(null);
 
   // ── Marks tab state ────────────────────────────────────────────────────────
   const [orgMarks, setOrgMarks] = useState([]);
   const [marksLoading, setMarksLoading] = useState(false);
   const [marksFilters, setMarksFilters] = useState({ gradeLevel: '', subjectId: '', studentName: '', yearId: '', termId: '', markType: '' });
   const [marksTerms, setMarksTerms] = useState([]);
+
+  // ── Grading System state ───────────────────────────────────────────────────
+  const [assessmentComponents, setAssessmentComponents] = useState([]);
+  const [componentsLoading, setComponentsLoading] = useState(false);
+  const [componentFilter, setComponentFilter] = useState({ gradeId: '', subjectId: '', termId: '' });
+  const [componentFilterSubjects, setComponentFilterSubjects] = useState([]);
+  const [componentModal, setComponentModal] = useState({ open: false, editing: null, name: '', weight: '', maxScore: '100', gradeId: '', subjectId: '', termId: '' });
+  const [componentModalSubjects, setComponentModalSubjects] = useState([]);
+  // flat map: subjectId → { name, gradeId } — accumulated as grades are selected
+  const [subjectInfoMap, setSubjectInfoMap] = useState({});
+
+  const [gradeScale, setGradeScale] = useState(null);
+  const [gradeScaleEnabled, setGradeScaleEnabled] = useState(false);
+  const [gradeScaleLoading, setGradeScaleLoading] = useState(false);
+  const [gradeScaleName, setGradeScaleName] = useState('Standard');
+  const [gradeScaleRanges, setGradeScaleRanges] = useState([]);
+
+  const [computedGrades, setComputedGrades] = useState([]);
+  const [computedGradesLoading, setComputedGradesLoading] = useState(false);
+  const [computeTermId, setComputeTermId] = useState('');
+  const [computeResult, setComputeResult] = useState(null);
+  const [showRankings, setShowRankings] = useState(false);
+  const [rankings, setRankings] = useState([]);
+  const [rankingsLoading, setRankingsLoading] = useState(false);
 
   const [credentialsModal, setCredentialsModal] = useState({ open: false, name: "", email: "", password: "" });
   const [bulkCredentialsModal, setBulkCredentialsModal] = useState({ open: false, users: [] });
@@ -836,6 +895,28 @@ export default function OrganizationWorkspacePage() {
     };
   }, [studentUsers.length, teachers.length, courses.length, subjectsByCourse, users.length]);
 
+  const [wizardOpen, setWizardOpen] = useState(false);
+
+  const setupChecklist = useMemo(() => {
+    const steps = isSchool
+      ? [
+          { key: "year",     label: isArabic ? "إنشاء السنة الدراسية"   : "Create Academic Year",  done: academicYears.length > 0,        Icon: CalendarDays,   tab: TABS.SCHOOL,   wizard: true  },
+          { key: "term",     label: isArabic ? "إضافة فصل دراسي"         : "Add a Term",             done: yearTerms.length > 0,            Icon: CalendarRange,  tab: TABS.SCHOOL,   wizard: false },
+          { key: "teachers", label: isArabic ? "إضافة معلمين"            : "Add Teachers",           done: teachers.length > 0,             Icon: Users,          tab: TABS.TEACHERS, wizard: false },
+          { key: "grades",   label: isArabic ? "إعداد الصفوف الدراسية"  : "Set Up Grade Levels",    done: courses.length > 0,              Icon: Building2,      tab: TABS.COURSES,  wizard: false },
+          { key: "subjects", label: isArabic ? "إضافة مواد دراسية"       : "Add Subjects",           done: overviewStats.totalSubjects > 0, Icon: BookOpen,       tab: "subjects",    wizard: false },
+          { key: "students", label: isArabic ? "تسجيل الطلاب"           : "Enroll Students",         done: overviewStats.totalStudents > 0, Icon: UserCheck,      tab: TABS.STUDENTS, wizard: false },
+        ]
+      : [
+          { key: "teachers", label: isArabic ? "إضافة معلمين"            : "Add Teachers",           done: teachers.length > 0,             Icon: Users,          tab: TABS.TEACHERS, wizard: false },
+          { key: "courses",  label: isArabic ? "إنشاء كورسات"            : "Create Courses",          done: courses.length > 0,              Icon: GraduationCap,  tab: TABS.COURSES,  wizard: false },
+          { key: "subjects", label: isArabic ? "إضافة مواد دراسية"       : "Add Subjects",           done: overviewStats.totalSubjects > 0, Icon: BookOpen,       tab: "subjects",    wizard: false },
+          { key: "students", label: isArabic ? "تسجيل الطلاب"           : "Enroll Students",         done: overviewStats.totalStudents > 0, Icon: UserCheck,      tab: TABS.STUDENTS, wizard: false },
+        ];
+    const completedCount = steps.filter((s) => s.done).length;
+    return { steps, completedCount, allDone: completedCount === steps.length };
+  }, [isSchool, isArabic, academicYears.length, yearTerms.length, teachers.length, courses.length, overviewStats.totalSubjects, overviewStats.totalStudents]);
+
   const formatMoney = (amount) => {
     const value = Number(amount || 0);
     return new Intl.NumberFormat(isArabic ? "ar-EG" : "en-US", {
@@ -896,6 +977,10 @@ export default function OrganizationWorkspacePage() {
         const settings = await fetchSchoolSettings();
         const years = await fetchAcademicYears().catch(() => []);
         setAcademicYears(years);
+        if (years.length > 0) {
+          const seedYear = years.find((y) => y.isActive) || years[0];
+          fetchTerms(seedYear.id).then(setYearTerms).catch(() => {});
+        }
         if (settings) {
           setSchoolForm({
             schoolYearStartMonth: Number(settings.schoolYearStartMonth || 9),
@@ -907,6 +992,10 @@ export default function OrganizationWorkspacePage() {
             minSubjectPassPercentage: Number(settings.minSubjectPassPercentage || 50),
             requireAllSubjectsPass: Boolean(settings.requireAllSubjectsPass),
             classRanges: Array.isArray(settings.classRanges) ? settings.classRanges : [],
+            maxFailedSubjects: Number(settings.maxFailedSubjects ?? 0),
+            allowConditionalPromotion: Boolean(settings.allowConditionalPromotion),
+            conditionalMaxFailed: Number(settings.conditionalMaxFailed ?? 1),
+            requiredSubjectIds: Array.isArray(settings.requiredSubjectIds) ? settings.requiredSubjectIds : [],
           });
         }
       }
@@ -960,6 +1049,15 @@ export default function OrganizationWorkspacePage() {
       .catch(() => { if (!cancelled) setOrgMarks([]); })
       .finally(() => { if (!cancelled) setMarksLoading(false); });
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // ── Load grade scale once when the School tab is first opened ──────────────
+  const [gradeScaleLoaded, setGradeScaleLoaded] = useState(false);
+  useEffect(() => {
+    if (activeTab !== TABS.SCHOOL || gradeScaleLoaded || !isSchool) return;
+    setGradeScaleLoaded(true);
+    loadGradeScale();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
@@ -1103,8 +1201,16 @@ export default function OrganizationWorkspacePage() {
     }));
   };
 
+  const splitName = (fullName) => {
+    const parts = (fullName || "").trim().split(/\s+/);
+    return { firstName: parts[0] || "", lastName: parts.slice(1).join(" ") };
+  };
+
+  const combineName = (firstName, lastName) =>
+    [firstName, lastName].filter(Boolean).join(" ").trim();
+
   const resetTeacherForm = () => {
-    setTeacherForm({ id: null, name: "", email: "", password: "", specialization: "", bio: "" });
+    setTeacherForm({ id: null, firstName: "", lastName: "", email: "", password: "", specialization: "", bio: "" });
     setTeacherEmailAuto(false);
   };
 
@@ -1233,12 +1339,12 @@ export default function OrganizationWorkspacePage() {
   };
 
   const resetStudentForm = () => {
-    setStudentForm({ id: null, name: "", email: "", password: "", age: "", gender: "MALE", address: "", dob: "", parentNationalId: "" });
+    setStudentForm({ id: null, firstName: "", lastName: "", email: "", password: "", age: "", gender: "MALE", address: "", dob: "", parentNationalId: "" });
     setStudentEmailAuto(false);
   };
 
   const resetParentForm = () => {
-    setParentForm({ id: null, name: "", email: "", password: "", address: "" });
+    setParentForm({ id: null, firstName: "", lastName: "", email: "", password: "", address: "" });
     setParentEmailAuto(false);
   };
 
@@ -1273,10 +1379,11 @@ export default function OrganizationWorkspacePage() {
   const saveTeacher = async (event) => {
     event.preventDefault();
 
+    const teacherFullName = combineName(teacherForm.firstName, teacherForm.lastName);
     await handleAction(async () => {
       if (teacherForm.id) {
         await updateOrganizationTeacher(teacherForm.id, {
-          name: teacherForm.name,
+          name: teacherFullName,
           specialization: teacherForm.specialization || undefined,
           bio: teacherForm.bio || undefined,
         });
@@ -1286,7 +1393,7 @@ export default function OrganizationWorkspacePage() {
         setTeacherModalOpen(false);
       } else if (teacherEmailAuto) {
         const generated = await createOrganizationUserWithGeneratedCredentials({
-          name: teacherForm.name,
+          name: teacherFullName,
           role: "TEACHER",
           specialization: teacherForm.specialization || undefined,
           bio: teacherForm.bio || undefined,
@@ -1304,11 +1411,11 @@ export default function OrganizationWorkspacePage() {
         setTeacherModalOpen(false);
         const email = generated?.credentials?.email || "-";
         const password = generated?.credentials?.password || "-";
-        setCredentialsModal({ open: true, name: teacherForm.name, email, password });
+        setCredentialsModal({ open: true, name: teacherFullName, email, password });
         return isArabic ? "تم إنشاء حساب المدرس" : "Teacher account created";
       } else {
         const created = await createOrganizationTeacher({
-          name: teacherForm.name,
+          name: teacherFullName,
           email: teacherForm.email,
           specialization: teacherForm.specialization || undefined,
           bio: teacherForm.bio || undefined,
@@ -1318,7 +1425,7 @@ export default function OrganizationWorkspacePage() {
         resetTeacherForm();
         setTeacherModalOpen(false);
         const tempPassword = created?.data?.tempPassword || "-";
-        setCredentialsModal({ open: true, name: teacherForm.name, email: teacherForm.email, password: tempPassword });
+        setCredentialsModal({ open: true, name: teacherFullName, email: teacherForm.email, password: tempPassword });
         return isArabic ? "تم إنشاء حساب المدرس" : "Teacher account created";
       }
     }, t.organization.messages.teacherSaved);
@@ -1468,8 +1575,9 @@ export default function OrganizationWorkspacePage() {
   const saveStudent = async (event) => {
     event.preventDefault();
 
+    const studentFullName = combineName(studentForm.firstName, studentForm.lastName);
     const basePayload = {
-      name: studentForm.name,
+      name: studentFullName,
       role: "STUDENT",
       age: studentForm.age ? Number(studentForm.age) : undefined,
       gender: studentForm.gender || undefined,
@@ -1501,7 +1609,7 @@ export default function OrganizationWorkspacePage() {
         const email = generated?.credentials?.email || "-";
         const password = generated?.credentials?.password || "-";
         const parentLinkMessage = buildParentLinkMessage(generated?.parentLinkStatus);
-        setCredentialsModal({ open: true, name: studentForm.name, email, password });
+        setCredentialsModal({ open: true, name: studentFullName, email, password });
         return `${isArabic ? "تم إنشاء حساب الطالب" : "Student account created"}${parentLinkMessage}`;
       } else {
         const created = await createOrganizationUser({ ...basePayload, email: studentForm.email });
@@ -1511,7 +1619,7 @@ export default function OrganizationWorkspacePage() {
         setStudentModalOpen(false);
         const tempPassword = created?.tempPassword || "-";
         const parentLinkMessage = buildParentLinkMessage(created?.parentLinkStatus);
-        setCredentialsModal({ open: true, name: studentForm.name, email: studentForm.email, password: tempPassword });
+        setCredentialsModal({ open: true, name: studentFullName, email: studentForm.email, password: tempPassword });
         return `${isArabic ? "تم إنشاء حساب الطالب" : "Student account created"}${parentLinkMessage}`;
       }
     }, t.organization.messages.studentSaved);
@@ -1520,8 +1628,9 @@ export default function OrganizationWorkspacePage() {
   const saveParent = async (event) => {
     event.preventDefault();
 
+    const parentFullName = combineName(parentForm.firstName, parentForm.lastName);
     const basePayload = {
-      name: parentForm.name,
+      name: parentFullName,
       role: "PARENT",
       address: parentForm.address || undefined,
     };
@@ -1541,7 +1650,7 @@ export default function OrganizationWorkspacePage() {
         setParentModalOpen(false);
         const email = generated?.credentials?.email || "-";
         const password = generated?.credentials?.password || "-";
-        setCredentialsModal({ open: true, name: parentForm.name, email, password });
+        setCredentialsModal({ open: true, name: parentFullName, email, password });
         return isArabic ? "تم إنشاء حساب ولي الأمر" : "Parent account created";
       } else {
         const created = await createOrganizationUser({ ...basePayload, email: parentForm.email });
@@ -1550,7 +1659,7 @@ export default function OrganizationWorkspacePage() {
         resetParentForm();
         setParentModalOpen(false);
         const tempPassword = created?.tempPassword || "-";
-        setCredentialsModal({ open: true, name: parentForm.name, email: parentForm.email || "", password: tempPassword });
+        setCredentialsModal({ open: true, name: parentFullName, email: parentForm.email || "", password: tempPassword });
         return isArabic ? "تم إنشاء حساب ولي الأمر" : "Parent account created";
       }
     }, t.organization.messages.parentSaved);
@@ -1907,12 +2016,136 @@ export default function OrganizationWorkspacePage() {
     }, isArabic ? "تم إعادة فتح الفصل" : "Term reopened");
   };
 
+  const handleActivateSession = async (yearId) => {
+    await handleAction(async () => {
+      const updated = await activateSession(yearId);
+      setAcademicYears((prev) =>
+        prev.map((y) => ({ ...y, isActive: y.id === updated.id }))
+      );
+    }, isArabic ? "تم تفعيل الجلسة" : "Session activated");
+  };
+
+  const handleActivateTerm = async (termId) => {
+    if (!selectedYear) return;
+    await handleAction(async () => {
+      const updated = await activateTermManually(selectedYear.id, termId);
+      setYearTerms((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    }, isArabic ? "تم تفعيل الفصل" : "Term activated");
+  };
+
   const termStatusColor = (status) => ({
     PLANNED: "bg-slate-100 text-slate-600",
     ACTIVE:  "bg-green-100 text-green-700",
     CLOSED:  "bg-amber-100 text-amber-700",
     LOCKED:  "bg-red-100 text-red-700",
   }[status] || "bg-slate-100 text-slate-600");
+
+  // ── Grading system handlers ────────────────────────────────────────────────
+  const loadSubjectsForGrade = async (gradeId, setter) => {
+    if (!gradeId) { setter([]); return; }
+    try {
+      const data = await fetchCourseSubjects(gradeId);
+      setter(data);
+      // accumulate into the map so table rows can resolve names
+      setSubjectInfoMap((prev) => {
+        const next = { ...prev };
+        data.forEach((s) => { next[s.id] = { name: s.name, gradeId }; });
+        return next;
+      });
+    } catch { setter([]); }
+  };
+
+  const loadComponents = async (subjectId = componentFilter.subjectId, termId = componentFilter.termId) => {
+    setComponentsLoading(true);
+    try {
+      const params = {};
+      if (subjectId) params.subjectId = subjectId;
+      if (termId) params.termId = termId;
+      const data = await fetchAssessmentComponents(params);
+      setAssessmentComponents(data);
+    } catch (err) { notifyError(safeError(err)); }
+    finally { setComponentsLoading(false); }
+  };
+
+  const loadGradeScale = async () => {
+    setGradeScaleLoading(true);
+    try {
+      const data = await fetchGradeScale();
+      setGradeScale(data);
+      setGradeScaleEnabled(!!data);
+      if (data) {
+        setGradeScaleName(data.name || 'Standard');
+        setGradeScaleRanges(data.ranges || []);
+      }
+    } catch (err) { notifyError(safeError(err)); }
+    finally { setGradeScaleLoading(false); }
+  };
+
+  const handleSaveGradeScale = async () => {
+    await handleAction(async () => {
+      const saved = await upsertGradeScale({ name: gradeScaleName, ranges: gradeScaleRanges });
+      setGradeScale(saved);
+      setGradeScaleRanges(saved.ranges || []);
+    }, isArabic ? "تم حفظ سلم التقدير" : "Grade scale saved");
+  };
+
+  const handleDeleteGradeScale = async () => {
+    await handleAction(async () => {
+      await deleteGradeScale();
+      setGradeScale(null);
+      setGradeScaleEnabled(false);
+      setGradeScaleRanges([]);
+    }, isArabic ? "تم حذف سلم التقدير" : "Grade scale removed");
+  };
+
+  const handleSaveComponent = async (e) => {
+    e.preventDefault();
+    await handleAction(async () => {
+      const payload = {
+        name: componentModal.name,
+        weight: Number(componentModal.weight),
+        maxScore: Number(componentModal.maxScore || 100),
+        subjectId: componentModal.subjectId ? Number(componentModal.subjectId) : null,
+        termId: componentModal.termId ? Number(componentModal.termId) : null,
+      };
+      if (componentModal.editing) {
+        await updateAssessmentComponent(componentModal.editing.id, payload);
+      } else {
+        await createAssessmentComponent(payload);
+      }
+      setComponentModal({ open: false, editing: null, name: '', weight: '', maxScore: '100', gradeId: '', subjectId: '', termId: '' });
+      setComponentModalSubjects([]);
+      await loadComponents();
+    }, isArabic ? "تم حفظ المكون" : "Component saved");
+  };
+
+  const handleDeleteComponent = async (id) => {
+    await handleAction(async () => {
+      await deleteAssessmentComponent(id);
+      setAssessmentComponents((prev) => prev.filter((c) => c.id !== id));
+    }, isArabic ? "تم حذف المكون" : "Component deleted");
+  };
+
+  const handleComputeGrades = async () => {
+    if (!computeTermId) return notifyError(isArabic ? 'اختر الفصل أولاً' : 'Select a term first');
+    await handleAction(async () => {
+      const result = await computeGrades(Number(computeTermId));
+      setComputeResult(result);
+      const grades = await fetchComputedGrades({ termId: computeTermId });
+      setComputedGrades(grades);
+    }, isArabic ? "تم احتساب الدرجات" : "Grades computed");
+  };
+
+  const handleShowRankings = async () => {
+    if (!computeTermId) return notifyError(isArabic ? 'اختر الفصل أولاً' : 'Select a term first');
+    setRankingsLoading(true);
+    try {
+      const data = await fetchGradeRankings({ termId: computeTermId });
+      setRankings(data);
+      setShowRankings(true);
+    } catch (err) { notifyError(safeError(err)); }
+    finally { setRankingsLoading(false); }
+  };
 
   const tabs = useMemo(() => {
     const courseTabLabel = isSchool
@@ -1928,9 +2161,11 @@ export default function OrganizationWorkspacePage() {
     ];
 
     if (isSchool) {
-      baseTabs.push({ id: TABS.PARENTS, label: t.organization.tabs.parents });
-      baseTabs.push({ id: TABS.MARKS,   label: isArabic ? 'الدرجات' : 'Marks' });
-      baseTabs.push({ id: TABS.SCHOOL,  label: t.organization.tabs.schoolSettings });
+      baseTabs.push({ id: TABS.PARENTS,     label: t.organization.tabs.parents });
+      baseTabs.push({ id: TABS.MARKS,       label: isArabic ? 'الدرجات' : 'Marks' });
+      baseTabs.push({ id: TABS.CALENDAR,    label: isArabic ? 'التقويم' : 'Calendar' });
+      baseTabs.push({ id: TABS.ATTENDANCE,  label: isArabic ? 'الحضور' : 'Attendance' });
+      baseTabs.push({ id: TABS.SCHOOL,      label: t.organization.tabs.schoolSettings });
     }
 
     if (isAcademy) {
@@ -2137,20 +2372,64 @@ export default function OrganizationWorkspacePage() {
             <p className="mt-2 text-sm text-indigo-50/90">{t.organization.badge}</p>
           </div>
 
-          <nav className="space-y-2">
+          <nav className="space-y-1">
             {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => { setActiveTab(tab.id); setDrillCourse(null); setDrillSubject(null); setDrillExpandedLesson(null); }}
-                className={`w-full rounded-2xl px-4 py-3 text-sm font-semibold transition-all duration-200 ${
-                  activeTab === tab.id
-                    ? "dashboard-sidebar-item-active"
-                    : "dashboard-sidebar-item"
-                } ${isArabic ? "text-right" : "text-left"}`}
-              >
-                {tab.label}
-              </button>
+              <div key={tab.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (tab.id === TABS.SCHOOL && isSchool) {
+                      if (activeTab !== TABS.SCHOOL) {
+                        setActiveTab(TABS.SCHOOL);
+                        setSchoolSubNavOpen(true);
+                      } else {
+                        setSchoolSubNavOpen((v) => !v);
+                      }
+                      setDrillCourse(null); setDrillSubject(null); setDrillExpandedLesson(null);
+                    } else {
+                      setActiveTab(tab.id); setDrillCourse(null); setDrillSubject(null); setDrillExpandedLesson(null);
+                    }
+                  }}
+                  className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold transition-all duration-200 ${
+                    activeTab === tab.id
+                      ? "dashboard-sidebar-item-active"
+                      : "dashboard-sidebar-item"
+                  } ${isArabic ? "text-right flex-row-reverse" : "text-left"}`}
+                >
+                  <span>{tab.label}</span>
+                  {tab.id === TABS.SCHOOL && isSchool && (
+                    <ChevronDown
+                      size={14}
+                      className={`shrink-0 transition-transform duration-200 ${schoolSubNavOpen && activeTab === TABS.SCHOOL ? 'rotate-180' : ''}`}
+                    />
+                  )}
+                </button>
+
+                {/* School Settings sub-nav */}
+                {tab.id === TABS.SCHOOL && isSchool && schoolSubNavOpen && activeTab === TABS.SCHOOL && (
+                  <div className={`mt-0.5 space-y-0.5 ${isArabic ? "pr-3" : "pl-3"}`}>
+                    {[
+                      { id: 'settings',   label: isArabic ? 'الإعدادات العامة'  : 'General Settings' },
+                      { id: 'sessions',   label: isArabic ? 'الجلسات والفصول'   : 'Sessions & Terms' },
+                      { id: 'components', label: isArabic ? 'مكونات التقييم'     : 'Assessment Components' },
+                      { id: 'gradescale', label: isArabic ? 'سلم التقدير'        : 'Grade Scale' },
+                    ].map((sub) => (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        onClick={() => setSchoolSubTab(sub.id)}
+                        className={`w-full rounded-xl px-3 py-2 text-xs font-semibold transition-all duration-150 ${
+                          schoolSubTab === sub.id
+                            ? 'bg-indigo-50 text-indigo-700'
+                            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                        } ${isArabic ? "text-right" : "text-left"}`}
+                      >
+                        {sub.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </nav>
 
@@ -2175,16 +2454,94 @@ export default function OrganizationWorkspacePage() {
               </div>
               <p className="mt-2 text-sm">{t.organization.subtitle}</p>
             </div>
-            <button
-              type="button"
-              onClick={toggleLang}
-              className="rounded-xl border border-white/30 bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/30"
-            >
-              {lang === "en" ? t.common.switchToArabic : t.common.switchToEnglish}
-            </button>
+            <div className="flex items-center gap-3">
+              <NotificationDropdown variant="onDark" />
+              <button
+                type="button"
+                onClick={toggleLang}
+                className="rounded-xl border border-white/30 bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/30"
+              >
+                {lang === "en" ? t.common.switchToArabic : t.common.switchToEnglish}
+              </button>
+            </div>
           </header>
 
           {loading && <p className="text-sm text-slate-500">{t.common.loading}</p>}
+        {!loading && activeTab === TABS.OVERVIEW && !setupChecklist.allDone && (
+          <article className="mb-4 rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-violet-50 p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-black text-slate-900">
+                  {isArabic ? "الإعداد الأولي" : "Getting Started"}
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {isArabic
+                    ? `${setupChecklist.completedCount} من ${setupChecklist.steps.length} خطوات مكتملة`
+                    : `${setupChecklist.completedCount} of ${setupChecklist.steps.length} steps completed`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWizardOpen(true)}
+                className="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:opacity-90 transition-opacity"
+              >
+                {isArabic ? "استئناف الإعداد" : "Resume Setup"}
+              </button>
+            </div>
+
+            {/* Progress bar */}
+            <div className="mb-4 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-500"
+                style={{ width: `${Math.round((setupChecklist.completedCount / setupChecklist.steps.length) * 100)}%` }}
+              />
+            </div>
+
+            <ul className="space-y-2">
+              {setupChecklist.steps.map((step) => (
+                <li
+                  key={step.key}
+                  className={[
+                    "flex items-center justify-between gap-3 rounded-2xl border px-3.5 py-2.5 text-sm transition-colors",
+                    step.done
+                      ? "border-emerald-100 bg-emerald-50"
+                      : "border-slate-200 bg-white",
+                  ].join(" ")}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span
+                      className={[
+                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
+                        step.done
+                          ? "bg-emerald-500 text-white"
+                          : "bg-slate-100 text-slate-400",
+                      ].join(" ")}
+                    >
+                      <step.Icon size={13} strokeWidth={step.done ? 3 : 2} />
+                    </span>
+                    <span className="text-sm font-medium text-slate-700 truncate">{step.label}</span>
+                  </div>
+                  {!step.done && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (step.wizard) {
+                          setWizardOpen(true);
+                        } else {
+                          setActiveTab(step.tab);
+                        }
+                      }}
+                      className="shrink-0 rounded-xl border border-indigo-200 bg-white px-3 py-1 text-xs font-bold text-indigo-600 hover:bg-indigo-50 transition-colors"
+                    >
+                      {isArabic ? "اذهب" : "Go →"}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </article>
+        )}
+
         {!loading && activeTab === TABS.OVERVIEW && (
           <section className="grid gap-4 md:grid-cols-2">
             <article className="rounded-3xl border border-slate-200 bg-white p-5">
@@ -2433,7 +2790,10 @@ export default function OrganizationWorkspacePage() {
           <section className="space-y-4">
             <Modal open={teacherModalOpen} onClose={() => { setTeacherModalOpen(false); resetTeacherForm(); }} title={teacherForm.id ? t.organization.teachers.formTitle : (isArabic ? "إضافة مدرس جديد" : "Add New Teacher")} maxWidth="max-w-lg">
               <form onSubmit={saveTeacher} className="space-y-3">
-                <input name="name" value={teacherForm.name} onChange={setField(setTeacherForm)} placeholder={t.organization.teachers.name} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
+                <div className="flex gap-2">
+                  <input name="firstName" value={teacherForm.firstName} onChange={setField(setTeacherForm)} placeholder={isArabic ? "الاسم الأول" : "First Name"} className="h-11 flex-1 rounded-xl border border-slate-200 px-3" required />
+                  <input name="lastName" value={teacherForm.lastName} onChange={setField(setTeacherForm)} placeholder={isArabic ? "اسم العائلة" : "Last Name"} className="h-11 flex-1 rounded-xl border border-slate-200 px-3" required />
+                </div>
                 {!teacherForm.id && (
                   <div className="flex overflow-hidden rounded-xl border border-slate-200">
                     <button type="button" onClick={() => setTeacherEmailAuto(false)}
@@ -2523,7 +2883,7 @@ export default function OrganizationWorkspacePage() {
                       <th className="px-5 py-3">{isArabic ? "المدرس" : "Teacher"}</th>
                       <th className="px-5 py-3">{isArabic ? "البريد الإلكتروني" : "Email"}</th>
                       <th className="px-5 py-3">{isArabic ? "التخصص" : "Specialization"}</th>
-                      <th className="px-5 py-3 text-center">{isArabic ? "المواد" : "Subjects"}</th>
+                      <th className="px-5 py-3 text-center">{isArabic ? "المواد" : "Courses"}</th>
                       <th className="px-5 py-3 text-center">{isArabic ? "الطلاب" : "Students"}</th>
                       <th className="px-5 py-3">{t.organization.common.actions}</th>
                     </tr>
@@ -2561,7 +2921,7 @@ export default function OrganizationWorkspacePage() {
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() => { setTeacherForm({ id: teacher.id, name: teacher?.user?.name || "", email: teacher?.user?.email || "", password: "", specialization: teacher?.specialization || "", bio: teacher?.bio || "" }); setTeacherModalOpen(true); }}
+                                onClick={() => { const { firstName, lastName } = splitName(teacher?.user?.name); setTeacherForm({ id: teacher.id, firstName, lastName, email: teacher?.user?.email || "", password: "", specialization: teacher?.specialization || "", bio: teacher?.bio || "" }); setTeacherModalOpen(true); }}
                                 className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
                                 title={t.organization.common.edit}
                               >
@@ -3314,11 +3674,189 @@ export default function OrganizationWorkspacePage() {
           </section>
         )}
 
-        {!loading && activeTab === TABS.STUDENTS && (
+        {!loading && activeTab === TABS.STUDENTS && showPromotePage && (
+          <section className="space-y-5">
+            {/* ── Promote Students page ─────────────────────────────────── */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => { setShowPromotePage(false); setPromotionResult(null); }}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition"
+              >
+                <ChevronDown size={14} className="rotate-90" />
+                {isArabic ? "العودة" : "Back"}
+              </button>
+              <div>
+                <h2 className="text-2xl font-black text-slate-900">{isArabic ? "ترفيع الطلاب" : "Promote Students"}</h2>
+                <p className="text-sm text-slate-500">{isArabic ? "انقل الطلاب من جلسة سابقة إلى الجلسة الحالية" : "Move students from a previous session to the current session"}</p>
+              </div>
+            </div>
+
+            {/* Session selectors */}
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="grid gap-6 sm:grid-cols-2">
+                {/* Source Session */}
+                <div>
+                  <p className="mb-1.5 text-xs font-black uppercase tracking-wider text-slate-500">{isArabic ? "الجلسة المصدر" : "Source Session"}</p>
+                  <p className="mb-3 text-sm text-slate-500">{isArabic ? "الجلسة التي يُرفَّع منها الطلاب" : "The session students are being promoted from"}</p>
+                  <select
+                    value={promoteSrcYearId}
+                    onChange={(e) => { setPromoteSrcYearId(e.target.value); setPromotionResult(null); }}
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700 focus:border-amber-400 focus:outline-none"
+                  >
+                    <option value="">{isArabic ? "اختر الجلسة المصدر" : "Select source session"}</option>
+                    {academicYears.map((y) => (
+                      <option key={y.id} value={y.id}>
+                        {y.name} {y.isActive ? (isArabic ? "(نشطة)" : "(Active)") : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Target Session */}
+                <div>
+                  <p className="mb-1.5 text-xs font-black uppercase tracking-wider text-slate-500">{isArabic ? "الجلسة الهدف" : "Target Session"}</p>
+                  <p className="mb-3 text-sm text-slate-500">{isArabic ? "الجلسة التي سينتقل إليها الطلاب بعد الترفيع" : "The session students will move into after promotion"}</p>
+                  <select
+                    value={promoteTgtYearId}
+                    onChange={(e) => { setPromoteTgtYearId(e.target.value); setPromotionResult(null); }}
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700 focus:border-indigo-400 focus:outline-none"
+                  >
+                    <option value="">{isArabic ? "اختر الجلسة الهدف" : "Select target session"}</option>
+                    {academicYears.filter((y) => String(y.id) !== promoteSrcYearId).map((y) => (
+                      <option key={y.id} value={y.id}>
+                        {y.name} {y.isActive ? (isArabic ? "(نشطة)" : "(Active)") : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Info banner */}
+              {promoteSrcYearId && promoteTgtYearId && (
+                <div className="mt-5 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  {isArabic
+                    ? "سيتم تقييم كل طالب بناءً على درجاته في الجلسة المصدر. الطلاب الناجحون ينتقلون للصف التالي في الجلسة الهدف."
+                    : "Each student will be evaluated based on their marks in the source session. Passing students move to the next grade in the target session."}
+                </div>
+              )}
+
+              <div className="mt-5 flex justify-end">
+                <button
+                  type="button"
+                  disabled={!promoteSrcYearId || !promoteTgtYearId || promotionRunning}
+                  onClick={async () => {
+                    setPromotionRunning(true);
+                    setPromotionResult(null);
+                    try {
+                      const res = await runAnnualPromotion({ academicYearId: Number(promoteSrcYearId) });
+                      setPromotionResult(res);
+                    } catch (err) {
+                      notifyError(err?.response?.data?.message || err?.message || 'Promotion failed');
+                    } finally {
+                      setPromotionRunning(false);
+                    }
+                  }}
+                  className="rounded-xl bg-amber-500 px-6 py-2.5 text-sm font-bold text-white hover:bg-amber-600 disabled:opacity-40 transition"
+                >
+                  {promotionRunning
+                    ? (isArabic ? "جارٍ الترفيع..." : "Running…")
+                    : (isArabic ? "تشغيل الترفيع" : "Run Promotion")}
+                </button>
+              </div>
+            </div>
+
+            {/* Results */}
+            {promotionResult && (
+              <div className="space-y-4">
+                {promotionResult.alreadyRan ? (
+                  <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <p className="font-semibold text-slate-700">{isArabic ? "تم تشغيل الترفيع مسبقًا لهذه الجلسة." : "Promotion was already run for this session."}</p>
+                    <p className="mt-1 text-sm text-slate-500">{isArabic ? "لا يمكن تشغيل الترفيع مرتين للسنة الدراسية نفسها." : "Promotion cannot run twice for the same school year."}</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Summary pills */}
+                    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                      <h3 className="mb-4 text-base font-bold text-slate-900">{isArabic ? "ملخص النتائج" : "Promotion Summary"}</h3>
+                      <div className="flex flex-wrap gap-3">
+                        {[
+                          { label: isArabic ? "مرفّع" : "Promoted",    value: promotionResult.summary?.promoted,    color: "bg-emerald-100 text-emerald-700" },
+                          { label: isArabic ? "مشروط" : "Conditional", value: promotionResult.summary?.conditional, color: "bg-amber-100 text-amber-700" },
+                          { label: isArabic ? "متخرج" : "Graduated",   value: promotionResult.summary?.graduated,   color: "bg-indigo-100 text-indigo-700" },
+                          { label: isArabic ? "راسب" : "Repeated",     value: promotionResult.summary?.repeated,    color: "bg-rose-100 text-rose-700" },
+                          { label: isArabic ? "معلق" : "Pending",      value: promotionResult.summary?.pending,     color: "bg-slate-100 text-slate-600" },
+                        ].map(({ label, value, color }) => (
+                          <div key={label} className={`flex flex-col items-center rounded-2xl px-6 py-4 ${color}`}>
+                            <span className="text-2xl font-black">{value ?? 0}</span>
+                            <span className="mt-0.5 text-xs font-semibold uppercase tracking-wide">{label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Student records table */}
+                    {Array.isArray(promotionResult.records) && promotionResult.records.length > 0 && (
+                      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <h3 className="mb-4 text-base font-bold text-slate-900">{isArabic ? "تفاصيل الطلاب" : "Student Details"}</h3>
+                        <div className="overflow-hidden rounded-2xl border border-slate-100">
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full text-sm">
+                              <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
+                                <tr>
+                                  <th className="px-4 py-3 text-start">{isArabic ? "الطالب" : "Student"}</th>
+                                  <th className="px-4 py-3 text-center">{isArabic ? "من الصف" : "From"}</th>
+                                  <th className="px-4 py-3 text-center">{isArabic ? "إلى الصف" : "To"}</th>
+                                  <th className="px-4 py-3 text-center">{isArabic ? "النسبة" : "Score %"}</th>
+                                  <th className="px-4 py-3 text-center">{isArabic ? "القرار" : "Decision"}</th>
+                                  <th className="px-4 py-3 text-start">{isArabic ? "السبب" : "Reason"}</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-50">
+                                {promotionResult.records.map((r) => {
+                                  const decisionColor = {
+                                    PROMOTED:    'bg-emerald-100 text-emerald-700',
+                                    CONDITIONAL: 'bg-amber-100 text-amber-700',
+                                    GRADUATED:   'bg-indigo-100 text-indigo-700',
+                                    REPEATED:    'bg-rose-100 text-rose-700',
+                                    PENDING:     'bg-slate-100 text-slate-600',
+                                  }[r.decision] || 'bg-slate-100 text-slate-600';
+                                  return (
+                                    <tr key={r.studentId} className="hover:bg-slate-50/60">
+                                      <td className="px-4 py-3 font-semibold text-slate-800">#{r.studentId}</td>
+                                      <td className="px-4 py-3 text-center text-slate-500">{r.fromGradeLevel ?? '—'}</td>
+                                      <td className="px-4 py-3 text-center text-slate-500">{r.toGradeLevel ?? '—'}</td>
+                                      <td className="px-4 py-3 text-center">
+                                        {r.finalPercentage != null ? `${r.finalPercentage}%` : '—'}
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${decisionColor}`}>{r.decision}</span>
+                                      </td>
+                                      <td className="px-4 py-3 text-xs text-slate-400">{r.reason || '—'}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        {!loading && activeTab === TABS.STUDENTS && !showPromotePage && (
           <section className="space-y-4">
             <Modal open={studentModalOpen} onClose={() => { setStudentModalOpen(false); resetStudentForm(); }} title={studentForm.id ? t.organization.students.formTitle : (isArabic ? "إضافة طالب جديد" : "Add New Student")} maxWidth="max-w-lg">
               <form onSubmit={saveStudent} className="space-y-3">
-                <input name="name" value={studentForm.name} onChange={setField(setStudentForm)} placeholder={t.organization.students.name} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
+                <div className="flex gap-2">
+                  <input name="firstName" value={studentForm.firstName} onChange={setField(setStudentForm)} placeholder={isArabic ? "الاسم الأول" : "First Name"} className="h-11 flex-1 rounded-xl border border-slate-200 px-3" required />
+                  <input name="lastName" value={studentForm.lastName} onChange={setField(setStudentForm)} placeholder={isArabic ? "اسم العائلة" : "Last Name"} className="h-11 flex-1 rounded-xl border border-slate-200 px-3" required />
+                </div>
                 {!studentForm.id && (
                   <div className="flex overflow-hidden rounded-xl border border-slate-200">
                     <button type="button" onClick={() => setStudentEmailAuto(false)}
@@ -3367,9 +3905,20 @@ export default function OrganizationWorkspacePage() {
                   <h2 className="text-2xl font-black text-slate-900">{t.organization.students.listTitle}</h2>
                   <p className="mt-1 text-sm text-slate-600">{isArabic ? "قائمة الطلاب مع الحالة والروابط" : "Students with status, course, and quick actions"}</p>
                 </div>
-                <button type="button" onClick={() => { resetStudentForm(); setStudentModalOpen(true); }} className="rounded-full bg-purple-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-purple-700">
-                  {isArabic ? "+ إضافة طالب" : "+ Add Student"}
-                </button>
+                <div className="flex items-center gap-2">
+                  {isSchool && (
+                    <button
+                      type="button"
+                      onClick={() => { setShowPromotePage(true); setPromotionResult(null); }}
+                      className="rounded-full border border-amber-200 bg-amber-50 px-5 py-2.5 text-sm font-bold text-amber-700 transition hover:bg-amber-100"
+                    >
+                      {isArabic ? "ترفيع الطلاب" : "Promote Students"}
+                    </button>
+                  )}
+                  <button type="button" onClick={() => { resetStudentForm(); setStudentModalOpen(true); }} className="rounded-full bg-purple-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-purple-700">
+                    {isArabic ? "+ إضافة طالب" : "+ Add Student"}
+                  </button>
+                </div>
               </div>
 
               <div className="mt-5 flex flex-wrap items-end gap-3">
@@ -3503,7 +4052,7 @@ export default function OrganizationWorkspacePage() {
                                 ) : null}
                                 <button
                                   type="button"
-                                  onClick={() => { setStudentForm({ id: student.id, name: student.name || "", email: student.email || "", password: "", age: student.age || "", gender: student.gender || "MALE", address: student.address || "", dob: student.dob ? String(student.dob).slice(0, 10) : "", parentNationalId: "" }); setStudentModalOpen(true); }}
+                                  onClick={() => { const { firstName, lastName } = splitName(student.name); setStudentForm({ id: student.id, firstName, lastName, email: student.email || "", password: "", age: student.age || "", gender: student.gender || "MALE", address: student.address || "", dob: student.dob ? String(student.dob).slice(0, 10) : "", parentNationalId: "" }); setStudentModalOpen(true); }}
                                   className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
                                   title={t.organization.common.edit}
                                 >
@@ -3562,7 +4111,10 @@ export default function OrganizationWorkspacePage() {
             <Modal open={parentModalOpen} onClose={() => { setParentModalOpen(false); resetParentForm(); }} title={parentForm.id ? t.organization.parents.formTitle : (isArabic ? "إضافة ولي أمر جديد" : "Add New Parent")} maxWidth="max-w-lg">
               <form onSubmit={saveParent} className="space-y-3">
                 <p className="text-xs text-slate-500">{parentForm.id ? t.organization.parents.selectHint : t.organization.parents.createHint}</p>
-                <input name="name" value={parentForm.name} onChange={setField(setParentForm)} placeholder={t.organization.parents.name} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
+                <div className="flex gap-2">
+                  <input name="firstName" value={parentForm.firstName} onChange={setField(setParentForm)} placeholder={isArabic ? "الاسم الأول" : "First Name"} className="h-11 flex-1 rounded-xl border border-slate-200 px-3" required />
+                  <input name="lastName" value={parentForm.lastName} onChange={setField(setParentForm)} placeholder={isArabic ? "اسم العائلة" : "Last Name"} className="h-11 flex-1 rounded-xl border border-slate-200 px-3" required />
+                </div>
                 {!parentForm.id && (
                   <div className="flex overflow-hidden rounded-xl border border-slate-200">
                     <button type="button" onClick={() => setParentEmailAuto(false)}
@@ -3659,7 +4211,7 @@ export default function OrganizationWorkspacePage() {
                           <div className="flex gap-2">
                             <button
                               type="button"
-                              onClick={() => { setParentForm({ id: parent.id, name: parent.name || "", email: parent.email || "", password: "", address: parent.address || "" }); setParentModalOpen(true); }}
+                              onClick={() => { const { firstName, lastName } = splitName(parent.name); setParentForm({ id: parent.id, firstName, lastName, email: parent.email || "", password: "", address: parent.address || "" }); setParentModalOpen(true); }}
                               className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700"
                             >
                               {t.organization.common.edit}
@@ -3955,14 +4507,140 @@ export default function OrganizationWorkspacePage() {
                   </div>
                 )}
               </div>
+
+              {/* Compute Grades Panel */}
+              <div className="rounded-3xl border border-indigo-100 bg-indigo-50 p-5">
+                <div className="mb-3 flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-bold text-indigo-800">{isArabic ? "احتساب الدرجات النهائية" : "Compute Final Grades"}</p>
+                    <p className="text-sm text-indigo-600 mt-0.5">{isArabic ? "اختر فصلاً واحتسب الدرجات بناءً على مكونات التقييم." : "Select a term and compute weighted grades using assessment components."}</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <select
+                    value={computeTermId}
+                    onChange={(e) => { setComputeTermId(e.target.value); setComputeResult(null); setShowRankings(false); setComputedGrades([]); }}
+                    className="h-9 rounded-xl border border-indigo-200 bg-white px-3 text-sm"
+                  >
+                    <option value="">{isArabic ? "اختر فصلاً" : "Select a term"}</option>
+                    {academicYears.flatMap((y) => (y.terms || [])).concat(yearTerms).filter((t, i, arr) => arr.findIndex((x) => x.id === t.id) === i).map((t) => (
+                      <option key={t.id} value={t.id}>{t.name || `Term ${t.termNumber}`}</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={handleComputeGrades} disabled={actionLoading || !computeTermId} className="h-9 rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
+                    {isArabic ? "احتساب" : "Compute"}
+                  </button>
+                  <button type="button" onClick={handleShowRankings} disabled={rankingsLoading || !computeTermId} className="h-9 rounded-xl border border-indigo-200 bg-white px-4 text-sm font-bold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50">
+                    {rankingsLoading ? '...' : (isArabic ? "عرض الترتيب" : "Show Rankings")}
+                  </button>
+                </div>
+
+                {computeResult && (
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <div className="rounded-2xl bg-white px-4 py-2 text-center border border-indigo-100">
+                      <p className="text-lg font-black text-indigo-700">{computeResult.computed}</p>
+                      <p className="text-[10px] font-bold uppercase text-indigo-400">{isArabic ? 'محتسب' : 'Computed'}</p>
+                    </div>
+                    <div className="rounded-2xl bg-white px-4 py-2 text-center border border-indigo-100">
+                      <p className="text-lg font-black text-slate-700">{computeResult.total}</p>
+                      <p className="text-[10px] font-bold uppercase text-slate-400">{isArabic ? 'إجمالي' : 'Total'}</p>
+                    </div>
+                    {computeResult.errors?.length > 0 && (
+                      <div className="rounded-2xl bg-rose-50 px-4 py-2 text-center border border-rose-100">
+                        <p className="text-lg font-black text-rose-700">{computeResult.errors.length}</p>
+                        <p className="text-[10px] font-bold uppercase text-rose-400">{isArabic ? 'أخطاء' : 'Errors'}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Rankings table */}
+                {showRankings && rankings.length > 0 && (
+                  <div className="mt-4 overflow-hidden rounded-2xl border border-indigo-100 bg-white">
+                    <div className="flex items-center justify-between px-4 py-2 bg-indigo-50">
+                      <p className="text-xs font-black uppercase tracking-wider text-indigo-500">{isArabic ? "ترتيب الطلاب" : "Student Rankings"}</p>
+                      <button type="button" onClick={() => setShowRankings(false)} className="text-xs font-bold text-slate-400 hover:text-slate-600">✕</button>
+                    </div>
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
+                        <tr>
+                          <th className="px-4 py-2 text-center">#</th>
+                          <th className="px-4 py-2 text-start">{isArabic ? "الطالب" : "Student"}</th>
+                          <th className="px-4 py-2 text-center">{isArabic ? "المعدل" : "Average"}</th>
+                          <th className="px-4 py-2 text-center">{isArabic ? "التقدير" : "Grade"}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {rankings.map((r) => (
+                          <tr key={r.studentId} className="hover:bg-slate-50/60">
+                            <td className="px-4 py-2.5 text-center font-black text-slate-400">#{r.rank}</td>
+                            <td className="px-4 py-2.5 font-semibold text-slate-800">{r.studentName}</td>
+                            <td className="px-4 py-2.5 text-center font-bold text-indigo-700">{r.averageScore}%</td>
+                            <td className="px-4 py-2.5 text-center">
+                              {r.letterGrade ? (
+                                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-black text-indigo-700">{r.letterGrade}</span>
+                              ) : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Computed grades table */}
+                {computedGrades.length > 0 && (
+                  <div className="mt-4 overflow-hidden rounded-2xl border border-indigo-100 bg-white">
+                    <p className="px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-400 bg-slate-50">{isArabic ? "الدرجات المحتسبة" : "Computed Grades"}</p>
+                    <table className="min-w-full text-sm">
+                      <thead className="text-[11px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                        <tr>
+                          <th className="px-4 py-2 text-start">{isArabic ? "الطالب" : "Student"}</th>
+                          <th className="px-4 py-2 text-start">{isArabic ? "المادة" : "Subject"}</th>
+                          <th className="px-4 py-2 text-center">{isArabic ? "النسبة" : "Score"}</th>
+                          <th className="px-4 py-2 text-center">{isArabic ? "التقدير" : "Grade"}</th>
+                          <th className="px-4 py-2 text-center">{isArabic ? "الحالة" : "Status"}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {computedGrades.map((g) => (
+                          <tr key={g.id} className="hover:bg-slate-50/60">
+                            <td className="px-4 py-2.5 font-semibold text-slate-800">{g.studentName || `#${g.studentId}`}</td>
+                            <td className="px-4 py-2.5 text-slate-600">{g.subjectName || '—'}</td>
+                            <td className="px-4 py-2.5 text-center font-bold text-slate-800">{g.rawScore.toFixed(1)}%</td>
+                            <td className="px-4 py-2.5 text-center">
+                              {g.letterGrade ? <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-black text-indigo-700">{g.letterGrade}</span> : '—'}
+                            </td>
+                            <td className="px-4 py-2.5 text-center">
+                              <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${g.isPassed ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                                {g.isPassed ? (isArabic ? 'ناجح' : 'Passed') : (isArabic ? 'راسب' : 'Failed')}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
             </section>
           );
         })()}
 
+        {!loading && isSchool && activeTab === TABS.CALENDAR && (
+          <SchoolCalendar isArabic={isArabic} courses={courses} />
+        )}
+
+        {!loading && isSchool && activeTab === TABS.ATTENDANCE && (
+          <AttendanceTracker isArabic={isArabic} courses={courses} />
+        )}
+
         {!loading && isSchool && activeTab === TABS.SCHOOL && (
           <>
-          <div className="grid gap-6 lg:grid-cols-2">
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div>
+            {/* General Settings */}
+            {schoolSubTab === 'settings' && <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-bold text-slate-900">
@@ -3983,13 +4661,7 @@ export default function OrganizationWorkspacePage() {
                 </button>
               </div>
 
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    {isArabic ? "سن القبول" : "Entry Age"}
-                  </p>
-                  <p className="mt-1 text-lg font-bold text-slate-900">{schoolForm.entryGradeMinAge}</p>
-                </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-2xl bg-slate-50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     {isArabic ? "نسبة النجاح العامة" : "Overall Pass"}
@@ -4011,18 +4683,19 @@ export default function OrganizationWorkspacePage() {
                   </p>
                 </div>
               </div>
-            </section>
+            </section>}
 
-            <section className="rounded-3xl border border-teal-200 bg-white p-5 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
+            {/* Sessions */}
+            {schoolSubTab === 'sessions' && <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-5 flex items-center justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-bold text-slate-900">
-                    {isArabic ? "إعدادات الترفيع السنوي" : "Annual Promotion"}
+                    {isArabic ? "الجلسات الدراسية" : "Sessions"}
                   </h2>
-                  <p className="mt-2 text-sm text-slate-600">
+                  <p className="mt-1 text-sm text-slate-500">
                     {isArabic
-                      ? "إدارة السنوات الدراسية والفصول وتشغيل الترفيع بعد إغلاقها."
-                      : "Manage academic years, terms, and run promotion after closure."}
+                      ? "كل جلسة تحتوي على فصول دراسية. فعّل الجلسة والفصول يدويًا."
+                      : "Each session contains terms. Activate sessions and terms manually."}
                   </p>
                 </div>
                 <button
@@ -4035,107 +4708,402 @@ export default function OrganizationWorkspacePage() {
                   }}
                   className="shrink-0 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
                 >
-                  {isArabic ? "إدارة السنوات" : "Manage Years"}
+                  {isArabic ? "+ جلسة جديدة" : "+ New Session"}
                 </button>
               </div>
 
-              <div className="mt-5 space-y-3">
-                {academicYears.length === 0 ? (
-                  <p className="text-sm text-slate-500">
-                    {isArabic ? "لا توجد سنوات دراسية بعد." : "No academic years yet."}
-                  </p>
-                ) : academicYears.map((year) => (
-                  <button
-                    key={year.id}
-                    type="button"
-                    onClick={() => loadTermsForYear(year)}
-                    className={"flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition " + (selectedYear?.id === year.id ? "border-teal-600 bg-teal-50" : "border-slate-200 bg-white hover:border-teal-200 hover:bg-teal-50")}
-                  >
-                    <span className="font-semibold text-slate-800">{year.name}</span>
-                    <span className="text-xs text-slate-500">
-                      {year.isActive ? (isArabic ? "نشطة" : "Active") : (isArabic ? "غير نشطة" : "Inactive")}
-                    </span>
-                  </button>
-                ))}
+              {academicYears.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <CalendarDays size={36} className="mb-3 text-slate-300" />
+                  <p className="text-sm font-semibold text-slate-500">{isArabic ? "لا توجد جلسات بعد" : "No sessions yet"}</p>
+                  <p className="mt-1 text-xs text-slate-400">{isArabic ? "أنشئ جلستك الأولى للبدء" : "Create your first session to get started"}</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {academicYears.map((session) => {
+                    const isExpanded = selectedYear?.id === session.id;
+                    return (
+                      <div
+                        key={session.id}
+                        className={[
+                          "overflow-hidden rounded-2xl border transition-all",
+                          session.isActive
+                            ? "border-teal-200 bg-teal-50/50"
+                            : "border-slate-200 bg-white",
+                        ].join(" ")}
+                      >
+                        {/* Session header */}
+                        <div className="flex items-center gap-3 px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isExpanded) {
+                                setSelectedYear(null);
+                                setYearTerms([]);
+                              } else {
+                                loadTermsForYear(session);
+                              }
+                            }}
+                            className="flex flex-1 items-center gap-3 text-left"
+                          >
+                            <ChevronRight
+                              size={16}
+                              className={[
+                                "shrink-0 text-slate-400 transition-transform duration-200",
+                                isExpanded ? "rotate-90" : "",
+                              ].join(" ")}
+                            />
+                            <div className="min-w-0">
+                              <p className="font-semibold text-slate-900 truncate">{session.name}</p>
+                              <p className="text-xs text-slate-500">
+                                {String(session.startDate || "").slice(0, 10)} → {String(session.endDate || "").slice(0, 10)}
+                              </p>
+                            </div>
+                          </button>
+
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span className={[
+                              "rounded-full px-2.5 py-0.5 text-xs font-bold",
+                              session.isActive ? "bg-teal-100 text-teal-700" : "bg-slate-100 text-slate-500",
+                            ].join(" ")}>
+                              {session.isActive ? (isArabic ? "نشطة" : "Active") : (isArabic ? "غير نشطة" : "Inactive")}
+                            </span>
+                            {!session.isActive && (
+                              <button
+                                type="button"
+                                disabled={actionLoading}
+                                onClick={() => handleActivateSession(session.id)}
+                                className="rounded-xl bg-teal-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-teal-700 disabled:opacity-50 transition-colors"
+                              >
+                                {isArabic ? "تفعيل" : "Set Active"}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedYear(session);
+                                setYearWizardStep(2);
+                                setTermForm({ termNumber: (session.termCount || 0) + 1, name: "", startDate: "", endDate: "", changeReason: "" });
+                                setYearModal(true);
+                              }}
+                              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:border-teal-200 hover:text-teal-700 transition-colors"
+                            >
+                              {isArabic ? "+ فصل" : "+ Term"}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Terms panel */}
+                        {isExpanded && (
+                          <div className="border-t border-slate-200 px-4 pb-4 pt-3">
+                            {academicYearLoading ? (
+                              <p className="text-sm text-slate-400">{isArabic ? "جارٍ التحميل..." : "Loading..."}</p>
+                            ) : yearTerms.length === 0 ? (
+                              <p className="text-sm text-slate-400">{isArabic ? "لا توجد فصول في هذه الجلسة بعد." : "No terms in this session yet."}</p>
+                            ) : (
+                              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                {yearTerms.map((term) => (
+                                  <div
+                                    key={term.id}
+                                    className={[
+                                      "rounded-2xl border p-3",
+                                      term.status === "ACTIVE"
+                                        ? "border-green-200 bg-green-50"
+                                        : term.status === "CLOSED"
+                                        ? "border-amber-100 bg-amber-50"
+                                        : "border-slate-200 bg-white",
+                                    ].join(" ")}
+                                  >
+                                    <div className="flex items-start justify-between gap-2 mb-2">
+                                      <div className="min-w-0">
+                                        <p className="text-sm font-semibold text-slate-800 truncate">{term.name}</p>
+                                        <p className="text-xs text-slate-400">
+                                          {String(term.startDate).slice(0, 10)} → {String(term.endDate).slice(0, 10)}
+                                        </p>
+                                      </div>
+                                      <span className={"shrink-0 rounded-full px-2 py-0.5 text-xs font-bold " + termStatusColor(term.status)}>
+                                        {term.status}
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {term.status === "PLANNED" && (
+                                        <button
+                                          type="button"
+                                          disabled={actionLoading}
+                                          onClick={() => handleActivateTerm(term.id)}
+                                          className="rounded-lg bg-green-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+                                        >
+                                          {isArabic ? "تفعيل" : "Activate"}
+                                        </button>
+                                      )}
+                                      {term.status === "CLOSED" && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setReopenModal({ term, changeReason: "" })}
+                                          className="rounded-lg border border-amber-200 bg-white px-2.5 py-1 text-xs font-bold text-amber-700 hover:bg-amber-50 transition-colors"
+                                        >
+                                          {isArabic ? "إعادة فتح" : "Reopen"}
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditTermModal({ term, name: term.name, startDate: String(term.startDate).slice(0, 10), endDate: String(term.endDate).slice(0, 10), changeReason: "" })}
+                                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-600 hover:border-slate-300 transition-colors"
+                                      >
+                                        {isArabic ? "تعديل" : "Edit"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>}
+
+            {/* Assessment Components */}
+            {schoolSubTab === 'components' && <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">{isArabic ? "مكونات التقييم" : "Assessment Components"}</h2>
+                  <p className="mt-0.5 text-sm text-slate-500">{isArabic ? "وزّع درجات كل مادة (نصفي، نهائي، اختبارات...)" : "Define weighted components per subject (midterm, final, quizzes…)"}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setComponentModal({ open: true, editing: null, name: '', weight: '', maxScore: '100', gradeId: componentFilter.gradeId, subjectId: componentFilter.subjectId, termId: componentFilter.termId });
+                    setComponentModalSubjects(componentFilterSubjects);
+                  }}
+                  className="shrink-0 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                >
+                  {isArabic ? "+ إضافة" : "+ Add"}
+                </button>
               </div>
 
-              {selectedYear && (
-                <div className="mt-5 rounded-2xl border border-slate-200 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-slate-900">{selectedYear.name}</p>
-                      <p className="text-xs text-slate-500">
-                        {yearTerms.length}/{selectedYear.numberOfTerms} {isArabic ? "فصل" : "term(s)"}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setYearWizardStep(2);
-                        setTermForm({ termNumber: yearTerms.length + 1, name: "", startDate: "", endDate: "", changeReason: "" });
-                        setYearModal(true);
-                      }}
-                      disabled={yearTerms.length >= Number(selectedYear.numberOfTerms || 0)}
-                      className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-semibold text-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isArabic ? "+ إضافة فصل" : "+ Add Term"}
-                    </button>
+              {/* Filter row: Grade → Subject → Term */}
+              <div className="mb-3 flex flex-wrap gap-2">
+                {/* 1. Grade */}
+                <select
+                  value={componentFilter.gradeId}
+                  onChange={(e) => {
+                    const gradeId = e.target.value;
+                    setComponentFilter((p) => ({ ...p, gradeId, subjectId: '' }));
+                    loadSubjectsForGrade(gradeId, setComponentFilterSubjects);
+                    loadComponents('', componentFilter.termId);
+                  }}
+                  className="h-9 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm"
+                >
+                  <option value="">{isArabic ? "كل الصفوف" : "All grades"}</option>
+                  {courses.map((c) => <option key={c.id} value={c.id}>{formatGradeName(c, isSchool, isArabic) || c.name}</option>)}
+                </select>
+
+                {/* 2. Subject (enabled only after grade is selected) */}
+                <select
+                  value={componentFilter.subjectId}
+                  disabled={!componentFilter.gradeId}
+                  onChange={(e) => {
+                    const subjectId = e.target.value;
+                    setComponentFilter((p) => ({ ...p, subjectId }));
+                    loadComponents(subjectId, componentFilter.termId);
+                  }}
+                  className="h-9 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm disabled:opacity-40"
+                >
+                  <option value="">{componentFilter.gradeId ? (isArabic ? "كل المواد" : "All subjects") : (isArabic ? "اختر صفاً أولاً" : "Select a grade first")}</option>
+                  {componentFilterSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+
+                {/* 3. Term */}
+                <select
+                  value={componentFilter.termId}
+                  onChange={(e) => { const v = e.target.value; setComponentFilter((p) => ({ ...p, termId: v })); loadComponents(componentFilter.subjectId, v); }}
+                  className="h-9 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm"
+                >
+                  <option value="">{isArabic ? "كل الفصول" : "All terms"}</option>
+                  {yearTerms.map((t) => <option key={t.id} value={t.id}>{t.name || `Term ${t.termNumber}`}</option>)}
+                </select>
+
+                <button type="button" onClick={() => loadComponents(componentFilter.subjectId, componentFilter.termId)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-600 hover:border-slate-300">
+                  {isArabic ? "بحث" : "Search"}
+                </button>
+              </div>
+
+              {componentsLoading ? (
+                <div className="flex items-center gap-2 py-8 text-slate-400">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-300 border-t-indigo-600" />
+                  <span className="text-sm">{isArabic ? "جارٍ التحميل..." : "Loading..."}</span>
+                </div>
+              ) : assessmentComponents.length === 0 ? (
+                <p className="py-6 text-center text-sm text-slate-400">{isArabic ? "لا توجد مكونات. أضف مكونًا أولاً." : "No components yet. Click + Add to create one."}</p>
+              ) : (
+                <div className="overflow-hidden rounded-2xl border border-slate-100">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
+                      <tr>
+                        <th className="px-4 py-2 text-start">{isArabic ? "الاسم" : "Name"}</th>
+                        <th className="px-4 py-2 text-center">{isArabic ? "الوزن" : "Weight"}</th>
+                        <th className="px-4 py-2 text-center">{isArabic ? "الدرجة القصوى" : "Max Score"}</th>
+                        <th className="px-4 py-2" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {assessmentComponents.map((comp) => {
+                        const subjectInfo = comp.subjectId ? subjectInfoMap[comp.subjectId] : null;
+                        const subjectName = subjectInfo?.name;
+                        const gradeName = subjectInfo?.gradeId ? (formatGradeName(courses.find((c) => c.id === subjectInfo.gradeId), isSchool, isArabic) || courses.find((c) => c.id === subjectInfo.gradeId)?.name) : null;
+                        const termName = yearTerms.find((t) => t.id === comp.termId)?.name;
+                        return (
+                          <tr key={comp.id} className="hover:bg-slate-50/60">
+                            <td className="px-4 py-2.5 font-semibold text-slate-800">
+                              {comp.name}
+                              {(gradeName || subjectName || termName) && (
+                                <span className="ml-2 text-[10px] font-normal text-slate-400">
+                                  {[gradeName, subjectName, termName].filter(Boolean).join(' · ')}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2.5 text-center">
+                              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-700">{comp.weight}%</span>
+                            </td>
+                            <td className="px-4 py-2.5 text-center text-slate-500">{comp.maxScore}</td>
+                            <td className="px-4 py-2.5 text-end">
+                              <div className="flex items-center justify-end gap-1">
+                                <button type="button" onClick={async () => {
+                                  const gradeId = subjectInfo?.gradeId ? String(subjectInfo.gradeId) : '';
+                                  let subjects = gradeId ? (componentFilterSubjects.length > 0 && componentFilter.gradeId === gradeId ? componentFilterSubjects : await fetchCourseSubjects(gradeId).catch(() => [])) : [];
+                                  if (gradeId && subjects.length > 0) {
+                                    setSubjectInfoMap((prev) => { const next = { ...prev }; subjects.forEach((s) => { next[s.id] = { name: s.name, gradeId }; }); return next; });
+                                  }
+                                  setComponentModalSubjects(subjects);
+                                  setComponentModal({ open: true, editing: comp, name: comp.name, weight: String(comp.weight), maxScore: String(comp.maxScore), gradeId, subjectId: comp.subjectId ? String(comp.subjectId) : '', termId: comp.termId ? String(comp.termId) : '' });
+                                }} className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:border-indigo-200 hover:text-indigo-600">
+                                  <Pencil size={12} />
+                                </button>
+                                <button type="button" onClick={() => handleDeleteComponent(comp.id)} className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:border-rose-200 hover:text-rose-600">
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>}
+
+            {/* Grade Scale (optional) */}
+            {schoolSubTab === 'gradescale' && <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">{isArabic ? "سلم التقدير (اختياري)" : "Grade Scale (Optional)"}</h2>
+                  <p className="mt-0.5 text-sm text-slate-500">{isArabic ? "حوّل النسب إلى تقديرات حرفية (A, B, C…). يمكن تعطيله." : "Convert percentages to letter grades (A, B, C…). Completely optional."}</p>
+                </div>
+                <div
+                  onClick={() => {
+                    if (gradeScaleEnabled) {
+                      if (gradeScale) {
+                        // Only call the API if a scale was actually saved
+                        handleDeleteGradeScale();
+                      } else {
+                        // Toggled on but never saved — just reset local state
+                        setGradeScaleEnabled(false);
+                        setGradeScaleRanges([]);
+                      }
+                    } else {
+                      setGradeScaleEnabled(true);
+                      if (gradeScaleRanges.length === 0) {
+                        setGradeScaleRanges([
+                          { grade: 'A+', minScore: 95, maxScore: 100, gpaPoints: 4.0, isPassing: true },
+                          { grade: 'A',  minScore: 85, maxScore: 94,  gpaPoints: 3.7, isPassing: true },
+                          { grade: 'B',  minScore: 75, maxScore: 84,  gpaPoints: 3.0, isPassing: true },
+                          { grade: 'C',  minScore: 60, maxScore: 74,  gpaPoints: 2.0, isPassing: true },
+                          { grade: 'F',  minScore: 0,  maxScore: 59,  gpaPoints: 0.0, isPassing: false },
+                        ]);
+                      }
+                    }
+                  }}
+                  className="flex cursor-pointer items-center gap-2"
+                >
+                  <span className="text-sm font-semibold text-slate-600">{gradeScaleEnabled ? (isArabic ? "مفعّل" : "On") : (isArabic ? "معطّل" : "Off")}</span>
+                  <div className={`relative h-6 w-11 rounded-full transition-colors ${gradeScaleEnabled ? 'bg-indigo-600' : 'bg-slate-200'}`}>
+                    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${gradeScaleEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
                   </div>
-                  <div className="mt-4">
-                    {academicYearLoading ? (
-                      <p className="text-sm text-slate-500">{isArabic ? "جارٍ التحميل..." : "Loading..."}</p>
-                    ) : yearTerms.length === 0 ? (
-                      <p className="text-sm text-slate-500">{isArabic ? "لا توجد فصول لهذه السنة." : "No terms for this year."}</p>
-                    ) : (
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {yearTerms.map((term) => (
-                          <div key={term.id} className="rounded-2xl border border-slate-200 p-4">
-                            <div className="flex items-start justify-between gap-2">
-                              <span className="font-semibold text-slate-800">{term.name}</span>
-                              <span className={"rounded-full px-2 py-0.5 text-xs font-bold " + termStatusColor(term.status)}>{term.status}</span>
-                            </div>
-                            <p className="mt-1.5 text-xs text-slate-500">
-                              {String(term.startDate).slice(0, 10)} → {String(term.endDate).slice(0, 10)}
-                            </p>
-                          </div>
+                </div>
+              </div>
+
+              {gradeScaleLoading && <p className="text-sm text-slate-400">{isArabic ? "جارٍ التحميل..." : "Loading..."}</p>}
+
+              {gradeScaleEnabled && !gradeScaleLoading && (
+                <div className="space-y-3">
+                  <input
+                    value={gradeScaleName}
+                    onChange={(e) => setGradeScaleName(e.target.value)}
+                    placeholder={isArabic ? "اسم السلم" : "Scale name"}
+                    className="h-9 w-full max-w-xs rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm"
+                  />
+                  <div className="overflow-hidden rounded-2xl border border-slate-100">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
+                        <tr>
+                          <th className="px-3 py-2 text-start">{isArabic ? "التقدير" : "Grade"}</th>
+                          <th className="px-3 py-2 text-center">{isArabic ? "من %" : "Min %"}</th>
+                          <th className="px-3 py-2 text-center">{isArabic ? "إلى %" : "Max %"}</th>
+                          <th className="px-3 py-2 text-center">GPA</th>
+                          <th className="px-3 py-2 text-center">{isArabic ? "ناجح" : "Pass"}</th>
+                          <th className="px-3 py-2" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {gradeScaleRanges.map((r, i) => (
+                          <tr key={i} className="hover:bg-slate-50/60">
+                            <td className="px-3 py-2">
+                              <input value={r.grade} onChange={(e) => setGradeScaleRanges((prev) => prev.map((x, j) => j === i ? { ...x, grade: e.target.value } : x))} className="h-8 w-16 rounded-lg border border-slate-200 px-2 text-sm font-bold" />
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <input type="number" min="0" max="100" value={r.minScore} onChange={(e) => setGradeScaleRanges((prev) => prev.map((x, j) => j === i ? { ...x, minScore: Number(e.target.value) } : x))} className="h-8 w-20 rounded-lg border border-slate-200 px-2 text-sm text-center" />
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <input type="number" min="0" max="100" value={r.maxScore} onChange={(e) => setGradeScaleRanges((prev) => prev.map((x, j) => j === i ? { ...x, maxScore: Number(e.target.value) } : x))} className="h-8 w-20 rounded-lg border border-slate-200 px-2 text-sm text-center" />
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <input type="number" min="0" max="4" step="0.1" value={r.gpaPoints ?? ''} onChange={(e) => setGradeScaleRanges((prev) => prev.map((x, j) => j === i ? { ...x, gpaPoints: e.target.value === '' ? null : Number(e.target.value) } : x))} className="h-8 w-16 rounded-lg border border-slate-200 px-2 text-sm text-center" />
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <input type="checkbox" checked={r.isPassing} onChange={(e) => setGradeScaleRanges((prev) => prev.map((x, j) => j === i ? { ...x, isPassing: e.target.checked } : x))} className="h-4 w-4 accent-emerald-500" />
+                            </td>
+                            <td className="px-3 py-2 text-end">
+                              <button type="button" onClick={() => setGradeScaleRanges((prev) => prev.filter((_, j) => j !== i))} className="rounded-lg border border-slate-200 p-1 text-rose-400 hover:border-rose-200 hover:text-rose-600">
+                                <Trash2 size={12} />
+                              </button>
+                            </td>
+                          </tr>
                         ))}
-                      </div>
-                    )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setGradeScaleRanges((prev) => [...prev, { grade: '', minScore: 0, maxScore: 100, gpaPoints: null, isPassing: true }])} className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:border-slate-300">
+                      + {isArabic ? "إضافة نطاق" : "Add Range"}
+                    </button>
+                    <button type="button" onClick={handleSaveGradeScale} disabled={actionLoading} className="rounded-xl bg-indigo-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
+                      {isArabic ? "حفظ السلم" : "Save Scale"}
+                    </button>
                   </div>
                 </div>
               )}
-
-              <div className="mt-5 rounded-2xl border border-rose-100 bg-rose-50 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-rose-800">{isArabic ? "تشغيل الترفيع السنوي" : "Run Annual Promotion"}</p>
-                    <p className="text-xs text-rose-700">
-                      {isArabic
-                        ? "يعمل بعد إغلاق كل الفصول وإدخال الدرجات."
-                        : "Available after all terms are closed and marks are entered."}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={confirmRunPromotionAction}
-                    disabled={actionLoading}
-                    className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
-                  >
-                    {isArabic ? "تشغيل" : "Run"}
-                  </button>
-                </div>
-              </div>
-            </section>
+            </section>}
 
           </div>
 
           <Modal open={schoolSettingsModalOpen} onClose={() => setSchoolSettingsModalOpen(false)} title={isArabic ? "إعدادات المدرسة" : "School Settings"} maxWidth="max-w-lg">
             <form onSubmit={async (e) => { await saveSchoolSettingsAction(e); setSchoolSettingsModalOpen(false); }} className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="mb-1.5 block text-sm font-semibold text-slate-700">{isArabic ? "الحد الأدنى لسن القبول" : "Min Entry Age (Grade 1)"}</span>
-                  <input name="entryGradeMinAge" type="number" min="4" max="10" value={schoolForm.entryGradeMinAge} onChange={setField(setSchoolForm)} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm focus:border-blue-400 focus:bg-white focus:outline-none" />
-                </label>
                 <label className="block">
                   <span className="mb-1.5 block text-sm font-semibold text-slate-700">{isArabic ? "نسبة النجاح الإجمالية" : "Overall Pass Threshold"}</span>
                   <div className="flex items-center gap-2">
@@ -4157,9 +5125,98 @@ export default function OrganizationWorkspacePage() {
                   </div>
                 </label>
               </div>
+
+              {/* Extended Promotion Rules */}
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <p className="mb-3 text-xs font-black uppercase tracking-wider text-slate-500">{isArabic ? "قواعد الترفيع الموسعة" : "Extended Promotion Rules"}</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-1.5 block text-sm font-semibold text-slate-700">{isArabic ? "أقصى مواد راسبة مسموحة" : "Max Failed Subjects"}</span>
+                    <input name="maxFailedSubjects" type="number" min="0" max="20" value={schoolForm.maxFailedSubjects} onChange={setField(setSchoolForm)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm" />
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-3 pt-5">
+                    <input
+                      type="checkbox"
+                      checked={schoolForm.allowConditionalPromotion}
+                      onChange={(e) => setSchoolForm((f) => ({ ...f, allowConditionalPromotion: e.target.checked }))}
+                      className="mt-0.5 h-4 w-4 accent-amber-500"
+                    />
+                    <span className="block text-sm font-semibold text-slate-800">{isArabic ? "السماح بالترفيع المشروط" : "Allow Conditional Promotion"}</span>
+                  </label>
+                  {schoolForm.allowConditionalPromotion && (
+                    <label className="block sm:col-span-2">
+                      <span className="mb-1.5 block text-sm font-semibold text-slate-700">{isArabic ? "أقصى مواد راسبة للترفيع المشروط" : "Max Failed for Conditional"}</span>
+                      <input name="conditionalMaxFailed" type="number" min="1" max="10" value={schoolForm.conditionalMaxFailed} onChange={setField(setSchoolForm)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm" />
+                    </label>
+                  )}
+                </div>
+              </div>
+
               <div className="mt-4 flex items-center justify-end gap-2">
                 <button type="button" onClick={() => setSchoolSettingsModalOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm">{isArabic ? "إلغاء" : "Cancel"}</button>
                 <button type="submit" className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">{isArabic ? "حفظ" : "Save"}</button>
+              </div>
+            </form>
+          </Modal>
+
+          {/* Assessment Component Modal */}
+          <Modal open={componentModal.open} onClose={() => { setComponentModal((p) => ({ ...p, open: false })); setComponentModalSubjects([]); }} title={componentModal.editing ? (isArabic ? "تعديل مكون" : "Edit Component") : (isArabic ? "إضافة مكون تقييم" : "Add Assessment Component")} maxWidth="max-w-md">
+            <form onSubmit={handleSaveComponent} className="space-y-3">
+              <label className="block">
+                <span className="mb-1 block text-sm font-semibold text-slate-700">{isArabic ? "الاسم" : "Name"}</span>
+                <input required value={componentModal.name} onChange={(e) => setComponentModal((p) => ({ ...p, name: e.target.value }))} placeholder={isArabic ? "مثال: الاختبار النهائي" : "e.g. Final Exam"} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold text-slate-700">{isArabic ? "الوزن %" : "Weight %"}</span>
+                  <input required type="number" min="0.01" max="100" step="0.01" value={componentModal.weight} onChange={(e) => setComponentModal((p) => ({ ...p, weight: e.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold text-slate-700">{isArabic ? "الدرجة القصوى" : "Max Score"}</span>
+                  <input type="number" min="1" value={componentModal.maxScore} onChange={(e) => setComponentModal((p) => ({ ...p, maxScore: e.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                </label>
+              </div>
+
+              {/* Grade → Subject cascade */}
+              <label className="block">
+                <span className="mb-1 block text-sm font-semibold text-slate-700">{isArabic ? "الصف (اختياري)" : "Grade (optional)"}</span>
+                <select
+                  value={componentModal.gradeId}
+                  onChange={(e) => {
+                    const gradeId = e.target.value;
+                    setComponentModal((p) => ({ ...p, gradeId, subjectId: '' }));
+                    loadSubjectsForGrade(gradeId, setComponentModalSubjects);
+                  }}
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                >
+                  <option value="">{isArabic ? "لا يخص صفاً بعينه" : "Not specific to a grade"}</option>
+                  {courses.map((c) => <option key={c.id} value={c.id}>{formatGradeName(c, isSchool, isArabic) || c.name}</option>)}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-sm font-semibold text-slate-700">{isArabic ? "المادة (اختياري)" : "Subject (optional)"}</span>
+                <select
+                  value={componentModal.subjectId}
+                  disabled={!componentModal.gradeId}
+                  onChange={(e) => setComponentModal((p) => ({ ...p, subjectId: e.target.value }))}
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm disabled:opacity-40"
+                >
+                  <option value="">{componentModal.gradeId ? (isArabic ? "لا يخص مادة بعينها" : "Not specific to a subject") : (isArabic ? "اختر صفاً أولاً" : "Select a grade first")}</option>
+                  {componentModalSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-sm font-semibold text-slate-700">{isArabic ? "الفصل (اختياري)" : "Term (optional)"}</span>
+                <select value={componentModal.termId} onChange={(e) => setComponentModal((p) => ({ ...p, termId: e.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
+                  <option value="">{isArabic ? "لا يخص فصلاً بعينه" : "Not specific to a term"}</option>
+                  {yearTerms.map((t) => <option key={t.id} value={t.id}>{t.name || `Term ${t.termNumber}`}</option>)}
+                </select>
+              </label>
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={() => { setComponentModal((p) => ({ ...p, open: false })); setComponentModalSubjects([]); }} className="flex-1 rounded-xl border border-slate-200 py-2 text-sm">{isArabic ? "إلغاء" : "Cancel"}</button>
+                <button type="submit" disabled={actionLoading} className="flex-1 rounded-xl bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">{isArabic ? "حفظ" : "Save"}</button>
               </div>
             </form>
           </Modal>
@@ -4241,14 +5298,20 @@ export default function OrganizationWorkspacePage() {
           </Modal>
 
           {/* Edit Term Modal */}
-          {editTermModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-              <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-5 shadow-xl">
-                <h3 className="text-lg font-bold text-slate-900">{isArabic ? "تعديل الفصل" : "Edit Term"}</h3>
+          <Modal
+            open={Boolean(editTermModal)}
+            onClose={() => setEditTermModal(null)}
+            title={isArabic ? "تعديل الفصل" : "Edit Term"}
+            maxWidth="max-w-md"
+          >
+            {editTermModal && (
+              <>
                 {editTermModal.term.status === "ACTIVE" && (
-                  <p className="mt-1 text-xs text-amber-600">{isArabic ? "الفصل نشط — يمكن تمديد تاريخ النهاية فقط" : "Term is ACTIVE — only end date extension allowed"}</p>
+                  <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    {isArabic ? "الفصل نشط — يمكن تمديد تاريخ النهاية فقط" : "Term is ACTIVE — only end date extension allowed"}
+                  </p>
                 )}
-                <form onSubmit={handleUpdateTerm} className="mt-4 grid gap-3">
+                <form onSubmit={handleUpdateTerm} className="grid gap-3">
                   {editTermModal.term.status === "PLANNED" && (
                     <>
                       <input placeholder={isArabic ? "الاسم" : "Name"} value={editTermModal.name} onChange={(e) => setEditTermModal((m) => ({ ...m, name: e.target.value }))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
@@ -4266,26 +5329,33 @@ export default function OrganizationWorkspacePage() {
                     <button type="button" onClick={() => setEditTermModal(null)} className="flex-1 rounded-xl border border-slate-200 py-2 text-sm text-slate-600">{isArabic ? "إلغاء" : "Cancel"}</button>
                   </div>
                 </form>
-              </div>
-            </div>
-          )}
+              </>
+            )}
+          </Modal>
 
           {/* Reopen Term Modal */}
-          {reopenModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-              <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-5 shadow-xl">
-                <h3 className="text-lg font-bold text-slate-900">{isArabic ? "إعادة فتح الفصل" : "Reopen Term"}</h3>
-                <p className="mt-1 text-sm text-slate-600">{reopenModal.term.name} — {isArabic ? "سيتحول من مغلق إلى نشط" : "will change from CLOSED to ACTIVE"}</p>
-                <form onSubmit={handleReopenTerm} className="mt-4 grid gap-3">
+          <Modal
+            open={Boolean(reopenModal)}
+            onClose={() => setReopenModal(null)}
+            title={isArabic ? "إعادة فتح الفصل" : "Reopen Term"}
+            maxWidth="max-w-md"
+          >
+            {reopenModal && (
+              <>
+                <p className="mb-3 text-sm text-slate-600">
+                  <span className="font-semibold">{reopenModal.term.name}</span>
+                  {" — "}{isArabic ? "سيتحول من مغلق إلى نشط" : "will change from CLOSED to ACTIVE"}
+                </p>
+                <form onSubmit={handleReopenTerm} className="grid gap-3">
                   <textarea required rows={2} placeholder={isArabic ? "سبب إعادة الفتح (مطلوب)" : "Reason for reopening (required)"} value={reopenModal.changeReason} onChange={(e) => setReopenModal((m) => ({ ...m, changeReason: e.target.value }))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
                   <div className="flex gap-2">
                     <button type="submit" disabled={actionLoading} className="flex-1 rounded-xl bg-amber-500 py-2 text-sm font-semibold text-slate-900">{isArabic ? "إعادة فتح" : "Reopen"}</button>
                     <button type="button" onClick={() => setReopenModal(null)} className="flex-1 rounded-xl border border-slate-200 py-2 text-sm text-slate-600">{isArabic ? "إلغاء" : "Cancel"}</button>
                   </div>
                 </form>
-              </div>
-            </div>
-          )}
+              </>
+            )}
+          </Modal>
           </>
         )}
 
@@ -4445,6 +5515,26 @@ export default function OrganizationWorkspacePage() {
           </div>
         </div>
       )}
+
+      {!loading && (
+        <OrgOnboardingWizard
+          orgKey={orgKey}
+          orgType={organizationType}
+          academicYears={academicYears}
+          createAcademicYear={createAcademicYear}
+          createTerm={createTerm}
+          setActiveTab={setActiveTab}
+          forceOpen={wizardOpen}
+          hasTerm={yearTerms.length > 0}
+          onComplete={() => {
+            setWizardOpen(false);
+            if (isSchool) {
+              fetchAcademicYears().then(setAcademicYears).catch(() => {});
+            }
+          }}
+        />
+      )}
+      <OrgAIChat isArabic={isArabic} isSchool={isSchool} />
     </main>
   );
 };

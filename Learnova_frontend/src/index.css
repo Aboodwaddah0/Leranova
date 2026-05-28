@@ -135,7 +135,6 @@ html { scroll-behavior: smooth; }
 .auth-btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(99,102,241,.45); }
 .auth-btn-primary:active:not(:disabled) { transform: translateY(0); }
 .auth-btn-primary:disabled { opacity: .6; cursor: not-allowed; }
-
 :root {
   --surface: #f7f9fb;
   --surface-2: #eef2f6;

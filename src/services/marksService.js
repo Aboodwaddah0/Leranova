@@ -1,5 +1,6 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
+import { createNotification } from './notificationService.js';
 
 const markInclude = {
 	student: {
@@ -177,6 +178,14 @@ export const createMark = async (teacherId, data) => {
 		},
 		include: markInclude,
 	});
+
+	createNotification({
+		userId: mark.student.user.id,
+		content: `Your mark for "${mark.course.name}" has been recorded: ${mark.Numbers}/${mark.OutOf}`,
+		type: 'MARK',
+		url: '/student/marks',
+	}).catch(() => {});
+
 	return serializeMark(mark);
 };
 

@@ -235,6 +235,11 @@ export const updateAcademicYear = async (yearId, payload) => {
   return data?.data || null;
 };
 
+export const activateSession = async (yearId) => {
+  const { data } = await api.post(`/academic-years/${yearId}/activate`);
+  return data?.data || null;
+};
+
 // ── Terms ───────────────────────────────────────────────────────────────────
 export const fetchTerms = async (yearId) => {
   const { data } = await api.get(`/academic-years/${yearId}/terms`);
@@ -246,6 +251,11 @@ export const createTerm = async (yearId, payload) => {
   return data?.data || null;
 };
 
+export const activateTermManually = async (yearId, termId) => {
+  const { data } = await api.post(`/academic-years/${yearId}/terms/${termId}/activate`);
+  return data?.data || null;
+};
+
 export const updateTerm = async (yearId, termId, payload) => {
   const { data } = await api.patch(`/academic-years/${yearId}/terms/${termId}`, payload);
   return data?.data || null;
@@ -254,4 +264,58 @@ export const updateTerm = async (yearId, termId, payload) => {
 export const reopenTerm = async (yearId, termId, changeReason) => {
   const { data } = await api.post(`/academic-years/${yearId}/terms/${termId}/reopen`, { changeReason });
   return data?.data || null;
+};
+
+// ── Assessment Components ────────────────────────────────────────────────────
+export const fetchAssessmentComponents = async (params = {}) => {
+  const query = buildQueryString(params);
+  const { data } = await api.get(`/assessment-components${query}`);
+  return data?.data || [];
+};
+
+export const createAssessmentComponent = async (payload) => {
+  const { data } = await api.post('/assessment-components', payload);
+  return data?.data || null;
+};
+
+export const updateAssessmentComponent = async (id, payload) => {
+  const { data } = await api.patch(`/assessment-components/${id}`, payload);
+  return data?.data || null;
+};
+
+export const deleteAssessmentComponent = async (id) => {
+  await api.delete(`/assessment-components/${id}`);
+};
+
+// ── Grade Scale ──────────────────────────────────────────────────────────────
+export const fetchGradeScale = async () => {
+  const { data } = await api.get('/grade-scale');
+  return data?.data || null;
+};
+
+export const upsertGradeScale = async (payload) => {
+  const { data } = await api.put('/grade-scale', payload);
+  return data?.data || null;
+};
+
+export const deleteGradeScale = async () => {
+  await api.delete('/grade-scale');
+};
+
+// ── Computed Grades ──────────────────────────────────────────────────────────
+export const computeGrades = async (termId) => {
+  const { data } = await api.post('/computed-grades/compute', { termId });
+  return data?.data || null;
+};
+
+export const fetchComputedGrades = async (params = {}) => {
+  const query = buildQueryString(params);
+  const { data } = await api.get(`/computed-grades${query}`);
+  return data?.data || [];
+};
+
+export const fetchGradeRankings = async (params = {}) => {
+  const query = buildQueryString(params);
+  const { data } = await api.get(`/computed-grades/rankings${query}`);
+  return data?.data || [];
 };

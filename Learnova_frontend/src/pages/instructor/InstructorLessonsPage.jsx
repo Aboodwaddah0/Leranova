@@ -262,6 +262,8 @@ export default function InstructorLessonsPage() {
   const [quizGenerating, setQuizGenerating] = useState(false);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [showAddQuestionModal, setShowAddQuestionModal] = useState(false);
+  const [showPeriodModal, setShowPeriodModal] = useState(false);
+  const [periodForm, setPeriodForm] = useState({ availableFrom: '', availableTo: '' });
   
   const [generateForm, setGenerateForm] = useState({ numMCQ: 5, numTrueFalse: 3, numShortAnswer: 2, difficulty: 'MEDIUM', notes: '', lang: '' });
   const [addQuestionForm, setAddQuestionForm] = useState({ type: 'MULTIPLE_CHOICE', question: '', options: ['', '', '', ''], correctAnswer: 0, expectedAnswer: '', explanation: '' });
@@ -1320,6 +1322,16 @@ export default function InstructorLessonsPage() {
                       className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${quiz.isPublished ? 'border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}>
                       {quiz.isPublished ? (isArabic ? 'إلغاء النشر' : 'Unpublish') : (isArabic ? 'نشر' : 'Publish')}
                     </button>
+                    <button type="button" onClick={async () => {
+                      const subjectId = getSubjectId();
+                      try {
+                        const updated = await updateLessonQuiz(subjectId, selectedLessonId, quiz.id, { isHidden: !quiz.isHidden });
+                        setQuiz(updated);
+                      } catch (err) { setError(safeError(err)); }
+                    }}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${quiz.isHidden ? 'border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200' : 'border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}>
+                      {quiz.isHidden ? (isArabic ? '👁 إظهار' : '👁 Show') : (isArabic ? '🙈 إخفاء' : '🙈 Hide')}
+                    </button>
                     <button type="button" onClick={onDeleteQuiz}
                       className="rounded-xl border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-50">
                       {isArabic ? 'حذف' : 'Delete'}
@@ -1356,6 +1368,18 @@ export default function InstructorLessonsPage() {
                     <span>❓ {isArabic ? 'الأسئلة:' : 'Questions:'} {(quiz.questions || []).length}</span>
                   </div>
 
+                  {/* Active period badge */}
+                  {(quiz.availableFrom || quiz.availableTo) && (
+                    <div className="flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700">
+                      <span>⏰</span>
+                      <span>
+                        {quiz.availableFrom ? new Date(quiz.availableFrom).toLocaleString(isArabic ? 'ar-SA' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '∞'}
+                        {' → '}
+                        {quiz.availableTo ? new Date(quiz.availableTo).toLocaleString(isArabic ? 'ar-SA' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '∞'}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Action buttons */}
                   <div className="flex flex-wrap gap-2">
                     <button type="button" onClick={() => { setGenerateForm((p) => ({ ...p, lang: quizViewLang })); setShowGenerateModal(true); }} disabled={quizGenerating}
@@ -1365,6 +1389,16 @@ export default function InstructorLessonsPage() {
                     <button type="button" onClick={() => setShowAddQuestionModal(true)}
                       className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
                       {isArabic ? '+ إضافة سؤال يدوياً' : '+ Add Question Manually'}
+                    </button>
+                    <button type="button" onClick={() => {
+                      setPeriodForm({
+                        availableFrom: quiz.availableFrom ? new Date(quiz.availableFrom).toISOString().slice(0,16) : '',
+                        availableTo: quiz.availableTo ? new Date(quiz.availableTo).toISOString().slice(0,16) : '',
+                      });
+                      setShowPeriodModal(true);
+                    }}
+                      className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-700 hover:bg-amber-100">
+                      ⏰ {isArabic ? 'تحديد وقت الاختبار' : 'Set Quiz Time'}
                     </button>
                   </div>
 
@@ -1932,6 +1966,87 @@ export default function InstructorLessonsPage() {
               </button>
             </div>
           </Modal>
+
+          {/* ── Set Quiz Time Modal ── */}
+          {showPeriodModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+              <div className="w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl">
+                <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4">
+                  <h2 className="text-lg font-black text-white">
+                    ⏰ {isArabic ? 'تحديد وقت الاختبار' : 'Set Quiz Time Period'}
+                  </h2>
+                  <p className="mt-0.5 text-xs text-amber-100">
+                    {isArabic ? 'اتركه فارغاً لإزالة القيد الزمني' : 'Leave empty to remove the time restriction'}
+                  </p>
+                </div>
+                <div className="space-y-4 p-6">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-bold text-slate-600">
+                      {isArabic ? 'يبدأ من' : 'Available From'}
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={periodForm.availableFrom}
+                      onChange={(e) => setPeriodForm((p) => ({ ...p, availableFrom: e.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-bold text-slate-600">
+                      {isArabic ? 'ينتهي في' : 'Available Until'}
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={periodForm.availableTo}
+                      onChange={(e) => setPeriodForm((p) => ({ ...p, availableTo: e.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100"
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const subjectId = getSubjectId();
+                        try {
+                          const updated = await updateLessonQuiz(subjectId, selectedLessonId, quiz.id, {
+                            availableFrom: periodForm.availableFrom || null,
+                            availableTo: periodForm.availableTo || null,
+                          });
+                          setQuiz(updated);
+                          setShowPeriodModal(false);
+                        } catch (err) { setError(safeError(err)); }
+                      }}
+                      className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-bold text-white hover:bg-amber-600">
+                      {isArabic ? 'حفظ' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const subjectId = getSubjectId();
+                        try {
+                          const updated = await updateLessonQuiz(subjectId, selectedLessonId, quiz.id, {
+                            availableFrom: null,
+                            availableTo: null,
+                          });
+                          setQuiz(updated);
+                          setPeriodForm({ availableFrom: '', availableTo: '' });
+                          setShowPeriodModal(false);
+                        } catch (err) { setError(safeError(err)); }
+                      }}
+                      className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-500 hover:bg-slate-50">
+                      {isArabic ? 'إزالة الوقت' : 'Clear'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowPeriodModal(false)}
+                      className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-500 hover:bg-slate-50">
+                      {isArabic ? 'إلغاء' : 'Cancel'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
         </section>
       </div>

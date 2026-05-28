@@ -90,7 +90,7 @@ export default function AdminDashboardPage() {
               <Link to="/admin/organizations" className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">
                 {t.admin.tabs.organizations}
               </Link>
-              <button type="button" onClick={handleLogout} className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
+              <button type="button" onClick={handleLogout} className="rounded-2xl border border-transparent bg-transparent px-4 py-3 text-sm font-semibold text-red-500 transition-all duration-200 hover:border-red-500 hover:bg-red-500 hover:text-white hover:shadow-md">
                 {t.dashboard.logout}
               </button>
             </div>

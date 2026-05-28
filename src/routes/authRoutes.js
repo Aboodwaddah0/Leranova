@@ -9,6 +9,7 @@ import {
 	changePasswordController,
 	getMeController,
 	verifyOrgEmailController,
+	stripeStatusController,
 } from '../controllers/authController.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { loginAdminController } from '../controllers/adminAuthController.js';
@@ -16,6 +17,7 @@ import { loginAdminController } from '../controllers/adminAuthController.js';
 const router = Router();
 
 router.get('/me', authMiddleware, getMeController);
+router.get('/stripe-status', stripeStatusController);
 
 // Traditional registration and login
 router.post('/organization/register', register);

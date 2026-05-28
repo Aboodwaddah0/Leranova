@@ -60,6 +60,9 @@ const serializeQuiz = (quiz, { includeCorrectAnswers = false } = {}) => ({
   difficulty: quiz.difficulty,
   passingScore: quiz.passingScore,
   isPublished: quiz.isPublished,
+  isHidden: quiz.isHidden,
+  availableFrom: quiz.availableFrom ?? null,
+  availableTo: quiz.availableTo ?? null,
   questionCount: quiz.questions?.length ?? 0,
   questions: (quiz.questions || []).map((q) => ({
     id: q.id,
@@ -97,6 +100,18 @@ export const getQuizForLesson = async (actor, lessonId, lang = 'ar') => {
 
   if (!quiz) return null;
   if (isStudent && !quiz.isPublished) return null;
+  if (isStudent && quiz.isHidden) return null;
+
+  // Period enforcement for students
+  if (isStudent) {
+    const now = new Date();
+    if (quiz.availableFrom && now < new Date(quiz.availableFrom)) {
+      return { status: 'not_yet_available', availableFrom: quiz.availableFrom, title: quiz.title };
+    }
+    if (quiz.availableTo && now > new Date(quiz.availableTo)) {
+      return { status: 'expired', availableTo: quiz.availableTo, title: quiz.title };
+    }
+  }
 
   // Language resolution: prefer requested lang; if no questions exist in it,
   // fall back to whatever language the teacher generated — the quiz content
@@ -131,7 +146,7 @@ export const getQuizForLesson = async (actor, lessonId, lang = 'ar') => {
   };
 };
 
-export const createQuiz = async (actor, lessonId, { title, description, difficulty = 'MEDIUM', passingScore = 70 }) => {
+export const createQuiz = async (actor, lessonId, { title, description, difficulty = 'MEDIUM', passingScore = 70, isHidden = false, availableFrom, availableTo }) => {
   const scope = await resolveActor(actor);
   if (scope.role === 'STUDENT') throw new AppError('Students cannot create quizzes', 403);
   await ensureTeacherOwnsLesson(scope, lessonId);
@@ -140,7 +155,16 @@ export const createQuiz = async (actor, lessonId, { title, description, difficul
   if (existing) throw new AppError('A quiz already exists for this lesson', 409);
 
   const quiz = await prisma.quiz.create({
-    data: { lessonId: Number(lessonId), title, description, difficulty, passingScore },
+    data: {
+      lessonId: Number(lessonId),
+      title,
+      description,
+      difficulty,
+      passingScore,
+      isHidden: Boolean(isHidden),
+      availableFrom: availableFrom ? new Date(availableFrom) : null,
+      availableTo: availableTo ? new Date(availableTo) : null,
+    },
     include: { questions: true },
   });
 
@@ -152,10 +176,16 @@ export const updateQuiz = async (actor, quizId, data) => {
   if (scope.role === 'STUDENT') throw new AppError('Students cannot update quizzes', 403);
   await ensureTeacherOwnsQuiz(scope, quizId);
 
-  const allowed = ['title', 'description', 'difficulty', 'passingScore', 'isPublished'];
+  const allowed = ['title', 'description', 'difficulty', 'passingScore', 'isPublished', 'isHidden'];
   const updateData = {};
   for (const key of allowed) {
     if (data[key] !== undefined) updateData[key] = data[key];
+  }
+  if (data.availableFrom !== undefined) {
+    updateData.availableFrom = data.availableFrom ? new Date(data.availableFrom) : null;
+  }
+  if (data.availableTo !== undefined) {
+    updateData.availableTo = data.availableTo ? new Date(data.availableTo) : null;
   }
 
   const quiz = await prisma.quiz.update({
@@ -505,6 +535,10 @@ export const submitQuizAttempt = async (actor, lessonId, { answers, lang = 'ar' 
     include: { questions: { orderBy: [{ lang: 'asc' }, { orderIndex: 'asc' }] } },
   });
   if (!quiz || !quiz.isPublished) throw new AppError('Quiz not found or not published', 404);
+  if (quiz.isHidden) throw new AppError('This quiz is not available', 403);
+  const now = new Date();
+  if (quiz.availableFrom && now < new Date(quiz.availableFrom)) throw new AppError('Quiz is not open yet', 403);
+  if (quiz.availableTo && now > new Date(quiz.availableTo)) throw new AppError('Quiz period has ended', 403);
   if (!Array.isArray(answers)) throw new AppError('answers must be an array', 400);
 
   // Same lang fallback as getQuizForLesson — score against the language that was shown

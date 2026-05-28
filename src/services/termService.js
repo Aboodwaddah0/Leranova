@@ -120,8 +120,12 @@ export const createTerm = async (orgId, yearId, data, actorUserId) => {
   const startDate = parseDateOrThrow(data.startDate);
   const endDate = parseDateOrThrow(data.endDate);
 
-  if (termNumber < 1 || termNumber > Number(year.numberOfTerms || 1)) {
-    throw new AppError('Term number must be within the configured number of terms', 400);
+  const maxTerms = Number(year.numberOfTerms || 1);
+  if (termNumber < 1 || termNumber > maxTerms) {
+    throw new AppError(
+      `Term number ${termNumber} is out of range. This academic year is configured for ${maxTerms} term(s). To add more terms, edit the academic year and increase "Number of Terms" first.`,
+      400,
+    );
   }
 
   if (endDate <= startDate) {
@@ -135,8 +139,11 @@ export const createTerm = async (orgId, yearId, data, actorUserId) => {
   }
 
   const existingTerms = await getYearTerms(yearId);
-  if (existingTerms.length >= Number(year.numberOfTerms || 1)) {
-    throw new AppError('The academic year already has the configured number of terms', 409);
+  if (existingTerms.length >= maxTerms) {
+    throw new AppError(
+      `This academic year is set to ${maxTerms} term(s) and all slots are filled. To add another term, edit the academic year and increase "Number of Terms".`,
+      409,
+    );
   }
 
   const hasOverlap = existingTerms.some((term) => rangesOverlap(startDate, endDate, new Date(term.startDate), new Date(term.endDate)));
@@ -175,6 +182,38 @@ export const createTerm = async (orgId, yearId, data, actorUserId) => {
   });
 
   return toTermDto(term);
+};
+
+export const activateTerm = async (orgId, yearId, termId, actorUserId) => {
+  await resolveAcademicYear(orgId, yearId);
+
+  const term = await prisma.term.findFirst({
+    where: { id: termId, academicYearId: yearId },
+  });
+  if (!term) throw new AppError('Term not found', 404);
+
+  if (term.status === 'ACTIVE') throw new AppError('Term is already active', 409);
+  if (term.status === 'CLOSED') throw new AppError('Term is closed. Use "Reopen" to restore it to active.', 400);
+  if (term.status === 'LOCKED') throw new AppError('Cannot activate a locked term', 403);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const updated = await tx.term.update({
+      where: { id: termId },
+      data: { status: 'ACTIVE' },
+    });
+    await writeAudit(tx, {
+      termId,
+      orgId,
+      userId: actorUserId,
+      actionType: 'ACTIVATED',
+      oldValues: { status: term.status },
+      newValues: { status: 'ACTIVE' },
+      changeReason: 'Manual activation by admin',
+    });
+    return updated;
+  });
+
+  return toTermDto(result);
 };
 
 export const listTerms = async (orgId, yearId) => {

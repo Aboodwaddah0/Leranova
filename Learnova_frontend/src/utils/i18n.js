@@ -380,7 +380,7 @@ export const authTranslations = {
         specialization: "Specialization",
         bio: "Bio",
         importTitle: "Import Teachers from Excel",
-        importHint: "Upload an Excel file with rows where role is TEACHER.",
+        importHint: "Upload an Excel file with Name (First Last), Role=TEACHER, Email, Specialization columns.",
         importAction: "Upload Teachers Excel",
       },
       courses: {
@@ -424,7 +424,7 @@ export const authTranslations = {
         male: "Male",
         female: "Female",
         importTitle: "Import from Excel",
-        importHint: "Upload a .xlsx or .xls file to bulk-create users.",
+        importHint: "Upload a .xlsx or .xls file. Name column = full name (e.g. John Doe).",
         importAction: "Upload Excel",
       },
       parents: {
@@ -831,7 +831,7 @@ export const authTranslations = {
         specialization: "التخصص",
         bio: "نبذة",
         importTitle: "استيراد المعلمين من إكسل",
-        importHint: "ارفع ملف إكسل يحتوي صفوفًا يكون فيها role = TEACHER.",
+        importHint: "ارفع ملف إكسل يحتوي عمود Name (الاسم الأول والأخير)، Role=TEACHER، Email، Specialization.",
         importAction: "رفع إكسل المعلمين",
       },
       courses: {
@@ -875,7 +875,7 @@ export const authTranslations = {
         male: "ذكر",
         female: "أنثى",
         importTitle: "استيراد من إكسل",
-        importHint: "ارفع ملف .xlsx أو .xls لإنشاء المستخدمين دفعة واحدة.",
+        importHint: "ارفع ملف .xlsx أو .xls. عمود Name يجب أن يكون الاسم الكامل (مثال: محمد علي).",
         importAction: "رفع ملف إكسل",
       },
       parents: {

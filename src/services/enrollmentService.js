@@ -1,5 +1,6 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
+import { createNotification } from './notificationService.js';
 
 const orgRoleKey = (orgRole) => String(orgRole || '').trim().toUpperCase();
 
@@ -111,6 +112,13 @@ export const createEnrollment = async (orgId, orgRole, data) => {
       include: enrollmentInclude,
     });
 
+    createNotification({
+      userId: enrollment.academy_user.user.id,
+      content: `You have been enrolled in "${course.Name}"`,
+      type: 'ENROLLMENT',
+      url: `/courses/${course.id}`,
+    }).catch(() => {});
+
     return mapAcademyEnrollment(enrollment);
   }
 
@@ -141,6 +149,13 @@ export const createEnrollment = async (orgId, orgRole, data) => {
       track: { select: { id: true, Name: true, Description: true, Thumbnail: true } },
     },
   });
+
+  createNotification({
+    userId: updatedStudent.user.id,
+    content: `You have been enrolled in "${course.Name}"`,
+    type: 'ENROLLMENT',
+    url: `/courses/${course.id}`,
+  }).catch(() => {});
 
   return mapSchoolEnrollment(updatedStudent);
 };

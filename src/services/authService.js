@@ -18,7 +18,7 @@ import { getOrCreateSchoolSettings } from './schoolSettingsService.js';
 import { isBusinessEmail } from '../utils/domainCheck.js';
 
 const PASSWORD_RESET_EXPIRY_MINUTES = 15;
-const EMAIL_VERIFICATION_EXPIRY_HOURS = 24;
+const EMAIL_VERIFICATION_EXPIRY_HOURS = 72;
 const normalizeSubdomain = (subdomain) => String(subdomain || '').trim().toLowerCase();
 const normalizeNationalId = (nationalId) => String(nationalId || '').trim().replace(/[\s-]/g, '');
 const normalizeRequestedUserRole = (role) => {
@@ -83,7 +83,9 @@ export const registerOrganization = async (data) => {
       throw new AppError('Selected plan not found', 404);
     }
 
-    ensureStripeConfigured();
+    if (Number(selectedPlan.price) > 0) {
+      ensureStripeConfigured();
+    }
   }
 
   const hashedPassword = await hashPassword(data.password);
@@ -203,7 +205,7 @@ export const registerOrganization = async (data) => {
       to: result.organization.Email,
       name: result.organization.Name,
       verificationLink,
-    }).catch(() => {});
+    }).catch((err) => console.error('[EMAIL] Verification email failed:', err.message));
   }
 
   if (!selectedPlan) {
@@ -248,11 +250,11 @@ export const verifyOrganizationEmail = async (token) => {
   });
 
   if (!organization) {
-    throw new AppError('Invalid verification token', 400);
+    throw new AppError('This verification link has already been used or is invalid. If you have already verified your email, please log in.', 400);
   }
 
   if (organization.emailVerificationExpiresAt < new Date()) {
-    throw new AppError('Verification token has expired', 400);
+    throw new AppError('This verification link has expired. Please contact support or register again with a new email.', 400);
   }
 
   if (organization.status !== 'PENDING') {
