@@ -17,7 +17,7 @@ import {
   fetchLessonAiContentInstructor, generateLessonFlashcardsOnly, generateLessonMindmapOnly,
   updateLessonFlashcards, updateLessonMindmap, deleteLessonFlashcards, deleteLessonMindmap,
   publishLessonAiContent, unpublishLessonAiContent,
-  fetchLessonQuiz, createLessonQuiz, deleteLessonQuiz,
+  fetchLessonQuiz, createLessonQuiz, updateLessonQuiz, deleteLessonQuiz,
   generateLessonQuizQuestions, addLessonQuizQuestion, deleteLessonQuizQuestion,
   generateLessonPowerSlides, deleteLessonPowerSlides,
 } from "../../services/instructorService";
@@ -113,6 +113,8 @@ export default function InstructorCoursesPage() {
   const [quizLang,      setQuizLang]      = useState(isArabic ? "ar" : "en");
   const [quizForm,      setQuizForm]      = useState({ numMCQ:5, numTrueFalse:3, numShortAnswer:2, difficulty:"MEDIUM" });
   const [addQForm,      setAddQForm]      = useState({ type:"MULTIPLE_CHOICE", question:"", options:["","","",""], correctAnswer:0, expectedAnswer:"", explanation:"" });
+  const [showPeriodModal, setShowPeriodModal] = useState(false);
+  const [periodForm,      setPeriodForm]      = useState({ availableFrom: "", availableTo: "" });
   const [showAddQ,      setShowAddQ]      = useState(false);
   const [expandedQ,     setExpandedQ]     = useState(null);
   /* ── Edit states ── */
@@ -297,7 +299,7 @@ export default function InstructorCoursesPage() {
   const togglePublish = async () => {
     if (!drillLesson || !aiContent) return;
     try {
-      if (aiContent.isPublished) { await unpublishLessonAiContent(drillLesson.id); }
+      if (aiContent.published) { await unpublishLessonAiContent(drillLesson.id); }
       else { await publishLessonAiContent(drillLesson.id); }
       await loadAiContent();
     } catch (err) { notifyError(safeError(err)); }
@@ -1109,6 +1111,10 @@ export default function InstructorCoursesPage() {
                         {aiGenerating==="flashcards"?<RefreshCw size={13} className="animate-spin"/>:<Sparkles size={13}/>}
                         {aiGenerating==="flashcards"?(isArabic?"جاري التوليد...":"Generating..."):(isArabic?"توليد":"Generate")}
                       </button>
+                      {aiContent?.flashcards?.length>0&&<button type="button" onClick={togglePublish} className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition ${aiContent.published?"border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100":"border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
+                        {aiContent.published?<EyeOff size={13}/>:<Eye size={13}/>}
+                        {aiContent.published?(isArabic?"إلغاء النشر":"Unpublish"):(isArabic?"نشر":"Publish")}
+                      </button>}
                       {aiContent?.flashcards?.length>0&&<button type="button" onClick={()=>loadAiContent()} disabled={aiLoading} className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"><RefreshCw size={13} className={aiLoading?"animate-spin":""}/>{isArabic?"تحديث":"Refresh"}</button>}
                       {aiContent?.flashcards?.length>0&&<button type="button" onClick={deleteFlashcards} disabled={saving} className="flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50 transition"><Trash2 size={13}/>{isArabic?"حذف":"Delete"}</button>}
                     </div>
@@ -1122,15 +1128,7 @@ export default function InstructorCoursesPage() {
                     </div>
                   ):(
                     <>
-                      <div className="flex items-center justify-between text-xs text-slate-500">
-                        <span>{aiContent.flashcards.length} {isArabic?"بطاقة":"cards"}</span>
-                        {aiContent&&(
-                          <button type="button" onClick={togglePublish} className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 font-semibold transition ${aiContent.isPublished?"bg-amber-100 text-amber-700 hover:bg-amber-200":"bg-emerald-100 text-emerald-700 hover:bg-emerald-200"}`}>
-                            {aiContent.isPublished?<EyeOff size={12}/>:<Eye size={12}/>}
-                            {aiContent.isPublished?(isArabic?"إخفاء":"Unpublish"):(isArabic?"نشر":"Publish")}
-                          </button>
-                        )}
-                      </div>
+                      <p className="text-xs text-slate-500">{aiContent.flashcards.length} {isArabic?"بطاقة":"cards"}</p>
                       <div className="grid gap-3 sm:grid-cols-2">
                         {aiContent.flashcards.map((fc,i)=>{
                           const isEditing = editingFlashcard?.index === i;
@@ -1183,6 +1181,10 @@ export default function InstructorCoursesPage() {
                         {aiGenerating==="mindmap"?<RefreshCw size={13} className="animate-spin"/>:<Map size={13}/>}
                         {aiGenerating==="mindmap"?(isArabic?"جاري التوليد...":"Generating..."):(isArabic?"توليد":"Generate")}
                       </button>
+                      {aiContent?.mindmap&&<button type="button" onClick={togglePublish} className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition ${aiContent.published?"border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100":"border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
+                        {aiContent.published?<EyeOff size={13}/>:<Eye size={13}/>}
+                        {aiContent.published?(isArabic?"إلغاء النشر":"Unpublish"):(isArabic?"نشر":"Publish")}
+                      </button>}
                       {aiContent?.mindmap&&<button type="button" onClick={()=>{ setMindmapDraft(JSON.parse(JSON.stringify(aiContent.mindmap))); setShowMindmapEdit(true); }} className="flex items-center gap-1.5 rounded-xl border border-teal-200 bg-teal-50 px-3.5 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-100 transition"><Pencil size={13}/>{isArabic?"تعديل":"Edit"}</button>}
                       {aiContent?.mindmap&&<button type="button" onClick={deleteMindmap} disabled={saving} className="flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50 transition"><Trash2 size={13}/>{isArabic?"حذف":"Delete"}</button>}
                     </div>
@@ -1224,11 +1226,28 @@ export default function InstructorCoursesPage() {
                 <div className="p-6 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <h3 className="font-black text-slate-900">{isArabic?"الاختبار":"Quiz"}</h3>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button type="button" onClick={()=>setShowQuizModal(true)} disabled={quizGenerating||saving} className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-amber-600 disabled:opacity-50 transition">
                         {quizGenerating?<RefreshCw size={13} className="animate-spin"/>:<Sparkles size={13}/>}
                         {quizGenerating?(isArabic?"جاري التوليد...":"Generating..."):(quiz?(isArabic?"توليد أسئلة":"Generate Questions"):(isArabic?"إنشاء اختبار":"Create Quiz"))}
                       </button>
+                      {quiz&&<button type="button" onClick={async()=>{
+                        try { const u = await updateLessonQuiz(drillCourse.id, drillLesson.id, quiz.id, { isPublished: !quiz.isPublished }); setQuiz(u); }
+                        catch(err){ notifyError(safeError(err)); }
+                      }} className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition ${quiz.isPublished?"border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100":"border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`}>
+                        {quiz.isPublished?<Eye size={13}/>:<EyeOff size={13}/>}
+                        {quiz.isPublished?(isArabic?"منشور":"Published"):(isArabic?"غير منشور":"Unpublished")}
+                      </button>}
+                      {quiz&&<button type="button" onClick={()=>{
+                        setPeriodForm({
+                          availableFrom: quiz.availableFrom ? new Date(quiz.availableFrom).toISOString().slice(0,16) : "",
+                          availableTo:   quiz.availableTo   ? new Date(quiz.availableTo).toISOString().slice(0,16)   : "",
+                        });
+                        setShowPeriodModal(true);
+                      }} className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition ${(quiz.availableFrom||quiz.availableTo)?"border border-amber-400 bg-amber-100 text-amber-800 hover:bg-amber-200":"border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`}>
+                        ⏰ {isArabic?"وقت الاختبار":"Quiz Time"}
+                      </button>}
+                      {quiz&&<button type="button" onClick={()=>setShowAddQ(v=>!v)} className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"><Plus size={13}/>{isArabic?"إضافة سؤال":"Add Question"}</button>}
                       {quiz&&<button type="button" onClick={deleteQuizFull} disabled={saving} className="flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50 transition"><Trash2 size={13}/>{isArabic?"حذف الاختبار":"Delete Quiz"}</button>}
                     </div>
                   </div>
@@ -1241,14 +1260,13 @@ export default function InstructorCoursesPage() {
                     </div>
                   ):(
                     <>
-                      {/* Quick actions bar */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                        <div className="flex items-center gap-2">
-                          <Brain size={16} className="shrink-0 text-amber-700"/>
-                          <span className="text-sm font-semibold text-amber-900">{isArabic?"إدارة الاختبار":"Manage Quiz"}</span>
+                      {(quiz.availableFrom||quiz.availableTo)&&(
+                        <div className="flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700 w-fit">
+                          ⏰ {quiz.availableFrom&&<span>{new Date(quiz.availableFrom).toLocaleDateString()}</span>}
+                          <span>→</span>
+                          {quiz.availableTo?<span>{new Date(quiz.availableTo).toLocaleDateString()}</span>:<span>∞</span>}
                         </div>
-                        <button type="button" onClick={()=>setShowAddQ(v=>!v)} className="flex items-center gap-1.5 rounded-xl border border-amber-200 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50 transition"><Plus size={12}/>{isArabic?"إضافة سؤال يدوياً":"Add Question Manually"}</button>
-                      </div>
+                      )}
 
                       {/* Add question form */}
                       {showAddQ&&(
@@ -1420,6 +1438,56 @@ export default function InstructorCoursesPage() {
           )}
         </div>
       </div>
+      {/* ── Set Quiz Time Modal ── */}
+      {showPeriodModal&&(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4">
+              <h2 className="text-lg font-black text-white">⏰ {isArabic?"تحديد وقت الاختبار":"Set Quiz Time Period"}</h2>
+              <p className="mt-0.5 text-xs text-amber-100">{isArabic?"اتركه فارغاً لإزالة القيد الزمني":"Leave empty to remove the time restriction"}</p>
+            </div>
+            <div className="space-y-4 p-6">
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-slate-600">{isArabic?"يبدأ من":"Available From"}</label>
+                <input type="datetime-local" value={periodForm.availableFrom}
+                  onChange={(e)=>setPeriodForm(p=>({...p,availableFrom:e.target.value}))}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100"/>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-slate-600">{isArabic?"ينتهي في":"Available Until"}</label>
+                <input type="datetime-local" value={periodForm.availableTo}
+                  onChange={(e)=>setPeriodForm(p=>({...p,availableTo:e.target.value}))}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100"/>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button type="button" onClick={async()=>{
+                  try {
+                    const u = await updateLessonQuiz(drillCourse.id, drillLesson.id, quiz.id, {
+                      availableFrom: periodForm.availableFrom || null,
+                      availableTo:   periodForm.availableTo   || null,
+                    });
+                    setQuiz(u); setShowPeriodModal(false);
+                  } catch(err){ notifyError(safeError(err)); }
+                }} className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-bold text-white hover:bg-amber-600">
+                  {isArabic?"حفظ":"Save"}
+                </button>
+                <button type="button" onClick={async()=>{
+                  try {
+                    const u = await updateLessonQuiz(drillCourse.id, drillLesson.id, quiz.id, { availableFrom: null, availableTo: null });
+                    setQuiz(u); setPeriodForm({availableFrom:"",availableTo:""}); setShowPeriodModal(false);
+                  } catch(err){ notifyError(safeError(err)); }
+                }} className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-500 hover:bg-slate-50">
+                  {isArabic?"إزالة الوقت":"Clear"}
+                </button>
+                <button type="button" onClick={()=>setShowPeriodModal(false)}
+                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-500 hover:bg-slate-50">
+                  {isArabic?"إلغاء":"Cancel"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </InstructorLayout>
   );
 }

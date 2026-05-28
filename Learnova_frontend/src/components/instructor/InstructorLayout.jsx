@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { Bell, ChevronDown, Search, UserCircle2 } from "lucide-react";
+import { ChevronDown, Search, UserCircle2 } from "lucide-react";
 import { useDispatch } from "react-redux";
 import { useSelector } from "react-redux";
 import { logout } from "../../redux/slices/authSlice";
 import { fetchInstructorProfile } from "../../services/instructorService";
 import { ORG_TYPES } from "../../utils/constants";
 import { useLanguage } from "../../utils/i18n";
+import InstructorAIChat from "./InstructorAIChat";
+import NotificationDropdown from "../shared/NotificationDropdown";
 
 const navItems = [
   { to: "/dashboard/instructor/overview", labelAr: "النظرة العامة", labelEn: "Overview", end: true },
@@ -99,14 +101,7 @@ export default function InstructorLayout({ title, subtitle, children, actions })
               />
             </label>
 
-            <button
-              type="button"
-              className="dashboard-icon-btn relative rounded-2xl border p-3 transition hover:text-slate-900"
-              aria-label={isArabic ? "الإشعارات" : "Notifications"}
-            >
-              <Bell size={18} />
-              <span className="dashboard-notification-dot absolute right-2 top-2 h-2.5 w-2.5 rounded-full" />
-            </button>
+            <NotificationDropdown />
 
             <div className="relative">
               <button
@@ -143,7 +138,7 @@ export default function InstructorLayout({ title, subtitle, children, actions })
                   <button
                     type="button"
                     onClick={() => dispatch(logout())}
-                    className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-rose-700 hover:bg-rose-50"
+                    className="w-full rounded-xl border border-transparent bg-transparent px-3 py-2 text-left text-sm font-semibold text-red-500 transition-all duration-200 hover:border-red-500 hover:bg-red-500 hover:text-white"
                   >
                     {isArabic ? "تسجيل الخروج" : "Logout"}
                   </button>
@@ -189,7 +184,7 @@ export default function InstructorLayout({ title, subtitle, children, actions })
             <button
               type="button"
               onClick={() => dispatch(logout())}
-              className="w-full rounded-2xl border border-[#EAE0CF]/50 bg-white/10 px-4 py-3 text-sm font-semibold text-[#EAE0CF] transition hover:bg-white/20"
+              className="w-full rounded-2xl border border-transparent bg-transparent px-4 py-3 text-sm font-semibold text-red-500 transition-all duration-200 hover:border-red-500 hover:bg-red-500 hover:text-white hover:shadow-md"
             >
               {isArabic ? "تسجيل الخروج" : "Logout"}
             </button>
@@ -207,6 +202,8 @@ export default function InstructorLayout({ title, subtitle, children, actions })
           <div>{children}</div>
         </section>
       </div>
+
+      <InstructorAIChat isArabic={isArabic} isSchool={isSchool} />
     </main>
   );
 }

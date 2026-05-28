@@ -12,6 +12,10 @@ const DEFAULT_SETTINGS = {
   minSubjectPassPercentage: 50,
   requireAllSubjectsPass: true,
   classRanges: [],
+  maxFailedSubjects: 0,
+  allowConditionalPromotion: false,
+  conditionalMaxFailed: 1,
+  requiredSubjectIds: null,
 };
 
 const ensureValidMonthDay = (month, day, fieldPrefix) => {
@@ -38,6 +42,14 @@ const normalizeSettingsPayload = (payload = {}) => {
     requireAllSubjectsPass:
       payload.requireAllSubjectsPass === undefined ? undefined : Boolean(payload.requireAllSubjectsPass),
     classRanges: payload.classRanges === undefined ? undefined : normalizeClassRanges(payload.classRanges),
+    maxFailedSubjects:
+      payload.maxFailedSubjects === undefined ? undefined : Number(payload.maxFailedSubjects),
+    allowConditionalPromotion:
+      payload.allowConditionalPromotion === undefined ? undefined : Boolean(payload.allowConditionalPromotion),
+    conditionalMaxFailed:
+      payload.conditionalMaxFailed === undefined ? undefined : Number(payload.conditionalMaxFailed),
+    requiredSubjectIds:
+      payload.requiredSubjectIds === undefined ? undefined : (Array.isArray(payload.requiredSubjectIds) ? payload.requiredSubjectIds : null),
   };
 
   if (normalized.schoolYearStartMonth !== undefined || normalized.schoolYearStartDay !== undefined) {
@@ -134,6 +146,10 @@ export const toSchoolSettingsDto = (settings) => ({
   minSubjectPassPercentage: Number(settings.minSubjectPassPercentage),
   requireAllSubjectsPass: settings.requireAllSubjectsPass,
   classRanges: Array.isArray(settings.classRanges) ? settings.classRanges : [],
+  maxFailedSubjects: settings.maxFailedSubjects ?? 0,
+  allowConditionalPromotion: settings.allowConditionalPromotion ?? false,
+  conditionalMaxFailed: settings.conditionalMaxFailed ?? 1,
+  requiredSubjectIds: Array.isArray(settings.requiredSubjectIds) ? settings.requiredSubjectIds : [],
   createdAt: settings.createdAt,
   updatedAt: settings.updatedAt,
 });

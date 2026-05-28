@@ -6,6 +6,7 @@ import {
   listAcademicYearsController,
   getAcademicYearController,
   updateAcademicYearController,
+  activateAcademicYearController,
 } from '../controllers/academicYearController.js';
 import {
   createTermController,
@@ -13,6 +14,7 @@ import {
   getTermController,
   updateTermController,
   reopenTermController,
+  activateTermController,
   listTermAuditLogsController,
 } from '../controllers/termController.js';
 
@@ -26,12 +28,14 @@ router.post('/', isOrganization, createAcademicYearController);
 router.get('/', listAcademicYearsController);
 router.get('/:yearId', getAcademicYearController);
 router.patch('/:yearId', isOrganization, updateAcademicYearController);
+router.post('/:yearId/activate', isOrganization, activateAcademicYearController);
 
 // Term endpoints nested under academic year
 router.post('/:yearId/terms', isOrganization, createTermController);
 router.get('/:yearId/terms', listTermsController);
 router.get('/:yearId/terms/:termId', getTermController);
 router.patch('/:yearId/terms/:termId', isOrganization, updateTermController);
+router.post('/:yearId/terms/:termId/activate', isOrganization, activateTermController);
 router.post('/:yearId/terms/:termId/reopen', isOrganization, reopenTermController);
 router.get('/:yearId/terms/:termId/audit', isOrganization, listTermAuditLogsController);
 

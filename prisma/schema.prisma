@@ -100,6 +100,7 @@ model track {
   chats                  chats[]
 
   student_course_payment student_course_payment[]
+  attendance             attendance[]             @relation("class_attendance")
 
   createdAt              DateTime                  @default(now()) @db.Timestamp(0)
   updatedAt              DateTime                  @default(now()) @updatedAt @db.Timestamp(0)
@@ -164,18 +165,21 @@ model lesson {
 }
 
 model quiz {
-  id           Int             @id @default(autoincrement())
-  lessonId     Int             @unique
-  title        String          @db.VarChar(255)
-  description  String?         @db.Text
-  difficulty   String          @default("MEDIUM") @db.VarChar(10)
-  passingScore Int             @default(70)
-  isPublished  Boolean         @default(false)
-  lesson       lesson          @relation(fields: [lessonId], references: [id], onDelete: Cascade, map: "fk_quiz_lesson")
-  questions    quiz_question[]
-  attempts     quiz_attempt[]
-  createdAt    DateTime        @default(now()) @db.Timestamp(0)
-  updatedAt    DateTime        @default(now()) @updatedAt @db.Timestamp(0)
+  id            Int             @id @default(autoincrement())
+  lessonId      Int             @unique
+  title         String          @db.VarChar(255)
+  description   String?         @db.Text
+  difficulty    String          @default("MEDIUM") @db.VarChar(10)
+  passingScore  Int             @default(70)
+  isPublished   Boolean         @default(false)
+  isHidden      Boolean         @default(false)
+  availableFrom DateTime?       @db.Timestamp(0)
+  availableTo   DateTime?       @db.Timestamp(0)
+  lesson        lesson          @relation(fields: [lessonId], references: [id], onDelete: Cascade, map: "fk_quiz_lesson")
+  questions     quiz_question[]
+  attempts      quiz_attempt[]
+  createdAt     DateTime        @default(now()) @db.Timestamp(0)
+  updatedAt     DateTime        @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([lessonId], map: "idx_quiz_lesson_id")
 }
@@ -290,21 +294,27 @@ model lesson_progress {
 }
 
 model marks {
-  id             Int       @id @default(autoincrement())
+  id             Int                   @id @default(autoincrement())
   Student_id     Int
   Subject_id     Int
-  Numbers        Decimal   @db.Decimal(5, 2)
-  OutOf          Decimal   @default(100) @db.Decimal(5, 2)
-  ExamPercentage Decimal   @default(100) @db.Decimal(5, 2)
-  MarkType       String    @default("EXAM") @db.VarChar(50)
-  time           DateTime? @db.Date
-  student        student   @relation(fields: [Student_id], references: [Student_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_marks_student")
-  course         course    @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_marks_subject")
-  createdAt      DateTime  @default(now()) @db.Timestamp(0)
-  updatedAt      DateTime  @default(now()) @updatedAt @db.Timestamp(0)
+  Numbers        Decimal               @db.Decimal(5, 2)
+  OutOf          Decimal               @default(100) @db.Decimal(5, 2)
+  ExamPercentage Decimal               @default(100) @db.Decimal(5, 2)
+  MarkType       String                @default("EXAM") @db.VarChar(50)
+  time           DateTime?             @db.Date
+  termId         Int?
+  componentId    Int?
+  student        student               @relation(fields: [Student_id], references: [Student_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_marks_student")
+  course         course                @relation(fields: [Subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_marks_subject")
+  term           term?                 @relation(fields: [termId], references: [id], onDelete: SetNull, onUpdate: Restrict, map: "fk_marks_term")
+  component      assessment_component? @relation(fields: [componentId], references: [id], onDelete: SetNull, onUpdate: Restrict, map: "fk_marks_component")
+  createdAt      DateTime              @default(now()) @db.Timestamp(0)
+  updatedAt      DateTime              @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([Subject_id], map: "idx_marks_subject_id")
   @@index([Student_id], map: "idx_marks_student_id")
+  @@index([termId], map: "idx_marks_term_id")
+  @@index([componentId], map: "idx_marks_component_id")
 }
 
 model message_attachments {
@@ -404,6 +414,8 @@ model organization {
   promotion_runs         organization_promotion_run[]
   academic_years         academic_year[]
   student_notes          student_note[]
+  school_events          school_event[]
+  attendance             attendance[]
   createdAt              DateTime                      @default(now()) @db.Timestamp(0)
   updatedAt              DateTime                      @default(now()) @updatedAt @db.Timestamp(0)
 
@@ -513,10 +525,12 @@ model student {
   track             track?                      @relation(fields: [Course_id], references: [id], onUpdate: Restrict, map: "fk_student_course")
   promotion_history student_promotion_history[]
   marks             marks[]
+  computed_grades   computed_grade[]
   organization      organization                @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_org")
   parent            parent?                     @relation(fields: [Parent_id], references: [Parent_id], onUpdate: Restrict, map: "fk_student_parent")
   user              user                        @relation(fields: [Student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_user")
   student_notes     student_note[]
+  attendance        attendance[]
   createdAt         DateTime                    @default(now()) @db.Timestamp(0)
   updatedAt         DateTime                    @default(now()) @updatedAt @db.Timestamp(0)
 
@@ -548,20 +562,24 @@ model student_note {
 }
 
 model organization_school_settings {
-  id                       Int          @id @default(autoincrement())
-  OrgId                    Int          @unique
-  schoolYearStartMonth     Int          @default(9)
-  schoolYearStartDay       Int          @default(1)
-  promotionMonth           Int          @default(9)
-  promotionDay             Int          @default(1)
-  entryGradeMinAge         Int          @default(6)
-  passThresholdPercentage  Decimal      @default(50) @db.Decimal(5, 2)
-  minSubjectPassPercentage Decimal      @default(50) @db.Decimal(5, 2)
-  requireAllSubjectsPass   Boolean      @default(true)
-  classRanges              Json?
-  organization             organization @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_school_settings_org")
-  createdAt                DateTime     @default(now()) @db.Timestamp(0)
-  updatedAt                DateTime     @default(now()) @updatedAt @db.Timestamp(0)
+  id                        Int          @id @default(autoincrement())
+  OrgId                     Int          @unique
+  schoolYearStartMonth      Int          @default(9)
+  schoolYearStartDay        Int          @default(1)
+  promotionMonth            Int          @default(9)
+  promotionDay              Int          @default(1)
+  entryGradeMinAge          Int          @default(6)
+  passThresholdPercentage   Decimal      @default(50) @db.Decimal(5, 2)
+  minSubjectPassPercentage  Decimal      @default(50) @db.Decimal(5, 2)
+  requireAllSubjectsPass    Boolean      @default(true)
+  classRanges               Json?
+  maxFailedSubjects         Int          @default(0)
+  allowConditionalPromotion Boolean      @default(false)
+  conditionalMaxFailed      Int          @default(1)
+  requiredSubjectIds        Json?
+  organization              organization @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_school_settings_org")
+  createdAt                 DateTime     @default(now()) @db.Timestamp(0)
+  updatedAt                 DateTime     @default(now()) @updatedAt @db.Timestamp(0)
 }
 
 model organization_promotion_run {
@@ -578,22 +596,25 @@ model organization_promotion_run {
 }
 
 model student_promotion_history {
-  id              Int      @id @default(autoincrement())
+  id              Int           @id @default(autoincrement())
   Student_id      Int
   OrgId           Int
   fromGradeLevel  Int?
   toGradeLevel    Int?
-  decision        String   @db.VarChar(20)
-  finalPercentage Decimal? @db.Decimal(5, 2)
-  reason          String?  @db.VarChar(255)
+  decision        String        @db.VarChar(30)
+  finalPercentage Decimal?      @db.Decimal(5, 2)
+  reason          String?       @db.VarChar(500)
   schoolYear      Int
-  promotedAt      DateTime @default(now()) @db.Timestamp(0)
-  student         student  @relation(fields: [Student_id], references: [Student_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_promotion_history_student")
+  academicYearId  Int?
+  promotedAt      DateTime      @default(now()) @db.Timestamp(0)
+  student         student       @relation(fields: [Student_id], references: [Student_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_promotion_history_student")
+  academic_year   academic_year? @relation(fields: [academicYearId], references: [id], onDelete: SetNull, onUpdate: Restrict, map: "fk_promotion_history_academic_year")
 
   @@unique([Student_id, schoolYear], map: "uq_student_promotion_history_school_year")
   @@index([OrgId], map: "idx_student_promotion_history_org")
   @@index([Student_id], map: "idx_student_promotion_history_student")
   @@index([schoolYear], map: "idx_student_promotion_history_school_year")
+  @@index([academicYearId], map: "idx_student_promotion_history_academic_year")
 }
 
 model course {
@@ -606,14 +627,16 @@ model course {
   price       Decimal  @default(0) @db.Decimal(10, 2)
   imageUrl    String   @default("") @db.VarChar(500)
   Description String?  @db.Text
-  chats       chats[]
-  lesson      lesson[]
-  marks       marks[]
-  subscriptions student_subject_subscription[]
-  track       track    @relation(fields: [Course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_course")
-  teacher     teacher? @relation(fields: [Teacher_id], references: [Teacher_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_teacher")
-  createdAt   DateTime @default(now()) @db.Timestamp(0)
-  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamp(0)
+  chats                 chats[]
+  lesson                lesson[]
+  marks                 marks[]
+  subscriptions         student_subject_subscription[]
+  assessment_components assessment_component[]
+  computed_grades       computed_grade[]
+  track                 track    @relation(fields: [Course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_course")
+  teacher               teacher? @relation(fields: [Teacher_id], references: [Teacher_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_teacher")
+  createdAt             DateTime @default(now()) @db.Timestamp(0)
+  updatedAt             DateTime @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([Course_id], map: "idx_subject_course_id")
   @@index([Teacher_id], map: "idx_subject_teacher_id")
@@ -690,6 +713,8 @@ model user {
   studentStreak          student_streak?
   achievements           student_achievement[]
   missionProgress        student_mission_progress[]
+  school_events_created  school_event[]             @relation("school_event_creator")
+  attendance_marked      attendance[]               @relation("attendance_marker")
   createdAt              DateTime            @default(now()) @db.Timestamp(0)
   updatedAt              DateTime            @default(now()) @updatedAt @db.Timestamp(0)
 }
@@ -796,17 +821,18 @@ enum term_status {
 }
 
 model academic_year {
-  id            Int           @id @default(autoincrement())
-  OrgId         Int
-  name          String        @db.VarChar(100)
-  startDate     DateTime      @db.Date
-  endDate       DateTime      @db.Date
-  numberOfTerms Int           @default(1)
-  isActive      Boolean       @default(false)
-  organization  organization  @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_academic_year_org")
-  terms         term[]
-  createdAt     DateTime      @default(now()) @db.Timestamp(0)
-  updatedAt     DateTime      @default(now()) @updatedAt @db.Timestamp(0)
+  id                  Int                          @id @default(autoincrement())
+  OrgId               Int
+  name                String                       @db.VarChar(100)
+  startDate           DateTime                     @db.Date
+  endDate             DateTime                     @db.Date
+  numberOfTerms       Int                          @default(1)
+  isActive            Boolean                      @default(false)
+  organization        organization                 @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_academic_year_org")
+  terms               term[]
+  promotion_histories student_promotion_history[]
+  createdAt           DateTime                     @default(now()) @db.Timestamp(0)
+  updatedAt           DateTime                     @default(now()) @updatedAt @db.Timestamp(0)
 
   @@unique([OrgId, isActive], map: "uq_org_active_academic_year")
   @@index([OrgId], map: "idx_academic_year_org")
@@ -814,17 +840,21 @@ model academic_year {
 }
 
 model term {
-  id             Int           @id @default(autoincrement())
-  academicYearId Int
-  termNumber     Int
-  name           String        @db.VarChar(100)
-  startDate      DateTime      @db.Date
-  endDate        DateTime      @db.Date
-  status         term_status   @default(PLANNED)
-  academic_year  academic_year @relation(fields: [academicYearId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_term_academic_year")
-  audit_logs     term_edit_audit[]
-  createdAt      DateTime      @default(now()) @db.Timestamp(0)
-  updatedAt      DateTime      @default(now()) @updatedAt @db.Timestamp(0)
+  id                    Int                    @id @default(autoincrement())
+  academicYearId        Int
+  termNumber            Int
+  name                  String                 @db.VarChar(100)
+  startDate             DateTime               @db.Date
+  endDate               DateTime               @db.Date
+  status                term_status            @default(PLANNED)
+  academic_year         academic_year          @relation(fields: [academicYearId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_term_academic_year")
+  audit_logs            term_edit_audit[]
+  school_events         school_event[]
+  marks                 marks[]
+  assessment_components assessment_component[]
+  computed_grades       computed_grade[]
+  createdAt             DateTime               @default(now()) @db.Timestamp(0)
+  updatedAt             DateTime               @default(now()) @updatedAt @db.Timestamp(0)
 
   @@unique([academicYearId, termNumber], map: "uq_academic_year_term_number")
   @@index([academicYearId], map: "idx_term_academic_year")
@@ -868,6 +898,67 @@ enum mission_type {
   WEEKLY
 }
 
+enum school_event_type {
+  HOLIDAY
+  EXAM
+  PTA_MEETING
+  ACTIVITY
+  ANNOUNCEMENT
+  OTHER
+}
+
+enum attendance_status {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+model school_event {
+  id           Int               @id @default(autoincrement())
+  orgId        Int
+  title        String            @db.VarChar(200)
+  description  String?           @db.Text
+  startDate    DateTime          @db.Date
+  endDate      DateTime          @db.Date
+  type         school_event_type @default(OTHER)
+  termId       Int?
+  createdBy    Int
+  isPublished  Boolean           @default(true)
+  organization organization      @relation(fields: [orgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_school_event_org")
+  term         term?             @relation(fields: [termId], references: [id], onDelete: SetNull, onUpdate: Restrict, map: "fk_school_event_term")
+  creator      user              @relation("school_event_creator", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_school_event_creator")
+  createdAt    DateTime          @default(now()) @db.Timestamp(0)
+  updatedAt    DateTime          @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@index([orgId], map: "idx_school_event_org")
+  @@index([termId], map: "idx_school_event_term")
+  @@index([startDate], map: "idx_school_event_start")
+  @@index([type], map: "idx_school_event_type")
+}
+
+model attendance {
+  id           Int               @id @default(autoincrement())
+  studentId    Int
+  classId      Int
+  orgId        Int
+  date         DateTime          @db.Date
+  status       attendance_status @default(PRESENT)
+  markedBy     Int
+  note         String?           @db.VarChar(500)
+  student      student           @relation(fields: [studentId], references: [Student_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_attendance_student")
+  class        track             @relation("class_attendance", fields: [classId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_attendance_class")
+  organization organization      @relation(fields: [orgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_attendance_org")
+  marker       user              @relation("attendance_marker", fields: [markedBy], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_attendance_marker")
+  createdAt    DateTime          @default(now()) @db.Timestamp(0)
+  updatedAt    DateTime          @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@unique([studentId, date], map: "uq_student_attendance_date")
+  @@index([classId, date], map: "idx_attendance_class_date")
+  @@index([orgId, date], map: "idx_attendance_org_date")
+  @@index([studentId], map: "idx_attendance_student")
+}
+
 model student_achievement {
   id             Int      @id @default(autoincrement())
   studentId      Int
@@ -894,4 +985,69 @@ model student_mission_progress {
 
   @@unique([studentId, missionKey, periodStart], name: "uq_mission_period")
   @@index([studentId])
+}
+
+// ── Grading System ───────────────────────────────────────────────────────────
+
+model assessment_component {
+  id        Int      @id @default(autoincrement())
+  OrgId     Int
+  subjectId Int?
+  termId    Int?
+  name      String   @db.VarChar(100)
+  weight    Decimal  @db.Decimal(5, 2)
+  maxScore  Decimal  @default(100) @db.Decimal(5, 2)
+  marks     marks[]
+  term      term?    @relation(fields: [termId], references: [id], onDelete: SetNull, onUpdate: Restrict, map: "fk_assessment_component_term")
+  course    course?  @relation(fields: [subjectId], references: [id], onDelete: SetNull, onUpdate: Restrict, map: "fk_assessment_component_subject")
+  createdAt DateTime @default(now()) @db.Timestamp(0)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@index([OrgId], map: "idx_assessment_component_org")
+  @@index([subjectId], map: "idx_assessment_component_subject")
+  @@index([termId], map: "idx_assessment_component_term")
+}
+
+model grade_scale {
+  id        Int                 @id @default(autoincrement())
+  OrgId     Int                 @unique
+  name      String              @default("Standard") @db.VarChar(100)
+  ranges    grade_scale_range[]
+  createdAt DateTime            @default(now()) @db.Timestamp(0)
+  updatedAt DateTime            @default(now()) @updatedAt @db.Timestamp(0)
+}
+
+model grade_scale_range {
+  id           Int         @id @default(autoincrement())
+  gradeScaleId Int
+  grade        String      @db.VarChar(10)
+  minScore     Decimal     @db.Decimal(5, 2)
+  maxScore     Decimal     @db.Decimal(5, 2)
+  gpaPoints    Decimal?    @db.Decimal(3, 2)
+  isPassing    Boolean     @default(true)
+  gradeScale   grade_scale @relation(fields: [gradeScaleId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_grade_scale_range_scale")
+
+  @@index([gradeScaleId], map: "idx_grade_scale_range_scale")
+}
+
+model computed_grade {
+  id          Int      @id @default(autoincrement())
+  studentId   Int
+  subjectId   Int
+  termId      Int
+  OrgId       Int
+  rawScore    Decimal  @db.Decimal(5, 2)
+  letterGrade String?  @db.VarChar(10)
+  gpaPoints   Decimal? @db.Decimal(3, 2)
+  isPassed    Boolean
+  computedAt  DateTime @default(now()) @db.Timestamp(0)
+  student     student  @relation(fields: [studentId], references: [Student_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_computed_grade_student")
+  course      course   @relation(fields: [subjectId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_computed_grade_subject")
+  term        term     @relation(fields: [termId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_computed_grade_term")
+
+  @@unique([studentId, subjectId, termId], map: "uq_computed_grade_student_subject_term")
+  @@index([OrgId], map: "idx_computed_grade_org")
+  @@index([studentId], map: "idx_computed_grade_student")
+  @@index([termId], map: "idx_computed_grade_term")
+  @@index([subjectId], map: "idx_computed_grade_subject")
 }

@@ -1,10 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LogOut, Bell, BarChart2, Home, Settings } from 'lucide-react';
+import { LogOut, BarChart2, Home, Settings } from 'lucide-react';
+import NotificationDropdown from '../shared/NotificationDropdown';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../../redux/slices/authSlice';
 import { useLanguage } from '../../utils/i18n';
 
-export default function ParentLayout({ children, unreadCount = 0 }) {
+export default function ParentLayout({ children }) {
   const { isArabic, lang } = useLanguage();
   const dispatch = useDispatch();
   const user = useSelector((s) => s.auth?.user);
@@ -55,15 +56,7 @@ export default function ParentLayout({ children, unreadCount = 0 }) {
 
           {/* Right side */}
           <div className="flex items-center gap-3">
-            {/* Unread bell */}
-            {unreadCount > 0 && (
-              <div className="relative">
-                <Bell size={20} className="text-slate-600" />
-                <span className="absolute -top-1.5 -end-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              </div>
-            )}
+            <NotificationDropdown />
 
             {/* Avatar + name */}
             <div className="flex items-center gap-2">
@@ -78,7 +71,7 @@ export default function ParentLayout({ children, unreadCount = 0 }) {
             <button
               type="button"
               onClick={() => dispatch(logout())}
-              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
+              className="flex items-center gap-1.5 rounded-xl border border-transparent bg-transparent px-3 py-1.5 text-sm font-semibold text-red-500 transition-all duration-200 hover:border-red-500 hover:bg-red-500 hover:text-white"
             >
               <LogOut size={14} />
               {isArabic ? 'خروج' : 'Logout'}

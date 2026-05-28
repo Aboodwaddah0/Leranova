@@ -79,6 +79,32 @@ export default function Quiz({ quiz, onSubmit, submitting, isArabic }) {
     </div>
   );
 
+  if (quiz.status === 'not_yet_available') {
+    const dateStr = quiz.availableFrom ? new Date(quiz.availableFrom).toLocaleString(isArabic ? 'ar-SA' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+    return (
+      <div className="flex flex-col items-center gap-3 py-16 text-center">
+        <span className="text-5xl">🔒</span>
+        <p className="text-base font-black text-slate-700">{quiz.title}</p>
+        <p className="text-sm font-semibold text-slate-500">
+          {isArabic ? `هذا الاختبار لم يُفتح بعد${dateStr ? `، يبدأ في: ${dateStr}` : ''}` : `This quiz is not open yet${dateStr ? `. Opens: ${dateStr}` : ''}`}
+        </p>
+      </div>
+    );
+  }
+
+  if (quiz.status === 'expired') {
+    const dateStr = quiz.availableTo ? new Date(quiz.availableTo).toLocaleString(isArabic ? 'ar-SA' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+    return (
+      <div className="flex flex-col items-center gap-3 py-16 text-center">
+        <span className="text-5xl">⏰</span>
+        <p className="text-base font-black text-slate-700">{quiz.title}</p>
+        <p className="text-sm font-semibold text-slate-500">
+          {isArabic ? `انتهت فترة هذا الاختبار${dateStr ? ` في: ${dateStr}` : ''}` : `This quiz period has ended${dateStr ? ` on ${dateStr}` : ''}`}
+        </p>
+      </div>
+    );
+  }
+
   const questions = quiz.questions || [];
   const total = questions.length;
   const answered = Object.keys(answers).filter((k) => answers[k] !== undefined && answers[k] !== '').length;

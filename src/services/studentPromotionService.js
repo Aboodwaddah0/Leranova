@@ -6,7 +6,7 @@ import { getOrCreateSchoolSettings, isPromotionDueToday } from './schoolSettings
 
 const round2 = (value) => Math.round(value * 100) / 100;
 
-const evaluateStudentDecision = async (tx, student, settings) => {
+const evaluateStudentDecision = async (tx, student, settings, activeYearId) => {
   if (!student.Course_id) {
     return { decision: 'PENDING', finalPercentage: null, reason: 'Student is not assigned to a course' };
   }
@@ -22,67 +22,122 @@ const evaluateStudentDecision = async (tx, student, settings) => {
 
   const subjectIds = subjects.map((subject) => subject.id);
 
-  const marks = await tx.marks.findMany({
-    where: {
-      Student_id: student.Student_id,
-      Subject_id: { in: subjectIds },
-    },
-    select: {
-      Subject_id: true,
-      Numbers: true,
-      OutOf: true,
-      ExamPercentage: true,
-    },
-  });
+  // Prefer computed_grades from the active academic year's terms
+  let subjectResults = null;
+  if (activeYearId) {
+    const termIds = (await tx.term.findMany({
+      where: { academicYearId: activeYearId },
+      select: { id: true },
+    })).map((t) => t.id);
 
-  const marksBySubject = new Map();
-  for (const mark of marks) {
-    const list = marksBySubject.get(mark.Subject_id) || [];
-    list.push(mark);
-    marksBySubject.set(mark.Subject_id, list);
+    if (termIds.length > 0) {
+      const computedGrades = await tx.computed_grade.findMany({
+        where: {
+          studentId: student.Student_id,
+          subjectId: { in: subjectIds },
+          termId: { in: termIds },
+        },
+        select: { subjectId: true, rawScore: true, isPassed: true },
+      });
+
+      if (computedGrades.length > 0) {
+        // Group by subject, average across terms
+        const bySubject = {};
+        for (const g of computedGrades) {
+          if (!bySubject[g.subjectId]) bySubject[g.subjectId] = [];
+          bySubject[g.subjectId].push(g);
+        }
+        subjectResults = subjectIds.map((sid) => {
+          const grades = bySubject[sid];
+          if (!grades || grades.length === 0) return null;
+          const avgScore = grades.reduce((s, g) => s + Number(g.rawScore), 0) / grades.length;
+          const isPassed = grades.every((g) => g.isPassed);
+          return { subjectId: sid, avgScore, isPassed };
+        });
+
+        if (subjectResults.some((r) => r === null)) {
+          return { decision: 'PENDING', finalPercentage: null, reason: 'Computed grades are incomplete for one or more subjects' };
+        }
+      }
+    }
   }
 
-  const subjectPercentages = [];
+  // Fallback: use raw marks with ExamPercentage weights
+  if (!subjectResults) {
+    const marks = await tx.marks.findMany({
+      where: {
+        Student_id: student.Student_id,
+        Subject_id: { in: subjectIds },
+      },
+      select: {
+        Subject_id: true,
+        Numbers: true,
+        OutOf: true,
+        ExamPercentage: true,
+      },
+    });
 
-  for (const subjectId of subjectIds) {
-    const subjectMarks = marksBySubject.get(subjectId) || [];
-    if (!subjectMarks.length) {
-      return { decision: 'PENDING', finalPercentage: null, reason: 'Marks are incomplete for one or more subjects' };
+    const marksBySubject = new Map();
+    for (const mark of marks) {
+      const list = marksBySubject.get(mark.Subject_id) || [];
+      list.push(mark);
+      marksBySubject.set(mark.Subject_id, list);
     }
 
-    let weightedScore = 0;
-    let weightedOutOf = 0;
+    const minSubjectPass = Number(settings.minSubjectPassPercentage);
+    subjectResults = [];
 
-    for (const mark of subjectMarks) {
-      const weight = Number(mark.ExamPercentage) / 100;
-      weightedScore += Number(mark.Numbers) * weight;
-      weightedOutOf += Number(mark.OutOf) * weight;
+    for (const subjectId of subjectIds) {
+      const subjectMarks = marksBySubject.get(subjectId) || [];
+      if (!subjectMarks.length) {
+        return { decision: 'PENDING', finalPercentage: null, reason: 'Marks are incomplete for one or more subjects' };
+      }
+
+      let weightedScore = 0;
+      let weightedOutOf = 0;
+      for (const mark of subjectMarks) {
+        const weight = Number(mark.ExamPercentage) / 100;
+        weightedScore += Number(mark.Numbers) * weight;
+        weightedOutOf += Number(mark.OutOf) * weight;
+      }
+
+      if (weightedOutOf <= 0) {
+        return { decision: 'PENDING', finalPercentage: null, reason: 'Invalid mark configuration for one or more subjects' };
+      }
+
+      const avgScore = (weightedScore / weightedOutOf) * 100;
+      subjectResults.push({ subjectId, avgScore, isPassed: avgScore >= minSubjectPass });
     }
-
-    if (weightedOutOf <= 0) {
-      return { decision: 'PENDING', finalPercentage: null, reason: 'Invalid mark configuration for one or more subjects' };
-    }
-
-    subjectPercentages.push((weightedScore / weightedOutOf) * 100);
   }
 
   const finalPercentage = round2(
-    subjectPercentages.reduce((acc, percentage) => acc + percentage, 0) / subjectPercentages.length,
+    subjectResults.reduce((acc, r) => acc + r.avgScore, 0) / subjectResults.length,
   );
 
-  const minSubjectPass = Number(settings.minSubjectPassPercentage);
+  const failedSubjects = subjectResults.filter((r) => !r.isPassed);
+  const failedCount = failedSubjects.length;
+
+  // Check required subjects
+  const requiredIds = Array.isArray(settings.requiredSubjectIds) ? settings.requiredSubjectIds.map(Number) : [];
+  const failedRequiredSubject = requiredIds.length > 0 && failedSubjects.some((r) => requiredIds.includes(r.subjectId));
+  if (failedRequiredSubject) {
+    return { decision: 'REPEATED', finalPercentage, reason: 'Student failed a required subject' };
+  }
+
+  const maxFailed = Number(settings.maxFailedSubjects ?? 0);
   const passThreshold = Number(settings.passThresholdPercentage);
-  const hasFailedSubject = subjectPercentages.some((percentage) => percentage < minSubjectPass);
 
-  if (settings.requireAllSubjectsPass && hasFailedSubject) {
-    return { decision: 'FAIL', finalPercentage, reason: 'Student failed at least one subject' };
+  if (finalPercentage < passThreshold || failedCount > maxFailed) {
+    if (settings.allowConditionalPromotion && failedCount <= Number(settings.conditionalMaxFailed ?? 1)) {
+      return { decision: 'CONDITIONAL', finalPercentage, reason: `Conditional promotion: failed ${failedCount} subject(s)` };
+    }
+    if (failedCount > 0) {
+      return { decision: 'REPEATED', finalPercentage, reason: `Student failed ${failedCount} subject(s)` };
+    }
+    return { decision: 'REPEATED', finalPercentage, reason: 'Student final percentage is below pass threshold' };
   }
 
-  if (finalPercentage < passThreshold) {
-    return { decision: 'FAIL', finalPercentage, reason: 'Student final percentage is below pass threshold' };
-  }
-
-  return { decision: 'PASS', finalPercentage, reason: 'Student meets promotion criteria' };
+  return { decision: 'PROMOTED', finalPercentage, reason: 'Student meets promotion criteria' };
 };
 
 const ensureSchoolOrg = async (tx, orgId) => {
@@ -100,13 +155,15 @@ const ensureSchoolOrg = async (tx, orgId) => {
   }
 };
 
-const applyPromotionDecision = async (tx, student, decisionResult, schoolYear, orgId) => {
+const applyPromotionDecision = async (tx, student, decisionResult, schoolYear, orgId, academicYearId) => {
   const fromGradeLevel = student.GradeLevel;
   let toGradeLevel = fromGradeLevel;
   let courseId = student.Course_id;
   let academicStatus = student.AcademicStatus || 'ACTIVE';
 
-  if (decisionResult.decision === 'PASS') {
+  const isAdvancing = decisionResult.decision === 'PROMOTED' || decisionResult.decision === 'CONDITIONAL';
+
+  if (isAdvancing) {
     if (!fromGradeLevel && student.DOB) {
       const settings = await getOrCreateSchoolSettings(orgId, tx);
       toGradeLevel = computeGradeLevelFromDob(student.DOB, settings);
@@ -127,16 +184,25 @@ const applyPromotionDecision = async (tx, student, decisionResult, schoolYear, o
         courseId = nextCourse.id;
       }
     }
-  }
 
-  if (decisionResult.decision === 'FAIL' && fromGradeLevel) {
+    if (academicStatus === 'GRADUATED') {
+      decisionResult = { ...decisionResult, decision: 'GRADUATED' };
+    }
+  } else if (decisionResult.decision === 'REPEATED' && fromGradeLevel) {
     const sameGradeCourse = await ensureCourseForGradeLevel(orgId, fromGradeLevel, tx);
     toGradeLevel = fromGradeLevel;
     courseId = sameGradeCourse.id;
     academicStatus = 'ACTIVE';
-  }
-
-  if (decisionResult.decision === 'PENDING') {
+  } else if (decisionResult.decision === 'WITHHELD') {
+    toGradeLevel = fromGradeLevel;
+    courseId = student.Course_id;
+    academicStatus = 'WITHHELD';
+  } else if (decisionResult.decision === 'TRANSFERRED') {
+    toGradeLevel = fromGradeLevel;
+    courseId = null;
+    academicStatus = 'TRANSFERRED';
+  } else {
+    // PENDING
     toGradeLevel = fromGradeLevel;
     courseId = student.Course_id;
   }
@@ -163,6 +229,7 @@ const applyPromotionDecision = async (tx, student, decisionResult, schoolYear, o
       decision: decisionResult.decision,
       finalPercentage: decisionResult.finalPercentage,
       reason: decisionResult.reason,
+      academicYearId: academicYearId ?? null,
       promotedAt: new Date(),
     },
     create: {
@@ -174,6 +241,7 @@ const applyPromotionDecision = async (tx, student, decisionResult, schoolYear, o
       finalPercentage: decisionResult.finalPercentage,
       reason: decisionResult.reason,
       schoolYear,
+      academicYearId: academicYearId ?? null,
     },
   });
 
@@ -241,16 +309,18 @@ export const runAnnualPromotionForOrg = async (orgId, options = {}) => {
 
     const records = [];
     for (const student of students) {
-      const decision = await evaluateStudentDecision(tx, student, settings);
-      const result = await applyPromotionDecision(tx, student, decision, schoolYear, orgId);
+      const decision = await evaluateStudentDecision(tx, student, settings, activeYear?.id ?? null);
+      const result = await applyPromotionDecision(tx, student, decision, schoolYear, orgId, activeYear?.id ?? null);
       records.push(result);
     }
 
     const summary = {
       totalStudents: records.length,
-      promoted: records.filter((record) => record.decision === 'PASS').length,
-      repeated: records.filter((record) => record.decision === 'FAIL').length,
-      pending: records.filter((record) => record.decision === 'PENDING').length,
+      promoted: records.filter((r) => r.decision === 'PROMOTED').length,
+      conditional: records.filter((r) => r.decision === 'CONDITIONAL').length,
+      graduated: records.filter((r) => r.decision === 'GRADUATED').length,
+      repeated: records.filter((r) => r.decision === 'REPEATED').length,
+      pending: records.filter((r) => r.decision === 'PENDING').length,
     };
 
     await tx.organization_promotion_run.create({

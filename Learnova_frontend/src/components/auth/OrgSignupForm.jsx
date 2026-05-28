@@ -81,7 +81,7 @@ export default function OrgSignupForm({ selectedPlanId, onSubmit, loading, t }) 
         </div>
         <div>
           <label className="auth-label">{t.signup.fields.subdomain}</label>
-          <input className={inp} name="subdomain" placeholder={t.signup.fields.subdomain} value={formState.subdomain} onChange={handleChange} pattern="[a-z0-9-]+" required />
+          <input className={inp} name="subdomain" placeholder={t.signup.fields.subdomain} value={formState.subdomain} onChange={handleChange} pattern="[-a-z0-9]+" required />
         </div>
         <div>
           <label className="auth-label">{t.signup.fields.email}</label>

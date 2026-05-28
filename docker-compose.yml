@@ -41,6 +41,8 @@ services:
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      EMAIL_VERIFICATION_URL_BASE: ${EMAIL_VERIFICATION_URL_BASE:-http://localhost:5173/verify-email}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       STRIPE_CHECKOUT_SUCCESS_URL: ${STRIPE_CHECKOUT_SUCCESS_URL:-http://localhost:5173/payment/success?session_id={CHECKOUT_SESSION_ID}}
       STRIPE_CHECKOUT_CANCEL_URL: ${STRIPE_CHECKOUT_CANCEL_URL:-http://localhost:5173/payment/cancel}
     depends_on:
