@@ -4,7 +4,7 @@ import { useLanguage } from "../../utils/i18n";
 
 const initialState = {
   Name: "",
-  subdomain: "",
+  portal: "",
   Email: "",
   password: "",
   Role: ORG_TYPES.ACADEMY,
@@ -22,7 +22,7 @@ export default function OrgSignupForm({ selectedPlanId, onSubmit, loading, t }) 
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormState((prev) => ({ ...prev, [name]: name === "subdomain" ? value.toLowerCase() : value }));
+    setFormState((prev) => ({ ...prev, [name]: name === "portal" ? value.toLowerCase() : value }));
   };
 
   const handleClassRangeChange = (index, field, value) => {
@@ -50,7 +50,7 @@ export default function OrgSignupForm({ selectedPlanId, onSubmit, loading, t }) 
       setError("");
       onSubmit({
         Name:        formState.Name,
-        subdomain:   formState.subdomain,
+        portal:      formState.portal,
         Email:       formState.Email,
         password:    formState.password,
         Role:        formState.Role,
@@ -80,8 +80,17 @@ export default function OrgSignupForm({ selectedPlanId, onSubmit, loading, t }) 
           <input className={inp} name="Name" placeholder={t.signup.fields.name} value={formState.Name} onChange={handleChange} required />
         </div>
         <div>
-          <label className="auth-label">{t.signup.fields.subdomain}</label>
-          <input className={inp} name="subdomain" placeholder={t.signup.fields.subdomain} value={formState.subdomain} onChange={handleChange} pattern="[-a-z0-9]+" required />
+          <label className="auth-label">{isArabic ? "النطاق الفرعي المفضل" : "Preferred Subdomain"} <span className="text-rose-500">*</span></label>
+          <div className="flex items-center overflow-hidden rounded-xl border border-slate-200 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition">
+            <input
+              className="min-w-0 flex-1 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none"
+              name="portal" placeholder="your-org" value={formState.portal}
+              onChange={handleChange} pattern="[-a-z0-9]+" required
+            />
+            <span className="shrink-0 select-none border-l border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-400 font-mono whitespace-nowrap">
+              .learnova.com
+            </span>
+          </div>
         </div>
         <div>
           <label className="auth-label">{t.signup.fields.email}</label>

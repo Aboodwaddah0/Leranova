@@ -8,7 +8,7 @@ import { sendOrgApprovedEmail, sendOrgRejectedEmail } from '../utils/emailServic
 const organizationSelect = {
   id: true,
   Name: true,
-  subdomain: true,
+  portal: true,
   Email: true,
   Phone: true,
   Founded: true,
@@ -21,10 +21,10 @@ const organizationSelect = {
 };
 
 const normalizeOrganizationRole = (role) => String(role || '').trim().toUpperCase();
-const normalizeSubdomain = (subdomain) => String(subdomain || '').trim().toLowerCase();
+const normalizeSubdomain = (portal) => String(portal || '').trim().toLowerCase();
 
 export const createOrganization = async (data) => {
-  const normalizedSubdomain = normalizeSubdomain(data.subdomain);
+  const normalizedSubdomain = normalizeSubdomain(data.portal);
   const normalizedRole = normalizeOrganizationRole(data.Role);
   
   // Validate classRanges for school organizations
@@ -48,7 +48,7 @@ export const createOrganization = async (data) => {
 
   const existingSubdomain = await prisma.organization.findUnique({
     where: {
-      subdomain: normalizedSubdomain,
+      portal: normalizedSubdomain,
     },
     select: {
       id: true,
@@ -56,7 +56,7 @@ export const createOrganization = async (data) => {
   });
 
   if (existingSubdomain) {
-    throw new AppError('Organization subdomain already exists', 400);
+    throw new AppError('Organization portal already exists', 400);
   }
 
   const hashedPassword = await hashPassword(data.password);
@@ -65,7 +65,7 @@ export const createOrganization = async (data) => {
     const organization = await tx.organization.create({
       data: {
         Name: data.Name,
-        subdomain: normalizedSubdomain,
+        portal: normalizedSubdomain,
         Email: data.Email,
         Password_Hashed: hashedPassword,
         Phone: data.Phone ?? null,
@@ -127,7 +127,7 @@ export const getOrganizationById = async (organizationId) => {
 export const updateOrganization = async (organizationId, data) => {
   const existing = await getOrganizationById(organizationId);
 
-  const normalizedSubdomain = data.subdomain ? normalizeSubdomain(data.subdomain) : undefined;
+  const normalizedSubdomain = data.portal ? normalizeSubdomain(data.portal) : undefined;
 
   if (data.Email) {
     const emailOwner = await prisma.organization.findUnique({
@@ -145,17 +145,17 @@ export const updateOrganization = async (organizationId, data) => {
   }
 
   if (normalizedSubdomain) {
-    const subdomainOwner = await prisma.organization.findUnique({
+    const portalOwner = await prisma.organization.findUnique({
       where: {
-        subdomain: normalizedSubdomain,
+        portal: normalizedSubdomain,
       },
       select: {
         id: true,
       },
     });
 
-    if (subdomainOwner && subdomainOwner.id !== organizationId) {
-      throw new AppError('Organization subdomain already exists', 400);
+    if (portalOwner && portalOwner.id !== organizationId) {
+      throw new AppError('Organization portal already exists', 400);
     }
   }
 
@@ -165,7 +165,7 @@ export const updateOrganization = async (organizationId, data) => {
     },
     data: {
       Name: data.Name,
-      subdomain: normalizedSubdomain,
+      portal: normalizedSubdomain,
       Email: data.Email,
       Password_Hashed: data.password ? await hashPassword(data.password) : undefined,
       Phone: data.Phone ?? undefined,

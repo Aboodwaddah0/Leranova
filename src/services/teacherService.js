@@ -89,7 +89,7 @@ const teacherSelfSelect = {
       id: true,
       Name: true,
       Role: true,
-      subdomain: true,
+      portal: true,
       status: true,
     },
   },
@@ -165,7 +165,7 @@ const serializeTeacherSelfProfile = (teacher) => ({
         id: teacher.organization.id,
         name: teacher.organization.Name,
         role: teacher.organization.Role,
-        subdomain: teacher.organization.subdomain,
+        portal: teacher.organization.portal,
         status: teacher.organization.status,
       }
     : null,

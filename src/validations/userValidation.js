@@ -107,9 +107,11 @@ export const validateAddUserData = (data) => {
 		errors.push("Name is required");
 	}
 
-	if (!email) {
-		errors.push("Email is required");
-	} else {
+	if (role === 'TEACHER' && !email) {
+		errors.push("Email is required for TEACHER");
+	}
+
+	if (email) {
 		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 		if (!emailRegex.test(email)) {
 			errors.push("Email must be valid");
@@ -334,6 +336,10 @@ export const validateExcelData = (data, options = {}) => {
 				: normalizeNationalId(rawParentNationalId);
 
 		let isEmailValid = true;
+		if (role === 'TEACHER' && !email) {
+			isEmailValid = false;
+			errors.push(`Row ${rowNumber}: Email is required for TEACHER rows`);
+		}
 		if (email) {
 			const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 			if (!emailRegex.test(email)) {
@@ -403,6 +409,7 @@ export const validateExcelData = (data, options = {}) => {
 			(role !== "STUDENT" || (Number.isInteger(ageValue) && ageValue >= 0)) &&
 			(role !== "STUDENT" || (gender && USER_GENDERS.has(gender))) &&
 			(role !== "STUDENT" || address) &&
+			(role !== "TEACHER" || email) &&
 			isEmailValid &&
 			isPasswordValid
 		) {

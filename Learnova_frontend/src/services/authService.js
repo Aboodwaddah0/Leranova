@@ -6,31 +6,25 @@ export const fetchPlans = async () => {
   return data?.data || [];
 };
 
-export const loginWithRole = async ({ role, email, password, nationalId }) => {
-  if (role === AUTH_ROLES.ORGANIZATION) {
-    const { data } = await api.post("/auth/organization/login", {
-      Email: email,
-      password,
-    });
+const isEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+
+export const loginWithRole = async ({ email, password }) => {
+  const identifier = String(email || "").trim();
+
+  // Registration number → user login only
+  if (!isEmail(identifier)) {
+    const { data } = await api.post("/auth/user/login", { registrationNumber: identifier, password });
     return data?.data;
   }
 
-  if (role === AUTH_ROLES.PARENT) {
-    const { data } = await api.post("/auth/parent/login", {
-      email,
-      password,
-    });
+  // Email → try user login first, fall back to org login
+  try {
+    const { data } = await api.post("/auth/user/login", { email: identifier, password });
+    return data?.data;
+  } catch (_) {
+    const { data } = await api.post("/auth/organization/login", { Email: identifier, password });
     return data?.data;
   }
-
-  const userRole = role === AUTH_ROLES.INSTRUCTOR ? "TEACHER" : role;
-
-  const { data } = await api.post("/auth/user/login", {
-    email,
-    password,
-    role: userRole,
-  });
-  return data?.data;
 };
 
 export const registerOrganization = async (payload) => {

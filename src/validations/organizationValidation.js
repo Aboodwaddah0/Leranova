@@ -2,7 +2,7 @@ import Joi from 'joi';
 
 const organizationRoleValues = ['ACADEMY', 'SCHOOL'];
 const organizationStatusValues = ['PENDING', 'EMAIL_VERIFIED', 'APPROVED', 'REJECTED'];
-const subdomainPattern = /^[a-z0-9-]+$/;
+const portalPattern = /^[a-z0-9-]+$/;
 const classRangeSchema = Joi.object({
 	startGradeLevel: Joi.number().integer().min(1).max(12).required(),
 	endGradeLevel: Joi.number().integer().min(1).max(12).required(),
@@ -10,7 +10,7 @@ const classRangeSchema = Joi.object({
 
 export const createOrganizationSchema = Joi.object({
 	Name: Joi.string().max(255).required(),
-	subdomain: Joi.string().trim().lowercase().max(63).pattern(subdomainPattern).required(),
+	portal: Joi.string().trim().lowercase().max(63).pattern(portalPattern).required(),
 	Email: Joi.string().email().max(255).required(),
 	password: Joi.string().min(6).required(),
 	Phone: Joi.string().max(50).allow('', null),
@@ -29,7 +29,7 @@ export const createOrganizationSchema = Joi.object({
 
 export const updateOrganizationSchema = Joi.object({
 	Name: Joi.string().max(255),
-	subdomain: Joi.string().trim().lowercase().max(63).pattern(subdomainPattern),
+	portal: Joi.string().trim().lowercase().max(63).pattern(portalPattern),
 	Email: Joi.string().email().max(255),
 	password: Joi.string().min(6),
 	Phone: Joi.string().max(50).allow('', null),
@@ -45,7 +45,7 @@ export const updateOrganizationSchema = Joi.object({
 
 export const updateOwnOrganizationSchema = Joi.object({
 	Name: Joi.string().max(255),
-	subdomain: Joi.string().trim().lowercase().max(63).pattern(subdomainPattern),
+	portal: Joi.string().trim().lowercase().max(63).pattern(portalPattern),
 	Email: Joi.string().email().max(255),
 	password: Joi.string().min(6),
 	Phone: Joi.string().max(50).allow('', null),

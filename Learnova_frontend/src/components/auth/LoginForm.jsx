@@ -14,15 +14,21 @@ const rolePaths = {
   [AUTH_ROLES.PARENT]:       "/dashboard/parent",
 };
 
-export default function LoginForm({ t }) {
-  const dispatch     = useDispatch();
-  const navigate     = useNavigate();
-  const selectedRole = useSelector((s) => s.ui.selectedRole);
+const backendRoleToAuthRole = {
+  STUDENT:  AUTH_ROLES.STUDENT,
+  TEACHER:  AUTH_ROLES.INSTRUCTOR,
+  PARENT:   AUTH_ROLES.PARENT,
+  ADMIN:    AUTH_ROLES.ADMIN,
+};
+
+export default function LoginForm({ t, isArabic }) {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { loading, error } = useSelector((s) => s.auth);
 
   useEffect(() => { if (error) notifyError(error); }, [error]);
 
-  const [formState, setFormState] = useState({ email: "", password: "", rememberMe: true });
+  const [formState, setFormState] = useState({ identifier: "", password: "", rememberMe: true });
 
   const onChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -31,28 +37,46 @@ export default function LoginForm({ t }) {
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    dispatch(setAuthRole(selectedRole));
-    const result = await dispatch(loginThunk({ role: selectedRole, password: formState.password, email: formState.email }));
+    const result = await dispatch(loginThunk({
+      email: formState.identifier,
+      password: formState.password,
+    }));
     if (loginThunk.fulfilled.match(result)) {
-      const mustChangePassword =
-        result.payload?.user?.mustChangePassword ||
-        result.payload?.parent?.mustChangePassword ||
-        false;
-      if (mustChangePassword) {
-        navigate("/change-password");
-      } else {
-        navigate(rolePaths[selectedRole] || "/dashboard");
+      const payload = result.payload;
+
+      // Org login response has an `organization` key; user login has `user`
+      if (payload?.organization) {
+        dispatch(setAuthRole(AUTH_ROLES.ORGANIZATION));
+        navigate(rolePaths[AUTH_ROLES.ORGANIZATION]);
+        return;
       }
+
+      const user = payload?.user;
+      const mustChange = user?.mustChangePassword || false;
+      if (mustChange) {
+        navigate("/change-password");
+        return;
+      }
+      const authRole = backendRoleToAuthRole[user?.role] || AUTH_ROLES.STUDENT;
+      dispatch(setAuthRole(authRole));
+      navigate(rolePaths[authRole] || "/dashboard");
     }
   };
 
   return (
     <form className="space-y-5" onSubmit={onSubmit}>
       <div>
-        <label className="auth-label">{t.login.email}</label>
+        <label className="auth-label">
+          {isArabic ? "البريد الإلكتروني أو رقم القيد" : "Email or Registration Number"}
+        </label>
         <input
-          name="email" type="email" value={formState.email} onChange={onChange} required
-          className="auth-input" placeholder={t.login.emailPlaceholder}
+          name="identifier"
+          value={formState.identifier}
+          onChange={onChange}
+          required
+          className="auth-input"
+          placeholder={isArabic ? "أدخل البريد أو رقم القيد" : "Enter email or registration number"}
+          autoComplete="username"
         />
       </div>
 

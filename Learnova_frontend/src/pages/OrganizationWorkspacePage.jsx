@@ -25,6 +25,7 @@ import {
   fetchSchoolSettings,
   fetchStudentCourses,
   importUsersFromExcel,
+  downloadSampleExcel,
   linkParentToStudents,
   removeStudentFromCourse,
   runAnnualPromotion,
@@ -400,7 +401,7 @@ export default function OrganizationWorkspacePage() {
   const organizationType = String((organizationProfile?.type || organization?.type || organizationProfile?.Role || organization?.Role) || "").toUpperCase();
   const isSchool = organizationType === "SCHOOL";
   const isAcademy = organizationType === "ACADEMY";
-  const orgKey = organizationProfile?.subdomain || organization?.subdomain || "default";
+  const orgKey = organizationProfile?.portal || organization?.portal || "default";
   const canManageCourses = isSchool || isAcademy;
   const sl = getSubjectLabels(isAcademy, isArabic);
 
@@ -466,7 +467,7 @@ export default function OrganizationWorkspacePage() {
   const [profileForm, setProfileForm] = useState({
     Name: organization?.Name || "",
     Email: organization?.Email || "",
-    subdomain: organization?.subdomain || "",
+    portal: organization?.portal || "",
     Phone: organization?.Phone || organization?.PhoneNumber || "",
     Address: organization?.Address || "",
     Description: organization?.Description || "",
@@ -957,7 +958,7 @@ export default function OrganizationWorkspacePage() {
       setProfileForm({
         Name: profileData?.Name || "",
         Email: profileData?.Email || "",
-        subdomain: profileData?.subdomain || "",
+        portal: profileData?.portal || "",
         Phone: profileData?.Phone || profileData?.PhoneNumber || "",
         Address: profileData?.Address || "",
         Description: profileData?.Description || "",
@@ -1437,7 +1438,7 @@ export default function OrganizationWorkspacePage() {
     const payload = {
       Name: profileForm.Name,
       Email: profileForm.Email,
-      subdomain: profileForm.subdomain,
+      portal: profileForm.portal,
       Phone: profileForm.Phone,
       Address: profileForm.Address,
       Description: profileForm.Description,
@@ -1901,6 +1902,15 @@ export default function OrganizationWorkspacePage() {
     }, t.organization.messages.teacherImportDone);
 
     event.target.value = "";
+  };
+
+  const handleDownloadSample = async (role) => {
+    try {
+      const blob = await downloadSampleExcel(role);
+      triggerBlobDownload(blob, `sample_${role}.xlsx`);
+    } catch {
+      notifyError(isArabic ? "فشل تحميل النموذج" : "Failed to download sample");
+    }
   };
 
   const saveSchoolSettingsAction = async (event) => {
@@ -2549,7 +2559,7 @@ export default function OrganizationWorkspacePage() {
               <div className="mt-4 space-y-2 text-sm text-slate-700">
                 <p><span className="font-semibold">{t.organization.organizationInfo.name}:</span> {organizationProfile?.Name || "-"}</p>
                 <p><span className="font-semibold">{t.organization.organizationInfo.email}:</span> {organizationProfile?.Email || "-"}</p>
-                <p><span className="font-semibold">{t.organization.organizationInfo.subdomain}:</span> {organizationProfile?.subdomain || "-"}</p>
+                <p><span className="font-semibold">{t.organization.organizationInfo.portal}:</span> {organizationProfile?.portal || "-"}</p>
                 {organizationProfile?.Phone && <p><span className="font-semibold">{t.organization.organizationInfo.phone}:</span> {organizationProfile.Phone}</p>}
                 {organizationProfile?.Address && <p><span className="font-semibold">{t.organization.organizationInfo.address}:</span> {organizationProfile.Address}</p>}
                 {organizationProfile?.Founded && <p><span className="font-semibold">{t.organization.organizationInfo.founded}:</span> {String(organizationProfile.Founded).slice(0, 10)}</p>}
@@ -2573,7 +2583,7 @@ export default function OrganizationWorkspacePage() {
               <form onSubmit={saveProfile} className="space-y-3 text-sm text-slate-700">
                 <input name="Name" value={profileForm.Name} onChange={setField(setProfileForm)} placeholder={t.organization.organizationInfo.name} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
                 <input name="Email" value={profileForm.Email} onChange={setField(setProfileForm)} placeholder={t.organization.organizationInfo.email} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
-                <input name="subdomain" value={profileForm.subdomain} onChange={setField(setProfileForm)} placeholder={t.organization.organizationInfo.subdomain} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
+                <input name="portal" value={profileForm.portal} onChange={setField(setProfileForm)} placeholder={t.organization.organizationInfo.portal} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
                 <input name="Phone" value={profileForm.Phone} onChange={setField(setProfileForm)} placeholder={t.organization.organizationInfo.phone} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
                 <input name="Address" value={profileForm.Address} onChange={setField(setProfileForm)} placeholder={t.organization.organizationInfo.address} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
                 <input name="Founded" type="date" value={profileForm.Founded} onChange={setField(setProfileForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
@@ -2794,25 +2804,7 @@ export default function OrganizationWorkspacePage() {
                   <input name="firstName" value={teacherForm.firstName} onChange={setField(setTeacherForm)} placeholder={isArabic ? "الاسم الأول" : "First Name"} className="h-11 flex-1 rounded-xl border border-slate-200 px-3" required />
                   <input name="lastName" value={teacherForm.lastName} onChange={setField(setTeacherForm)} placeholder={isArabic ? "اسم العائلة" : "Last Name"} className="h-11 flex-1 rounded-xl border border-slate-200 px-3" required />
                 </div>
-                {!teacherForm.id && (
-                  <div className="flex overflow-hidden rounded-xl border border-slate-200">
-                    <button type="button" onClick={() => setTeacherEmailAuto(false)}
-                      className={`flex-1 py-2 text-xs font-semibold transition ${!teacherEmailAuto ? "bg-slate-900 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
-                      {isArabic ? "إدخال البريد يدوياً" : "Enter email manually"}
-                    </button>
-                    <button type="button" onClick={() => setTeacherEmailAuto(true)}
-                      className={`flex-1 py-2 text-xs font-semibold transition ${teacherEmailAuto ? "bg-indigo-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
-                      {isArabic ? "توليد تلقائي بالنطاق" : "Auto-generate by domain"}
-                    </button>
-                  </div>
-                )}
-                {(!teacherForm.id && !teacherEmailAuto) || teacherForm.id ? (
-                  <input name="email" value={teacherForm.email} onChange={setField(setTeacherForm)} placeholder={t.organization.teachers.email} className="h-11 w-full rounded-xl border border-slate-200 px-3" required={!teacherForm.id} />
-                ) : (
-                  <p className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-xs text-indigo-600">
-                    {isArabic ? "سيتم توليد البريد تلقائياً بناءً على اسم المدرس ونطاق المنظمة." : "Email will be auto-generated based on the teacher's name and your organization's domain."}
-                  </p>
-                )}
+                <input name="email" value={teacherForm.email} onChange={setField(setTeacherForm)} placeholder={t.organization.teachers.email} className="h-11 w-full rounded-xl border border-slate-200 px-3" required={!teacherForm.id} />
                 <input name="specialization" value={teacherForm.specialization} onChange={setField(setTeacherForm)} placeholder={t.organization.teachers.specialization} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
                 <textarea name="bio" value={teacherForm.bio} onChange={setField(setTeacherForm)} placeholder={t.organization.teachers.bio} className="min-h-20 w-full rounded-xl border border-slate-200 px-3 py-2" />
                 <div className="flex gap-2 pt-1">
@@ -2822,10 +2814,15 @@ export default function OrganizationWorkspacePage() {
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <p className="text-sm font-semibold text-slate-800">{t.organization.teachers.importTitle}</p>
                   <p className="mt-1 text-xs text-slate-500">{t.organization.teachers.importHint}</p>
-                  <label className="mt-3 inline-flex cursor-pointer items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
-                    <input type="file" accept=".xlsx,.xls" className="hidden" onChange={uploadTeacherExcel} />
-                    {t.organization.teachers.importAction}
-                  </label>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <label className="inline-flex cursor-pointer items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                      <input type="file" accept=".xlsx,.xls" className="hidden" onChange={uploadTeacherExcel} />
+                      {t.organization.teachers.importAction}
+                    </label>
+                    <button type="button" onClick={() => handleDownloadSample("TEACHER")} className="inline-flex items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-100">
+                      ↓ {isArabic ? "تحميل نموذج" : "Download Sample"}
+                    </button>
+                  </div>
                 </div>
               </form>
             </Modal>
@@ -3857,25 +3854,7 @@ export default function OrganizationWorkspacePage() {
                   <input name="firstName" value={studentForm.firstName} onChange={setField(setStudentForm)} placeholder={isArabic ? "الاسم الأول" : "First Name"} className="h-11 flex-1 rounded-xl border border-slate-200 px-3" required />
                   <input name="lastName" value={studentForm.lastName} onChange={setField(setStudentForm)} placeholder={isArabic ? "اسم العائلة" : "Last Name"} className="h-11 flex-1 rounded-xl border border-slate-200 px-3" required />
                 </div>
-                {!studentForm.id && (
-                  <div className="flex overflow-hidden rounded-xl border border-slate-200">
-                    <button type="button" onClick={() => setStudentEmailAuto(false)}
-                      className={`flex-1 py-2 text-xs font-semibold transition ${!studentEmailAuto ? "bg-slate-900 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
-                      {isArabic ? "إدخال البريد يدوياً" : "Enter email manually"}
-                    </button>
-                    <button type="button" onClick={() => setStudentEmailAuto(true)}
-                      className={`flex-1 py-2 text-xs font-semibold transition ${studentEmailAuto ? "bg-indigo-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
-                      {isArabic ? "توليد تلقائي بالنطاق" : "Auto-generate by domain"}
-                    </button>
-                  </div>
-                )}
-                {(!studentForm.id && !studentEmailAuto) || studentForm.id ? (
-                  <input name="email" value={studentForm.email} onChange={setField(setStudentForm)} placeholder={t.organization.students.email} className="h-11 w-full rounded-xl border border-slate-200 px-3" required={!studentForm.id} />
-                ) : (
-                  <p className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-xs text-indigo-600">
-                    {isArabic ? "سيتم توليد البريد تلقائياً بناءً على اسم الطالب ونطاق المنظمة." : "Email will be auto-generated based on the student's name and your organization's domain."}
-                  </p>
-                )}
+                <input name="email" value={studentForm.email} onChange={setField(setStudentForm)} placeholder={isArabic ? "البريد الإلكتروني (اختياري)" : "Email (optional)"} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
                 <input name="age" type="number" value={studentForm.age} onChange={setField(setStudentForm)} placeholder={t.organization.students.age} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
                 <input name="dob" type="date" value={studentForm.dob} onChange={setField(setStudentForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
                 {isSchool && <input name="parentNationalId" value={studentForm.parentNationalId} onChange={setField(setStudentForm)} placeholder={t.organization.students.parentNationalId} className="h-11 w-full rounded-xl border border-slate-200 px-3" />}
@@ -3891,10 +3870,15 @@ export default function OrganizationWorkspacePage() {
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <p className="text-sm font-semibold text-slate-800">{t.organization.students.importTitle}</p>
                   <p className="mt-1 text-xs text-slate-500">{t.organization.students.importHint}</p>
-                  <label className="mt-3 inline-flex cursor-pointer items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
-                    <input type="file" accept=".xlsx,.xls" className="hidden" onChange={uploadStudentExcel} />
-                    {t.organization.students.importAction}
-                  </label>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <label className="inline-flex cursor-pointer items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                      <input type="file" accept=".xlsx,.xls" className="hidden" onChange={uploadStudentExcel} />
+                      {t.organization.students.importAction}
+                    </label>
+                    <button type="button" onClick={() => handleDownloadSample("STUDENT")} className="inline-flex items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-100">
+                      ↓ {isArabic ? "تحميل نموذج" : "Download Sample"}
+                    </button>
+                  </div>
                 </div>
               </form>
             </Modal>
@@ -4115,25 +4099,7 @@ export default function OrganizationWorkspacePage() {
                   <input name="firstName" value={parentForm.firstName} onChange={setField(setParentForm)} placeholder={isArabic ? "الاسم الأول" : "First Name"} className="h-11 flex-1 rounded-xl border border-slate-200 px-3" required />
                   <input name="lastName" value={parentForm.lastName} onChange={setField(setParentForm)} placeholder={isArabic ? "اسم العائلة" : "Last Name"} className="h-11 flex-1 rounded-xl border border-slate-200 px-3" required />
                 </div>
-                {!parentForm.id && (
-                  <div className="flex overflow-hidden rounded-xl border border-slate-200">
-                    <button type="button" onClick={() => setParentEmailAuto(false)}
-                      className={`flex-1 py-2 text-xs font-semibold transition ${!parentEmailAuto ? "bg-slate-900 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
-                      {isArabic ? "إدخال البريد يدوياً" : "Enter email manually"}
-                    </button>
-                    <button type="button" onClick={() => setParentEmailAuto(true)}
-                      className={`flex-1 py-2 text-xs font-semibold transition ${parentEmailAuto ? "bg-indigo-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
-                      {isArabic ? "توليد تلقائي بالنطاق" : "Auto-generate by domain"}
-                    </button>
-                  </div>
-                )}
-                {(!parentForm.id && !parentEmailAuto) || parentForm.id ? (
-                  <input name="email" value={parentForm.email} onChange={setField(setParentForm)} placeholder={t.organization.parents.email} className="h-11 w-full rounded-xl border border-slate-200 px-3" required={!parentForm.id} />
-                ) : (
-                  <p className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-xs text-indigo-600">
-                    {isArabic ? "سيتم توليد البريد تلقائياً بناءً على اسم ولي الأمر ونطاق المنظمة." : "Email will be auto-generated based on the parent's name and your organization's domain."}
-                  </p>
-                )}
+                <input name="email" value={parentForm.email} onChange={setField(setParentForm)} placeholder={isArabic ? "البريد الإلكتروني (اختياري)" : "Email (optional)"} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
                 <input name="address" value={parentForm.address} onChange={setField(setParentForm)} placeholder={t.organization.parents.address} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
                 <div className="flex gap-2 pt-1">
                   <button type="submit" disabled={actionLoading} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">{t.organization.common.save}</button>

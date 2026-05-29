@@ -1,21 +1,11 @@
-import { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { useDispatch } from "react-redux";
 import { Sparkles, Bot, BarChart3, Shield } from "lucide-react";
 import LoginForm from "../components/auth/LoginForm";
-import RoleSelector from "../components/auth/RoleSelector";
-import { setSelectedRole } from "../redux/slices/uiSlice";
-import { AUTH_ROLES } from "../utils/constants";
 import { useLanguage } from "../utils/i18n";
 import authPhoto from "../assets/authPhoto.jpg";
 
 export default function LoginPage() {
-  const dispatch = useDispatch();
   const { lang, isArabic, t, toggleLang } = useLanguage();
-
-  useEffect(() => {
-    dispatch(setSelectedRole(AUTH_ROLES.STUDENT));
-  }, [dispatch]);
 
   const highlights = isArabic
     ? [
@@ -127,8 +117,7 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-5">
-              <RoleSelector t={t} />
-              <LoginForm t={t} />
+              <LoginForm t={t} isArabic={isArabic} />
             </div>
 
             <div className="mt-8 border-t border-slate-100 pt-6 text-center">

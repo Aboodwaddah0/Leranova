@@ -19,7 +19,7 @@ import { isBusinessEmail } from '../utils/domainCheck.js';
 
 const PASSWORD_RESET_EXPIRY_MINUTES = 15;
 const EMAIL_VERIFICATION_EXPIRY_HOURS = 72;
-const normalizeSubdomain = (subdomain) => String(subdomain || '').trim().toLowerCase();
+const normalizePortal = (portal) => String(portal || '').trim().toLowerCase();
 const normalizeNationalId = (nationalId) => String(nationalId || '').trim().replace(/[\s-]/g, '');
 const normalizeRequestedUserRole = (role) => {
   const normalizedRole = String(role || '').trim().toUpperCase();
@@ -37,7 +37,7 @@ const normalizeRequestedUserRole = (role) => {
 
 export const registerOrganization = async (data) => {
   const normalizedRole = String(data.Role || '').trim().toUpperCase();
-  const normalizedSubdomain = normalizeSubdomain(data.subdomain);
+  const normalizedPortal = normalizePortal(data.portal);
   const normalizedPlanId = Number(data.planId);
   const hasSelectedPlan = Number.isInteger(normalizedPlanId) && normalizedPlanId > 0;
 
@@ -56,13 +56,13 @@ export const registerOrganization = async (data) => {
     throw new AppError('Organization email already exists', 400);
   }
 
-  const existingSubdomain = await prisma.organization.findUnique({
-    where: { subdomain: normalizedSubdomain },
+  const existingPortal = await prisma.organization.findUnique({
+    where: { portal: normalizedPortal },
     select: { id: true },
   });
 
-  if (existingSubdomain) {
-    throw new AppError('Organization subdomain already exists', 400);
+  if (existingPortal) {
+    throw new AppError('Organization portal already exists', 400);
   }
 
   let selectedPlan = null;
@@ -95,7 +95,7 @@ export const registerOrganization = async (data) => {
     const organization = await tx.organization.create({
       data: {
         Name: data.Name,
-        subdomain: normalizedSubdomain,
+        portal: normalizedPortal,
         Email: data.Email,
         Password_Hashed: hashedPassword,
         Phone: data.Phone ?? null,
@@ -111,7 +111,7 @@ export const registerOrganization = async (data) => {
       select: {
         id: true,
         Name: true,
-        subdomain: true,
+        portal: true,
         Email: true,
         Phone: true,
         Founded: true,
@@ -319,7 +319,7 @@ export const loginOrganization = async ({ Email, password }) => {
     organization: {
       id: organization.id,
       Name: organization.Name,
-      subdomain: organization.subdomain,
+      portal: organization.portal,
       Email: organization.Email,
       Phone: organization.Phone,
       Founded: organization.Founded,
@@ -333,50 +333,61 @@ export const loginOrganization = async ({ Email, password }) => {
   };
 };
 
-// Teacher/Student login with email and password.
-export const loginUser = async ({ email, password, role }) => {
-  if (!email || !password) {
-    throw new AppError('Email and password are required', 400);
+// Teacher/Student login with email/registrationNumber and password.
+export const loginUser = async ({ email, registrationNumber, password, role }) => {
+  if (!email && !registrationNumber) {
+    throw new AppError('Email or registration number is required', 400);
   }
 
   const requestedRole = normalizeRequestedUserRole(role);
 
-  const user = await prisma.user.findUnique({
-    where: { email },
-    include: {
-      student: {
-        include: {
-          organization: {
-            select: { id: true, Name: true, Role: true },
-          },
-        },
-      },
-      academy_user: {
-        include: {
-          organization: {
-            select: { id: true, Name: true, Role: true },
-          },
-        },
-      },
-      teacher: {
-        include: {
-          organization: {
-            select: { id: true, Name: true, Role: true },
-          },
+  const userInclude = {
+    student: {
+      include: {
+        organization: {
+          select: { id: true, Name: true, Role: true },
         },
       },
     },
-  });
-  if (!user) {
-    throw new AppError('Invalid email or password', 401);
+    academy_user: {
+      include: {
+        organization: {
+          select: { id: true, Name: true, Role: true },
+        },
+      },
+    },
+    teacher: {
+      include: {
+        organization: {
+          select: { id: true, Name: true, Role: true },
+        },
+      },
+    },
+    parent: true,
+  };
+
+  let user;
+
+  if (registrationNumber) {
+    user = await prisma.user.findUnique({
+      where: { registrationNumber: String(registrationNumber).trim() },
+      include: userInclude,
+    });
+    if (!user || user.role !== 'STUDENT') {
+      throw new AppError('Invalid registration number or password', 401);
+    }
+  } else {
+    user = await prisma.user.findUnique({
+      where: { email },
+      include: userInclude,
+    });
+    if (!user) {
+      throw new AppError('Invalid email or password', 401);
+    }
   }
 
-  if (user.role !== 'TEACHER' && user.role !== 'STUDENT' && user.role !== 'ADMIN') {
-    throw new AppError('This login flow is only for teacher, student, and admin', 403);
-  }
-
-  if (requestedRole && requestedRole !== user.role) {
-    throw new AppError('Selected role does not match this account', 403);
+  if (!['TEACHER', 'STUDENT', 'ADMIN', 'PARENT'].includes(user.role)) {
+    throw new AppError('This login flow is only for teachers, students, parents, and admins', 403);
   }
 
   const isPasswordValid = await comparePassword(password, user.passwordHashed);
@@ -414,6 +425,7 @@ export const loginUser = async ({ email, password, role }) => {
             orgId: user.academy_user.OrgId,
           }
         : null,
+      parent: user.parent ? { parentId: user.parent.Parent_id } : null,
     },
     token,
   };
