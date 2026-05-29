@@ -387,7 +387,7 @@ model notification {
 model organization {
   id                     Int                           @id @default(autoincrement())
   Name                   String                        @db.VarChar(255)
-  subdomain              String                        @unique @db.VarChar(63)
+  portal                 String                        @unique @db.VarChar(63)
   Email                  String                        @unique(map: "Email") @db.VarChar(255)
   Password_Hashed        String                        @db.VarChar(255)
   PasswordResetToken     String?                       @db.VarChar(255)
@@ -686,7 +686,7 @@ model user {
   name                   String              @db.VarChar(255)
   age                    Int?
   gender                 user_Gender?
-  email                  String              @unique(map: "Email") @db.VarChar(255)
+  email                  String?             @unique(map: "Email") @db.VarChar(255)
   passwordHashed         String              @db.VarChar(255)
   passwordEncrypted      String?             @db.VarChar(1024)
   passwordResetToken     String?             @db.VarChar(255)
@@ -694,6 +694,7 @@ model user {
   passwordChangedAt      DateTime?           @db.Timestamp(0)
   mustChangePassword     Boolean             @default(false)
   address                String?             @db.VarChar(255)
+  registrationNumber     String?             @unique @db.VarChar(50)
   role                   user_Role
   academy_user           academy_user?
   chat_participants      chat_participants[]

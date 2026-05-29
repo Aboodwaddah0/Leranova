@@ -178,6 +178,13 @@ export const importUsersFromExcel = async (file) => {
   return data || null;
 };
 
+export const downloadSampleExcel = async (role) => {
+  const response = await api.get(`/users/sample-excel?role=${role}`, {
+    responseType: "blob",
+  });
+  return response?.data || null;
+};
+
 export const downloadOrganizationCredentialsCsv = async () => {
   const response = await api.get('/users/export-credentials', {
     responseType: 'blob',

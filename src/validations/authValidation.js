@@ -1,6 +1,6 @@
 import Joi from 'joi';
 
-const subdomainPattern = /^[a-z0-9-]+$/;
+const portalPattern = /^[a-z0-9-]+$/;
 const classRangeSchema = Joi.object({
   startGradeLevel: Joi.number().integer().min(1).max(12).required(),
   endGradeLevel: Joi.number().integer().min(1).max(12).required(),
@@ -8,7 +8,7 @@ const classRangeSchema = Joi.object({
 
 export const registerOrganizationSchema = Joi.object({
   Name: Joi.string().max(255).required(),
-  subdomain: Joi.string().trim().lowercase().max(63).pattern(subdomainPattern).required(),
+  portal: Joi.string().trim().lowercase().max(63).pattern(portalPattern).required(),
   Email: Joi.string().email().max(255).required(),
   password: Joi.string().min(6).required(),
   Role: Joi.string().valid('ACADEMY', 'SCHOOL', 'Academy', 'School').required(),
@@ -27,10 +27,11 @@ export const loginOrganizationSchema = Joi.object({
 });
 
 export const loginUserSchema = Joi.object({
-  email: Joi.string().email().max(255).required(),
+  email: Joi.string().email().max(255),
+  registrationNumber: Joi.string().max(50),
   password: Joi.string().required(),
   role: Joi.string().valid('STUDENT', 'TEACHER', 'INSTRUCTOR', 'ADMIN').optional(),
-});
+}).or('email', 'registrationNumber');
 
 export const loginParentSchema = Joi.object({
   email: Joi.string().trim().email().required(),

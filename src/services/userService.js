@@ -1,11 +1,12 @@
 import prisma from "../utils/prisma.js";
-import { generateUserCredentials, generateTempPassword } from "../utils/generateUsersAccount.js";
+import { generateTempPassword } from "../utils/generateUsersAccount.js";
 import { hashPassword } from "../utils/hashPassword.js";
 import { decryptPassword, encryptPassword } from "../utils/passwordCrypto.js";
 import AppError from "../utils/appError.js";
 import { ensureCourseForGradeLevel } from "./courseService.js";
 import { computeGradeLevelFromDob, computeGradeLevelFromBirthYear, parseDobInput, computeAgeFromDob } from "./gradePlacementService.js";
 import { getOrCreateSchoolSettings } from "./schoolSettingsService.js";
+import XLSX from "xlsx";
 
 const isSchoolStudent = (data) => {
   const role = String(data.role || '').trim().toUpperCase();
@@ -13,20 +14,13 @@ const isSchoolStudent = (data) => {
   return role === 'STUDENT' && orgRole === 'SCHOOL';
 };
 
-const normalizeNationalId = (value) => String(value || '').trim().replace(/[\s-]/g, '');
-
-const buildDomainFromSubdomain = (subdomain) => {
-  const sanitized = String(subdomain || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, '');
-
-  if (!sanitized) {
-    return null;
-  }
-
-  return `${sanitized}.com`;
+const assignRegistrationNumber = async (userId, orgId) => {
+  const registrationNumber = `${orgId}-${String(userId).padStart(5, '0')}`;
+  await prisma.user.update({ where: { id: userId }, data: { registrationNumber } });
+  return registrationNumber;
 };
+
+const normalizeNationalId = (value) => String(value || '').trim().replace(/[\s-]/g, '');
 
 const prepareSchoolPlacement = async (data, tx = prisma, isImport = false) => {
   if (!isSchoolStudent(data)) {
@@ -126,17 +120,17 @@ const toCsvValue = (value) => {
   return `"${escaped}"`;
 };
 
-const createParentForNationalId = async (nationalId, domain, tx = prisma) => {
+const createParentForNationalId = async (nationalId, tx = prisma) => {
   const safeNationalId = String(nationalId || "").trim();
   const parentName = `Parent ${safeNationalId}`;
-  const { email, password } = await generateUserCredentials(parentName, domain);
+  const password = generateTempPassword(parentName);
   const passwordHashed = await hashPassword(password);
   const passwordEncrypted = encryptPassword(password);
 
   const createdParentUser = await tx.user.create({
     data: {
       name: parentName,
-      email,
+      email: null,
       passwordHashed,
       passwordEncrypted,
       mustChangePassword: true,
@@ -159,7 +153,7 @@ const createParentForNationalId = async (nationalId, domain, tx = prisma) => {
   return {
     parentId: createdParentUser.id,
     nationalId: safeNationalId,
-    email,
+    email: null,
     password,
   };
 };
@@ -178,7 +172,7 @@ const resolveParentIdByNationalId = async (parentNationalId) => {
   return parent?.Parent_id ? Number(parent.Parent_id) : null;
 };
 
-const resolveOrCreateParentId = async ({ parentNationalId, orgId, domain }) => {
+const resolveOrCreateParentId = async ({ parentNationalId }) => {
   const normalized = normalizeNationalId(parentNationalId);
   if (!normalized) {
     return null;
@@ -192,18 +186,8 @@ const resolveOrCreateParentId = async ({ parentNationalId, orgId, domain }) => {
     };
   }
 
-  let resolvedDomain = domain;
-  if (!resolvedDomain) {
-    const subdomain = await getOrganizationSubdomain(orgId);
-    resolvedDomain = buildDomainFromSubdomain(subdomain);
-  }
-
-  if (!resolvedDomain) {
-    throw new AppError('Unable to create parent account from national ID: organization subdomain is missing', 400);
-  }
-
   try {
-    const createdParent = await createParentForNationalId(normalized, resolvedDomain);
+    const createdParent = await createParentForNationalId(normalized);
     return {
       parentId: Number(createdParent.parentId),
       parentLinkStatus: 'created',
@@ -220,7 +204,7 @@ const resolveOrCreateParentId = async ({ parentNationalId, orgId, domain }) => {
   }
 };
 
-export const generateUsers = async (data, domain) => {
+export const generateUsers = async (data) => {
   const createdUsers = [];
   const createdParents = [];
   const skippedUsers = [];
@@ -228,22 +212,10 @@ export const generateUsers = async (data, domain) => {
   const preparedRows = [];
 
   for (const user of data) {
-    let finalEmail = user.email ? String(user.email).trim().toLowerCase() : null;
-    let finalPassword = user.password ? String(user.password) : null;
+    const finalEmail = user.email ? String(user.email).trim().toLowerCase() : null;
+    const finalPassword = user.password ? String(user.password) : generateTempPassword(user.name);
 
-    if (!finalEmail || !finalPassword) {
-      const generatedCredentials = await generateUserCredentials(user.name, domain);
-
-      if (!finalEmail) {
-        finalEmail = generatedCredentials.email;
-      }
-
-      if (!finalPassword) {
-        finalPassword = generatedCredentials.password;
-      }
-    }
-
-    if (batchEmails.has(finalEmail)) {
+    if (finalEmail && batchEmails.has(finalEmail)) {
       skippedUsers.push({
         name: user.name,
         email: finalEmail,
@@ -252,7 +224,9 @@ export const generateUsers = async (data, domain) => {
       continue;
     }
 
-    batchEmails.add(finalEmail);
+    if (finalEmail) {
+      batchEmails.add(finalEmail);
+    }
     preparedRows.push({
       ...user,
       finalEmail,
@@ -260,16 +234,11 @@ export const generateUsers = async (data, domain) => {
     });
   }
 
-  const existingUsers = preparedRows.length
+  const emailsToCheck = preparedRows.map((row) => row.finalEmail).filter(Boolean);
+  const existingUsers = emailsToCheck.length
     ? await prisma.user.findMany({
-      where: {
-        email: {
-          in: preparedRows.map((row) => row.finalEmail),
-        },
-      },
-      select: {
-        email: true,
-      },
+      where: { email: { in: emailsToCheck } },
+      select: { email: true },
     })
     : [];
 
@@ -297,7 +266,7 @@ export const generateUsers = async (data, domain) => {
   }
 
   for (const user of preparedRows) {
-    if (existingEmails.has(user.finalEmail)) {
+    if (user.finalEmail && existingEmails.has(user.finalEmail)) {
       skippedUsers.push({
         name: user.name,
         email: user.finalEmail,
@@ -325,7 +294,7 @@ export const generateUsers = async (data, domain) => {
           resolvedParentId = existingParent.Parent_id;
           parentIdByNationalId.set(String(user.parentNationalId), resolvedParentId);
         } else {
-          newlyCreatedParent = await createParentForNationalId(user.parentNationalId, domain);
+          newlyCreatedParent = await createParentForNationalId(user.parentNationalId);
           resolvedParentId = newlyCreatedParent.parentId;
           parentIdByNationalId.set(String(newlyCreatedParent.nationalId), Number(newlyCreatedParent.parentId));
         }
@@ -383,6 +352,10 @@ export const generateUsers = async (data, domain) => {
         createdParents.push(newlyCreatedParent);
       }
 
+      const registrationNumber = createdUser.role === 'STUDENT' && user.orgId
+        ? await assignRegistrationNumber(createdUser.id, user.orgId)
+        : null;
+
       createdUsers.push({
         id: createdUser.id,
         name: createdUser.name,
@@ -396,6 +369,7 @@ export const generateUsers = async (data, domain) => {
         gradeLevel: createdUser.student?.GradeLevel ?? null,
         courseId: createdUser.student?.Course_id ?? null,
         academicStatus: createdUser.student?.AcademicStatus ?? null,
+        registrationNumber,
       });
     } catch (error) {
       // Clean up any parent created in this iteration if the student failed
@@ -434,10 +408,7 @@ if (isUserExist)  {
 }
 
 const resolvedParentInfo = data.role === 'STUDENT' && data.parentNationalId
-  ? await resolveOrCreateParentId({
-    parentNationalId: data.parentNationalId,
-    orgId: data.orgId,
-  })
+  ? await resolveOrCreateParentId({ parentNationalId: data.parentNationalId })
   : null;
 
 const resolvedParentId = resolvedParentInfo?.parentId ?? (data.parentId ?? null);
@@ -471,23 +442,26 @@ const user=await prisma.user.create({
     }
 });
 
+const registrationNumber = payload.role === 'STUDENT' && payload.orgId
+  ? await assignRegistrationNumber(user.id, payload.orgId)
+  : null;
+
 return {
   ...user,
+  registrationNumber,
   tempPassword,
   parentLinkStatus: resolvedParentInfo?.parentLinkStatus ?? null,
 };
 
 }
 
-export const addUserWithGeneratedCredentials = async (data, domain) => {
-  const { email, password } = await generateUserCredentials(data.name, domain);
+export const addUserWithGeneratedCredentials = async (data) => {
+  const password = generateTempPassword(data.name);
   const passwordHashed = await hashPassword(password);
   const passwordEncrypted = encryptPassword(password);
   const resolvedParentInfo = data.role === 'STUDENT' && data.parentNationalId
     ? await resolveOrCreateParentId({
       parentNationalId: data.parentNationalId,
-      orgId: data.orgId,
-      domain,
     })
     : null;
 
@@ -506,7 +480,7 @@ export const addUserWithGeneratedCredentials = async (data, domain) => {
   const createdUser = await prisma.user.create({
     data: {
       name: payload.name,
-      email,
+      email: data.email ?? null,
       passwordHashed,
       passwordEncrypted,
       mustChangePassword: true,
@@ -533,17 +507,18 @@ export const addUserWithGeneratedCredentials = async (data, domain) => {
     },
   });
 
+  const registrationNumber = payload.role === 'STUDENT' && payload.orgId
+    ? await assignRegistrationNumber(createdUser.id, payload.orgId)
+    : null;
+
   return {
-    user: createdUser,
-    credentials: {
-      email,
-      password,
-    },
+    user: { ...createdUser, registrationNumber },
+    credentials: { password },
     parentLinkStatus: resolvedParentInfo?.parentLinkStatus ?? null,
   };
 };
 
-const buildOrganizationUsersWhere = (orgId, orgRole, orgSubdomain = null, filters = {}) => {
+const buildOrganizationUsersWhere = (orgId, orgRole, filters = {}) => {
   const normalizedOrgRole = String(orgRole || '').trim().toUpperCase();
   const { courseId } = filters || {};
 
@@ -576,53 +551,37 @@ const buildOrganizationUsersWhere = (orgId, orgRole, orgSubdomain = null, filter
   }
 
   // SCHOOL logic
-  const orgDomain = orgSubdomain ? `@${String(orgSubdomain).toLowerCase()}.com` : null;
-
   if (courseId) {
-    // Filter by Course_id for school students
     return {
       OR: [
         { role: 'STUDENT', student: { is: { OrgId: orgId, Course_id: Number(courseId) } } },
         { role: 'TEACHER', teacher: { is: { OrgId: orgId } } },
         { role: 'PARENT', parent: { is: { student: { some: { OrgId: orgId, Course_id: Number(courseId) } } } } },
-        ...(orgDomain ? [{ role: 'PARENT', email: { endsWith: orgDomain } }] : []),
       ],
     };
   }
 
-  // No courseId filter: return all school users
   return {
     OR: [
       { role: 'STUDENT', student: { is: { OrgId: orgId } } },
       { role: 'TEACHER', teacher: { is: { OrgId: orgId } } },
       { role: 'PARENT', parent: { is: { student: { some: { OrgId: orgId } } } } },
-      ...(orgDomain ? [{ role: 'PARENT', email: { endsWith: orgDomain } }] : []),
     ],
   };
 };
 
-const getOrganizationSubdomain = async (orgId) => {
-  const org = await prisma.organization.findUnique({
-    where: { id: orgId },
-    select: { subdomain: true },
-  });
-
-  return org?.subdomain || null;
-};
-
-const findOrganizationUserById = async (id, orgId, orgRole, orgSubdomain) => {
+const findOrganizationUserById = async (id, orgId, orgRole) => {
   return prisma.user.findFirst({
     where: {
       id,
-      ...buildOrganizationUsersWhere(orgId, orgRole, orgSubdomain),
+      ...buildOrganizationUsersWhere(orgId, orgRole),
     },
-    select: { id: true, email: true },
+    select: { id: true, email: true, role: true },
   });
 };
 
 export const getAllUsers = async (orgId, orgRole, filters = {}) => {
   const normalizedOrgRole = String(orgRole || '').trim().toUpperCase();
-  const orgSubdomain = await getOrganizationSubdomain(orgId);
 
   const baseSelect = {
     id: true,
@@ -662,7 +621,7 @@ export const getAllUsers = async (orgId, orgRole, filters = {}) => {
   }
 
   const users = await prisma.user.findMany({
-    where: buildOrganizationUsersWhere(orgId, orgRole, orgSubdomain, filters),
+    where: buildOrganizationUsersWhere(orgId, orgRole, filters),
     select: baseSelect,
   });
 
@@ -681,8 +640,7 @@ export const getAllUsers = async (orgId, orgRole, filters = {}) => {
 };
 
 export const updateUser = async (id, data, orgId, orgRole) => {
-  const orgSubdomain = await getOrganizationSubdomain(orgId);
-  const user = await findOrganizationUserById(id, orgId, orgRole, orgSubdomain);
+  const user = await findOrganizationUserById(id, orgId, orgRole);
   if (!user) {
     throw new Error('user not found');
   }
@@ -743,8 +701,7 @@ export const updateUser = async (id, data, orgId, orgRole) => {
 };
 
 export const deleteUser = async (id, orgId, orgRole) => {
-  const orgSubdomain = await getOrganizationSubdomain(orgId);
-  const user = await findOrganizationUserById(id, orgId, orgRole, orgSubdomain);
+  const user = await findOrganizationUserById(id, orgId, orgRole);
   if (!user) {
     throw new Error('user not found');
   }
@@ -766,14 +723,45 @@ export const exportOrganizationUsersCredentials = async (orgId, orgRole) => {
     .join('\r\n');
 };
 
+export const generateSampleExcel = (role, orgType) => {
+  const normalizedRole = String(role || '').trim().toUpperCase();
+  const isSchool = String(orgType || '').trim().toUpperCase() === 'SCHOOL';
+
+  let headers;
+  let exampleRow;
+
+  if (normalizedRole === 'STUDENT') {
+    if (isSchool) {
+      headers  = ['name',     'Role',    'email',  'age', 'gender', 'address',          'DOB',        'ParentNationalId'];
+      exampleRow = ['John Doe', 'STUDENT', '',        14,   'MALE',   '123 Main Street',  '2010-05-15', '1234567890'];
+    } else {
+      headers  = ['name',       'Role',    'email', 'age', 'gender',  'address'];
+      exampleRow = ['Jane Smith', 'STUDENT', '',      20,   'FEMALE',  '456 Oak Avenue'];
+    }
+  } else if (normalizedRole === 'TEACHER') {
+    headers  = ['name',         'Role',    'email',               'Work',           'Specialization', 'Bio',                         'age', 'gender'];
+    exampleRow = ['Ahmed Hassan', 'TEACHER', 'ahmed@example.com',  'Private School', 'Mathematics',    'Experienced math teacher',    35,    'MALE'];
+  } else if (normalizedRole === 'PARENT') {
+    headers  = ['name',     'Role',   'email', 'Work'];
+    exampleRow = ['Sara Ali', 'PARENT', '',      'Engineer'];
+  } else {
+    throw new AppError('role must be one of: STUDENT, TEACHER, PARENT', 400);
+  }
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
+  XLSX.utils.book_append_sheet(wb, ws, 'Sample');
+
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+};
+
 export const linkParentToStudents = async ({ orgId, orgRole, parentId, studentIds }) => {
   const normalizedOrgRole = String(orgRole || '').trim().toUpperCase();
   if (normalizedOrgRole !== 'SCHOOL') {
     throw new AppError('Parent-student linking is only available for SCHOOL organizations', 403);
   }
 
-  const orgSubdomain = await getOrganizationSubdomain(orgId);
-  const parentUser = await findOrganizationUserById(parentId, orgId, orgRole, orgSubdomain);
+  const parentUser = await findOrganizationUserById(parentId, orgId, orgRole);
   if (!parentUser) {
     throw new AppError('Parent user not found in this organization', 404);
   }
