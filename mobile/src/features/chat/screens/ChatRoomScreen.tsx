@@ -40,6 +40,7 @@ import {
   deleteStudentChatMessage,
   editStudentChatMessage,
   fetchStudentChatMessages,
+  normalizeMessage,
   reactStudentChatMessage,
   sendStudentChatMessage,
 } from '../../student/services/studentService';
@@ -194,10 +195,11 @@ export function ChatRoomScreen() {
       sock.on('connect_error', () => { if (alive) { setConnected(false); setSockFail(true); } });
       sock.on('disconnect',    () => { if (alive) { setConnected(false); setSockFail(true); } });
 
-      sock.on('receive_message', ({ chatId: cId, message }: { chatId: number; message: ChatMessage }) => {
+      sock.on('receive_message', ({ chatId: cId, message }: { chatId: number; message: Record<string, unknown> }) => {
         if (!alive || Number(cId) !== Number(chatIdRef.current)) return;
-        setMessages((prev) => addOrReplace(prev, message));
-        if (Number(message.senderId) !== Number(userId))
+        const normalized = normalizeMessage(message);
+        setMessages((prev) => addOrReplace(prev, normalized));
+        if (Number(normalized.senderId) !== Number(userId))
           sock.emit('message_seen', { chatId: chatIdRef.current });
       });
 
@@ -222,9 +224,10 @@ export function ChatRoomScreen() {
         );
       });
 
-      sock.on('message_reaction', ({ chatId: cId, message }: { chatId: number; message: ChatMessage }) => {
+      sock.on('message_reaction', ({ chatId: cId, message }: { chatId: number; message: Record<string, unknown> }) => {
         if (!alive || Number(cId) !== Number(chatIdRef.current)) return;
-        setMessages((prev) => patchById(prev, Number(message.id), message));
+        const normalized = normalizeMessage(message);
+        setMessages((prev) => patchById(prev, Number(normalized.id), normalized));
       });
     })();
 
