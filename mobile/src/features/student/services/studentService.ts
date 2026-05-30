@@ -261,6 +261,25 @@ export async function fetchMyStudentMarks(): Promise<StudentMark[]> {
 }
 
 // ── Chat ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Normalises a raw API message payload into a flat `ChatMessage`.
+ *
+ * The backend serializer (`serializeStudentChatMessage`) returns the sender as a
+ * nested object `sender: { id, name, email }` but the `ChatMessage` TypeScript
+ * interface (and every piece of UI code) expects a flat `senderName` string.
+ * This function bridges that gap and must be applied to every message that
+ * comes in from the REST API **or** via Socket.io events.
+ */
+export function normalizeMessage(raw: Record<string, unknown>): ChatMessage {
+  const sender = raw.sender as { id?: number; name?: string; email?: string } | null | undefined;
+  return {
+    ...(raw as ChatMessage),
+    senderName:   String(raw.senderName   ?? sender?.name   ?? ''),
+    senderAvatar: (raw.senderAvatar       ?? null)           as string | null,
+  };
+}
+
 export async function fetchStudentChats(): Promise<Chat[]> {
   const res = await apiClient.get('/chats');
   return ensureArray<Chat>(unwrap(res));
@@ -268,14 +287,15 @@ export async function fetchStudentChats(): Promise<Chat[]> {
 
 export async function fetchStudentChatMessages(chatId: number, limit = 100): Promise<ChatMessage[]> {
   const res = await apiClient.get(`/chats/${chatId}/messages`, { params: { limit } });
-  return ensureArray<ChatMessage>(unwrap(res));
+  const arr = ensureArray<Record<string, unknown>>(unwrap(res));
+  return arr.map(normalizeMessage);
 }
 
 export async function sendStudentChatMessage(chatId: number, content: string, replyToMessageId?: number): Promise<ChatMessage> {
   const payload: Record<string, unknown> = { content };
   if (replyToMessageId) payload.replyToMessageId = replyToMessageId;
   const res = await apiClient.post(`/chats/${chatId}/messages`, payload);
-  return unwrap<ChatMessage>(res);
+  return normalizeMessage(unwrap<Record<string, unknown>>(res));
 }
 
 export async function deleteStudentChatMessage(messageId: number): Promise<void> {
@@ -284,17 +304,20 @@ export async function deleteStudentChatMessage(messageId: number): Promise<void>
 
 export async function editStudentChatMessage(messageId: number, content: string): Promise<ChatMessage> {
   const res = await apiClient.patch(`/chats/messages/${messageId}`, { content });
-  return unwrap<ChatMessage>(res);
+  return normalizeMessage(unwrap<Record<string, unknown>>(res));
 }
 
 export async function reactStudentChatMessage(
   messageId: number,
   emoji: string,
 ): Promise<ChatMessage> {
-  const res = await apiClient.post(`/chats/messages/${messageId}/react`, { emoji });
-  // API may return { message: {...} } or the ChatMessage object directly
+  // Backend: PATCH /chats/messages/:id/reaction  body: { reaction: string }
+  // Response: { data: { action, message: <serialized ChatMessage> } }
+  const res  = await apiClient.patch(`/chats/messages/${messageId}/reaction`, { reaction: emoji });
   const data = unwrap<Record<string, unknown>>(res);
-  return ((data?.message ?? data) as ChatMessage);
+  // unwrap gives us { action, message: {...} } — extract the nested message object
+  const raw  = (data?.message ?? data) as Record<string, unknown>;
+  return normalizeMessage(raw);
 }
 
 // ── Social / Competition ──────────────────────────────────────────────────────
