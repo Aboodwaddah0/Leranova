@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Learnova",
+    "slug": "learnova-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.learnova.mobile"
+    },
+    "android": {
+      "package": "com.learnova.mobile"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-av",
+      "expo-file-system",
+      "expo-image-picker",
+      "expo-font"
+    ]
+  }
+}
