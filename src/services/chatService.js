@@ -192,10 +192,6 @@ const resolveReplyToMessageId = async ({ chatId, senderId, replyToMessageId }) =
     throw new AppError('Reply target message not found', 404);
   }
 
-  if (Number(target.sender_user_id) === Number(senderId)) {
-    throw new AppError('You cannot reply to your own message', 400);
-  }
-
   return target.id;
 };
 
