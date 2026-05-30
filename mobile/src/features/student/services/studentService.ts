@@ -89,14 +89,29 @@ export async function updateStudentLessonProgress(lessonId: number, isCompleted:
 }
 
 // ── Comments ─────────────────────────────────────────────────────────────────
+/** Backend returns flat { userId, userName } — reshape to nested { user: { id, name } } */
+function normalizeComment(raw: unknown): Comment {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    id:        Number(r.id        ?? 0),
+    content:   String(r.content   ?? ''),
+    createdAt: String(r.createdAt ?? r.time ?? ''),
+    user: {
+      id:        Number(r.userId   ?? 0),
+      name:      String(r.userName ?? 'Member'),
+      avatarUrl: (r.userAvatar     ?? null) as string | null,
+    },
+  };
+}
+
 export async function fetchLessonComments(lessonId: number): Promise<Comment[]> {
   const res = await apiClient.get(`/lessons/${lessonId}/comments`);
-  return ensureArray<Comment>(unwrap(res));
+  return ensureArray<Record<string, unknown>>(unwrap(res)).map(normalizeComment);
 }
 
 export async function createLessonComment(lessonId: number, content: string): Promise<Comment> {
   const res = await apiClient.post(`/lessons/${lessonId}/comments`, { content: content.trim() });
-  return unwrap<Comment>(res);
+  return normalizeComment(unwrap<Record<string, unknown>>(res));
 }
 
 // ── AI Content (Flashcards + Mindmap) ────────────────────────────────────────
@@ -116,13 +131,40 @@ export async function regenerateLessonFlashcards(lessonId: number, lang = 'ar'):
 
 // ── Quiz ─────────────────────────────────────────────────────────────────────
 export async function fetchStudentLessonQuiz(lessonId: number, lang = 'ar') {
-  const res = await apiClient.get(`/lessons/${lessonId}/quiz`, { params: { lang } });
-  return unwrap(res);
+  try {
+    const res = await apiClient.get(`/lessons/${lessonId}/quiz`, { params: { lang } });
+    const raw = unwrap<Record<string, unknown>>(res);
+    if (!raw) return null;
+    // Normalize: backend returns "isPublished", QuizTab checks "published"
+    // Also stringify question IDs to match QuizQuestion { id: string }
+    return {
+      ...raw,
+      published: raw.published ?? raw.isPublished,
+      questions: ensureArray<Record<string, unknown>>(raw.questions as unknown[])
+        .map((q) => ({ ...q, id: String(q.id) })),
+    };
+  } catch {
+    return null;
+  }
 }
 
-export async function submitStudentQuizAttempt(lessonId: number, answers: QuizAttemptAnswer[], lang = 'ar'): Promise<QuizResult | null> {
-  const res = await apiClient.post(`/lessons/${lessonId}/quiz/attempt`, { answers, lang });
-  return unwrap<QuizResult>(res);
+/**
+ * Submit quiz — answers is a plain indexed array (same format the web sends):
+ *   MCQ / TRUE_FALSE → option index (number)
+ *   SHORT_ANSWER     → text string
+ * Returns the raw backend payload { attempt, questions (with correctAnswer), reward }.
+ */
+export async function submitStudentQuizAttempt(
+  lessonId: number,
+  answers:  unknown[],
+  lang = 'ar',
+): Promise<Record<string, unknown> | null> {
+  try {
+    const res = await apiClient.post(`/lessons/${lessonId}/quiz/attempt`, { answers, lang });
+    return unwrap<Record<string, unknown>>(res);
+  } catch {
+    return null;
+  }
 }
 
 // ── AI Chatbot ────────────────────────────────────────────────────────────────

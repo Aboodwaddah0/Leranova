@@ -1,11 +1,12 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Dimensions,
+  StyleSheet, Platform,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Bot } from 'lucide-react-native';
+import { ArrowLeft, Bot } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../shared/hooks/useTheme';
 import { spacing, radius, fontSize, fontWeight } from '../../../shared/theme';
 import { LoadingState, ErrorState } from '../../../shared/components';
@@ -16,18 +17,16 @@ import {
 import type { Lesson, LessonAiContent } from '../../../types/student';
 import type { StudentStackParamList } from '../../../types/navigation';
 
-// Tab components
-import { VideoPlayer }     from '../components/VideoPlayer';
-import { AttachmentsTab }  from '../components/AttachmentsTab';
-import { CommentsTab }     from '../components/CommentsTab';
-import { FlashcardsTab }   from '../components/FlashcardsTab';
-import { QuizTab }         from '../components/QuizTab';
-import { MindMapTab }      from '../components/MindMapTab';
-import { AIAssistantModal} from '../components/AIAssistantModal';
+import { VideoPlayer }      from '../components/VideoPlayer';
+import { AttachmentsTab }   from '../components/AttachmentsTab';
+import { CommentsTab }      from '../components/CommentsTab';
+import { FlashcardsTab }    from '../components/FlashcardsTab';
+import { QuizTab }          from '../components/QuizTab';
+import { MindMapTab }       from '../components/MindMapTab';
+import { AIAssistantModal } from '../components/AIAssistantModal';
 
 type Route = RouteProp<StudentStackParamList, 'Lesson'>;
 type Nav   = NativeStackNavigationProp<StudentStackParamList>;
-
 type TabKey = 'attachments' | 'comments' | 'flashcards' | 'mindmap' | 'quiz';
 
 const TABS: { key: TabKey; label: string }[] = [
@@ -39,37 +38,33 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 export function LessonScreen() {
-  const { T }  = useTheme();
-  const nav    = useNavigation<Nav>();
+  const { T }      = useTheme();
+  const nav        = useNavigation<Nav>();
   const { params } = useRoute<Route>();
+  const insets     = useSafeAreaInsets();
 
-  const [lesson,     setLesson]     = useState<Lesson | null>(null);
-  const [aiContent,  setAiContent]  = useState<LessonAiContent | null>(null);
-  const [quizData,   setQuizData]   = useState<unknown>(null);
-  const [activeTab,  setActiveTab]  = useState<TabKey>('attachments');
-  const [loading,    setLoading]    = useState(true);
-  const [error,      setError]      = useState('');
-  const [showAI,     setShowAI]     = useState(false);
+  const [lesson,    setLesson]    = useState<Lesson | null>(null);
+  const [aiContent, setAiContent] = useState<LessonAiContent | null>(null);
+  const [quizData,  setQuizData]  = useState<unknown>(null);
+  const [activeTab, setActiveTab] = useState<TabKey>('attachments');
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState('');
+  const [showAI,    setShowAI]    = useState(false);
 
   const load = useCallback(async () => {
     try {
       setError('');
-      // Load lessons for this subject, find the one we need
       const lessons = await fetchSubjectLessons(params.subjectId);
-      const found   = lessons.find((l) => l.id === params.lessonId) ?? null;
-      setLesson(found);
+      setLesson(lessons.find((l) => l.id === params.lessonId) ?? null);
+      updateStudentLessonProgress(params.lessonId, false).catch(() => {});
 
-      // Load AI content and quiz in parallel (non-blocking)
-      Promise.all([
+      // Load AI content + quiz independently — one failure won't block the other
+      const [aiResult, quizResult] = await Promise.allSettled([
         fetchLessonAiContent(params.lessonId),
         fetchStudentLessonQuiz(params.lessonId),
-      ]).then(([ai, quiz]) => {
-        setAiContent(ai);
-        setQuizData(quiz);
-      }).catch(() => {/* non-critical */});
-
-      // Mark as started
-      updateStudentLessonProgress(params.lessonId, false).catch(() => {});
+      ]);
+      if (aiResult.status   === 'fulfilled') setAiContent(aiResult.value);
+      if (quizResult.status === 'fulfilled') setQuizData(quizResult.value);
     } catch {
       setError('Failed to load lesson.');
     } finally {
@@ -80,41 +75,45 @@ export function LessonScreen() {
   useEffect(() => { load(); }, [load]);
 
   if (loading) return <LoadingState message="Loading lesson…" />;
-  if (error)   return <ErrorState message={error} onRetry={load} />;
+  if (error)   return <ErrorState  message={error} onRetry={load} />;
+
+  const headerTop = Platform.OS === 'android' ? insets.top + spacing[2] : insets.top + spacing[1];
 
   return (
-    <View style={[styles.root, { backgroundColor: T.background }]}>
-      {/* Header bar */}
-      <View style={[styles.header, { backgroundColor: T.surface, borderBottomColor: T.border }]}>
-        <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn}>
-          <Text style={{ color: T.primary, fontSize: fontSize.base }}>← Back</Text>
+    <View style={[S.root, { backgroundColor: T.background }]}>
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <View style={[S.header, {
+        backgroundColor:   T.surface,
+        borderBottomColor: T.border,
+        paddingTop:        headerTop,
+      }]}>
+        <TouchableOpacity onPress={() => nav.goBack()} style={S.backBtn} hitSlop={8}>
+          <ArrowLeft size={20} color={T.primary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: T.text }]} numberOfLines={1}>{params.lessonTitle}</Text>
-        <TouchableOpacity onPress={() => setShowAI(true)} style={[styles.aiBtn, { backgroundColor: 'rgba(99,102,241,0.15)' }]}>
-          <Bot size={18} color="#818cf8" />
-        </TouchableOpacity>
+        <Text style={[S.headerTitle, { color: T.text }]} numberOfLines={1}>
+          {params.lessonTitle}
+        </Text>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Video */}
+      {/* ── Scrollable content ─────────────────────────────────────────── */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
         <VideoPlayer videoUrl={lesson?.videoUrl} />
 
-        {/* Lesson info */}
         {lesson && (
-          <View style={[styles.infoBox, { backgroundColor: T.surface, borderColor: T.border }]}>
-            <Text style={[styles.lessonTitle, { color: T.text }]}>{lesson.title}</Text>
+          <View style={[S.infoBox, { backgroundColor: T.surface, borderColor: T.border }]}>
+            <Text style={[S.lessonTitle, { color: T.text }]}>{lesson.title}</Text>
             {lesson.description ? (
-              <Text style={[styles.lessonDesc, { color: T.muted }]}>{lesson.description}</Text>
+              <Text style={[S.lessonDesc, { color: T.muted }]}>{lesson.description}</Text>
             ) : null}
           </View>
         )}
 
-        {/* Tabs */}
+        {/* ── Tab bar ─────────────────────────────────────────────────── */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={styles.tabsScroll}
-          contentContainerStyle={styles.tabsRow}
+          style={S.tabsScroll}
+          contentContainerStyle={S.tabsRow}
         >
           {TABS.map((tab) => {
             const active = tab.key === activeTab;
@@ -123,20 +122,22 @@ export function LessonScreen() {
                 key={tab.key}
                 onPress={() => setActiveTab(tab.key)}
                 style={[
-                  styles.tabBtn,
+                  S.tabBtn,
                   active
                     ? { backgroundColor: T.primary }
                     : { backgroundColor: T.elevated, borderColor: T.border, borderWidth: 1 },
                 ]}
               >
-                <Text style={[styles.tabLabel, { color: active ? '#fff' : T.muted }]}>{tab.label}</Text>
+                <Text style={[S.tabLabel, { color: active ? '#fff' : T.muted }]}>
+                  {tab.label}
+                </Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
 
-        {/* Tab content */}
-        <View style={styles.tabContent}>
+        {/* ── Tab content ─────────────────────────────────────────────── */}
+        <View style={S.tabContent}>
           {activeTab === 'attachments' && (
             <AttachmentsTab attachments={lesson?.attachments ?? []} />
           )}
@@ -162,7 +163,15 @@ export function LessonScreen() {
         </View>
       </ScrollView>
 
-      {/* AI Modal */}
+      {/* ── AI FAB ─────────────────────────────────────────────────────── */}
+      <TouchableOpacity
+        onPress={() => setShowAI(true)}
+        style={[S.fab, { bottom: insets.bottom + spacing[5] }]}
+        activeOpacity={0.85}
+      >
+        <Bot size={22} color="#fff" />
+      </TouchableOpacity>
+
       <AIAssistantModal
         visible={showAI}
         onClose={() => setShowAI(false)}
@@ -174,32 +183,55 @@ export function LessonScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root:   { flex: 1 },
+const S = StyleSheet.create({
+  root: { flex: 1 },
+
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection:    'row',
+    alignItems:       'center',
     paddingHorizontal: spacing[4],
-    paddingTop: spacing[10],
-    paddingBottom: spacing[3],
+    paddingBottom:     spacing[3],
     borderBottomWidth: 1,
+    gap: spacing[3],
   },
-  backBtn:     { paddingRight: spacing[3] },
+  backBtn:     { padding: spacing[1] },
   headerTitle: { flex: 1, fontSize: fontSize.base, fontWeight: fontWeight.semibold },
-  aiBtn:       { width: 36, height: 36, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },
 
   infoBox: {
-    margin: spacing[4],
-    padding: spacing[4],
-    borderRadius: radius.xl,
-    borderWidth: 1,
+    margin:        spacing[4],
+    padding:       spacing[4],
+    borderRadius:  radius.xl,
+    borderWidth:   1,
   },
   lessonTitle: { fontSize: fontSize.md, fontWeight: fontWeight.bold, marginBottom: spacing[1] },
   lessonDesc:  { fontSize: fontSize.sm, lineHeight: 20 },
 
   tabsScroll: { paddingLeft: spacing[4] },
-  tabsRow:    { flexDirection: 'row', gap: spacing[2], paddingRight: spacing[4], paddingVertical: spacing[3] },
-  tabBtn:     { borderRadius: radius.full, paddingHorizontal: spacing[4], paddingVertical: spacing[2] },
-  tabLabel:   { fontSize: fontSize.sm, fontWeight: fontWeight.semibold },
-  tabContent: { padding: spacing[4], paddingBottom: spacing[10] },
+  tabsRow:    {
+    flexDirection: 'row',
+    gap:           spacing[2],
+    paddingRight:  spacing[4],
+    paddingVertical: spacing[3],
+  },
+  tabBtn:  { borderRadius: radius.full, paddingHorizontal: spacing[4], paddingVertical: spacing[2] },
+  tabLabel: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold },
+
+  tabContent: { padding: spacing[4], paddingBottom: spacing[6] },
+
+  fab: {
+    position:        'absolute',
+    right:           spacing[5],
+    width:           52,
+    height:          52,
+    borderRadius:    26,
+    backgroundColor: '#6366f1',
+    alignItems:      'center',
+    justifyContent:  'center',
+    // shadow
+    shadowColor:     '#6366f1',
+    shadowOffset:    { width: 0, height: 4 },
+    shadowOpacity:   0.45,
+    shadowRadius:    8,
+    elevation:       8,
+  },
 });

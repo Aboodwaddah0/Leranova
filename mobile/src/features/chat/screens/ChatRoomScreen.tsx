@@ -151,6 +151,7 @@ export function ChatRoomScreen() {
   const socketRef   = useRef<Socket | null>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chatIdRef   = useRef(chatId);
+  const flatListRef = useRef<FlatList<MsgItem>>(null);
 
   // ── helpers ─────────────────────────────────────────────────────────────
   const addOrReplace = (prev: ChatMessage[], msg: ChatMessage): ChatMessage[] =>
@@ -276,6 +277,8 @@ export function ChatRoomScreen() {
 
       setMessages((prev) => addOrReplace(prev, msg));
       socketRef.current?.emit('message_seen', { chatId });
+      // Scroll to bottom (offset 0 = bottom on inverted list) after state flush
+      setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 50);
     } catch { /* noop */ } finally { setSending(false); }
   };
 
@@ -389,6 +392,7 @@ export function ChatRoomScreen() {
 
       {/* ── Messages ──────────────────────────────────────────────────── */}
       <FlatList
+        ref={flatListRef}
         data={displayData}
         inverted
         keyExtractor={(item) => String(item.id)}
