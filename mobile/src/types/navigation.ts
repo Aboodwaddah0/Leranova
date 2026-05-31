@@ -17,21 +17,21 @@ export type AuthStackParamList = {
 // ── Student Tabs ──────────────────────────────────────────────────────────────
 export type StudentTabParamList = {
   Dashboard: undefined;
-  Courses: undefined;
-  Chat: undefined;
-  Social: undefined;
-  Profile: undefined;
+  Courses:   undefined;
+  Chat:      undefined;
+  Social:    undefined;
+  Teachers:  undefined;
+  Profile:   undefined;
 };
 
 // ── Student Stack (nested inside tabs or separate) ────────────────────────────
 export type StudentStackParamList = {
-  StudentTabs: undefined;
-  CourseDetails: { courseId: number; courseName: string };
+  StudentTabs:    undefined;
+  CourseDetails:  { courseId: number; courseName: string };
   SubjectLessons: { subjectId: number; subjectName: string; courseId: number };
-  Lesson: { lessonId: number; lessonTitle: string; subjectId: number; courseId: number };
-  Teachers: undefined;
+  Lesson:         { lessonId: number; lessonTitle: string; subjectId: number; courseId: number };
   TeacherProfile: { teacherId: number };
-  ChatRoom: { chatId: number; chatName?: string };
+  ChatRoom:       { chatId: number; chatName?: string };
 };
 
 // ── Parent Tabs ───────────────────────────────────────────────────────────────
