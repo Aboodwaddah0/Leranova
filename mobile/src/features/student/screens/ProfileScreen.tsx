@@ -4,7 +4,7 @@ import {
   RefreshControl, Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { LogOut, Edit2, Key, BookOpen, Trophy, Flame, X } from 'lucide-react-native';
+import { LogOut, Edit2, Key, BookOpen, Trophy, Flame, X, Sun, Moon } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../shared/hooks/useTheme';
 import { Card, Avatar, Separator, Button } from '../../../shared/components';
@@ -18,7 +18,7 @@ import { logout, updateUser } from '../../../store/authSlice';
 import type { StudentProfile, GamificationStats } from '../../../types/student';
 
 export function StudentProfileScreen() {
-  const { T }  = useTheme();
+  const { T, isDark, toggleTheme }  = useTheme();
   const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
 
@@ -113,7 +113,7 @@ export function StudentProfileScreen() {
       >
         {/* Hero */}
         <LinearGradient
-          colors={['#5b21b6', '#0f172a', '#312e81']}
+          colors={isDark ? ['#5b21b6', '#0f172a', '#312e81'] : ['#6d28d9', '#7c3aed']}
           style={[styles.hero, { paddingTop: insets.top + spacing[4] }]}
         >
           <Avatar name={profile?.fullName} uri={profile?.avatarUrl} size={80} />
@@ -152,6 +152,14 @@ export function StudentProfileScreen() {
             <ActionRow label="Edit Profile"    icon={Edit2} color="#6366f1" onPress={openEdit}  T={T} />
             <Separator marginV={spacing[2]} />
             <ActionRow label="Change Password" icon={Key}   color="#8b5cf6" onPress={openPwd}   T={T} />
+            <Separator marginV={spacing[2]} />
+            <ActionRow
+              label={isDark ? 'Switch to Light' : 'Switch to Dark'}
+              icon={isDark ? Sun : Moon}
+              color={isDark ? '#f59e0b' : '#6366f1'}
+              onPress={toggleTheme}
+              T={T}
+            />
           </Card>
 
           {/* Logout */}

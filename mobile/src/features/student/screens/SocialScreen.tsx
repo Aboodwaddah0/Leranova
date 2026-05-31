@@ -411,13 +411,16 @@ function LeaderboardCard({ board, myStudentId, meXp, meLevel, isDark }: {
       <View style={S.secHeader}>
         <Text style={[S.sectionLabel, { color: C.muted }]}>LEADERBOARD</Text>
         {top3.length >= 2 && (
-          <TouchableOpacity onPress={togglePodium} activeOpacity={0.8}
+          <TouchableOpacity
+            onPress={togglePodium}
+            activeOpacity={0.8}
             style={[S.champBtn, {
               backgroundColor: showPodium
-                ? (isDark ? 'rgba(251,191,36,0.15)' : 'rgba(251,191,36,0.10)')
-                : (isDark ? 'rgba(251,191,36,0.06)' : 'rgba(251,191,36,0.05)'),
-              borderColor: showPodium ? 'rgba(251,191,36,0.52)' : 'rgba(251,191,36,0.26)',
-            }]}>
+                ? (isDark ? 'rgba(251,191,36,0.18)' : 'rgba(251,191,36,0.13)')
+                : (isDark ? 'rgba(251,191,36,0.08)' : 'rgba(251,191,36,0.06)'),
+              borderColor: 'rgba(251,191,36,0.70)',
+            }]}
+          >
             <Text style={{ fontSize: 12, fontWeight: '700', color: '#f59e0b' }}>
               🏆  Champions  {showPodium ? '▲' : '▾'}
             </Text>
@@ -708,7 +711,16 @@ const S = StyleSheet.create({
   secHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 2 },
   cardLabel:    { fontSize: 10, fontWeight: '700', letterSpacing: 1.8 },
-  champBtn:     { flexDirection: 'row', alignItems: 'center', gap: spacing[1], borderRadius: 10, paddingHorizontal: spacing[3], paddingVertical: spacing[1.5], borderWidth: 1 },
+  // Champions button
+  champBtn: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               spacing[1],
+    borderRadius:      22,
+    paddingHorizontal: spacing[4],
+    paddingVertical:   spacing[1.5],
+    borderWidth:       1.5,
+  },
 
   // podium
   podiumRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: spacing[3] },

@@ -50,6 +50,7 @@ export function CourseDetailsScreen() {
         subtitle="Course subjects"
         onBack={() => nav.goBack()}
         stats={[{ label: 'Subjects', value: subjects.length }]}
+        lightColors={['#047857', '#059669']}
       />
 
       {loading ? (

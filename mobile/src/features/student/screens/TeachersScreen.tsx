@@ -47,6 +47,7 @@ export function TeachersScreen() {
         title="👨‍🏫 Teachers"
         subtitle="Your instructors"
         stats={[{ label: 'Teachers', value: teachers.length }]}
+        lightColors={['#c2410c', '#ea580c']}
       />
 
       {/* Search */}

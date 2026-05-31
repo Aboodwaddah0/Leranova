@@ -604,18 +604,21 @@ export const resetPassword = async ({ token, newPassword }) => {
 export const getMe = async (userId) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      address: true,
-      age: true,
-      gender: true,
-    },
+    select: { id: true, name: true, email: true },
   });
   if (!user) throw new AppError('User not found', 404);
-  return user;
+  // Return fullName so the mobile ProfileScreen maps correctly
+  return { id: user.id, fullName: user.name, email: user.email };
+};
+
+export const updateMe = async (userId, { fullName }) => {
+  if (!fullName?.trim()) throw new AppError('Name is required', 400);
+  const user = await prisma.user.update({
+    where: { id: Number(userId) },
+    data:  { name: fullName.trim() },
+    select: { id: true, name: true, email: true },
+  });
+  return { id: user.id, fullName: user.name, email: user.email };
 };
 
 export const changePassword = async ({ userId, newPassword }) => {

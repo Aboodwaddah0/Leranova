@@ -39,6 +39,7 @@ export function TeacherProfileScreen() {
         subtitle={teacher?.specialization ?? teacher?.work ?? 'Instructor'}
         onBack={() => nav.goBack()}
         badge={`${teacher?.subjectCount ?? 0} subjects`}
+        lightColors={['#c2410c', '#ea580c']}
       />
 
       <View style={styles.body}>

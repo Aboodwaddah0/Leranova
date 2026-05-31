@@ -7,6 +7,7 @@ import {
   resetPassword,
   changePassword,
   getMe,
+  updateMe,
   verifyOrganizationEmail,
 } from '../services/authService.js';
 import {
@@ -144,7 +145,26 @@ export const resetPasswordController = async (req, res, next) => {
 export const getMeController = async (req, res, next) => {
   try {
     const user = await getMe(req.user.id);
-    return res.status(200).json({ message: 'User profile fetched', data: user });
+    return res.status(200).json({
+      success: true, status: 200, data: user, error: null,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const updateMeController = async (req, res, next) => {
+  try {
+    const { fullName } = req.body;
+    if (!fullName?.trim()) {
+      return next(new AppError('Full name is required', 400));
+    }
+    const updated = await updateMe(req.user.id, { fullName });
+    return res.status(200).json({
+      success: true, status: 200, data: updated, error: null,
+      timestamp: new Date().toISOString(),
+    });
   } catch (err) {
     next(err);
   }

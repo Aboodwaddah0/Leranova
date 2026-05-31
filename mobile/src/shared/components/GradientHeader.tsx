@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ViewStyle } from 'react-nativ
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../hooks/useTheme';
 import { spacing, radius, fontSize, fontWeight } from '../theme';
 
 interface StatItem {
@@ -18,14 +19,21 @@ interface Props {
   badge?: string;
   children?: React.ReactNode;
   style?: ViewStyle;
+  /** Override gradient colors for light mode */
+  lightColors?: string[];
 }
 
-export function GradientHeader({ title, subtitle, onBack, stats, badge, children, style }: Props) {
+export function GradientHeader({ title, subtitle, onBack, stats, badge, children, style, lightColors }: Props) {
   const insets = useSafeAreaInsets();
+  const { isDark } = useTheme();
+
+  const darkColors: [string, string, string] = ['#5b21b6', '#0f172a', '#312e81'];
+  const resolvedLight = (lightColors ?? ['#3730a3', '#4338ca']) as [string, string];
+  const gradientColors = isDark ? darkColors : resolvedLight;
 
   return (
     <LinearGradient
-      colors={['#5b21b6', '#0f172a', '#312e81']}
+      colors={gradientColors}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={[styles.container, { paddingTop: insets.top + spacing[3] }, style]}
