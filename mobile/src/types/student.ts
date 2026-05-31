@@ -15,6 +15,20 @@ export interface Course {
   description: string;
   category: string;
   progress: number;
+  /** Lesson-level progress data (ACADEMY mode tracks) */
+  lessonCount?:      number;
+  completedLessons?: number;
+  /** How many subjects the track contains (used to decide direct-to-lesson vs subject list) */
+  subjectCount?: number;
+  /**
+   * Smart-resume lesson: first incomplete lesson (0% → first, in-progress → next after last
+   * completed, 100% → last).  Populated only when subjectCount === 1.
+   */
+  resumeLesson?: {
+    id:        number;
+    title:     string;
+    subjectId: number;
+  };
   status: 'ACTIVE' | 'PENDING' | 'INACTIVE';
   priceStatus: 'PAID' | 'PENDING' | 'FREE';
   cover: string;
