@@ -1,8 +1,12 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { StyleSheet, Platform } from 'react-native';
-import { LayoutDashboard, BookOpen, MessageCircle, Trophy, UserCircle } from 'lucide-react-native';
+import { createBottomTabNavigator }   from '@react-navigation/bottom-tabs';
+import type { BottomTabBarProps }     from '@react-navigation/bottom-tabs';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import {
+  LayoutDashboard, BookOpen, MessageCircle,
+  Trophy, Users, UserCircle,
+} from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../shared/hooks/useTheme';
 import type { StudentStackParamList, StudentTabParamList } from '../types/navigation';
@@ -23,80 +27,161 @@ import { TeacherProfileScreen }   from '../features/student/screens/TeacherProfi
 const Tab   = createBottomTabNavigator<StudentTabParamList>();
 const Stack = createNativeStackNavigator<StudentStackParamList>();
 
-function StudentTabs() {
+// ── Tab icon renderer ─────────────────────────────────────────────────────────
+function TabIcon({ name, color }: { name: string; color: string }) {
+  const p = { size: 21, color, strokeWidth: 1.8 } as const;
+  switch (name) {
+    case 'Dashboard': return <LayoutDashboard {...p} />;
+    case 'Courses':   return <BookOpen        {...p} />;
+    case 'Chat':      return <MessageCircle   {...p} />;
+    case 'Social':    return <Trophy          {...p} />;
+    case 'Teachers':  return <Users           {...p} />;
+    case 'Profile':   return <UserCircle      {...p} />;
+    default:          return null;
+  }
+}
+
+const TAB_LABELS: Record<string, string> = {
+  Dashboard: 'Home',
+  Courses:   'Courses',
+  Chat:      'Chat',
+  Social:    'Social',
+  Teachers:  'Teachers',
+  Profile:   'Profile',
+};
+
+// ── Custom tab bar ────────────────────────────────────────────────────────────
+function StudentTabBar({ state, navigation }: BottomTabBarProps) {
   const { T }  = useTheme();
   const insets = useSafeAreaInsets();
-  // On Android the bottom inset covers the gesture/button nav bar.
-  // Add it to the tab bar so icons don't hide behind it.
-  const tabBarHeight = 56 + (Platform.OS === 'android' ? insets.bottom : 0);
+  // Extra bottom padding: respect home-indicator / gesture bar
+  const pb = (Platform.OS === 'ios' ? insets.bottom : Math.max(insets.bottom, 4)) + 4;
+
+  return (
+    <View
+      style={[
+        tabStyles.bar,
+        { backgroundColor: T.tabBar, paddingBottom: pb },
+      ]}
+    >
+      {state.routes.map((route, index) => {
+        const isFocused = state.index === index;
+        const color     = isFocused ? T.tabActive : T.tabInactive;
+
+        const onPress = () => {
+          const event = navigation.emit({
+            type:              'tabPress',
+            target:            route.key,
+            canPreventDefault: true,
+          });
+          if (!isFocused && !event.defaultPrevented) {
+            navigation.navigate(route.name, route.params);
+          }
+        };
+
+        return (
+          <TouchableOpacity
+            key={route.key}
+            onPress={onPress}
+            style={tabStyles.tab}
+            activeOpacity={0.72}
+          >
+            {/* Pill highlight behind icon when active */}
+            <View
+              style={[
+                tabStyles.iconPill,
+                isFocused && { backgroundColor: T.tabActive + '22' },
+              ]}
+            >
+              <TabIcon name={route.name} color={color} />
+            </View>
+
+            <Text
+              style={[
+                tabStyles.label,
+                {
+                  color,
+                  fontWeight: isFocused ? '700' : '500',
+                },
+              ]}
+            >
+              {TAB_LABELS[route.name] ?? route.name}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+// ── Tab navigator ─────────────────────────────────────────────────────────────
+function StudentTabs() {
   return (
     <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: [
-          styles.tabBar,
-          {
-            backgroundColor: T.tabBar,
-            borderTopColor:  T.tabBarBorder,
-            height:          tabBarHeight,
-            paddingBottom:   Platform.OS === 'android' ? insets.bottom + 4 : 8,
-          },
-        ],
-        tabBarActiveTintColor:   T.tabActive,
-        tabBarInactiveTintColor: T.tabInactive,
-        tabBarLabelStyle: styles.tabLabel,
-      }}
+      screenOptions={{ headerShown: false }}
+      tabBar={(props) => <StudentTabBar {...props} />}
     >
-      <Tab.Screen
-        name="Dashboard"
-        component={StudentDashboardScreen}
-        options={{ tabBarIcon: ({ color, size }) => <LayoutDashboard color={color} size={size} />, tabBarLabel: 'Home' }}
-      />
-      <Tab.Screen
-        name="Courses"
-        component={CoursesScreen}
-        options={{ tabBarIcon: ({ color, size }) => <BookOpen color={color} size={size} />, tabBarLabel: 'Courses' }}
-      />
-      <Tab.Screen
-        name="Chat"
-        component={ChatListScreen}
-        options={{ tabBarIcon: ({ color, size }) => <MessageCircle color={color} size={size} />, tabBarLabel: 'Chat' }}
-      />
-      <Tab.Screen
-        name="Social"
-        component={StudentSocialScreen}
-        options={{ tabBarIcon: ({ color, size }) => <Trophy color={color} size={size} />, tabBarLabel: 'Social' }}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={StudentProfileScreen}
-        options={{ tabBarIcon: ({ color, size }) => <UserCircle color={color} size={size} />, tabBarLabel: 'Profile' }}
-      />
+      <Tab.Screen name="Dashboard" component={StudentDashboardScreen} />
+      <Tab.Screen name="Courses"   component={CoursesScreen} />
+      <Tab.Screen name="Chat"      component={ChatListScreen} />
+      <Tab.Screen name="Social"    component={StudentSocialScreen} />
+      <Tab.Screen name="Teachers"  component={TeachersScreen} />
+      <Tab.Screen name="Profile"   component={StudentProfileScreen} />
     </Tab.Navigator>
   );
 }
 
+// ── Root stack ────────────────────────────────────────────────────────────────
 export function StudentNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="StudentTabs"     component={StudentTabs} />
-      <Stack.Screen name="CourseDetails"   component={CourseDetailsScreen} />
-      <Stack.Screen name="SubjectLessons"  component={SubjectScreen} />
-      <Stack.Screen name="Lesson"          component={LessonScreen} />
-      <Stack.Screen name="Teachers"        component={TeachersScreen} />
-      <Stack.Screen name="TeacherProfile"  component={TeacherProfileScreen} />
-      <Stack.Screen name="ChatRoom"        component={ChatRoomScreen} />
+      <Stack.Screen name="StudentTabs"    component={StudentTabs} />
+      <Stack.Screen name="CourseDetails"  component={CourseDetailsScreen} />
+      <Stack.Screen name="SubjectLessons" component={SubjectScreen} />
+      <Stack.Screen name="Lesson"         component={LessonScreen} />
+      <Stack.Screen name="TeacherProfile" component={TeacherProfileScreen} />
+      <Stack.Screen name="ChatRoom"       component={ChatRoomScreen} />
     </Stack.Navigator>
   );
 }
 
-const styles = StyleSheet.create({
-  tabBar: {
-    paddingTop: 6,
-    borderTopWidth: 1,
+// ── Styles ────────────────────────────────────────────────────────────────────
+const tabStyles = StyleSheet.create({
+  bar: {
+    flexDirection:        'row',
+    paddingTop:           10,
+    paddingHorizontal:    4,
+    // Rounded top corners — gives a "floating card" feel
+    borderTopLeftRadius:  22,
+    borderTopRightRadius: 22,
+    // iOS shadow (upward)
+    shadowColor:   '#000',
+    shadowOffset:  { width: 0, height: -3 },
+    shadowOpacity: 0.10,
+    shadowRadius:  14,
+    // Android elevation
+    elevation: 20,
   },
-  tabLabel: {
-    fontSize: 11,
-    fontWeight: '600',
+
+  tab: {
+    flex:           1,
+    alignItems:     'center',
+    justifyContent: 'center',
+    paddingTop:     2,
+    gap:            3,
+  },
+
+  // Pill container behind icon
+  iconPill: {
+    width:          46,
+    height:         30,
+    borderRadius:   15,
+    alignItems:     'center',
+    justifyContent: 'center',
+  },
+
+  label: {
+    fontSize: 10,
+    letterSpacing: 0.1,
   },
 });

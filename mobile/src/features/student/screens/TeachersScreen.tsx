@@ -46,7 +46,6 @@ export function TeachersScreen() {
       <GradientHeader
         title="👨‍🏫 Teachers"
         subtitle="Your instructors"
-        onBack={() => nav.goBack()}
         stats={[{ label: 'Teachers', value: teachers.length }]}
       />
 
