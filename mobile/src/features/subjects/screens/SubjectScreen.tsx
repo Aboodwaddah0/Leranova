@@ -6,7 +6,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../../shared/hooks/useTheme';
 import { GradientHeader, Card, LoadingState, ErrorState, EmptyState } from '../../../shared/components';
 import { spacing, radius, fontSize, fontWeight } from '../../../shared/theme';
-import { fetchSubjectLessons } from '../../student/services/studentService';
+import { fetchSubjectLessons, updateStudentLessonProgress } from '../../student/services/studentService';
 import type { Lesson } from '../../../types/student';
 import type { StudentStackParamList } from '../../../types/navigation';
 
@@ -42,6 +42,18 @@ export function SubjectScreen() {
     await load();
     setRefreshing(false);
   }, [load]);
+
+  const toggleLesson = useCallback(async (target: Lesson) => {
+    const next = !(target.isCompleted ?? false);
+    // Optimistic update
+    setLessons((prev) => prev.map((l) => l.id === target.id ? { ...l, isCompleted: next } : l));
+    try {
+      await updateStudentLessonProgress(target.id, next);
+    } catch {
+      // Revert on failure
+      setLessons((prev) => prev.map((l) => l.id === target.id ? { ...l, isCompleted: !next } : l));
+    }
+  }, []);
 
   const completedCount = lessons.filter((l) => l.isCompleted).length;
 
@@ -79,6 +91,7 @@ export function SubjectScreen() {
                 subjectId: params.subjectId,
                 courseId: params.courseId,
               })}
+              onToggleComplete={() => toggleLesson(item)}
             />
           )}
         />
@@ -87,33 +100,40 @@ export function SubjectScreen() {
   );
 }
 
-function LessonItem({ lesson, index, T, onPress }: {
+function LessonItem({ lesson, index, T, onPress, onToggleComplete }: {
   lesson: Lesson;
   index: number;
   T: ReturnType<typeof useTheme>['T'];
   onPress: () => void;
+  onToggleComplete: () => void;
 }) {
   const Icon = lesson.isCompleted ? CheckCircle2 : Circle;
   const iconColor = lesson.isCompleted ? '#34d399' : T.muted;
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={styles.itemWrap}>
+    <View style={styles.itemWrap}>
       <Card>
         <View style={styles.row}>
-          <Text style={[styles.indexBadge, { backgroundColor: 'rgba(99,102,241,0.1)', color: '#818cf8' }]}>
-            {index + 1}
-          </Text>
-          <View style={styles.body}>
-            <Text style={[styles.title, { color: T.text }]} numberOfLines={1}>{lesson.title}</Text>
-            {lesson.duration ? (
-              <Text style={[styles.duration, { color: T.muted }]}>⏱ {lesson.duration}</Text>
-            ) : null}
-          </View>
-          <Icon size={20} color={iconColor} />
-          <ChevronRight size={14} color={T.muted} style={{ marginLeft: spacing[1] }} />
+          {/* Checkbox — independent touch target */}
+          <TouchableOpacity onPress={onToggleComplete} hitSlop={10} style={styles.checkBtn}>
+            <Icon size={22} color={iconColor} />
+          </TouchableOpacity>
+          {/* Body + navigation area */}
+          <TouchableOpacity onPress={onPress} activeOpacity={0.75} style={styles.navArea}>
+            <Text style={[styles.indexBadge, { backgroundColor: 'rgba(99,102,241,0.1)', color: '#818cf8' }]}>
+              {index + 1}
+            </Text>
+            <View style={styles.body}>
+              <Text style={[styles.title, { color: T.text }]} numberOfLines={1}>{lesson.title}</Text>
+              {lesson.duration ? (
+                <Text style={[styles.duration, { color: T.muted }]}>⏱ {lesson.duration}</Text>
+              ) : null}
+            </View>
+            <ChevronRight size={14} color={T.muted} />
+          </TouchableOpacity>
         </View>
       </Card>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -121,7 +141,9 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   list: { padding: spacing[5], paddingBottom: spacing[8] },
   itemWrap: { marginBottom: spacing[3] },
-  row:     { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  row:      { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  checkBtn: { padding: spacing[1] },
+  navArea:  { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
   indexBadge: {
     width: 32, height: 32, borderRadius: radius.md,
     textAlign: 'center', lineHeight: 32,

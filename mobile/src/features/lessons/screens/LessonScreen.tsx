@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Platform,
+  StyleSheet, Platform, LayoutAnimation, UIManager,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ArrowLeft, Bot } from 'lucide-react-native';
+import { ArrowLeft, Bot, ChevronDown, CheckCircle2, Circle } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../shared/hooks/useTheme';
 import { spacing, radius, fontSize, fontWeight } from '../../../shared/theme';
@@ -23,7 +23,12 @@ import { CommentsTab }      from '../components/CommentsTab';
 import { FlashcardsTab }    from '../components/FlashcardsTab';
 import { QuizTab }          from '../components/QuizTab';
 import { MindMapTab }       from '../components/MindMapTab';
+import { MindMapModal }     from '../components/MindMapModal';
 import { AIAssistantModal } from '../components/AIAssistantModal';
+
+if (Platform.OS === 'android') {
+  UIManager.setLayoutAnimationEnabledExperimental?.(true);
+}
 
 type Route = RouteProp<StudentStackParamList, 'Lesson'>;
 type Nav   = NativeStackNavigationProp<StudentStackParamList>;
@@ -43,18 +48,21 @@ export function LessonScreen() {
   const { params } = useRoute<Route>();
   const insets     = useSafeAreaInsets();
 
-  const [lesson,    setLesson]    = useState<Lesson | null>(null);
-  const [aiContent, setAiContent] = useState<LessonAiContent | null>(null);
-  const [quizData,  setQuizData]  = useState<unknown>(null);
+  const [lesson,     setLesson]     = useState<Lesson | null>(null);
+  const [allLessons, setAllLessons] = useState<Lesson[]>([]);
+  const [aiContent,  setAiContent]  = useState<LessonAiContent | null>(null);
+  const [quizData,   setQuizData]   = useState<unknown>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('attachments');
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState('');
-  const [showAI,    setShowAI]    = useState(false);
+  const [showAI,       setShowAI]       = useState(false);
+  const [showMindMap,  setShowMindMap]  = useState(false);
 
   const load = useCallback(async () => {
     try {
       setError('');
       const lessons = await fetchSubjectLessons(params.subjectId);
+      setAllLessons(lessons);
       setLesson(lessons.find((l) => l.id === params.lessonId) ?? null);
       updateStudentLessonProgress(params.lessonId, false).catch(() => {});
 
@@ -73,6 +81,22 @@ export function LessonScreen() {
   }, [params.lessonId, params.subjectId]);
 
   useEffect(() => { load(); }, [load]);
+
+  const handleToggleLesson = useCallback(async (target: Lesson) => {
+    const next = !(target.isCompleted ?? false);
+    setAllLessons((prev) => prev.map((l) => l.id === target.id ? { ...l, isCompleted: next } : l));
+    if (target.id === params.lessonId) {
+      setLesson((prev) => prev ? { ...prev, isCompleted: next } : prev);
+    }
+    try {
+      await updateStudentLessonProgress(target.id, next);
+    } catch {
+      setAllLessons((prev) => prev.map((l) => l.id === target.id ? { ...l, isCompleted: !next } : l));
+      if (target.id === params.lessonId) {
+        setLesson((prev) => prev ? { ...prev, isCompleted: !next } : prev);
+      }
+    }
+  }, [params.lessonId]);
 
   if (loading) return <LoadingState message="Loading lesson…" />;
   if (error)   return <ErrorState  message={error} onRetry={load} />;
@@ -136,6 +160,19 @@ export function LessonScreen() {
           })}
         </ScrollView>
 
+        {/* ── Lessons dropdown ────────────────────────────────────────── */}
+        {allLessons.length > 1 && (
+          <LessonsDropdown
+            lessons={allLessons}
+            currentId={params.lessonId}
+            subjectId={params.subjectId}
+            courseId={params.courseId}
+            nav={nav}
+            T={T}
+            onToggle={handleToggleLesson}
+          />
+        )}
+
         {/* ── Tab content ─────────────────────────────────────────────── */}
         <View style={S.tabContent}>
           {activeTab === 'attachments' && (
@@ -155,6 +192,7 @@ export function LessonScreen() {
             <MindMapTab
               mindmap={aiContent?.mindmap}
               published={aiContent?.mindmapPublished ?? aiContent?.published}
+              onOpen={() => setShowMindMap(true)}
             />
           )}
           {activeTab === 'quiz' && (
@@ -172,6 +210,13 @@ export function LessonScreen() {
         <Bot size={22} color="#fff" />
       </TouchableOpacity>
 
+      <MindMapModal
+        visible={showMindMap}
+        onClose={() => setShowMindMap(false)}
+        mindmap={aiContent?.mindmap}
+        title={lesson?.title}
+      />
+
       <AIAssistantModal
         visible={showAI}
         onClose={() => setShowAI(false)}
@@ -183,6 +228,101 @@ export function LessonScreen() {
   );
 }
 
+// ── Lessons Dropdown ─────────────────────────────────────────────────────────
+function LessonsDropdown({
+  lessons, currentId, subjectId, courseId, nav, T, onToggle,
+}: {
+  lessons:   Lesson[];
+  currentId: number;
+  subjectId: number;
+  courseId:  number;
+  nav:       ReturnType<typeof useNavigation<NativeStackNavigationProp<StudentStackParamList>>>;
+  T:         ReturnType<typeof useTheme>['T'];
+  onToggle:  (l: Lesson) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const completed = lessons.filter((l) => l.isCompleted).length;
+
+  const toggle = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOpen((v) => !v);
+  };
+
+  return (
+    <View style={[S.ddWrap, { backgroundColor: T.surface, borderColor: T.border }]}>
+      {/* Header row */}
+      <TouchableOpacity onPress={toggle} style={S.ddHeader} activeOpacity={0.7}>
+        <Text style={[S.ddTitle, { color: T.text }]}>📚 All Lessons</Text>
+        <Text style={[S.ddCount, { color: T.muted }]}>{completed}/{lessons.length} done</Text>
+        <ChevronDown
+          size={16}
+          color={T.muted}
+          style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}
+        />
+      </TouchableOpacity>
+
+      {/* Expandable list */}
+      {open && (
+        <ScrollView
+          style={S.ddList}
+          scrollEnabled
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={false}
+        >
+          {lessons.map((lesson, idx) => {
+            const isCurrent = lesson.id === currentId;
+            return (
+              <View
+                key={lesson.id}
+                style={[
+                  S.ddItem,
+                  isCurrent && { backgroundColor: 'rgba(99,102,241,0.08)' },
+                  idx > 0 && { borderTopWidth: 1, borderTopColor: T.border },
+                ]}
+              >
+                {/* Checkbox */}
+                <TouchableOpacity onPress={() => onToggle(lesson)} hitSlop={10} style={S.ddCheckBtn}>
+                  {lesson.isCompleted
+                    ? <CheckCircle2 size={18} color="#34d399" />
+                    : <Circle size={18} color={T.muted} />}
+                </TouchableOpacity>
+
+                {/* Navigate area */}
+                <TouchableOpacity
+                  onPress={() => nav.navigate('Lesson', {
+                    lessonId:    lesson.id,
+                    lessonTitle: lesson.title,
+                    subjectId,
+                    courseId,
+                  })}
+                  style={S.ddNavArea}
+                  activeOpacity={0.7}
+                >
+                  <View style={S.ddItemBody}>
+                    <Text
+                      style={[S.ddItemTitle, { color: isCurrent ? T.primary : T.text }]}
+                      numberOfLines={1}
+                    >
+                      {lesson.title}
+                    </Text>
+                    <Text style={[S.ddItemSub, { color: T.muted }]}>Lesson {idx + 1}</Text>
+                  </View>
+                  {isCurrent && (
+                    <View style={[S.ddBadge, { backgroundColor: T.primary }]}>
+                      <Text style={S.ddBadgeText}>NOW</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 const S = StyleSheet.create({
   root: { flex: 1 },
 
@@ -217,6 +357,21 @@ const S = StyleSheet.create({
   tabLabel: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold },
 
   tabContent: { padding: spacing[4], paddingBottom: spacing[6] },
+
+  // Lessons dropdown
+  ddWrap:      { marginHorizontal: spacing[4], marginBottom: spacing[2], borderRadius: radius.xl, borderWidth: 1, overflow: 'hidden' },
+  ddHeader:    { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing[3], paddingHorizontal: spacing[4], gap: spacing[2] },
+  ddTitle:     { flex: 1, fontSize: fontSize.sm, fontWeight: fontWeight.semibold },
+  ddCount:     { fontSize: fontSize.xs },
+  ddList:      { maxHeight: 300 },
+  ddItem:      { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing[3], paddingHorizontal: spacing[4], gap: spacing[3] },
+  ddCheckBtn:  { padding: spacing[1] },
+  ddNavArea:   { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  ddItemBody:  { flex: 1 },
+  ddItemTitle: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold },
+  ddItemSub:   { fontSize: fontSize.xs, marginTop: 2 },
+  ddBadge:     { paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.full },
+  ddBadgeText: { fontSize: 9, fontWeight: fontWeight.extrabold, color: '#fff', letterSpacing: 0.5 },
 
   fab: {
     position:        'absolute',

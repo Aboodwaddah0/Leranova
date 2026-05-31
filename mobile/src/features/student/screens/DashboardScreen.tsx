@@ -8,7 +8,7 @@ import Svg, { Circle } from 'react-native-svg';
 import {
   BookOpen, Flame, Trophy, Zap, Brain, Star, Layers, MessageSquare,
   ChevronRight, CheckCircle, TrendingUp, Target, AlertCircle,
-  Sun, BarChart3,
+  Sun, BarChart3, GraduationCap,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -166,6 +166,25 @@ export function StudentDashboardScreen() {
     setRefreshing(false);
   }, [load]);
 
+  // ── Smart course navigation ───────────────────────────────────────────────
+  // Direct-to-lesson: skips CourseDetails → SubjectLessons detour.
+  // resumeLesson is pre-computed during catalog enrichment:
+  //   0% → first lesson · in-progress → first incomplete · 100% → last
+  const smartNavigate = useCallback((course: Course) => {
+    // Single-subject track → jump straight to the resume lesson
+    // Multi-subject track  → go to CourseDetails so user can pick the subject
+    if (course.subjectCount === 1 && course.resumeLesson) {
+      nav.navigate('Lesson', {
+        lessonId:    course.resumeLesson.id,
+        lessonTitle: course.resumeLesson.title,
+        subjectId:   course.resumeLesson.subjectId,
+        courseId:    course.id,
+      });
+    } else {
+      nav.navigate('CourseDetails', { courseId: course.id, courseName: course.name });
+    }
+  }, [nav]);
+
   // ── Derived data (mirrors web) ────────────────────────────────────────────
   const xpInLevel = stats.totalXp % 100;
   const xpToNext  = 100 - xpInLevel;
@@ -245,12 +264,12 @@ export function StudentDashboardScreen() {
               <SectionLabel label="Continue Learning" T={T} />
               <ResumeCourseCard
                 course={continueLearning[0]}
-                onPress={() => nav.navigate('CourseDetails', { courseId: continueLearning[0].id, courseName: continueLearning[0].name })}
+                onPress={() => smartNavigate(continueLearning[0])}
               />
               {continueLearning.slice(1, 3).map((c) => (
                 <MiniCourseCard
                   key={c.id} course={c} T={T}
-                  onPress={() => nav.navigate('CourseDetails', { courseId: c.id, courseName: c.name })}
+                  onPress={() => smartNavigate(c)}
                 />
               ))}
             </View>
@@ -273,11 +292,11 @@ export function StudentDashboardScreen() {
           {/* ── My Specializations / New Courses ─────────────────────────── */}
           {newCourses.length > 0 && (
             <View style={styles.section}>
-              <SectionLabel label="My Courses" T={T} />
+              <SectionLabel label="My Specializations" T={T} />
               {newCourses.slice(0, 4).map((c, i) => (
-                <MiniCourseCard
+                <SpecializationCard
                   key={c.id} course={c} T={T}
-                  onPress={() => nav.navigate('CourseDetails', { courseId: c.id, courseName: c.name })}
+                  onPress={() => smartNavigate(c)}
                   index={i}
                 />
               ))}
@@ -428,9 +447,16 @@ function HeroHeader({
 
 // ── Resume Course Card (dark glassmorphism) ───────────────────────────────────
 function ResumeCourseCard({ course, onPress }: { course: Course; onPress: () => void }) {
-  const totalSegs = 8;
-  const filledSegs = Math.max(0, Math.min(totalSegs, Math.round(((course.progress ?? 0) / 100) * totalSegs)));
-  const initial = (course.name || 'C').charAt(0).toUpperCase();
+  const totalSegs  = 10;
+  const pct        = course.progress ?? 0;
+  const filledSegs = Math.max(0, Math.min(totalSegs, Math.round((pct / 100) * totalSegs)));
+  const initial    = (course.name || 'C').charAt(0).toUpperCase();
+
+  // Lesson subtitle — show "Lesson X of Y" if data is available (mirrors web)
+  const hasLessonData = course.lessonCount != null && course.lessonCount > 0;
+  const lessonSubtitle = hasLessonData
+    ? `Lesson ${course.completedLessons ?? 0} of ${course.lessonCount}`
+    : null;
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={styles.resumeCard}>
@@ -441,11 +467,11 @@ function ResumeCourseCard({ course, onPress }: { course: Course; onPress: () => 
         style={styles.resumeAccent}
       />
       <View style={styles.resumeInner}>
-        {/* Continue label */}
+        {/* Header row */}
         <View style={styles.resumeHeader}>
           <View style={styles.resumeLiveDot} />
           <Text style={styles.resumeHeaderText}>Continue Learning</Text>
-          <Text style={styles.resumePct}>{course.progress ?? 0}%</Text>
+          <Text style={styles.resumePct}>{pct}%</Text>
         </View>
 
         <View style={styles.resumeBody}>
@@ -456,7 +482,20 @@ function ResumeCourseCard({ course, onPress }: { course: Course; onPress: () => 
 
           {/* Info */}
           <View style={{ flex: 1 }}>
-            <Text style={styles.resumeCourseName} numberOfLines={2}>{course.name}</Text>
+            <Text style={styles.resumeCourseName} numberOfLines={1}>{course.name}</Text>
+
+            {/* "Lesson X of Y  •  X% complete" — matches web card */}
+            {lessonSubtitle ? (
+              <View style={styles.resumeMetaRow}>
+                <Text style={styles.resumeMetaText}>{lessonSubtitle}</Text>
+                <View style={styles.resumeCompletePill}>
+                  <View style={styles.resumeCompleteDot} />
+                  <Text style={styles.resumeCompleteText}>{pct}% complete</Text>
+                </View>
+              </View>
+            ) : null}
+
+            {/* Segmented progress bar */}
             <View style={styles.resumeSegRow}>
               {Array.from({ length: totalSegs }, (_, i) => (
                 <View
@@ -482,17 +521,91 @@ function ResumeCourseCard({ course, onPress }: { course: Course; onPress: () => 
   );
 }
 
+// ── Specialization Card (matches web "My specializations" reference) ──────────
+const SPEC_HERO_GRADIENTS: [string, string][] = [
+  ['#7c3aed', '#6d28d9'],   // violet
+  ['#2563eb', '#1d4ed8'],   // blue
+  ['#0891b2', '#0e7490'],   // cyan
+  ['#7c3aed', '#4f46e5'],   // indigo-violet
+];
+
+function SpecializationCard({
+  course, T, onPress, index = 0,
+}: { course: Course; T: ReturnType<typeof useTheme>['T']; onPress: () => void; index?: number }) {
+  const pct = course.progress ?? 0;
+  const heroColors = SPEC_HERO_GRADIENTS[index % SPEC_HERO_GRADIENTS.length];
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.92}
+      style={[styles.specCard, { backgroundColor: T.surface, borderColor: T.border }]}
+    >
+      {/* ── Hero image area ── */}
+      <View style={styles.specHero}>
+        <LinearGradient colors={heroColors} style={StyleSheet.absoluteFill} />
+
+        {/* TRACK badge — top-left, matches reference exactly */}
+        <View style={styles.specBadge}>
+          <Text style={styles.specBadgeText}>{course.category.toUpperCase()}</Text>
+        </View>
+
+        {/* Large graduation cap illustration — centered, same watermark feel as reference */}
+        <GraduationCap
+          size={96}
+          color="rgba(255,255,255,0.38)"
+          strokeWidth={1.2}
+        />
+      </View>
+
+      {/* ── Content area ── */}
+      <View style={styles.specContent}>
+        <Text style={[styles.specTitle, { color: T.text }]} numberOfLines={2}>
+          {course.name}
+        </Text>
+
+        {pct > 0 ? (
+          /* Progress variant */
+          <View style={styles.specProgressWrap}>
+            <View style={[styles.specProgressBg, { backgroundColor: T.elevated }]}>
+              <LinearGradient
+                colors={heroColors}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.specProgressFill, { width: `${pct}%` }]}
+              />
+            </View>
+            <Text style={[styles.specProgressPct, { color: T.muted }]}>{pct}%</Text>
+          </View>
+        ) : (
+          /* Start now CTA — matches reference button */
+          <View style={[styles.specStartBtn, { borderColor: T.border }]}>
+            <Text style={[styles.specStartText, { color: T.subtext }]}>Start now →</Text>
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 // ── Mini Course Card ──────────────────────────────────────────────────────────
 function MiniCourseCard({
   course, T, onPress, index = 0,
 }: { course: Course; T: ReturnType<typeof useTheme>['T']; onPress: () => void; index?: number }) {
   const pct = course.progress ?? 0;
+  const gradients: [string, string][] = [
+    ['#6366f1', '#8b5cf6'],
+    ['#14b8a6', '#0d9488'],
+    ['#f59e0b', '#d97706'],
+    ['#ec4899', '#db2777'],
+  ];
+
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={{ marginBottom: spacing[3] }}>
       <Card>
         <View style={styles.miniCourseRow}>
           <LinearGradient
-            colors={([['#6366f1', '#8b5cf6'], ['#14b8a6', '#0d9488'], ['#f59e0b', '#d97706'], ['#ec4899', '#db2777']] as [string, string][])[index % 4]}
+            colors={gradients[index % 4]}
             style={styles.miniCourseIcon}
           >
             <BookOpen size={18} color="#fff" />
@@ -500,12 +613,16 @@ function MiniCourseCard({
           <View style={{ flex: 1 }}>
             <Text style={[styles.miniCourseName, { color: T.text }]} numberOfLines={1}>{course.name}</Text>
             <Text style={[styles.miniCourseCat, { color: T.muted }]}>{course.category}</Text>
-            {pct > 0 && (
+            {pct > 0 ? (
               <View style={styles.miniProgress}>
                 <View style={[styles.miniProgressBg, { backgroundColor: T.elevated }]}>
                   <View style={[styles.miniProgressFill, { width: `${pct}%` }]} />
                 </View>
                 <Text style={[styles.miniProgressPct, { color: T.muted }]}>{pct}%</Text>
+              </View>
+            ) : (
+              <View style={[styles.miniStartBtn, { borderColor: T.border }]}>
+                <Text style={[styles.miniStartBtnText, { color: T.primary }]}>Start now →</Text>
               </View>
             )}
           </View>
@@ -951,11 +1068,78 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   resumeInitial: { color: '#fff', fontSize: fontSize.xl, fontWeight: fontWeight.extrabold },
-  resumeCourseName: { color: '#fff', fontSize: fontSize.base, fontWeight: fontWeight.bold, marginBottom: spacing[2], lineHeight: 20 },
-  resumeSegRow: { flexDirection: 'row', gap: 3, height: 8 },
+  resumeCourseName: { color: '#fff', fontSize: fontSize.base, fontWeight: fontWeight.bold, lineHeight: 20 },
+  resumeMetaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing[2], marginTop: 3, marginBottom: spacing[2] },
+  resumeMetaText: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: fontWeight.semibold },
+  resumeCompletePill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(99,102,241,0.2)', borderRadius: radius.full, paddingHorizontal: spacing[2], paddingVertical: 2 },
+  resumeCompleteDot:  { width: 6, height: 6, borderRadius: 3, backgroundColor: '#818cf8' },
+  resumeCompleteText: { color: '#a5b4fc', fontSize: 10, fontWeight: fontWeight.semibold },
+  resumeSegRow: { flexDirection: 'row', gap: 3, height: 8, marginTop: 0 },
   resumeSeg:    { flex: 1, borderRadius: 3 },
   resumeBtn:    { paddingHorizontal: spacing[4], paddingVertical: spacing[2.5], borderRadius: radius.xl },
   resumeBtnText: { color: '#fff', fontSize: fontSize.sm, fontWeight: fontWeight.bold },
+
+  // Specialization card (web "My specializations" reference)
+  specCard: {
+    borderRadius: radius['2xl'],
+    borderWidth:  1,
+    overflow:     'hidden',
+    marginBottom: spacing[4],
+  },
+  specHero: {
+    height:          180,
+    alignItems:      'center',
+    justifyContent:  'center',
+    overflow:        'hidden',
+  },
+  specBadge: {
+    position:         'absolute',
+    top:              spacing[3],
+    left:             spacing[3],
+    backgroundColor:  'rgba(255,255,255,0.92)',
+    borderRadius:     radius.full,
+    paddingHorizontal: spacing[3],
+    paddingVertical:   spacing[1],
+  },
+  specBadgeText: {
+    fontSize:    10,
+    fontWeight:  fontWeight.extrabold,
+    color:       '#1e1b4b',
+    letterSpacing: 1.2,
+  },
+  specContent: {
+    padding: spacing[4],
+    gap:     spacing[3],
+  },
+  specTitle: {
+    fontSize:   fontSize.lg,
+    fontWeight: fontWeight.bold,
+    lineHeight: 24,
+  },
+  specProgressWrap: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           spacing[2],
+  },
+  specProgressBg: {
+    flex:         1,
+    height:       6,
+    borderRadius: radius.full,
+    overflow:     'hidden',
+  },
+  specProgressFill: {
+    height:       '100%',
+    borderRadius: radius.full,
+  },
+  specProgressPct: { fontSize: fontSize.xs, fontWeight: fontWeight.semibold, width: 32, textAlign: 'right' },
+  specStartBtn: {
+    borderWidth:     1,
+    borderRadius:    radius.xl,
+    paddingVertical: spacing[3],
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  specStartText: { fontSize: fontSize.base, fontWeight: fontWeight.semibold },
 
   // Mini course card
   miniCourseRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
@@ -966,6 +1150,8 @@ const styles = StyleSheet.create({
   miniProgressBg: { flex: 1, height: 4, borderRadius: radius.full, overflow: 'hidden' },
   miniProgressFill: { height: '100%', backgroundColor: '#6366f1', borderRadius: radius.full },
   miniProgressPct:  { fontSize: fontSize.xs, fontWeight: fontWeight.semibold, width: 28 },
+  miniStartBtn:     { marginTop: spacing[1.5], alignSelf: 'flex-start', borderRadius: radius.lg, borderWidth: 1, paddingHorizontal: spacing[3], paddingVertical: spacing[1] },
+  miniStartBtnText: { fontSize: fontSize.xs, fontWeight: fontWeight.bold },
 
   // AI Mentor card
   mentorCard: {

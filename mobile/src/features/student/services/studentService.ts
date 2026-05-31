@@ -28,19 +28,75 @@ export async function fetchStudentCourseCatalog(): Promise<Course[]> {
     if (context?.mode === 'ACADEMY') {
       const res = await apiClient.get('/student/academy/tracks');
       const tracks = ensureArray<Record<string, unknown>>(unwrap(res));
-      return tracks.map((t) => ({
+
+      // Build the base track list first
+      const baseTracks = tracks.map((t) => ({
         id:          Number(t.id),
         name:        String(t.name ?? ''),
         description: String(t.description ?? ''),
-        category:    'Track',
-        progress:    t.subjectCount
-          ? Math.round((Number(t.subscribedSubjectCount ?? 0) / Number(t.subjectCount ?? 1)) * 100)
-          : 0,
-        status:      'ACTIVE',
-        priceStatus: 'PAID',
+        category:    'Track' as const,
+        progress:    0,
+        status:      'ACTIVE' as const,
+        priceStatus: 'PAID'   as const,
         cover:       String(t.thumbnail ?? ''),
-        teacher:     null,
+        teacher:     null as null,
       }));
+
+      // ── Enrich with real lesson-level completion data ──────────────────────
+      // Mirrors web exactly (StudentDashboardPage.jsx lines 144-160):
+      //   fetchCourseSubjects(trackId) → fetchSubjectLessons(subjectId)
+      //   → count lesson.isCompleted from backend → compute real %
+      const enriched = await Promise.all(
+        baseTracks.map(async (track) => {
+          try {
+            const subjects = await fetchCourseSubjects(track.id);
+
+            // Fetch lessons per subject, keeping subject ID alongside each lesson
+            const lessonsBySubject = await Promise.all(
+              subjects.map(async (s) => {
+                const lessons = await fetchSubjectLessons(s.id);
+                // Guarantee subjectId is set (backend sets it, but guard in case)
+                return lessons.map((l) => ({ ...l, subjectId: l.subjectId ?? s.id }));
+              }),
+            );
+
+            const allLessons = lessonsBySubject.flat();
+            const total      = allLessons.length;
+            const completed  = allLessons.filter((l) => Boolean(l?.isCompleted)).length;
+            const progress   = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+            // Smart-resume lesson:
+            //   - 0% → first lesson
+            //   - in-progress → first lesson where isCompleted = false
+            //   - 100% → last lesson (for review)
+            const rawResume = total > 0
+              ? (allLessons.find((l) => !l.isCompleted) ?? allLessons[total - 1])
+              : null;
+
+            const resumeLesson = rawResume
+              ? {
+                  id:        rawResume.id,
+                  title:     rawResume.title || rawResume.name || '',
+                  subjectId: (rawResume.subjectId as number),
+                }
+              : undefined;
+
+            return {
+              ...track,
+              progress,
+              subjectCount:     subjects.length,
+              lessonCount:      total > 0 ? total     : undefined,
+              completedLessons: total > 0 ? completed : undefined,
+              // resumeLesson only used when there is exactly 1 subject
+              resumeLesson:     subjects.length === 1 ? resumeLesson : undefined,
+            };
+          } catch {
+            return track;  // on error, keep base track with progress = 0
+          }
+        }),
+      );
+
+      return enriched;
     }
 
     if (context?.mode === 'SCHOOL') {
