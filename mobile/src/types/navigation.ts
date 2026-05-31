@@ -29,7 +29,7 @@ export type StudentStackParamList = {
   StudentTabs:    undefined;
   CourseDetails:  { courseId: number; courseName: string };
   SubjectLessons: { subjectId: number; subjectName: string; courseId: number };
-  Lesson:         { lessonId: number; lessonTitle: string; subjectId: number; courseId: number };
+  Lesson:         { lessonId: number; lessonTitle: string; subjectId: number; courseId: number; autoPlay?: boolean };
   TeacherProfile: { teacherId: number };
   ChatRoom:       { chatId: number; chatName?: string };
 };

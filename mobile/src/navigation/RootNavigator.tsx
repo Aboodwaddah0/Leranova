@@ -7,6 +7,7 @@ import { AuthNavigator } from './AuthNavigator';
 import { StudentNavigator } from './StudentNavigator';
 import { ParentNavigator } from './ParentNavigator';
 import type { RootStackParamList } from '../types/navigation';
+import { useTheme } from '../shared/hooks/useTheme';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -17,6 +18,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export function RootNavigator() {
   const dispatch  = useAppDispatch();
   const { isLoading, isAuthenticated, user } = useAppSelector((s) => s.auth);
+  const { T }     = useTheme();
 
   useEffect(() => {
     dispatch(bootstrapAuth());
@@ -24,7 +26,7 @@ export function RootNavigator() {
 
   if (isLoading) {
     return (
-      <View style={styles.splash}>
+      <View style={[styles.splash, { backgroundColor: T.background }]}>
         <ActivityIndicator size="large" color="#6366f1" />
       </View>
     );
@@ -50,6 +52,5 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0d0c22',
   },
 });

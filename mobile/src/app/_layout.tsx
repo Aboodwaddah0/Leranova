@@ -1,6 +1,7 @@
 import 'react-native-gesture-handler';
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { useTheme } from '../shared/hooks/useTheme';
 import * as SplashScreen from 'expo-splash-screen';
 import { Slot } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -10,6 +11,12 @@ import { store } from '../store';
 import { AppProviders } from './providers';
 
 SplashScreen.preventAutoHideAsync();
+
+/** Reads isDark from context — must live inside AppProviders */
+function ThemedStatusBar() {
+  const { isDark } = useTheme();
+  return <StatusBar style={isDark ? 'light' : 'dark'} />;
+}
 
 export default function RootLayout() {
   useEffect(() => {
@@ -21,7 +28,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <ReduxProvider store={store}>
           <AppProviders>
-            <StatusBar style="auto" />
+            <ThemedStatusBar />
             <Slot />
           </AppProviders>
         </ReduxProvider>

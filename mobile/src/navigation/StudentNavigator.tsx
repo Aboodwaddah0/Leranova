@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator }   from '@react-navigation/bottom-tabs';
 import type { BottomTabBarProps }     from '@react-navigation/bottom-tabs';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated } from 'react-native';
 import {
   LayoutDashboard, BookOpen, MessageCircle,
   Trophy, Users, UserCircle,
@@ -50,64 +50,94 @@ const TAB_LABELS: Record<string, string> = {
   Profile:   'Profile',
 };
 
+// ── Animated single tab button ────────────────────────────────────────────────
+function TabButton({
+  routeName, isFocused, T, onPress,
+}: {
+  routeName: string;
+  isFocused: boolean;
+  T: ReturnType<typeof useTheme>['T'];
+  onPress: () => void;
+}) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const translateAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (isFocused) {
+      // Pop up + scale spring when tab becomes active
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1.18, friction: 4, tension: 180, useNativeDriver: true,
+        }),
+        Animated.spring(translateAnim, {
+          toValue: -3, friction: 4, tension: 180, useNativeDriver: true,
+        }),
+      ]).start(() => {
+        Animated.parallel([
+          Animated.spring(scaleAnim,     { toValue: 1,  friction: 5, useNativeDriver: true }),
+          Animated.spring(translateAnim, { toValue: 0,  friction: 5, useNativeDriver: true }),
+        ]).start();
+      });
+    }
+  }, [isFocused, scaleAnim, translateAnim]);
+
+  const color = isFocused ? T.tabActive : T.tabInactive;
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={tabStyles.tab}
+      activeOpacity={0.72}
+    >
+      {/* Pill highlight */}
+      <Animated.View
+        style={[
+          tabStyles.iconPill,
+          isFocused && { backgroundColor: T.tabActive + '22' },
+          { transform: [{ scale: scaleAnim }, { translateY: translateAnim }] },
+        ]}
+      >
+        <TabIcon name={routeName} color={color} />
+      </Animated.View>
+
+      <Text
+        style={[
+          tabStyles.label,
+          { color, fontWeight: isFocused ? '700' : '500' },
+        ]}
+      >
+        {TAB_LABELS[routeName] ?? routeName}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 // ── Custom tab bar ────────────────────────────────────────────────────────────
 function StudentTabBar({ state, navigation }: BottomTabBarProps) {
   const { T }  = useTheme();
   const insets = useSafeAreaInsets();
-  // Extra bottom padding: respect home-indicator / gesture bar
   const pb = (Platform.OS === 'ios' ? insets.bottom : Math.max(insets.bottom, 4)) + 4;
 
   return (
-    <View
-      style={[
-        tabStyles.bar,
-        { backgroundColor: T.tabBar, paddingBottom: pb },
-      ]}
-    >
+    <View style={[tabStyles.bar, { backgroundColor: T.tabBar, paddingBottom: pb }]}>
       {state.routes.map((route, index) => {
         const isFocused = state.index === index;
-        const color     = isFocused ? T.tabActive : T.tabInactive;
-
         const onPress = () => {
           const event = navigation.emit({
-            type:              'tabPress',
-            target:            route.key,
-            canPreventDefault: true,
+            type: 'tabPress', target: route.key, canPreventDefault: true,
           });
           if (!isFocused && !event.defaultPrevented) {
             navigation.navigate(route.name, route.params);
           }
         };
-
         return (
-          <TouchableOpacity
+          <TabButton
             key={route.key}
+            routeName={route.name}
+            isFocused={isFocused}
+            T={T}
             onPress={onPress}
-            style={tabStyles.tab}
-            activeOpacity={0.72}
-          >
-            {/* Pill highlight behind icon when active */}
-            <View
-              style={[
-                tabStyles.iconPill,
-                isFocused && { backgroundColor: T.tabActive + '22' },
-              ]}
-            >
-              <TabIcon name={route.name} color={color} />
-            </View>
-
-            <Text
-              style={[
-                tabStyles.label,
-                {
-                  color,
-                  fontWeight: isFocused ? '700' : '500',
-                },
-              ]}
-            >
-              {TAB_LABELS[route.name] ?? route.name}
-            </Text>
-          </TouchableOpacity>
+          />
         );
       })}
     </View>

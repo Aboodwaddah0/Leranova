@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Platform, LayoutAnimation, UIManager,
@@ -18,6 +18,8 @@ import type { Lesson, LessonAiContent } from '../../../types/student';
 import type { StudentStackParamList } from '../../../types/navigation';
 
 import { VideoPlayer }      from '../components/VideoPlayer';
+import type { NextLessonInfo } from '../components/VideoPlayer';
+import { useSoundEffect }  from '../../../shared/hooks/useSoundEffect';
 import { AttachmentsTab }   from '../components/AttachmentsTab';
 import { CommentsTab }      from '../components/CommentsTab';
 import { FlashcardsTab }    from '../components/FlashcardsTab';
@@ -57,6 +59,15 @@ export function LessonScreen() {
   const [error,     setError]     = useState('');
   const [showAI,       setShowAI]       = useState(false);
   const [showMindMap,  setShowMindMap]  = useState(false);
+
+  // ── auto-play when arriving from "Up Next" auto-navigation ────────────────
+  const autoPlay = params.autoPlay ?? false;
+
+  // ── paper flip sound for MindMap ──────────────────────────────────────────
+  // Free paper-flip sound (Mixkit, royalty-free). Preloaded on mount.
+  const playPageFlip = useSoundEffect({
+    uri: 'https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3',
+  });
 
   const load = useCallback(async () => {
     try {
@@ -98,6 +109,41 @@ export function LessonScreen() {
     }
   }, [params.lessonId]);
 
+  // ── Next lesson (for "Up next" overlay) ────────────────────────────────────
+  const nextLessonInfo = useMemo<NextLessonInfo | null>(() => {
+    const idx = allLessons.findIndex((l) => l.id === params.lessonId);
+    if (idx < 0 || idx >= allLessons.length - 1) return null;
+    const next = allLessons[idx + 1];
+    return {
+      id:          next.id,
+      title:       next.title || next.name,
+      subjectId:   params.subjectId,
+      courseId:    params.courseId,
+      lessonIndex: idx + 2,            // 1-based: current is idx+1, next is idx+2
+    };
+  }, [allLessons, params.lessonId, params.subjectId, params.courseId]);
+
+  const handleNextLesson = useCallback(() => {
+    if (!nextLessonInfo) return;
+
+    // ── Mark current lesson as completed (fire-and-forget) ────────────────
+    updateStudentLessonProgress(params.lessonId, true).catch(() => {});
+    // Update local state so LessonsDropdown reflects completion immediately
+    setAllLessons((prev) =>
+      prev.map((l) => l.id === params.lessonId ? { ...l, isCompleted: true } : l),
+    );
+    setLesson((prev) => prev ? { ...prev, isCompleted: true } : prev);
+
+    // ── Navigate to next lesson and auto-start playback ────────────────────
+    nav.replace('Lesson', {
+      lessonId:    nextLessonInfo.id,
+      lessonTitle: nextLessonInfo.title,
+      subjectId:   nextLessonInfo.subjectId,
+      courseId:    nextLessonInfo.courseId,
+      autoPlay:    true,
+    });
+  }, [nextLessonInfo, nav, params.lessonId]);
+
   if (loading) return <LoadingState message="Loading lesson…" />;
   if (error)   return <ErrorState  message={error} onRetry={load} />;
 
@@ -121,7 +167,12 @@ export function LessonScreen() {
 
       {/* ── Scrollable content ─────────────────────────────────────────── */}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-        <VideoPlayer videoUrl={lesson?.videoUrl} />
+        <VideoPlayer
+          videoUrl={lesson?.videoUrl}
+          nextLesson={nextLessonInfo}
+          onNextLesson={handleNextLesson}
+          autoPlay={autoPlay}
+        />
 
         {lesson && (
           <View style={[S.infoBox, { backgroundColor: T.surface, borderColor: T.border }]}>
@@ -192,7 +243,7 @@ export function LessonScreen() {
             <MindMapTab
               mindmap={aiContent?.mindmap}
               published={aiContent?.mindmapPublished ?? aiContent?.published}
-              onOpen={() => setShowMindMap(true)}
+              onOpen={() => { playPageFlip(); setShowMindMap(true); }}
             />
           )}
           {activeTab === 'quiz' && (

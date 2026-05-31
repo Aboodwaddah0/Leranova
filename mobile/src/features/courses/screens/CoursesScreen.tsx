@@ -18,7 +18,7 @@ import type { StudentStackParamList } from '../../../types/navigation';
 type Nav = NativeStackNavigationProp<StudentStackParamList>;
 
 export function CoursesScreen() {
-  const { T }  = useTheme();
+  const { T, isDark }  = useTheme();
   const insets = useSafeAreaInsets();
   const nav    = useNavigation<Nav>();
 
@@ -60,7 +60,7 @@ export function CoursesScreen() {
     <View style={[styles.root, { backgroundColor: T.background }]}>
       {/* Header */}
       <LinearGradient
-        colors={['#5b21b6', '#0f172a', '#312e81']}
+        colors={isDark ? ['#5b21b6', '#0f172a', '#312e81'] : ['#047857', '#059669']}
         style={[styles.header, { paddingTop: insets.top + spacing[4] }]}
       >
         <Text style={styles.headerTitle}>

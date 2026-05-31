@@ -47,7 +47,7 @@ export function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <LinearGradient
-        colors={['#0d0c22', '#1a1836', '#0d0c22']}
+        colors={isDark ? ['#0d0c22', '#1a1836', '#0d0c22'] : ['#f5f3ff', '#ede9fe', '#f5f3ff']}
         style={[styles.container, { paddingTop: insets.top + spacing[8] }]}
       >
         {/* Logo */}
@@ -55,10 +55,10 @@ export function LoginScreen() {
           <View style={styles.logoIcon}>
             <BookOpen size={28} color="#fff" />
           </View>
-          <Text style={styles.logoText}>Learnova</Text>
+          <Text style={[styles.logoText, { color: isDark ? '#fff' : T.primary }]}>Learnova</Text>
         </View>
 
-        <Text style={styles.tagline}>Your learning, elevated.</Text>
+        <Text style={[styles.tagline, { color: isDark ? 'rgba(255,255,255,0.45)' : T.muted }]}>Your learning, elevated.</Text>
 
         {/* Card */}
         <View style={[styles.card, { backgroundColor: isDark ? '#111029' : '#ffffff', borderColor: T.border }]}>
@@ -121,7 +121,7 @@ export function LoginScreen() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.footer}>© 2026 Learnova. All rights reserved.</Text>
+        <Text style={[styles.footer, { color: isDark ? 'rgba(255,255,255,0.3)' : T.muted }]}>© 2026 Learnova. All rights reserved.</Text>
       </LinearGradient>
     </KeyboardAvoidingView>
   );

@@ -8,3 +8,4 @@ export { EmptyState }     from './EmptyState';
 export { Avatar }         from './Avatar';
 export { Badge }          from './Badge';
 export { Separator }      from './Separator';
+export { PendulumRope }   from './PendulumRope';

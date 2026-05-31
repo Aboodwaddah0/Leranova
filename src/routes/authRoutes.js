@@ -8,6 +8,7 @@ import {
 	resetPasswordController,
 	changePasswordController,
 	getMeController,
+	updateMeController,
 	verifyOrgEmailController,
 	stripeStatusController,
 } from '../controllers/authController.js';
@@ -16,7 +17,8 @@ import { loginAdminController } from '../controllers/adminAuthController.js';
 
 const router = Router();
 
-router.get('/me', authMiddleware, getMeController);
+router.get('/me',   authMiddleware, getMeController);
+router.patch('/me', authMiddleware, updateMeController);
 router.get('/stripe-status', stripeStatusController);
 
 // Traditional registration and login

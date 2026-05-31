@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  RefreshControl, Animated, Dimensions,
+  RefreshControl, Animated, Easing, Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
@@ -373,22 +373,101 @@ function HeroHeader({
   insetTop: number;
   T: ReturnType<typeof useTheme>['T'];
 }) {
+  const { isDark } = useTheme();
+
+  // ── Entrance (fade + slide) ────────────────────────────────────────────────
+  const mountAnim     = useRef(new Animated.Value(0)).current;
+  // ── Avatar glow aura ──────────────────────────────────────────────────────
+  const avatarGlow    = useRef(new Animated.Value(0)).current;
+  // ── Level-badge gold halo ─────────────────────────────────────────────────
+  const badgeHalo     = useRef(new Animated.Value(0)).current;
+  // ── XP bar animated fill ──────────────────────────────────────────────────
+  const xpBarAnim     = useRef(new Animated.Value(0)).current;
+  // ── Stat row shimmer ──────────────────────────────────────────────────────
+  const statShimmer   = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // 1. Entrance spring — content slides up with bounce
+    Animated.spring(mountAnim, {
+      toValue: 1, friction: 7, tension: 50, useNativeDriver: true,
+    }).start();
+
+    // 2. XP bar fill — wait 300 ms then sweep to actual value
+    Animated.timing(xpBarAnim, {
+      toValue: xpInLevel / 100,
+      duration: 1000, delay: 300,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: false,
+    }).start();
+
+    // 3. Avatar glow — soft sun radiation: slow breath, tiny scale shift, no pulsing expansion
+    const avatarLoop = Animated.loop(Animated.sequence([
+      Animated.timing(avatarGlow, { toValue: 1, duration: 2600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(avatarGlow, { toValue: 0, duration: 2600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    ]));
+    avatarLoop.start();
+
+    // 4. Badge gold halo — independent faster pulse
+    const badgeLoop = Animated.loop(Animated.sequence([
+      Animated.timing(badgeHalo, { toValue: 1, duration: 900,  easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(badgeHalo, { toValue: 0, duration: 900,  easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    ]));
+    badgeLoop.start();
+
+    // 5. Stat shimmer — rows subtly pulse opacity
+    const shimLoop = Animated.loop(Animated.sequence([
+      Animated.timing(statShimmer, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(statShimmer, { toValue: 0, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    ]));
+    shimLoop.start();
+
+    return () => { avatarLoop.stop(); badgeLoop.stop(); shimLoop.stop(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Derived interpolations
+  const contentOpacity   = mountAnim;
+  const contentTranslate = mountAnim.interpolate({ inputRange: [0, 1], outputRange: [44, 0] });
+
+  // Avatar: soft sun radiation — stays small, gentle opacity breath, no big expansion
+  const avatarGlowOpacity = avatarGlow.interpolate({ inputRange: [0, 1], outputRange: [0.20, 0.42] });
+  const avatarGlowScale   = avatarGlow.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.04] });
+
+  // Badge: gold halo opacity + scale
+  const badgeHaloOpacity = badgeHalo.interpolate({ inputRange: [0, 1], outputRange: [0.0, 0.85] });
+  const badgeHaloScale   = badgeHalo.interpolate({ inputRange: [0, 1], outputRange: [1.0, 1.80] });
+
+  // XP bar width %
+  const xpBarWidth = xpBarAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
+
+  // Stat row: subtle brightness pulse
+  const statOpacity = statShimmer.interpolate({ inputRange: [0, 1], outputRange: [0.80, 1.0] });
+
   return (
     <View style={[styles.hero, { paddingTop: insetTop + spacing[4] }]}>
       {/* Bg gradient */}
       <LinearGradient
-        colors={['rgba(12,11,35,0.97)', 'rgba(18,16,48,0.99)']}
+        colors={isDark
+          ? ['rgba(12,11,35,0.97)', 'rgba(18,16,48,0.99)']
+          : ['#1d4ed8', '#3730a3']}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
       {/* Glow overlay */}
       <LinearGradient
-        colors={['#6366f1', '#8b5cf6', '#ec4899']}
+        colors={isDark
+          ? ['#6366f1', '#8b5cf6', '#ec4899']
+          : ['#60a5fa', '#818cf8', '#a78bfa']}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-        style={[StyleSheet.absoluteFill, { opacity: 0.2 }]}
+        style={[StyleSheet.absoluteFill, { opacity: isDark ? 0.2 : 0.35 }]}
       />
 
-      <View style={styles.heroContent}>
+      <Animated.View
+        style={[
+          styles.heroContent,
+          { opacity: contentOpacity, transform: [{ translateY: contentTranslate }] },
+        ]}
+      >
         {/* Top row */}
         <View style={styles.heroTop}>
           <View style={{ flex: 1 }}>
@@ -407,46 +486,65 @@ function HeroHeader({
             </View>
           </View>
 
-          {/* Avatar with XP ring */}
-          <View style={styles.avatarWrap}>
-            <XpRing xpInLevel={xpInLevel} size={76} />
-            <View style={styles.avatarInner}>
-              <Avatar name={user?.name} uri={user?.avatarUrl} size={52} />
-            </View>
-            <View style={styles.levelBadge}>
-              <Text style={styles.levelText}>{stats.level}</Text>
+          {/* Avatar — glow aura + XP ring + level badge halo */}
+          <View style={styles.avatarContainer}>
+            {/* ① Purple glow aura behind avatar — most visible effect */}
+            <Animated.View style={[
+              styles.avatarGlowAura,
+              { opacity: avatarGlowOpacity, transform: [{ scale: avatarGlowScale }] },
+            ]} />
+
+            {/* ② Avatar + XP ring */}
+            <View style={styles.avatarWrap}>
+              <XpRing xpInLevel={xpInLevel} size={76} />
+              <View style={styles.avatarInner}>
+                <Avatar name={user?.name} uri={user?.avatarUrl} size={52} />
+              </View>
+
+              {/* ③ Level badge — gold halo radiates outward */}
+              <View style={styles.levelBadgeContainer}>
+                <Animated.View style={[
+                  styles.levelBadgeHalo,
+                  { opacity: badgeHaloOpacity, transform: [{ scale: badgeHaloScale }] },
+                ]} />
+                <View style={styles.levelBadge}>
+                  <Text style={styles.levelText}>{stats.level}</Text>
+                </View>
+              </View>
             </View>
           </View>
         </View>
 
-        {/* XP progress bar */}
+        {/* XP progress bar — animates from 0 % → real value on mount */}
         <View style={styles.xpBarWrap}>
           <View style={styles.xpBarBg}>
-            <View style={[styles.xpBarFill, { width: `${xpInLevel}%` }]} />
+            <Animated.View style={[styles.xpBarFill, { width: xpBarWidth }]} />
           </View>
           <Text style={styles.xpBarLabel}>{xpToNext} XP to next level</Text>
         </View>
 
-        {/* Stats row */}
-        <View style={styles.statsRow}>
+        {/* Stats row — subtle shimmer pulse */}
+        <Animated.View style={[styles.statsRow, { opacity: statOpacity }]}>
           {[
-            { icon: Flame,    value: `${stats.currentStreak}🔥`, label: 'Streak' },
-            { icon: Zap,      value: stats.totalXp,              label: 'Total XP' },
-            { icon: BarChart3, value: `${xpInLevel}/100`,        label: 'Level XP' },
+            { value: `${stats.currentStreak}🔥`, label: 'Streak' },
+            { value: stats.totalXp,               label: 'Total XP' },
+            { value: `${xpInLevel}/100`,           label: 'Level XP' },
           ].map((item, i) => (
             <View key={i} style={styles.statItem}>
               <Text style={styles.statVal}>{item.value}</Text>
               <Text style={styles.statLbl}>{item.label}</Text>
             </View>
           ))}
-        </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
+
     </View>
   );
 }
 
 // ── Resume Course Card (dark glassmorphism) ───────────────────────────────────
 function ResumeCourseCard({ course, onPress }: { course: Course; onPress: () => void }) {
+  const { isDark, T } = useTheme();
   const totalSegs  = 10;
   const pct        = course.progress ?? 0;
   const filledSegs = Math.max(0, Math.min(totalSegs, Math.round((pct / 100) * totalSegs)));
@@ -459,7 +557,10 @@ function ResumeCourseCard({ course, onPress }: { course: Course; onPress: () => 
     : null;
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={styles.resumeCard}>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={[styles.resumeCard, {
+      backgroundColor: isDark ? 'rgba(25,35,55,0.65)' : T.surface,
+      borderColor:     isDark ? 'rgba(99,102,241,0.4)' : T.border,
+    }]}>
       {/* Top accent line */}
       <LinearGradient
         colors={['transparent', '#6366f1', '#8b5cf6', 'transparent']}
@@ -470,8 +571,8 @@ function ResumeCourseCard({ course, onPress }: { course: Course; onPress: () => 
         {/* Header row */}
         <View style={styles.resumeHeader}>
           <View style={styles.resumeLiveDot} />
-          <Text style={styles.resumeHeaderText}>Continue Learning</Text>
-          <Text style={styles.resumePct}>{pct}%</Text>
+          <Text style={[styles.resumeHeaderText, { color: isDark ? 'rgba(255,255,255,0.5)' : T.muted }]}>Continue Learning</Text>
+          <Text style={[styles.resumePct, { color: isDark ? 'rgba(255,255,255,0.3)' : T.muted }]}>{pct}%</Text>
         </View>
 
         <View style={styles.resumeBody}>
@@ -482,12 +583,12 @@ function ResumeCourseCard({ course, onPress }: { course: Course; onPress: () => 
 
           {/* Info */}
           <View style={{ flex: 1 }}>
-            <Text style={styles.resumeCourseName} numberOfLines={1}>{course.name}</Text>
+            <Text style={[styles.resumeCourseName, { color: isDark ? '#fff' : T.text }]} numberOfLines={1}>{course.name}</Text>
 
             {/* "Lesson X of Y  •  X% complete" — matches web card */}
             {lessonSubtitle ? (
               <View style={styles.resumeMetaRow}>
-                <Text style={styles.resumeMetaText}>{lessonSubtitle}</Text>
+                <Text style={[styles.resumeMetaText, { color: isDark ? 'rgba(255,255,255,0.5)' : T.muted }]}>{lessonSubtitle}</Text>
                 <View style={styles.resumeCompletePill}>
                   <View style={styles.resumeCompleteDot} />
                   <Text style={styles.resumeCompleteText}>{pct}% complete</Text>
@@ -504,7 +605,7 @@ function ResumeCourseCard({ course, onPress }: { course: Course; onPress: () => 
                     styles.resumeSeg,
                     i < filledSegs
                       ? { backgroundColor: '#6366f1' }
-                      : { backgroundColor: 'rgba(255,255,255,0.1)' },
+                      : { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : T.elevated },
                   ]}
                 />
               ))}
@@ -635,6 +736,7 @@ function MiniCourseCard({
 
 // ── AI Mentor Card ────────────────────────────────────────────────────────────
 function AIMentorCard({ mentor, T }: { mentor: AIMentor; T: ReturnType<typeof useTheme>['T'] }) {
+  const { isDark } = useTheme();
   const urgColor = URGENCY_COLORS[mentor.nextBestAction?.urgency ?? 'LOW'] ?? '#6366f1';
   const ActionIcon = mentor.nextBestAction?.icon === 'FLAME' ? Flame
     : mentor.nextBestAction?.icon === 'QUIZ' ? Zap
@@ -644,7 +746,9 @@ function AIMentorCard({ mentor, T }: { mentor: AIMentor; T: ReturnType<typeof us
   return (
     <View style={styles.mentorCard}>
       <LinearGradient
-        colors={['#0f172a', '#1e1b4b', '#2d1b69']}
+        colors={isDark
+          ? ['#0f172a', '#1e1b4b', '#2d1b69']
+          : ['#0f766e', '#0d9488', '#0f766e']}
         style={StyleSheet.absoluteFill}
       />
       {/* Header */}
@@ -1017,12 +1121,39 @@ const styles = StyleSheet.create({
   },
   tierText: { color: '#a78bfa', fontSize: 9, fontWeight: fontWeight.extrabold, textTransform: 'uppercase', letterSpacing: 0.8 },
 
+  // Avatar glow system
+  avatarContainer: {
+    alignItems: 'center', justifyContent: 'center',
+    // extra space so the glow aura isn't clipped
+    width: 100, height: 100,
+  },
+  avatarGlowAura: {
+    position:     'absolute',
+    width:        68,
+    height:       68,
+    borderRadius: 34,
+    backgroundColor: '#818cf8',  // indigo/violet — matches XP ring color
+  },
   avatarWrap: { width: 76, height: 76, alignItems: 'center', justifyContent: 'center' },
   avatarInner: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  levelBadge: {
+
+  // Level badge halo system
+  levelBadgeContainer: {
     position: 'absolute', bottom: -2, right: -2,
+    alignItems: 'center', justifyContent: 'center',
+    width: 26, height: 26,
+  },
+  levelBadgeHalo: {
+    position:     'absolute',
+    width:        26,
+    height:       26,
+    borderRadius: 13,
+    backgroundColor: '#fbbf24',  // gold — contrasts with the purple avatar ring
+  },
+  levelBadge: {
+    width: 22, height: 22,
     backgroundColor: '#6366f1', borderRadius: radius.full,
-    width: 22, height: 22, alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
     borderWidth: 2, borderColor: '#0f0f1a',
   },
   levelText: { color: '#fff', fontSize: 9, fontWeight: fontWeight.extrabold },
@@ -1053,8 +1184,7 @@ const styles = StyleSheet.create({
   // Resume card (dark glassmorphism)
   resumeCard: {
     borderRadius: radius['2xl'], overflow: 'hidden', marginBottom: spacing[3],
-    backgroundColor: 'rgba(25,35,55,0.65)',
-    borderWidth: 1, borderColor: 'rgba(99,102,241,0.4)',
+    borderWidth: 1,
   },
   resumeAccent: { height: 2 },
   resumeInner: { padding: spacing[4] },
