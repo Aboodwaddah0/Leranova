@@ -144,9 +144,9 @@ const toCsvValue = (value) => {
   return `"${escaped}"`;
 };
 
-const createParentForNationalId = async (nationalId, orgId = null, tx = prisma, { fatherPhone = null } = {}) => {
+const createParentForNationalId = async (nationalId, orgId = null, tx = prisma, { fatherName = null } = {}) => {
   const safeNationalId = String(nationalId || "").trim();
-  const parentName = `Parent ${safeNationalId}`;
+  const parentName = fatherName ? String(fatherName).trim() : `Parent ${safeNationalId}`;
   const password = generateTempPassword(parentName);
   const passwordHashed = await hashPassword(password);
   const passwordEncrypted = encryptPassword(password);
@@ -159,7 +159,6 @@ const createParentForNationalId = async (nationalId, orgId = null, tx = prisma, 
       passwordEncrypted,
       mustChangePassword: true,
       role: "PARENT",
-      phone: fatherPhone ? String(fatherPhone).trim() : null,
       parent: {
         create: {
           Work: null,
@@ -203,7 +202,7 @@ const resolveParentIdByNationalId = async (parentNationalId) => {
   return parent?.Parent_id ? Number(parent.Parent_id) : null;
 };
 
-const resolveOrCreateParentId = async ({ parentNationalId, orgId = null, fatherPhone = null }) => {
+const resolveOrCreateParentId = async ({ parentNationalId, orgId = null, fatherName = null }) => {
   const normalized = normalizeNationalId(parentNationalId);
   if (!normalized) {
     return null;
@@ -218,7 +217,7 @@ const resolveOrCreateParentId = async ({ parentNationalId, orgId = null, fatherP
   }
 
   try {
-    const createdParent = await createParentForNationalId(normalized, orgId, prisma, { fatherPhone });
+    const createdParent = await createParentForNationalId(normalized, orgId, prisma, { fatherName });
     return {
       parentId: Number(createdParent.parentId),
       parentLinkStatus: 'created',
@@ -325,7 +324,7 @@ export const generateUsers = async (data) => {
           resolvedParentId = existingParent.Parent_id;
           parentIdByNationalId.set(String(user.parentNationalId), resolvedParentId);
         } else {
-          newlyCreatedParent = await createParentForNationalId(user.parentNationalId, user.orgId ?? null, prisma, { fatherPhone: user.fatherPhone ?? null });
+          newlyCreatedParent = await createParentForNationalId(user.parentNationalId, user.orgId ?? null, prisma, { fatherName: user.fatherName ?? null });
           resolvedParentId = newlyCreatedParent.parentId;
           parentIdByNationalId.set(String(newlyCreatedParent.nationalId), Number(newlyCreatedParent.parentId));
         }
@@ -440,7 +439,7 @@ if (isUserExist)  {
 }
 
 const resolvedParentInfo = data.role === 'STUDENT' && data.parentNationalId
-  ? await resolveOrCreateParentId({ parentNationalId: data.parentNationalId, orgId: data.orgId ?? null, fatherPhone: data.fatherPhone ?? null })
+  ? await resolveOrCreateParentId({ parentNationalId: data.parentNationalId, orgId: data.orgId ?? null, fatherName: data.fatherName ?? null })
   : null;
 
 const resolvedParentId = resolvedParentInfo?.parentId ?? (data.parentId ?? null);
@@ -496,7 +495,7 @@ export const addUserWithGeneratedCredentials = async (data) => {
     ? await resolveOrCreateParentId({
       parentNationalId: data.parentNationalId,
       orgId: data.orgId ?? null,
-      fatherPhone: data.fatherPhone ?? null,
+      fatherName: data.fatherName ?? null,
     })
     : null;
 
@@ -646,7 +645,7 @@ export const getAllUsers = async (orgId, orgRole, filters = {}) => {
         parent: {
           select: {
             user: {
-              select: { phone: true },
+              select: { name: true },
             },
           },
         },
@@ -683,7 +682,7 @@ export const getAllUsers = async (orgId, orgRole, filters = {}) => {
     student: user.student || null,
     status: user.student?.AcademicStatus || user.academy_user?.AcademicStatus || null,
     academy_user: user.academy_user,
-    parentPhone: user.student?.parent?.user?.phone || null,
+    parentName: user.student?.parent?.user?.name || null,
   }));
 };
 
@@ -780,8 +779,8 @@ export const generateSampleExcel = (role, orgType) => {
 
   if (normalizedRole === 'STUDENT') {
     if (isSchool) {
-      headers  = ['firstName', 'lastName', 'Role',    'email', 'age', 'gender', 'address',         'phone',        'DOB',        'ParentNationalId', 'fatherPhone'];
-      exampleRow = ['John',    'Doe',      'STUDENT', '',      14,    'MALE',   '123 Main Street', '+1234567890', '2010-05-15', '1234567890',        '+9661234567'];
+      headers  = ['firstName', 'lastName', 'Role',    'email', 'age', 'gender', 'address',         'phone',        'DOB',        'ParentNationalId', 'fatherName'];
+      exampleRow = ['John',    'Doe',      'STUDENT', '',      14,    'MALE',   '123 Main Street', '+1234567890', '2010-05-15', '1234567890',        'Ahmed Hassan'];
     } else {
       headers  = ['firstName', 'lastName', 'Role',    'email', 'age', 'gender',  'address',        'phone'];
       exampleRow = ['Jane',    'Smith',    'STUDENT', '',      20,    'FEMALE',  '456 Oak Avenue', '+1234567890'];
