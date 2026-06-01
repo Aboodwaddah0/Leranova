@@ -628,7 +628,6 @@ export default function OrganizationWorkspacePage() {
     lastName: "",
     email: "",
     password: "",
-    age: "",
     gender: "MALE",
     address: "",
     phone: "",
@@ -1473,7 +1472,7 @@ export default function OrganizationWorkspacePage() {
   };
 
   const resetStudentForm = () => {
-    setStudentForm({ id: null, firstName: "", lastName: "", email: "", password: "", age: "", gender: "MALE", address: "", phone: "", dob: "", parentNationalId: "", fatherName: "" });
+    setStudentForm({ id: null, firstName: "", lastName: "", email: "", password: "", gender: "MALE", address: "", phone: "", dob: "", parentNationalId: "", fatherName: "" });
     setStudentEmailAuto(false);
   };
 
@@ -1714,7 +1713,6 @@ export default function OrganizationWorkspacePage() {
     const basePayload = {
       name: studentFullName,
       role: "STUDENT",
-      age: studentForm.age ? Number(studentForm.age) : undefined,
       gender: studentForm.gender || undefined,
       address: studentForm.address || undefined,
       phone: studentForm.phone || undefined,
@@ -1948,14 +1946,13 @@ export default function OrganizationWorkspacePage() {
     const dateLabel = new Date().toISOString().slice(0, 10);
 
     if (isSchool) {
-      const headers = ["account_id", "name", "email", "password", "father_name", "age", "gender", "address"];
+      const headers = ["account_id", "name", "email", "password", "father_name", "gender", "address"];
       const rows = filteredStudents.map((student) => [
         student?.registrationNumber || "",
         student?.name || "",
         student?.email || "",
         student?.password || "",
         student?.parentName || "",
-        student?.age ?? "",
         student?.gender || "",
         student?.address || "",
       ]);
@@ -1966,11 +1963,10 @@ export default function OrganizationWorkspacePage() {
         student?.name || "",
         student?.email || "",
         parentNameById.get(Number(student?.student?.Parent_id)) || "",
-        student?.age ?? "",
         student?.gender || "",
         student?.address || "",
       ]);
-      downloadExcelFromRows(`students-list-${dateLabel}.csv`, ["id", "name", "email", "parent", "age", "gender", "address"], rows);
+      downloadExcelFromRows(`students-list-${dateLabel}.csv`, ["id", "name", "email", "parent", "gender", "address"], rows);
     }
 
     setSuccess(isArabic ? "تم تنزيل قائمة الطلاب" : "Students list downloaded");
@@ -4132,7 +4128,6 @@ export default function OrganizationWorkspacePage() {
                   <input name="lastName" value={studentForm.lastName} onChange={setField(setStudentForm)} placeholder={isArabic ? "اسم العائلة" : "Last Name"} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
                 </div>
                 <input name="email" value={studentForm.email} onChange={setField(setStudentForm)} placeholder={isArabic ? "البريد الإلكتروني (اختياري)" : "Email (optional)"} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
-                <input name="age" type="number" value={studentForm.age} onChange={setField(setStudentForm)} placeholder={t.organization.students.age} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
                 <input name="dob" type="date" value={studentForm.dob} onChange={setField(setStudentForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
                 {isSchool && <input name="parentNationalId" value={studentForm.parentNationalId} onChange={setField(setStudentForm)} placeholder={t.organization.students.parentNationalId} className="h-11 w-full rounded-xl border border-slate-200 px-3" />}
                 {isSchool && <input name="fatherName" value={studentForm.fatherName} onChange={setField(setStudentForm)} placeholder={isArabic ? "اسم الأب" : "Father Name"} className="h-11 w-full rounded-xl border border-slate-200 px-3" />}
@@ -4315,7 +4310,7 @@ export default function OrganizationWorkspacePage() {
                                 ) : null}
                                 <button
                                   type="button"
-                                  onClick={() => { const { firstName, lastName } = splitName(student.name); setStudentForm({ id: student.id, firstName, lastName, email: student.email || "", password: "", age: student.age || "", gender: student.gender || "MALE", address: student.address || "", phone: student.phone || "", dob: student.dob ? String(student.dob).slice(0, 10) : "", parentNationalId: "", fatherName: "" }); setStudentModalOpen(true); }}
+                                  onClick={() => { const { firstName, lastName } = splitName(student.name); setStudentForm({ id: student.id, firstName, lastName, email: student.email || "", password: "", gender: student.gender || "MALE", address: student.address || "", phone: student.phone || "", dob: student.dob ? String(student.dob).slice(0, 10) : "", parentNationalId: "", fatherName: "" }); setStudentModalOpen(true); }}
                                   className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
                                   title={t.organization.common.edit}
                                 >
