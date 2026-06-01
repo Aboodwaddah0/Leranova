@@ -11,11 +11,14 @@ import InstructorAIChat from "./InstructorAIChat";
 import NotificationDropdown from "../shared/NotificationDropdown";
 
 const navItems = [
-  { to: "/dashboard/instructor/overview", labelAr: "النظرة العامة", labelEn: "Overview", end: true },
-  { to: "/dashboard/instructor/courses", labelAr: "الكورسات", labelEn: "Courses" },
-  { to: "/dashboard/instructor/students", labelAr: "الطلاب", labelEn: "Students" },
-  { to: "/dashboard/instructor/analytics", labelAr: "التحليلات", labelEn: "Analytics" },
-  { to: "/dashboard/instructor/marks", labelAr: "العلامات", labelEn: "Marks" },
+  { to: "/dashboard/instructor/overview",    labelAr: "النظرة العامة", labelEn: "Overview",    end: true },
+  { to: "/dashboard/instructor/courses",     labelAr: "الكورسات",     labelEn: "Courses" },
+  { to: "/dashboard/instructor/students",    labelAr: "الطلاب",       labelEn: "Students" },
+  { to: "/dashboard/instructor/analytics",   labelAr: "التحليلات",    labelEn: "Analytics" },
+  { to: "/dashboard/instructor/marks",       labelAr: "العلامات",     labelEn: "Marks",       schoolOnly: true },
+  { to: "/dashboard/instructor/chat",        labelAr: "المحادثات",    labelEn: "Chats",       schoolOnly: true },
+  { to: "/dashboard/instructor/timetable",   labelAr: "الجدول",       labelEn: "Timetable",   schoolOnly: true },
+  { to: "/dashboard/instructor/calendar",    labelAr: "التقويم",      labelEn: "Calendar",    schoolOnly: true },
 ];
 
 export default function InstructorLayout({ title, subtitle, children, actions }) {
@@ -68,13 +71,13 @@ export default function InstructorLayout({ title, subtitle, children, actions })
 
   const isSchool = organizationType === ORG_TYPES.SCHOOL;
   const canViewMarks = isSchool;
-  const visibleNavItems = isSchool
-    ? navItems.map((item) => ({
-        ...item,
-        labelEn: item.to === "/dashboard/instructor/courses" ? "Grades" : item.labelEn,
-        labelAr: item.to === "/dashboard/instructor/courses" ? "الصفوف" : item.labelAr,
-      }))
-    : navItems.filter((item) => item.to !== "/dashboard/instructor/marks");
+  const visibleNavItems = navItems
+    .filter((item) => !item.schoolOnly || isSchool)
+    .map((item) => ({
+      ...item,
+      labelEn: item.to === "/dashboard/instructor/courses" && isSchool ? "Grades" : item.labelEn,
+      labelAr: item.to === "/dashboard/instructor/courses" && isSchool ? "الصفوف" : item.labelAr,
+    }));
 
   return (
     <main dir={isArabic ? "rtl" : "ltr"} className={`admin-management-theme dashboard-page relative min-h-screen overflow-hidden px-4 py-8 ${isArabic ? "lang-ar" : "lang-en"}`}>
@@ -109,8 +112,9 @@ export default function InstructorLayout({ title, subtitle, children, actions })
                 onClick={() => setShowTopUserMenu((prev) => !prev)}
                 className="dashboard-user-chip flex items-center gap-3 rounded-2xl border px-4 py-2.5"
               >
-                <div className="dashboard-user-avatar flex h-10 w-10 items-center justify-center rounded-full">
-                  <UserCircle2 size={20} />
+                <div className="dashboard-user-avatar flex h-[34px] w-[34px] shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-black text-white"
+                  style={{ background: 'linear-gradient(135deg, #7c5ce0, #9c6ff0)', border: '2px solid #7c5ce0' }}>
+                  {String(displayName || 'T').trim().charAt(0).toUpperCase() || 'T'}
                 </div>
                 <div className="min-w-0 text-left">
                   <p className="dashboard-title truncate text-sm font-semibold">{displayName}</p>

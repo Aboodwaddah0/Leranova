@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { Home, BookOpen, UserCircle2, LogOut, MessageCircle, Users2, BarChart2, Trophy, Sun, Moon, Menu, X } from 'lucide-react';
+import { Award, Home, BookOpen, UserCircle2, LogOut, MessageCircle, Users2, BarChart2, Trophy, Sun, Moon, Menu, X, CalendarDays, CalendarRange, ClipboardList } from 'lucide-react';
 import NotificationDropdown from '../shared/NotificationDropdown';
 import { useDispatch, useSelector } from 'react-redux';
 import { useMemo, useState } from 'react';
@@ -27,7 +27,15 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
     { to: '/dashboard/student', label: t?.student?.title || (isArabic ? 'لوحة الطالب' : 'Student Dashboard'), icon: Home, match: (p) => p === '/dashboard/student' || p === '/dashboard/student/overview' },
     { to: '/student/social', label: isArabic ? 'المنافسة' : 'Competition', icon: Trophy, match: (p) => p === '/student/social' },
     { to: isSchoolStudent ? '/student/subjects' : '/courses', label: isSchoolStudent ? (isArabic ? 'موادّي' : 'My Subjects') : (t?.student?.courses?.title || (isArabic ? 'الكورسات' : 'Courses')), icon: BookOpen, match: (p) => isSchoolStudent ? p === '/student/subjects' || p.startsWith('/courses/') : p === '/courses' || p.startsWith('/courses/') },
-    ...(isSchoolStudent ? [{ to: '/student/marks', label: isArabic ? 'درجاتي' : 'My Marks', icon: BarChart2, match: (p) => p === '/student/marks' }] : []),
+    ...(isSchoolStudent ? [
+      { to: '/student/marks',        label: isArabic ? 'درجاتي'    : 'My Marks',     icon: BarChart2,    match: (p) => p === '/student/marks'         },
+      { to: '/student/attendance',   label: isArabic ? 'حضوري'     : 'Attendance',   icon: ClipboardList, match: (p) => p === '/student/attendance'    },
+      { to: '/student/timetable',    label: isArabic ? 'الجدول'    : 'Timetable',    icon: CalendarRange, match: (p) => p === '/student/timetable'     },
+      { to: '/student/calendar',     label: isArabic ? 'التقويم'   : 'Calendar',     icon: CalendarDays,  match: (p) => p === '/student/calendar'      },
+      { to: '/student/certificates', label: isArabic ? 'شهاداتي'   : 'Certificates', icon: Award,         match: (p) => p === '/student/certificates'  },
+    ] : [
+      { to: '/student/certificates', label: isArabic ? 'شهاداتي'   : 'Certificates', icon: Award,         match: (p) => p === '/student/certificates'  },
+    ]),
     { to: '/student/chat', label: t?.student?.chat?.title || (isArabic ? 'المحادثات' : 'Chat'), icon: MessageCircle, match: (p) => p === '/student/chat' },
     { to: '/teachers', label: t?.student?.teachers?.title || (isArabic ? 'المدرسين' : 'Teachers'), icon: Users2, match: (p) => p === '/teachers' || p.startsWith('/teachers/') },
     { to: '/student/profile', label: t?.student?.profile?.title || (isArabic ? 'الملف الشخصي' : 'Profile'), icon: UserCircle2, match: (p) => p === '/student/profile' },
@@ -171,7 +179,7 @@ export default function StudentLayout({ title, subtitle, children, actions, asid
             <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-black text-white"
               style={{ background: 'linear-gradient(135deg, #7c5ce0, #9c6ff0)', border: '2px solid #7c5ce0' }}
             >
-              {avatar ? <img src={avatar} alt={displayName} className="h-full w-full object-cover" /> : getInitial(displayName)}
+              {avatar ? <img src={avatar} alt={displayName} className="h-full w-full object-cover" /> : <UserCircle2 size={20} color="rgba(255,255,255,0.9)" strokeWidth={1.5} />}
             </div>
             <div className="hidden sm:flex flex-col leading-tight">
               <span className="text-sm font-semibold" style={{ color: isDark ? 'rgba(255,255,255,0.95)' : 'rgba(26,26,46,0.95)' }}>{displayName}</span>

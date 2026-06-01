@@ -101,6 +101,8 @@ model track {
 
   student_course_payment student_course_payment[]
   attendance             attendance[]             @relation("class_attendance")
+  certificates           student_certificate[]
+  timetable_slots        timetable_slot[]
 
   createdAt              DateTime                  @default(now()) @db.Timestamp(0)
   updatedAt              DateTime                  @default(now()) @updatedAt @db.Timestamp(0)
@@ -279,14 +281,16 @@ model lesson_transcripts {
 }
 
 model lesson_progress {
-  id          Int      @id @default(autoincrement())
-  studentId   Int
-  lessonId    Int
-  isCompleted Boolean  @default(false)
-  createdAt   DateTime @default(now()) @db.Timestamp(0)
-  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamp(0)
-  student     user     @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_progress_student")
-  lesson      lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_progress_lesson")
+  id                   Int      @id @default(autoincrement())
+  studentId            Int
+  lessonId             Int
+  isCompleted          Boolean  @default(false)
+  watchedSeconds       Int      @default(0)
+  videoDurationSeconds Int?
+  createdAt            DateTime @default(now()) @db.Timestamp(0)
+  updatedAt            DateTime @default(now()) @updatedAt @db.Timestamp(0)
+  student              user     @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_progress_student")
+  lesson               lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_lesson_progress_lesson")
 
   @@unique([studentId, lessonId], map: "uq_lesson_progress_student_lesson")
   @@index([studentId], map: "idx_lesson_progress_student")
@@ -387,7 +391,6 @@ model notification {
 model organization {
   id                     Int                           @id @default(autoincrement())
   Name                   String                        @db.VarChar(255)
-  portal                 String                        @unique @db.VarChar(63)
   Email                  String                        @unique(map: "Email") @db.VarChar(255)
   Password_Hashed        String                        @db.VarChar(255)
   PasswordResetToken     String?                       @db.VarChar(255)
@@ -416,6 +419,10 @@ model organization {
   student_notes          student_note[]
   school_events          school_event[]
   attendance             attendance[]
+  certificates           student_certificate[]
+  timetable_slots        timetable_slot[]
+  userSequence           Int                           @default(0)
+  organizationCode       String?                       @unique @db.VarChar(20)
   createdAt              DateTime                      @default(now()) @db.Timestamp(0)
   updatedAt              DateTime                      @default(now()) @updatedAt @db.Timestamp(0)
 
@@ -531,6 +538,7 @@ model student {
   user              user                        @relation(fields: [Student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_user")
   student_notes     student_note[]
   attendance        attendance[]
+  certificates      student_certificate[]
   createdAt         DateTime                    @default(now()) @db.Timestamp(0)
   updatedAt         DateTime                    @default(now()) @updatedAt @db.Timestamp(0)
 
@@ -633,6 +641,9 @@ model course {
   subscriptions         student_subject_subscription[]
   assessment_components assessment_component[]
   computed_grades       computed_grade[]
+  attendance            attendance[]
+  certificates          student_certificate[]
+  timetable_slots       timetable_slot[]
   track                 track    @relation(fields: [Course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_course")
   teacher               teacher? @relation(fields: [Teacher_id], references: [Teacher_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_subject_teacher")
   createdAt             DateTime @default(now()) @db.Timestamp(0)
@@ -676,7 +687,8 @@ model teacher {
   track          track[]
   courses        course[]
   user           user           @relation(fields: [Teacher_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_teacher_user")
-  student_notes  student_note[]
+  student_notes   student_note[]
+  timetable_slots timetable_slot[]
 
   @@index([OrgId], map: "idx_teacher_org_id")
 }
@@ -694,6 +706,7 @@ model user {
   passwordChangedAt      DateTime?           @db.Timestamp(0)
   mustChangePassword     Boolean             @default(false)
   address                String?             @db.VarChar(255)
+  phone                  String?             @db.VarChar(50)
   registrationNumber     String?             @unique @db.VarChar(50)
   role                   user_Role
   academy_user           academy_user?
@@ -832,12 +845,14 @@ model academic_year {
   organization        organization                 @relation(fields: [OrgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_academic_year_org")
   terms               term[]
   promotion_histories student_promotion_history[]
+  attendance          attendance[]
+  timetable_slots     timetable_slot[]
   createdAt           DateTime                     @default(now()) @db.Timestamp(0)
   updatedAt           DateTime                     @default(now()) @updatedAt @db.Timestamp(0)
 
-  @@unique([OrgId, isActive], map: "uq_org_active_academic_year")
   @@index([OrgId], map: "idx_academic_year_org")
   @@index([isActive], map: "idx_academic_year_is_active")
+  @@index([OrgId, isActive], map: "idx_academic_year_org_active")
 }
 
 model term {
@@ -854,6 +869,7 @@ model term {
   marks                 marks[]
   assessment_components assessment_component[]
   computed_grades       computed_grade[]
+  certificates          student_certificate[]
   createdAt             DateTime               @default(now()) @db.Timestamp(0)
   updatedAt             DateTime               @default(now()) @updatedAt @db.Timestamp(0)
 
@@ -939,25 +955,31 @@ model school_event {
 }
 
 model attendance {
-  id           Int               @id @default(autoincrement())
-  studentId    Int
-  classId      Int
-  orgId        Int
-  date         DateTime          @db.Date
-  status       attendance_status @default(PRESENT)
-  markedBy     Int
-  note         String?           @db.VarChar(500)
-  student      student           @relation(fields: [studentId], references: [Student_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_attendance_student")
-  class        track             @relation("class_attendance", fields: [classId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_attendance_class")
-  organization organization      @relation(fields: [orgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_attendance_org")
-  marker       user              @relation("attendance_marker", fields: [markedBy], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_attendance_marker")
-  createdAt    DateTime          @default(now()) @db.Timestamp(0)
-  updatedAt    DateTime          @default(now()) @updatedAt @db.Timestamp(0)
+  id             Int               @id @default(autoincrement())
+  studentId      Int
+  classId        Int
+  subjectId      Int?
+  orgId          Int
+  academicYearId Int?
+  date           DateTime          @db.Date
+  status         attendance_status @default(PRESENT)
+  markedBy       Int
+  note           String?           @db.VarChar(500)
+  student        student           @relation(fields: [studentId], references: [Student_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_attendance_student")
+  class          track             @relation("class_attendance", fields: [classId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_attendance_class")
+  subject        course?           @relation(fields: [subjectId], references: [id], onDelete: SetNull, onUpdate: Restrict, map: "fk_attendance_subject")
+  organization   organization      @relation(fields: [orgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_attendance_org")
+  marker         user              @relation("attendance_marker", fields: [markedBy], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_attendance_marker")
+  academic_year  academic_year?    @relation(fields: [academicYearId], references: [id], onDelete: SetNull, onUpdate: Restrict, map: "fk_attendance_academic_year")
+  createdAt      DateTime          @default(now()) @db.Timestamp(0)
+  updatedAt      DateTime          @default(now()) @updatedAt @db.Timestamp(0)
 
-  @@unique([studentId, date], map: "uq_student_attendance_date")
+  @@unique([studentId, classId, date], map: "uq_student_class_attendance_date")
   @@index([classId, date], map: "idx_attendance_class_date")
   @@index([orgId, date], map: "idx_attendance_org_date")
   @@index([studentId], map: "idx_attendance_student")
+  @@index([academicYearId], map: "idx_attendance_academic_year")
+  @@index([subjectId], map: "idx_attendance_subject")
 }
 
 model student_achievement {
@@ -1051,4 +1073,58 @@ model computed_grade {
   @@index([studentId], map: "idx_computed_grade_student")
   @@index([termId], map: "idx_computed_grade_term")
   @@index([subjectId], map: "idx_computed_grade_subject")
+}
+
+model student_certificate {
+  id           Int          @id @default(autoincrement())
+  studentId    Int
+  orgId        Int
+  subjectId    Int
+  trackId      Int
+  termId       Int?
+  isPublished  Boolean      @default(false)
+  issuedAt     DateTime     @default(now()) @db.Timestamp(0)
+  student      student      @relation(fields: [studentId], references: [Student_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_cert_student")
+  organization organization @relation(fields: [orgId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_cert_org")
+  subject      course       @relation(fields: [subjectId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_cert_subject")
+  track        track        @relation(fields: [trackId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_cert_track")
+  term         term?        @relation(fields: [termId], references: [id], onDelete: SetNull, onUpdate: Restrict, map: "fk_cert_term")
+  createdAt    DateTime     @default(now()) @db.Timestamp(0)
+
+  @@unique([studentId, subjectId, termId], map: "uq_student_cert_subject_term")
+  @@index([studentId],   map: "idx_cert_student")
+  @@index([orgId],       map: "idx_cert_org")
+  @@index([termId],      map: "idx_cert_term")
+  @@index([isPublished], map: "idx_cert_published")
+}
+
+// ── Timetable ─────────────────────────────────────────────────────────────────
+
+model timetable_slot {
+  id             Int           @id @default(autoincrement())
+  orgId          Int
+  trackId        Int
+  courseId       Int
+  teacherId      Int?
+  dayOfWeek      Int           // 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat
+  startTime      String        @db.VarChar(5)
+  endTime        String        @db.VarChar(5)
+  roomNumber     String?       @db.VarChar(50)
+  academicYearId Int?
+  isActive       Boolean       @default(true)
+
+  organization   organization   @relation(fields: [orgId],          references: [id], onDelete: Cascade,  onUpdate: Restrict, map: "fk_timetable_org")
+  track          track          @relation(fields: [trackId],         references: [id], onDelete: Cascade,  onUpdate: Restrict, map: "fk_timetable_track")
+  course         course         @relation(fields: [courseId],        references: [id], onDelete: Cascade,  onUpdate: Restrict, map: "fk_timetable_course")
+  teacher        teacher?       @relation(fields: [teacherId],       references: [Teacher_id], onDelete: SetNull, onUpdate: Restrict, map: "fk_timetable_teacher")
+  academic_year  academic_year? @relation(fields: [academicYearId],  references: [id], onDelete: SetNull,  onUpdate: Restrict, map: "fk_timetable_year")
+
+  createdAt      DateTime @default(now()) @db.Timestamp(0)
+  updatedAt      DateTime @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@unique([trackId, dayOfWeek, startTime], map: "uq_timetable_class_day_time")
+  @@index([orgId],          map: "idx_timetable_org")
+  @@index([trackId],        map: "idx_timetable_track")
+  @@index([teacherId],      map: "idx_timetable_teacher")
+  @@index([academicYearId], map: "idx_timetable_academic_year")
 }

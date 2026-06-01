@@ -201,8 +201,10 @@ export default function StudentLessonPage() {
 
   const videoPlayFiredRef = useRef(false);
 
-  // Reset per-lesson on lessonId change
-  useEffect(() => { videoPlayFiredRef.current = false; }, [numericLessonId]);
+  // Reset watch-tracking state and restore from localStorage on lesson change
+  useEffect(() => {
+    videoPlayFiredRef.current = false;
+  }, [numericLessonId]);
 
   function handleReward(reward) {
     if (!reward || reward.xpEarned === 0) return;
@@ -222,15 +224,19 @@ export default function StudentLessonPage() {
     notifyXpGained(reward.xpEarned);
   }
 
+  const onVideoTimeUpdate = () => {}; // no-op — watch tracking removed
+
+  const onVideoSeeking = () => {};
+  const onVideoSeeked = () => {};
+
   const onVideoPlay = () => {
     if (videoPlayFiredRef.current) return;
     videoPlayFiredRef.current = true;
-    // Fire lesson.viewed → touchStreak (no XP, streak-safe)
     void updateStudentLessonProgress(numericLessonId, false).catch(() => {});
   };
 
   const onVideoEnded = async () => {
-    videoPlayFiredRef.current = true; // prevent duplicate view dispatch
+    videoPlayFiredRef.current = true;
     setLessonCompleted(numericLessonId, true);
     try {
       const result = await updateStudentLessonProgress(numericLessonId, true);
@@ -387,7 +393,11 @@ export default function StudentLessonPage() {
               <>
                 <video ref={videoRef} controls preload="auto" src={lesson.videoUrl}
                   className="w-full max-h-[420px] object-cover"
-                  onPlay={onVideoPlay} onEnded={onVideoEnded} />
+                  onPlay={onVideoPlay}
+                  onEnded={onVideoEnded}
+                  onTimeUpdate={onVideoTimeUpdate}
+                  onSeeking={onVideoSeeking}
+                  onSeeked={onVideoSeeked} />
                 {autoNextCountdown ? (
                   <div className="border-t border-slate-800 bg-slate-900/90 px-5 py-2.5 text-xs font-semibold text-cyan-300">
                     {isArabic ? `الدرس التالي خلال ${autoNextCountdown}ث...` : `Next lesson in ${autoNextCountdown}s...`}

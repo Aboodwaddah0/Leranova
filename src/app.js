@@ -31,7 +31,10 @@ import noteRoutes from './routes/noteRoutes.js';
 import parentRoutes from './routes/parentRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import calendarRoutes from './routes/calendarRoutes.js';
+import timetableRoutes from './routes/timetableRoutes.js';
+import { listPublicEventsController } from './controllers/calendarController.js';
 import attendanceRoutes from './routes/attendanceRoutes.js';
+import certificateRoutes from './routes/certificateRoutes.js';
 import assessmentComponentRoutes from './routes/assessmentComponentRoutes.js';
 import gradeScaleRoutes from './routes/gradeScaleRoutes.js';
 import computedGradeRoutes from './routes/computedGradeRoutes.js';
@@ -42,6 +45,7 @@ import paymentRoutes from './routes/paymentRoutes.js';
 import { handleStripeWebhook } from './controllers/stripeWebhookController.js';
 
 import { errorMiddleware } from './middlewares/errorMiddleware.js';
+import { authMiddleware } from './middlewares/authMiddleware.js';
 
 const app = express();
 
@@ -91,16 +95,20 @@ app.use('/api/org-ai', orgAIRoutes);
 app.use('/api/instructor-ai', instructorAIRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/student/gamification', gamificationRoutes);
+app.use('/api/student/certificates', certificateRoutes);
 app.use('/api/student', studentExperienceRoutes);
 
 app.use('/api/notes', noteRoutes);
 app.use('/api/parent', parentRoutes);
 app.use('/api/notifications', notificationRoutes);
+// Public calendar read — any authenticated user (must come BEFORE the org-gated router)
+app.get('/api/school-calendar/public', authMiddleware, listPublicEventsController);
 app.use('/api/school-calendar', calendarRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/assessment-components', assessmentComponentRoutes);
 app.use('/api/grade-scale', gradeScaleRoutes);
 app.use('/api/computed-grades', computedGradeRoutes);
+app.use('/api/timetable', timetableRoutes);
 
 // auth routes
 app.use('/api/auth', authRoutes);

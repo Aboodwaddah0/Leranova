@@ -253,6 +253,7 @@ export const getStudentMarks = async (studentId, filters = {}) => {
 		where: {
 			Student_id: studentId,
 			...(filters.Subject_id ? { Subject_id: filters.Subject_id } : {}),
+			...(filters.academicYearId ? { term: { academicYearId: Number(filters.academicYearId) } } : {}),
 		},
 		include: markInclude,
 		orderBy: {
@@ -298,7 +299,7 @@ const orgMarkInclude = {
 };
 
 export const getOrgMarks = async (orgId, filters = {}) => {
-	const { subjectId, gradeLevel, studentName, dateFrom, dateTo, markType } = filters;
+	const { subjectId, gradeLevel, studentName, dateFrom, dateTo, markType, academicYearId } = filters;
 
 	// Build the where clause scoped to this org via the subject → track relation
 	const where = {
@@ -307,6 +308,7 @@ export const getOrgMarks = async (orgId, filters = {}) => {
 			...(subjectId ? { id: Number(subjectId) } : {}),
 			...(gradeLevel ? { track: { Org_id: Number(orgId), GradeLevel: Number(gradeLevel) } } : {}),
 		},
+		...(academicYearId ? { term: { academicYearId: Number(academicYearId) } } : {}),
 		...(markType ? { MarkType: markType } : {}),
 		...((dateFrom || dateTo) ? {
 			time: {

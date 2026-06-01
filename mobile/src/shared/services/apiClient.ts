@@ -5,7 +5,7 @@ import { StorageService } from './storage';
  * API base URL — change this to your server IP when running on a physical device.
  * localhost won't work on a physical device; use your LAN IP: 192.168.x.x:5000
  */
-export const API_BASE_URL = 'http://192.168.88.12:5000/api';
+export const API_BASE_URL = 'http://192.168.1.29:5000/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,

@@ -123,10 +123,6 @@ export default function StudentCoursesPage() {
     };
   }, [isArabic, progressTick]);
 
-  if (context?.mode === 'SCHOOL') {
-    return <Navigate to="/student/subjects" replace />;
-  }
-
   const filteredTracks = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return tracks;
@@ -138,6 +134,10 @@ export default function StudentCoursesPage() {
     if (!needle) return myCourses;
     return myCourses.filter((course) => `${course?.subjectName || ''} ${course?.trackName || ''}`.toLowerCase().includes(needle));
   }, [myCourses, query]);
+
+  if (context?.mode === 'SCHOOL') {
+    return <Navigate to="/student/subjects" replace />;
+  }
 
   return (
     <StudentLayout>

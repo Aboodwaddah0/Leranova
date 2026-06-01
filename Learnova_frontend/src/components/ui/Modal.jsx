@@ -18,7 +18,7 @@ export default function Modal({ open, onClose, title, children, maxWidth = 'max-
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className={`relative w-full ${maxWidth} max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 bg-white shadow-[0_32px_90px_-20px_rgba(15,23,42,0.65)]`} onClick={(e) => e.stopPropagation()}>
+      <div className={`relative w-full ${maxWidth} max-h-[90vh] overflow-x-hidden overflow-y-auto rounded-3xl border border-slate-200 bg-white shadow-[0_32px_90px_-20px_rgba(15,23,42,0.65)]`} onClick={(e) => e.stopPropagation()}>
         {title && (
           <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
             <h2 className="text-lg font-black text-slate-900">{title}</h2>

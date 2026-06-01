@@ -2,6 +2,7 @@ import Joi from 'joi';
 import AppError from '../utils/appError.js';
 import {
   getChatWithContext,
+  listChatsForTeacher,
   listChatsForStudent,
   listMessagesForStudentChat,
   sendStudentChatTextMessage,
@@ -70,6 +71,13 @@ const editStudentMessageSchema = Joi.object({
 const studentReactionSchema = Joi.object({
   reaction: Joi.string().trim().valid('👍', '❤️', '😂', '🔥', '👏', '😮').required(),
 });
+
+export const listTeacherChats = async (req, res, next) => {
+  try {
+    const chats = await listChatsForTeacher({ userId: req.user.id });
+    return res.status(200).json({ message: 'Chats retrieved successfully', data: chats });
+  } catch (error) { return next(error); }
+};
 
 export const listStudentChats = async (req, res, next) => {
   try {

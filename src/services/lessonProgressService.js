@@ -69,29 +69,32 @@ const ensureStudentCanAccessLesson = async ({ studentId, lessonId }) => {
   return lesson;
 };
 
-export const upsertLessonProgress = async ({ studentId, lessonId, isCompleted }) => {
+export const upsertLessonProgress = async ({ studentId, lessonId, isCompleted, watchedSeconds, videoDurationSeconds }) => {
   await ensureStudentCanAccessLesson({ studentId, lessonId });
 
   const existing = await prisma.lesson_progress.findUnique({
     where: { studentId_lessonId: { studentId, lessonId } },
-    select: { isCompleted: true },
+    select: { isCompleted: true, watchedSeconds: true },
   });
   const wasCompleted = existing?.isCompleted ?? false;
 
+  const updateData = { isCompleted: Boolean(isCompleted) };
+  if (typeof watchedSeconds === 'number' && watchedSeconds > 0) {
+    updateData.watchedSeconds = Math.max(watchedSeconds, existing?.watchedSeconds ?? 0);
+  }
+  if (typeof videoDurationSeconds === 'number' && videoDurationSeconds > 0) {
+    updateData.videoDurationSeconds = videoDurationSeconds;
+  }
+
   const progress = await prisma.lesson_progress.upsert({
-    where: {
-      studentId_lessonId: {
-        studentId,
-        lessonId,
-      },
-    },
-    update: {
-      isCompleted: Boolean(isCompleted),
-    },
+    where: { studentId_lessonId: { studentId, lessonId } },
+    update: updateData,
     create: {
       studentId,
       lessonId,
       isCompleted: Boolean(isCompleted),
+      watchedSeconds: typeof watchedSeconds === 'number' ? Math.max(0, watchedSeconds) : 0,
+      videoDurationSeconds: typeof videoDurationSeconds === 'number' && videoDurationSeconds > 0 ? videoDurationSeconds : null,
     },
   });
 
@@ -99,7 +102,6 @@ export const upsertLessonProgress = async ({ studentId, lessonId, isCompleted })
   if (isCompleted && !wasCompleted) {
     reward = await dispatchGamificationEvent({ studentId, event: 'lesson.completed', sourceId: lessonId });
   } else {
-    // Any lesson interaction (even re-marking) touches the streak only
     dispatch({ studentId, event: 'lesson.viewed', sourceId: lessonId });
   }
 
@@ -108,6 +110,8 @@ export const upsertLessonProgress = async ({ studentId, lessonId, isCompleted })
     studentId: progress.studentId,
     lessonId: progress.lessonId,
     isCompleted: Boolean(progress.isCompleted),
+    watchedSeconds: progress.watchedSeconds,
+    videoDurationSeconds: progress.videoDurationSeconds,
     updatedAt: progress.updatedAt,
     reward,
   };

@@ -19,7 +19,22 @@ import { isBusinessEmail } from '../utils/domainCheck.js';
 
 const PASSWORD_RESET_EXPIRY_MINUTES = 15;
 const EMAIL_VERIFICATION_EXPIRY_HOURS = 72;
-const normalizePortal = (portal) => String(portal || '').trim().toLowerCase();
+
+const generateUniqueOrgCode = async (name) => {
+  const words = String(name || '').split(/[\s\-_]+/).filter(Boolean);
+  const initials = words.map((w) => w.replace(/[^a-zA-Z]/g, '')[0] || '').join('').toUpperCase();
+  const base = initials.length >= 2
+    ? initials.slice(0, 5)
+    : String(name || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) || 'ORG';
+
+  for (let i = 0; i <= 99; i++) {
+    const code = i === 0 ? base : `${base}${i}`;
+    const exists = await prisma.organization.findUnique({ where: { organizationCode: code }, select: { id: true } });
+    if (!exists) return code;
+  }
+  return `${base}${Date.now().toString(36).slice(-3).toUpperCase()}`;
+};
+
 const normalizeNationalId = (nationalId) => String(nationalId || '').trim().replace(/[\s-]/g, '');
 const normalizeRequestedUserRole = (role) => {
   const normalizedRole = String(role || '').trim().toUpperCase();
@@ -37,7 +52,6 @@ const normalizeRequestedUserRole = (role) => {
 
 export const registerOrganization = async (data) => {
   const normalizedRole = String(data.Role || '').trim().toUpperCase();
-  const normalizedPortal = normalizePortal(data.portal);
   const normalizedPlanId = Number(data.planId);
   const hasSelectedPlan = Number.isInteger(normalizedPlanId) && normalizedPlanId > 0;
 
@@ -54,15 +68,6 @@ export const registerOrganization = async (data) => {
 
   if (existingOrganization) {
     throw new AppError('Organization email already exists', 400);
-  }
-
-  const existingPortal = await prisma.organization.findUnique({
-    where: { portal: normalizedPortal },
-    select: { id: true },
-  });
-
-  if (existingPortal) {
-    throw new AppError('Organization portal already exists', 400);
   }
 
   let selectedPlan = null;
@@ -95,7 +100,6 @@ export const registerOrganization = async (data) => {
     const organization = await tx.organization.create({
       data: {
         Name: data.Name,
-        portal: normalizedPortal,
         Email: data.Email,
         Password_Hashed: hashedPassword,
         Phone: data.Phone ?? null,
@@ -111,7 +115,6 @@ export const registerOrganization = async (data) => {
       select: {
         id: true,
         Name: true,
-        portal: true,
         Email: true,
         Phone: true,
         Founded: true,
@@ -122,6 +125,9 @@ export const registerOrganization = async (data) => {
         status: true,
       },
     });
+
+    const organizationCode = await generateUniqueOrgCode(organization.Name);
+    await tx.organization.update({ where: { id: organization.id }, data: { organizationCode } });
 
     if (normalizedRole === 'SCHOOL') {
       const classRanges = normalizeClassRanges(data.classRanges);
@@ -319,7 +325,6 @@ export const loginOrganization = async ({ Email, password }) => {
     organization: {
       id: organization.id,
       Name: organization.Name,
-      portal: organization.portal,
       Email: organization.Email,
       Phone: organization.Phone,
       Founded: organization.Founded,
@@ -373,7 +378,7 @@ export const loginUser = async ({ email, registrationNumber, password, role }) =
       where: { registrationNumber: String(registrationNumber).trim() },
       include: userInclude,
     });
-    if (!user || user.role !== 'STUDENT') {
+    if (!user) {
       throw new AppError('Invalid registration number or password', 401);
     }
   } else {

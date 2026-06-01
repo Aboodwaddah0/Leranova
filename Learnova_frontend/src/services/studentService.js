@@ -567,11 +567,34 @@ export async function fetchSubjectLessons(subjectId) {
   }
 }
 
-export async function updateStudentLessonProgress(lessonId, isCompleted) {
-  const response = await api.put(`/lessons/progress/${lessonId}`, {
-    isCompleted: Boolean(isCompleted),
-  });
+export async function updateStudentLessonProgress(lessonId, isCompleted, extra = {}) {
+  const body = { isCompleted: Boolean(isCompleted) };
+  if (typeof extra.watchedSeconds === 'number') body.watchedSeconds = extra.watchedSeconds;
+  if (typeof extra.videoDurationSeconds === 'number') body.videoDurationSeconds = extra.videoDurationSeconds;
+  const response = await api.put(`/lessons/progress/${lessonId}`, body);
+  return unwrap(response, null);
+}
 
+// ── Certificates ──────────────────────────────────────────────────────────────
+export async function fetchMyCertificates() {
+  try {
+    const response = await api.get('/student/certificates');
+    return unwrap(response, []);
+  } catch { return []; }
+}
+
+export async function fetchAcademyCertEligibility(subjectId) {
+  const response = await api.get(`/student/certificates/academy/eligibility/${subjectId}`);
+  return unwrap(response, null);
+}
+
+export async function claimAcademyCertificate(subjectId) {
+  const response = await api.post(`/student/certificates/academy/claim/${subjectId}`);
+  return unwrap(response, null);
+}
+
+export async function fetchStudentSchoolCertificate(termId) {
+  const response = await api.get('/student/certificates/school-certificate', { params: { termId } });
   return unwrap(response, null);
 }
 
@@ -1122,5 +1145,20 @@ export const fetchStudentLessonQuiz = async (lessonId, lang = 'ar') => {
 export const submitStudentQuizAttempt = async (lessonId, answers, lang = 'ar') => {
   const response = await api.post(`/lessons/${lessonId}/quiz/attempt`, { answers, lang });
   return response?.data?.data ?? null;
+};
+
+export const fetchMyTimetable = async () => {
+  const { data } = await api.get('/timetable/me');
+  return data?.data || [];
+};
+
+export const fetchMyCalendar = async (params = {}) => {
+  const { data } = await api.get('/school-calendar/public', { params });
+  return data?.data || [];
+};
+
+export const fetchMyAttendance = async (params = {}) => {
+  const { data } = await api.get('/attendance/me', { params });
+  return data?.data || [];
 };
 

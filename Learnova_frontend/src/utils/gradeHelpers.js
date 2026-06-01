@@ -40,7 +40,7 @@ export function formatGradeName(course, isSchool, isArabic) {
   }
 
   if (gradeLevel) {
-    return `Grade ${gradeLevel}`;
+    return `Class ${gradeLevel}`;
   }
   return course?.Name || course?.name || "";
 }
@@ -50,7 +50,7 @@ export function formatGradeName(course, isSchool, isArabic) {
  */
 export function getCourseLabel(isSchool, isArabic) {
   if (isSchool) {
-    return isArabic ? "الصفوف" : "Grades";
+    return isArabic ? "الصفوف" : "Classes";
   }
   return isArabic ? "الكورسات" : "Courses";
 }
@@ -60,7 +60,7 @@ export function getCourseLabel(isSchool, isArabic) {
  */
 export function getCourseSingleLabel(isSchool, isArabic) {
   if (isSchool) {
-    return isArabic ? "الصف" : "Grade";
+    return isArabic ? "الصف" : "Class";
   }
   return isArabic ? "الكورس" : "Course";
 }
