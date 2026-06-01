@@ -418,10 +418,6 @@ export const validateExcelData = (data, options = {}) => {
 		}
 
 		if (role === "STUDENT") {
-			if (rawAge === null || rawAge === undefined || rawAge === "") {
-				errors.push(`Row ${rowNumber}: age is required for STUDENT rows`);
-			}
-
 			if (!rawGender || !gender || !USER_GENDERS.has(gender)) {
 				errors.push(`Row ${rowNumber}: Gender is required and must be FEMALE or MALE for STUDENT rows`);
 			}
@@ -457,7 +453,6 @@ export const validateExcelData = (data, options = {}) => {
 			name &&
 			role &&
 			USER_ROLES.has(role) &&
-			(role !== "STUDENT" || (Number.isInteger(ageValue) && ageValue >= 0)) &&
 			(role !== "STUDENT" || (gender && USER_GENDERS.has(gender))) &&
 			(role !== "STUDENT" || address) &&
 			(role !== "STUDENT" || phone) &&

@@ -457,10 +457,11 @@ const payload = {
 const tempPassword = generateTempPassword(data.name);
 const hashedPassword= await hashPassword(tempPassword);
 const passwordEncrypted = encryptPassword(tempPassword);
+const finalAge = payload.dob ? computeAgeFromDob(payload.dob) : (payload.age ?? null);
 const user=await prisma.user.create({
     data:{
   name:payload.name,
-   age:payload.age,
+   age:finalAge,
   email:payload.email,
   passwordHashed: hashedPassword,
   passwordEncrypted,
@@ -511,6 +512,7 @@ export const addUserWithGeneratedCredentials = async (data) => {
     academicStatus: placement.academicStatus,
   };
 
+  const finalAge = payload.dob ? computeAgeFromDob(payload.dob) : (payload.age ?? null);
   const createdUser = await prisma.user.create({
     data: {
       name: payload.name,
@@ -519,7 +521,7 @@ export const addUserWithGeneratedCredentials = async (data) => {
       passwordEncrypted,
       mustChangePassword: true,
       role: payload.role,
-      age: payload.age,
+      age: finalAge,
       gender: payload.gender,
       address: payload.address,
       ...buildRoleNested(payload),
@@ -779,11 +781,11 @@ export const generateSampleExcel = (role, orgType) => {
 
   if (normalizedRole === 'STUDENT') {
     if (isSchool) {
-      headers  = ['firstName', 'lastName', 'Role',    'email', 'age', 'gender', 'address',         'phone',        'DOB',        'ParentNationalId', 'fatherName'];
-      exampleRow = ['John',    'Doe',      'STUDENT', '',      14,    'MALE',   '123 Main Street', '+1234567890', '2010-05-15', '1234567890',        'Ahmed Hassan'];
+      headers  = ['firstName', 'lastName', 'Role',    'email', 'gender', 'address',         'phone',        'DOB',        'ParentNationalId', 'fatherName'];
+      exampleRow = ['John',    'Doe',      'STUDENT', '',      'MALE',   '123 Main Street', '+1234567890', '2010-05-15', '1234567890',        'Ahmed Hassan'];
     } else {
-      headers  = ['firstName', 'lastName', 'Role',    'email', 'age', 'gender',  'address',        'phone'];
-      exampleRow = ['Jane',    'Smith',    'STUDENT', '',      20,    'FEMALE',  '456 Oak Avenue', '+1234567890'];
+      headers  = ['firstName', 'lastName', 'Role',    'email', 'gender',  'address',        'phone'];
+      exampleRow = ['Jane',    'Smith',    'STUDENT', '',      'FEMALE',  '456 Oak Avenue', '+1234567890'];
     }
   } else if (normalizedRole === 'TEACHER') {
     headers  = ['firstName', 'lastName', 'Role',    'email',              'Work',           'Specialization', 'Bio',                      'age', 'gender'];
