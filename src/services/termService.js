@@ -197,6 +197,27 @@ export const activateTerm = async (orgId, yearId, termId, actorUserId) => {
   if (term.status === 'LOCKED') throw new AppError('Cannot activate a locked term', 403);
 
   const result = await prisma.$transaction(async (tx) => {
+    // Close any currently ACTIVE term in this year before activating the new one
+    const currentlyActive = await tx.term.findFirst({
+      where: { academicYearId: yearId, status: 'ACTIVE', id: { not: termId } },
+      select: { id: true },
+    });
+    if (currentlyActive) {
+      await tx.term.update({
+        where: { id: currentlyActive.id },
+        data: { status: 'CLOSED' },
+      });
+      await writeAudit(tx, {
+        termId: currentlyActive.id,
+        orgId,
+        userId: actorUserId,
+        actionType: 'CLOSED',
+        oldValues: { status: 'ACTIVE' },
+        newValues: { status: 'CLOSED' },
+        changeReason: 'Auto-closed when activating another term',
+      });
+    }
+
     const updated = await tx.term.update({
       where: { id: termId },
       data: { status: 'ACTIVE' },
@@ -351,6 +372,15 @@ export const reopenTerm = async (orgId, yearId, termId, actorUserId, changeReaso
   if (term.status !== 'CLOSED') throw new AppError('Only CLOSED terms can be reopened', 409);
 
   const updated = await prisma.$transaction(async (tx) => {
+    // Close any currently ACTIVE term in this year before reopening
+    const currentlyActive = await tx.term.findFirst({
+      where: { academicYearId: yearId, status: 'ACTIVE', id: { not: termId } },
+      select: { id: true },
+    });
+    if (currentlyActive) {
+      await tx.term.update({ where: { id: currentlyActive.id }, data: { status: 'CLOSED' } });
+    }
+
     const result = await tx.term.update({
       where: { id: termId },
       data: { status: 'ACTIVE' },

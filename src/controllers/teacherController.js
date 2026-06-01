@@ -111,11 +111,11 @@ export const createTeacherController = async (req, res, next) => {
     }
 
     const orgId = req.user.id;
-    const { teacher, tempPassword } = await createTeacher(orgId, value);
+    const { teacher, tempPassword, registrationNumber } = await createTeacher(orgId, value);
 
     return res.status(201).json({
       message: 'Teacher created successfully',
-      data: { ...teacher, tempPassword },
+      data: { ...teacher, tempPassword, registrationNumber },
     });
   } catch (err) {
     next(err);

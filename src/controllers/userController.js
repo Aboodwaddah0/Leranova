@@ -43,10 +43,10 @@ export const generateUsersFromExcel = async (req, res) => {
     }
 
     // Keep orgId server-side from token and allow optional email/password from Excel.
-    const rowsWithOrg = validatedRows.map(({ name, role, age, gender, address, email, password, dob, work, specialization, bio, parentNationalId, courseId }) =>
+    const rowsWithOrg = validatedRows.map(({ name, role, age, gender, address, phone, email, password, dob, work, specialization, bio, parentNationalId, fatherPhone, courseId }) =>
       role === 'STUDENT' || role === 'TEACHER'
-        ? { name, role, age, gender, address, email, password, dob, work, specialization, bio, parentNationalId, courseId, orgId: organizationId, orgRole: req.user?.role }
-        : { name, role, age, gender, address, email, password, dob, work, specialization, bio, parentNationalId }
+        ? { name, role, age, gender, address, phone, email, password, dob, work, specialization, bio, parentNationalId, fatherPhone, courseId, orgId: organizationId, orgRole: req.user?.role }
+        : { name, role, age, gender, address, phone, email, password, dob, work, specialization, bio, parentNationalId, fatherPhone }
     );
     const { createdUsers, createdParents = [], skippedUsers } = await generateUsers(rowsWithOrg);
 

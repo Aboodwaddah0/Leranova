@@ -1,33 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Search, Users2, BadgeCheck, GraduationCap, BookOpen } from 'lucide-react';
+import { ArrowLeft, Search, Users2, BadgeCheck, GraduationCap, BookOpen, UserCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import StudentLayout from '../../components/student/StudentLayout';
 import { fetchStudentTeachers } from '../../services/studentService';
 import { useLanguage } from '../../utils/i18n';
 import { useTheme } from '../../contexts/ThemeContext';
 
-const PEOPLE_FALLBACK_AVATARS = [
-  'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1542206395-9feb3edaa68d?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1541534401786-2077eed87a72?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1546961329-78bef0414d7c?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=500&q=80',
-];
 
-const getTeacherAvatarUrl = (teacher = {}, index = 0) => {
-  if (teacher.avatarUrl) {
-    return teacher.avatarUrl;
-  }
-  return PEOPLE_FALLBACK_AVATARS[index % PEOPLE_FALLBACK_AVATARS.length];
-};
-
-const getTeacherSubjects = (teacher = {}) => (Array.isArray(teacher.subjects) ? teacher.subjects : [])
-  .filter(Boolean)
-  .slice(0, 3);
+const getTeacherSubjects = (teacher = {}) => [...new Set(
+  (Array.isArray(teacher.subjects) ? teacher.subjects : []).filter(Boolean)
+)].slice(0, 3);
 
 const teacherSearchText = (teacher = {}) => [teacher.name, teacher.specialization, teacher.work, teacher.bio, teacher.email, ...(Array.isArray(teacher.subjects) ? teacher.subjects : [])]
   .filter(Boolean)
@@ -195,7 +178,6 @@ export default function StudentTeachersPage() {
       ) : filteredTeachers.length ? (
         <div className="mt-6 space-y-4">
           {filteredTeachers.map((teacher, index) => {
-            const avatarUrl = getTeacherAvatarUrl(teacher, index);
             const subjectNames = getTeacherSubjects(teacher);
 
             return (
@@ -212,7 +194,10 @@ export default function StudentTeachersPage() {
                       className="mx-auto h-[88px] w-[88px] shrink-0 overflow-hidden rounded-2xl shadow-sm shadow-indigo-500/10"
                       style={{ border: `1px solid ${T.border}`, background: T.avatarBg }}
                     >
-                      <img src={avatarUrl} alt={teacher.name} className="h-full w-full object-cover" />
+                      <div className="flex h-full w-full items-center justify-center"
+                        style={{ background: 'linear-gradient(135deg, #7c5ce0, #9c6ff0)' }}>
+                        <UserCircle2 size={48} color="rgba(255,255,255,0.9)" strokeWidth={1.5} />
+                      </div>
                     </div>
 
                     <div className="min-w-0">
@@ -227,19 +212,6 @@ export default function StudentTeachersPage() {
                         <BadgeCheck size={12} /> {teacher.subjectCount || 0} {t.student.teachers.subjects}
                       </div>
 
-                      {subjectNames.length ? (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {subjectNames.map((subjectName) => (
-                            <span
-                              key={subjectName}
-                              className="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold"
-                              style={{ background: T.tagBg, color: T.tagText }}
-                            >
-                              {subjectName}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
                     </div>
                   </div>
                 </motion.article>

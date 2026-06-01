@@ -247,6 +247,10 @@ export const activateSession = async (yearId) => {
   return data?.data || null;
 };
 
+export const deleteAcademicYear = async (yearId) => {
+  await api.delete(`/academic-years/${yearId}`);
+};
+
 // ── Terms ───────────────────────────────────────────────────────────────────
 export const fetchTerms = async (yearId) => {
   const { data } = await api.get(`/academic-years/${yearId}/terms`);
@@ -260,6 +264,35 @@ export const createTerm = async (yearId, payload) => {
 
 export const activateTermManually = async (yearId, termId) => {
   const { data } = await api.post(`/academic-years/${yearId}/terms/${termId}/activate`);
+  return data?.data || null;
+};
+
+// ── Term Certificates ────────────────────────────────────────────────────────
+export const generateTermCertificates = async (yearId, termId, gradeLevel) => {
+  const params = gradeLevel !== undefined ? `?gradeLevel=${gradeLevel}` : '';
+  const { data } = await api.post(`/academic-years/${yearId}/terms/${termId}/certificates/generate${params}`);
+  return data?.data || null;
+};
+
+export const fetchTermCertificates = async (yearId, termId, gradeLevel) => {
+  const params = gradeLevel !== undefined ? `?gradeLevel=${gradeLevel}` : '';
+  const { data } = await api.get(`/academic-years/${yearId}/terms/${termId}/certificates${params}`);
+  return data?.data || null;
+};
+
+export const issueCertificates = async (yearId, termId, gradeLevel) => {
+  const params = gradeLevel !== undefined ? `?gradeLevel=${gradeLevel}` : '';
+  const { data } = await api.post(`/academic-years/${yearId}/terms/${termId}/certificates/issue${params}`);
+  return data?.data || null;
+};
+
+export const publishCertificates = async (yearId, termId) => {
+  const { data } = await api.post(`/academic-years/${yearId}/terms/${termId}/certificates/publish`);
+  return data?.data || null;
+};
+
+export const fetchCertificateStatus = async (yearId, termId) => {
+  const { data } = await api.get(`/academic-years/${yearId}/terms/${termId}/certificates/status`);
   return data?.data || null;
 };
 
@@ -325,4 +358,31 @@ export const fetchGradeRankings = async (params = {}) => {
   const query = buildQueryString(params);
   const { data } = await api.get(`/computed-grades/rankings${query}`);
   return data?.data || [];
+};
+
+// ── Timetable ────────────────────────────────────────────────────────────────
+
+export const fetchTimetable = async (params = {}) => {
+  const query = buildQueryString(params);
+  const { data } = await api.get(`/timetable${query}`);
+  return data?.data || [];
+};
+
+export const createTimetableSlot = async (payload) => {
+  const { data } = await api.post('/timetable', payload);
+  return data?.data || null;
+};
+
+export const updateTimetableSlot = async (id, payload) => {
+  const { data } = await api.put(`/timetable/${id}`, payload);
+  return data?.data || null;
+};
+
+export const unpublishCertificates = async (yearId, termId) => {
+  const { data } = await api.post(`/academic-years/${yearId}/terms/${termId}/certificates/unpublish`);
+  return data?.data || null;
+};
+
+export const deleteTimetableSlot = async (id) => {
+  await api.delete(`/timetable/${id}`);
 };

@@ -1,6 +1,5 @@
 import Joi from 'joi';
 
-const portalPattern = /^[a-z0-9-]+$/;
 const classRangeSchema = Joi.object({
   startGradeLevel: Joi.number().integer().min(1).max(12).required(),
   endGradeLevel: Joi.number().integer().min(1).max(12).required(),
@@ -8,8 +7,7 @@ const classRangeSchema = Joi.object({
 
 export const registerOrganizationSchema = Joi.object({
   Name: Joi.string().max(255).required(),
-  portal: Joi.string().trim().lowercase().max(63).pattern(portalPattern).required(),
-  Email: Joi.string().email().max(255).required(),
+  Email: Joi.string().email({ tlds: { allow: false } }).max(255).required(),
   password: Joi.string().min(6).required(),
   Role: Joi.string().valid('ACADEMY', 'SCHOOL', 'Academy', 'School').required(),
   planId: Joi.number().integer().positive().optional().allow(null),
@@ -22,12 +20,12 @@ export const registerOrganizationSchema = Joi.object({
 });
 
 export const loginOrganizationSchema = Joi.object({
-  Email: Joi.string().email().max(255).required(),
+  Email: Joi.string().email({ tlds: { allow: false } }).max(255).required(),
   password: Joi.string().required(),
 });
 
 export const loginUserSchema = Joi.object({
-  email: Joi.string().email().max(255),
+  email: Joi.string().email({ tlds: { allow: false } }).max(255),
   registrationNumber: Joi.string().max(50),
   password: Joi.string().required(),
   role: Joi.string().valid('STUDENT', 'TEACHER', 'INSTRUCTOR', 'ADMIN').optional(),
@@ -39,7 +37,7 @@ export const loginParentSchema = Joi.object({
 });
 
 export const forgotPasswordSchema = Joi.object({
-  email: Joi.string().email().max(255).required(),
+  email: Joi.string().email({ tlds: { allow: false } }).max(255).required(),
   accountType: Joi.string().valid('USER', 'ORGANIZATION').optional(),
 });
 

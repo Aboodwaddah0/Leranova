@@ -36,4 +36,5 @@ export const markQuerySchema = Joi.object({
 	Student_id: Joi.number().integer().positive(),
 	User_id: Joi.number().integer().positive(),
 	Subject_id: Joi.number().integer().positive(),
+	academicYearId: Joi.number().integer().positive(),
 });

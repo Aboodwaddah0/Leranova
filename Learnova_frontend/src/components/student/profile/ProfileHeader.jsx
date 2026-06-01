@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, School, Sparkles } from 'lucide-react';
+import { ArrowLeft, School, Sparkles, UserCircle2 } from 'lucide-react';
 import { useLanguage } from '../../../utils/i18n';
 
 const initialsOf = (name = '') => {
@@ -42,11 +42,12 @@ export default function ProfileHeader({ profile, studentMode }) {
 
         {/* ── Avatar + Name ── */}
         <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white/30 bg-white/15 text-base font-black text-white">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white/30"
+            style={{ background: 'linear-gradient(135deg, #7c5ce0, #9c6ff0)' }}>
             {avatarUrl ? (
               <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
             ) : (
-              initialsOf(displayName)
+              <UserCircle2 size={40} color="rgba(255,255,255,0.9)" strokeWidth={1.5} />
             )}
           </div>
           <div>

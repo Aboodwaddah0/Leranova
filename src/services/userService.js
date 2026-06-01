@@ -14,9 +14,31 @@ const isSchoolStudent = (data) => {
   return role === 'STUDENT' && orgRole === 'SCHOOL';
 };
 
-const assignRegistrationNumber = async (userId, orgId) => {
-  const registrationNumber = `${orgId}-${String(userId).padStart(5, '0')}`;
-  await prisma.user.update({ where: { id: userId }, data: { registrationNumber } });
+const buildOrgCode = (name) => {
+  const words = String(name || '').split(/[\s\-_]+/).filter(Boolean);
+  const initials = words.map((w) => w.replace(/[^a-zA-Z]/g, '')[0] || '').join('').toUpperCase();
+  return initials.length >= 2
+    ? initials.slice(0, 5)
+    : String(name || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) || 'ORG';
+};
+
+const assignRegistrationNumber = async (userId, orgId, tx = prisma) => {
+  const updated = await tx.organization.update({
+    where: { id: orgId },
+    data: { userSequence: { increment: 1 } },
+    select: { userSequence: true, organizationCode: true, Name: true },
+  });
+
+  let prefix = updated.organizationCode;
+  if (!prefix) {
+    prefix = buildOrgCode(updated.Name);
+    const exists = await prisma.organization.findFirst({ where: { organizationCode: prefix, id: { not: orgId } }, select: { id: true } });
+    if (exists) prefix = `${prefix}${orgId}`;
+    await prisma.organization.update({ where: { id: orgId }, data: { organizationCode: prefix } });
+  }
+
+  const registrationNumber = `${prefix}-${String(updated.userSequence).padStart(5, '0')}`;
+  await tx.user.update({ where: { id: userId }, data: { registrationNumber } });
   return registrationNumber;
 };
 
@@ -61,6 +83,8 @@ const buildRoleNested = (data) => {
         create: {
           OrgId: data.orgId,
           Work: data.work ?? null,
+          specialization: data.specialization ?? null,
+          bio: data.bio ?? null,
         },
       },
     };
@@ -120,7 +144,7 @@ const toCsvValue = (value) => {
   return `"${escaped}"`;
 };
 
-const createParentForNationalId = async (nationalId, tx = prisma) => {
+const createParentForNationalId = async (nationalId, orgId = null, tx = prisma, { fatherPhone = null } = {}) => {
   const safeNationalId = String(nationalId || "").trim();
   const parentName = `Parent ${safeNationalId}`;
   const password = generateTempPassword(parentName);
@@ -135,6 +159,7 @@ const createParentForNationalId = async (nationalId, tx = prisma) => {
       passwordEncrypted,
       mustChangePassword: true,
       role: "PARENT",
+      phone: fatherPhone ? String(fatherPhone).trim() : null,
       parent: {
         create: {
           Work: null,
@@ -150,11 +175,17 @@ const createParentForNationalId = async (nationalId, tx = prisma) => {
     },
   });
 
+  let registrationNumber = null;
+  if (orgId) {
+    registrationNumber = await assignRegistrationNumber(createdParentUser.id, orgId, tx);
+  }
+
   return {
     parentId: createdParentUser.id,
     nationalId: safeNationalId,
     email: null,
     password,
+    registrationNumber,
   };
 };
 
@@ -172,7 +203,7 @@ const resolveParentIdByNationalId = async (parentNationalId) => {
   return parent?.Parent_id ? Number(parent.Parent_id) : null;
 };
 
-const resolveOrCreateParentId = async ({ parentNationalId }) => {
+const resolveOrCreateParentId = async ({ parentNationalId, orgId = null, fatherPhone = null }) => {
   const normalized = normalizeNationalId(parentNationalId);
   if (!normalized) {
     return null;
@@ -187,7 +218,7 @@ const resolveOrCreateParentId = async ({ parentNationalId }) => {
   }
 
   try {
-    const createdParent = await createParentForNationalId(normalized);
+    const createdParent = await createParentForNationalId(normalized, orgId, prisma, { fatherPhone });
     return {
       parentId: Number(createdParent.parentId),
       parentLinkStatus: 'created',
@@ -294,7 +325,7 @@ export const generateUsers = async (data) => {
           resolvedParentId = existingParent.Parent_id;
           parentIdByNationalId.set(String(user.parentNationalId), resolvedParentId);
         } else {
-          newlyCreatedParent = await createParentForNationalId(user.parentNationalId);
+          newlyCreatedParent = await createParentForNationalId(user.parentNationalId, user.orgId ?? null, prisma, { fatherPhone: user.fatherPhone ?? null });
           resolvedParentId = newlyCreatedParent.parentId;
           parentIdByNationalId.set(String(newlyCreatedParent.nationalId), Number(newlyCreatedParent.parentId));
         }
@@ -327,6 +358,7 @@ export const generateUsers = async (data) => {
           age: finalAge,
           gender: userPayload.gender,
           address: userPayload.address,
+          phone: userPayload.phone ?? null,
           ...buildRoleNested(userPayload),
           ...buildAcademyUserNested(userPayload),
         },
@@ -352,7 +384,7 @@ export const generateUsers = async (data) => {
         createdParents.push(newlyCreatedParent);
       }
 
-      const registrationNumber = createdUser.role === 'STUDENT' && user.orgId
+      const registrationNumber = ['STUDENT', 'TEACHER', 'PARENT'].includes(createdUser.role) && user.orgId
         ? await assignRegistrationNumber(createdUser.id, user.orgId)
         : null;
 
@@ -408,7 +440,7 @@ if (isUserExist)  {
 }
 
 const resolvedParentInfo = data.role === 'STUDENT' && data.parentNationalId
-  ? await resolveOrCreateParentId({ parentNationalId: data.parentNationalId })
+  ? await resolveOrCreateParentId({ parentNationalId: data.parentNationalId, orgId: data.orgId ?? null, fatherPhone: data.fatherPhone ?? null })
   : null;
 
 const resolvedParentId = resolvedParentInfo?.parentId ?? (data.parentId ?? null);
@@ -437,12 +469,13 @@ const user=await prisma.user.create({
   gender:payload.gender,
   role:payload.role,
   address:payload.address,
+  phone: payload.phone ?? null,
   ...buildRoleNested(payload),
   ...buildAcademyUserNested(payload),
     }
 });
 
-const registrationNumber = payload.role === 'STUDENT' && payload.orgId
+const registrationNumber = ['STUDENT', 'TEACHER', 'PARENT'].includes(payload.role) && payload.orgId
   ? await assignRegistrationNumber(user.id, payload.orgId)
   : null;
 
@@ -462,6 +495,8 @@ export const addUserWithGeneratedCredentials = async (data) => {
   const resolvedParentInfo = data.role === 'STUDENT' && data.parentNationalId
     ? await resolveOrCreateParentId({
       parentNationalId: data.parentNationalId,
+      orgId: data.orgId ?? null,
+      fatherPhone: data.fatherPhone ?? null,
     })
     : null;
 
@@ -507,7 +542,7 @@ export const addUserWithGeneratedCredentials = async (data) => {
     },
   });
 
-  const registrationNumber = payload.role === 'STUDENT' && payload.orgId
+  const registrationNumber = ['STUDENT', 'TEACHER', 'PARENT'].includes(payload.role) && payload.orgId
     ? await assignRegistrationNumber(createdUser.id, payload.orgId)
     : null;
 
@@ -587,10 +622,12 @@ export const getAllUsers = async (orgId, orgRole, filters = {}) => {
     id: true,
     name: true,
     email: true,
+    registrationNumber: true,
     role: true,
     age: true,
     gender: true,
     address: true,
+    phone: true,
     passwordEncrypted: true,
     academy_user: {
       select: {
@@ -606,6 +643,13 @@ export const getAllUsers = async (orgId, orgRole, filters = {}) => {
         Parent_id: true,
         Course_id: true,
         AcademicStatus: true,
+        parent: {
+          select: {
+            user: {
+              select: { phone: true },
+            },
+          },
+        },
       },
     };
   }
@@ -629,13 +673,17 @@ export const getAllUsers = async (orgId, orgRole, filters = {}) => {
     id: user.id,
     name: user.name,
     email: user.email,
+    registrationNumber: user.registrationNumber || null,
     role: user.role,
     age: user.age,
     gender: user.gender,
     address: user.address,
+    phone: user.phone || null,
+    password: user.passwordEncrypted ? decryptPassword(user.passwordEncrypted) : null,
     student: user.student || null,
     status: user.student?.AcademicStatus || user.academy_user?.AcademicStatus || null,
     academy_user: user.academy_user,
+    parentPhone: user.student?.parent?.user?.phone || null,
   }));
 };
 
@@ -732,18 +780,18 @@ export const generateSampleExcel = (role, orgType) => {
 
   if (normalizedRole === 'STUDENT') {
     if (isSchool) {
-      headers  = ['name',     'Role',    'email',  'age', 'gender', 'address',          'DOB',        'ParentNationalId'];
-      exampleRow = ['John Doe', 'STUDENT', '',        14,   'MALE',   '123 Main Street',  '2010-05-15', '1234567890'];
+      headers  = ['firstName', 'lastName', 'Role',    'email', 'age', 'gender', 'address',         'phone',        'DOB',        'ParentNationalId', 'fatherPhone'];
+      exampleRow = ['John',    'Doe',      'STUDENT', '',      14,    'MALE',   '123 Main Street', '+1234567890', '2010-05-15', '1234567890',        '+9661234567'];
     } else {
-      headers  = ['name',       'Role',    'email', 'age', 'gender',  'address'];
-      exampleRow = ['Jane Smith', 'STUDENT', '',      20,   'FEMALE',  '456 Oak Avenue'];
+      headers  = ['firstName', 'lastName', 'Role',    'email', 'age', 'gender',  'address',        'phone'];
+      exampleRow = ['Jane',    'Smith',    'STUDENT', '',      20,    'FEMALE',  '456 Oak Avenue', '+1234567890'];
     }
   } else if (normalizedRole === 'TEACHER') {
-    headers  = ['name',         'Role',    'email',               'Work',           'Specialization', 'Bio',                         'age', 'gender'];
-    exampleRow = ['Ahmed Hassan', 'TEACHER', 'ahmed@example.com',  'Private School', 'Mathematics',    'Experienced math teacher',    35,    'MALE'];
+    headers  = ['firstName', 'lastName', 'Role',    'email',              'Work',           'Specialization', 'Bio',                      'age', 'gender'];
+    exampleRow = ['Ahmed',   'Hassan',   'TEACHER', 'ahmed@example.com', 'Private School', 'Mathematics',    'Experienced math teacher', 35,    'MALE'];
   } else if (normalizedRole === 'PARENT') {
-    headers  = ['name',     'Role',   'email', 'Work'];
-    exampleRow = ['Sara Ali', 'PARENT', '',      'Engineer'];
+    headers  = ['firstName', 'lastName', 'Role',   'email', 'Work'];
+    exampleRow = ['Sara',    'Ali',      'PARENT', '',      'Engineer'];
   } else {
     throw new AppError('role must be one of: STUDENT, TEACHER, PARENT', 400);
   }

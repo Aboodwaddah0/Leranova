@@ -125,7 +125,6 @@ export const getOrganizationAnalytics = async (req, res, next) => {
       where.OR = [
         { Name: { contains: search } },
         { Email: { contains: search } },
-        { portal: { contains: search } },
       ];
     }
 
@@ -138,7 +137,6 @@ export const getOrganizationAnalytics = async (req, res, next) => {
         select: {
           id: true,
           Name: true,
-          portal: true,
           Email: true,
           Role: true,
           status: true,

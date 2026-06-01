@@ -7,6 +7,7 @@ import {
   getAcademicYearController,
   updateAcademicYearController,
   activateAcademicYearController,
+  deleteAcademicYearController,
 } from '../controllers/academicYearController.js';
 import {
   createTermController,
@@ -17,6 +18,13 @@ import {
   activateTermController,
   listTermAuditLogsController,
 } from '../controllers/termController.js';
+import {
+  orgTermCertificatesController,
+  issueCertificatesController,
+  publishCertificatesController,
+  unpublishCertificatesController,
+  certStatusController,
+} from '../controllers/certificateController.js';
 
 const router = Router();
 
@@ -29,6 +37,7 @@ router.get('/', listAcademicYearsController);
 router.get('/:yearId', getAcademicYearController);
 router.patch('/:yearId', isOrganization, updateAcademicYearController);
 router.post('/:yearId/activate', isOrganization, activateAcademicYearController);
+router.delete('/:yearId', isOrganization, deleteAcademicYearController);
 
 // Term endpoints nested under academic year
 router.post('/:yearId/terms', isOrganization, createTermController);
@@ -38,5 +47,13 @@ router.patch('/:yearId/terms/:termId', isOrganization, updateTermController);
 router.post('/:yearId/terms/:termId/activate', isOrganization, activateTermController);
 router.post('/:yearId/terms/:termId/reopen', isOrganization, reopenTermController);
 router.get('/:yearId/terms/:termId/audit', isOrganization, listTermAuditLogsController);
+
+// Certificate routes for a term (org admin)
+router.get('/:yearId/terms/:termId/certificates',          isOrganization, orgTermCertificatesController);
+router.post('/:yearId/terms/:termId/certificates/generate', isOrganization, orgTermCertificatesController);
+router.get('/:yearId/terms/:termId/certificates/status',   isOrganization, certStatusController);
+router.post('/:yearId/terms/:termId/certificates/issue',   isOrganization, issueCertificatesController);
+router.post('/:yearId/terms/:termId/certificates/publish',   isOrganization, publishCertificatesController);
+router.post('/:yearId/terms/:termId/certificates/unpublish', isOrganization, unpublishCertificatesController);
 
 export default router;

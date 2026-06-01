@@ -5,6 +5,7 @@ import {
   getAcademicYearById,
   updateAcademicYear,
   activateAcademicYear,
+  deleteAcademicYear,
 } from '../services/academicYearService.js';
 import {
   createAcademicYearSchema,
@@ -89,5 +90,15 @@ export const activateAcademicYearController = async (req, res, next) => {
 
     const data = await activateAcademicYear(req.user.id, yearId);
     return res.status(200).json({ message: 'Session activated successfully', data });
+  } catch (err) { next(err); }
+};
+
+export const deleteAcademicYearController = async (req, res, next) => {
+  try {
+    const yearId = Number(req.params.yearId);
+    if (!Number.isInteger(yearId)) return next(new AppError('Invalid session id', 400));
+
+    await deleteAcademicYear(req.user.id, yearId);
+    return res.status(204).send();
   } catch (err) { next(err); }
 };

@@ -3,6 +3,7 @@ import multer from 'multer';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { checkFeature } from '../middlewares/checkFeature.js';
 import {
+  listTeacherChats,
   listStudentChats,
   listStudentChatMessages,
   sendStudentChatMessage,
@@ -35,18 +36,30 @@ const studentOnly = (req, _res, next) => {
   if (String(req.user?.role || '').toUpperCase() !== 'STUDENT') {
     return next('route');
   }
-
   return next();
 };
 
+const teacherOnly = (req, _res, next) => {
+  if (String(req.user?.role || '').toUpperCase() !== 'TEACHER') {
+    return next('route');
+  }
+  return next();
+};
+
+// Student routes (fall through to teacher if not student)
 router.get('/', authMiddleware, studentOnly, listStudentChats);
+// Teacher routes (fall through if not teacher)
+router.get('/', authMiddleware, teacherOnly, listTeacherChats);
+
 router.delete('/messages/:messageId', authMiddleware, studentOnly, deleteStudentMessage);
 router.patch('/messages/:messageId', authMiddleware, studentOnly, editStudentMessage);
 router.patch('/messages/:messageId/reaction', authMiddleware, studentOnly, reactStudentMessage);
-router.get('/:chatId/messages', authMiddleware, studentOnly, listStudentChatMessages);
-router.post('/:chatId/messages', authMiddleware, studentOnly, chatFileUpload.array('files', 5), sendStudentChatMessage);
-router.delete('/:chatId/messages/:messageId', authMiddleware, studentOnly, softDeleteMessage);
-router.delete('/:chatId/clear', authMiddleware, studentOnly, clearChat);
+
+// Messages — accessible by both students AND teachers
+router.get('/:chatId/messages', authMiddleware, listStudentChatMessages);
+router.post('/:chatId/messages', authMiddleware, chatFileUpload.array('files', 5), sendStudentChatMessage);
+router.delete('/:chatId/messages/:messageId', authMiddleware, softDeleteMessage);
+router.delete('/:chatId/clear', authMiddleware, clearChat);
 
 /**
  * =========================

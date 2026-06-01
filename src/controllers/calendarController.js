@@ -45,6 +45,13 @@ export const updateEventController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+export const listPublicEventsController = async (req, res, next) => {
+  try {
+    const events = await calendarService.listPublicEvents(req.user.id, req.user.role, req.query);
+    return res.status(200).json({ success: true, status: 200, data: events, error: null, timestamp: ts() });
+  } catch (err) { next(err); }
+};
+
 export const deleteEventController = async (req, res, next) => {
   try {
     ensureSchool(req);

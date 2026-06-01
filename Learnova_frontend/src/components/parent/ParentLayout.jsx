@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LogOut, BarChart2, Home, Settings } from 'lucide-react';
+import { LogOut, BarChart2, Home, Settings, CalendarDays, ClipboardList } from 'lucide-react';
 import NotificationDropdown from '../shared/NotificationDropdown';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../../redux/slices/authSlice';
@@ -12,9 +12,11 @@ export default function ParentLayout({ children }) {
   const { pathname } = useLocation();
 
   const navLinks = [
-    { to: '/dashboard/parent',          icon: Home,     en: 'Home',     ar: 'الرئيسية', exact: true  },
-    { to: '/dashboard/parent/marks',    icon: BarChart2, en: 'Marks',   ar: 'الدرجات', exact: false },
-    { to: '/dashboard/parent/settings', icon: Settings,  en: 'Settings', ar: 'الإعدادات', exact: false },
+    { to: '/dashboard/parent',            icon: Home,          en: 'Home',       ar: 'الرئيسية',  exact: true  },
+    { to: '/dashboard/parent/marks',      icon: BarChart2,     en: 'Marks',      ar: 'الدرجات',  exact: false },
+    { to: '/dashboard/parent/attendance', icon: ClipboardList, en: 'Attendance', ar: 'الحضور',   exact: false },
+    { to: '/dashboard/parent/calendar',   icon: CalendarDays,  en: 'Calendar',   ar: 'التقويم',  exact: false },
+    { to: '/dashboard/parent/settings',   icon: Settings,      en: 'Settings',   ar: 'الإعدادات', exact: false },
   ];
 
   const initial = (user?.name || 'P').charAt(0).toUpperCase();

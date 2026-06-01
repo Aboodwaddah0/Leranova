@@ -28,7 +28,6 @@ const generatePassword = (name) => {
   const base = slugifyName(name).slice(0, 4);
   const random = crypto.randomBytes(3).toString("hex");
   const number = Math.floor(100 + Math.random() * 900);
-
   return `${base}${random}@${number}`;
 };
 

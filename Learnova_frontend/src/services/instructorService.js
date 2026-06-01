@@ -249,3 +249,47 @@ export const createStudentNote = async ({ studentId, title, content }) => {
 export const deleteStudentNote = async (noteId) => {
   await api.delete(`/notes/${noteId}`);
 };
+
+// ── Teacher subject chats ────────────────────────────────────────────────────
+
+export const fetchTeacherChats = async () => {
+  const { data } = await api.get('/chats');
+  return data?.data || [];
+};
+
+export const fetchTeacherChatMessages = async (chatId) => {
+  const { data } = await api.get(`/chats/${chatId}/messages`);
+  return data?.data || [];
+};
+
+export const sendTeacherChatMessage = async (chatId, content) => {
+  const { data } = await api.post(`/chats/${chatId}/messages`, { content, type: 'text' });
+  return data?.data || null;
+};
+
+export const fetchMyTimetable = async () => {
+  const { data } = await api.get('/timetable/me');
+  return data?.data || [];
+};
+
+export const fetchInstructorCalendar = async (params = {}) => {
+  const { data } = await api.get('/school-calendar/public', { params });
+  return data?.data || [];
+};
+
+// ── Attendance (period/subject level) ──────────────────────────────────────
+
+export const fetchSubjectStudentsForAttendance = async (subjectId) => {
+  const { data } = await api.get(`/attendance/subject/${subjectId}/students`);
+  return data?.data || [];
+};
+
+export const fetchSubjectAttendance = async (subjectId, params = {}) => {
+  const { data } = await api.get(`/attendance/subject/${subjectId}`, { params });
+  return data?.data || [];
+};
+
+export const saveSubjectAttendance = async (subjectId, payload) => {
+  const { data } = await api.post(`/attendance/subject/${subjectId}`, payload);
+  return data?.data || [];
+};

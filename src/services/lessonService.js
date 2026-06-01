@@ -108,6 +108,27 @@ const serializeLesson = (lesson) => {
 	};
 };
 
+const PREVIEW_LESSON_COUNT = 3; // First N lessons are free preview
+
+const checkAcademySubscription = async (userId, subjectId) => {
+	const sub = await prisma.student_subject_subscription.findFirst({
+		where: { user_Academy_id: userId, Subject_id: subjectId, OR: PAID_SUBSCRIPTION_FILTER.OR },
+		select: { id: true },
+	});
+	return !!sub;
+};
+
+const isAcademyPreviewContext = async (scope, subjectId) => {
+	if (scope.role !== 'STUDENT' || scope.studentMode !== 'ACADEMY') return false;
+	const subject = await prisma.course.findFirst({
+		where: { id: subjectId, track: { Org_id: scope.orgId } },
+		select: { isPaid: true },
+	});
+	if (!subject?.isPaid) return false;
+	const subscribed = await checkAcademySubscription(scope.userId, subjectId);
+	return !subscribed; // preview mode only when paid + NOT subscribed
+};
+
 const buildStudentSubjectAccessFilter = (scope) => {
 	if (scope.role !== 'STUDENT') {
 		return {};
@@ -207,63 +228,70 @@ export const createLesson = async (actor, subjectId, data) => {
 
 export const getLessons = async (actor, subjectId) => {
 	const scope = await resolveLessonScope(actor);
-	await ensureSubjectBelongsToOrganization(scope, subjectId);
+	const previewMode = await isAcademyPreviewContext(scope, subjectId);
+
+	if (!previewMode) {
+		await ensureSubjectBelongsToOrganization(scope, subjectId);
+	}
 
 	const lessons = await prisma.lesson.findMany({
 		where: {
 			Subject_id: subjectId,
 			course: {
 				...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
-				...buildStudentSubjectAccessFilter(scope),
-				track: {
-					Org_id: scope.orgId,
-				},
+				...(previewMode ? {} : buildStudentSubjectAccessFilter(scope)),
+				track: { Org_id: scope.orgId },
 			},
 		},
-		orderBy: {
-			id: 'asc',
-		},
+		orderBy: { id: 'asc' },
 		include: {
-			attachments: {
-				orderBy: {
-					id: 'asc',
-				},
-			},
-			quiz: {
-				select: { isPublished: true },
-			},
+			attachments: { orderBy: { id: 'asc' } },
+			quiz: { select: { isPublished: true } },
 			...(scope.role === 'STUDENT'
-				? {
-					lesson_progress: {
-						where: {
-							studentId: scope.userId,
-						},
-						select: {
-							isCompleted: true,
-						},
-						take: 1,
-					},
-				}
+				? { lesson_progress: { where: { studentId: scope.userId }, select: { isCompleted: true }, take: 1 } }
 				: {}),
 		},
 	});
 
-	return lessons.map(serializeLesson);
+	return lessons.map((lesson, index) => {
+		const serialized = serializeLesson(lesson);
+		if (previewMode) {
+			const isFreePreview = index < PREVIEW_LESSON_COUNT;
+			serialized.isPreview  = isFreePreview;
+			serialized.isLocked   = !isFreePreview;
+			if (!isFreePreview) {
+				serialized.videoUrl    = null;
+				serialized.attachments = (serialized.attachments || []).map(a => ({ ...a, fileUrl: null, url: null }));
+			}
+		}
+		return serialized;
+	});
 };
 
 export const getLessonById = async (actor, subjectId, lessonId) => {
 	const scope = await resolveLessonScope(actor);
+	const previewMode = await isAcademyPreviewContext(scope, subjectId);
+
+	if (previewMode) {
+		// Allow only the first PREVIEW_LESSON_COUNT lessons
+		const previewIds = (await prisma.lesson.findMany({
+			where: { Subject_id: subjectId, course: { track: { Org_id: scope.orgId } } },
+			orderBy: { id: 'asc' },
+			select: { id: true },
+			take: PREVIEW_LESSON_COUNT,
+		})).map(l => l.id);
+		if (!previewIds.includes(lessonId)) {
+			throw new AppError('This lesson requires a subscription. Purchase this subject to access all lessons.', 402);
+		}
+	} else {
+		await ensureLessonBelongsToSubject(scope, subjectId, lessonId);
+	}
+
 	const lesson = await prisma.lesson.findFirst({
 		where: {
 			id: lessonId,
 			Subject_id: subjectId,
-			course: {
-				...(scope.teacherId ? { Teacher_id: scope.teacherId } : {}),
-				...buildStudentSubjectAccessFilter(scope),
-				track: {
-					Org_id: scope.orgId,
-				},
-			},
+			course: { track: { Org_id: scope.orgId } },
 		},
 		include: {
 			attachments: {
