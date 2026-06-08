@@ -24,6 +24,7 @@ import ParentCalendarPage from "./pages/parent/ParentCalendarPage";
 import ParentAttendancePage from "./pages/parent/ParentAttendancePage";
 import StudentDashboardPage from "./pages/student/StudentDashboardPage";
 import StudentCoursesPage from "./pages/student/StudentCoursesPage";
+import StudentMyCoursesPage from "./pages/student/StudentMyCoursesPage";
 import StudentCertificatesPage from "./pages/student/StudentCertificatesPage";
 import StudentCourseDetailsPage from "./pages/student/StudentCourseDetailsPage";
 import StudentSchoolSubjectsPage from "./pages/student/StudentSchoolSubjectsPage";
@@ -42,11 +43,11 @@ import AdminLoginPage from "./pages/AdminLoginPage";
 import SignupPage from "./pages/SignupPage";
 import PaymentRedirect from "./components/auth/PaymentRedirect";
 import PaymentSuccessPage from "./pages/PaymentSuccessPage";
+import StudentSubjectPaymentSuccessPage from "./pages/student/StudentSubjectPaymentSuccessPage";
 import OrganizationWorkspacePage from "./pages/OrganizationWorkspacePage";
 import AdminOverviewPage from "./pages/admin/AdminOverviewPage";
 import AdminOrganizationsPage from "./pages/admin/AdminOrganizationsPage";
 import AdminRevenuePage from "./pages/admin/AdminRevenuePage";
-import AdminPlansPage from "./pages/admin/AdminPlansPage";
 import ParentDashboardPage from "./pages/parent/ParentDashboardPage";
 import ParentMarksPage from "./pages/parent/ParentMarksPage";
 import ParentSettingsPage from "./pages/parent/ParentSettingsPage";
@@ -82,9 +83,13 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/signup/checkout" element={<PaymentRedirect />} />
-        <Route path="/payment-success" element={<PaymentSuccessPage />} />
-        <Route path="/payment/success" element={<PaymentSuccessPage />} />
+        {/* Organization registration payment success */}
+        <Route path="/payment/success"    element={<PaymentSuccessPage />} />
         <Route path="/subscription/success" element={<PaymentSuccessPage />} />
+        {/* Legacy alias — keep for any outstanding org-registration Stripe sessions */}
+        <Route path="/payment-success"    element={<PaymentSuccessPage />} />
+        {/* Subject subscription payment success — separate page to avoid org-registration conflict */}
+        <Route path="/student/payment-success" element={<StudentSubjectPaymentSuccessPage />} />
         <Route path="/payment/cancel" element={<Navigate to="/signup" replace />} />
         <Route path="/subscription/cancel" element={<Navigate to="/signup" replace />} />
         <Route path="/verify-email/:token" element={<VerifyEmailPage />} />
@@ -121,6 +126,7 @@ function App() {
             <Route path="/dashboard/student" element={<StudentPageErrorBoundary><StudentDashboardPage /></StudentPageErrorBoundary>} />
             <Route path="/dashboard/student/overview" element={<StudentPageErrorBoundary><StudentDashboardPage /></StudentPageErrorBoundary>} />
             <Route path="/dashboard/student/courses" element={<StudentPageErrorBoundary><StudentCoursesPage /></StudentPageErrorBoundary>} />
+              <Route path="/student/my-courses" element={<StudentPageErrorBoundary><StudentMyCoursesPage /></StudentPageErrorBoundary>} />
               <Route path="/courses" element={<StudentPageErrorBoundary><StudentCoursesPage /></StudentPageErrorBoundary>} />
               <Route path="/dashboard/student/courses" element={<Navigate to="/courses" replace />} />
               <Route path="/student/courses" element={<Navigate to="/courses" replace />} />
@@ -149,7 +155,6 @@ function App() {
           <Route path="/admin" element={<AdminOverviewPage />} />
           <Route path="/admin/organizations" element={<AdminOrganizationsPage />} />
           <Route path="/admin/revenue" element={<AdminRevenuePage />} />
-          <Route path="/admin/plans" element={<AdminPlansPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />

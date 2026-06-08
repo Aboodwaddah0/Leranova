@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  RefreshControl, Animated, Easing, Dimensions,
+  RefreshControl, Animated, Easing, Dimensions, Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
@@ -576,10 +576,18 @@ function ResumeCourseCard({ course, onPress }: { course: Course; onPress: () => 
         </View>
 
         <View style={styles.resumeBody}>
-          {/* Icon */}
-          <LinearGradient colors={['#6366f1', '#8b5cf6']} style={styles.resumeIconWrap}>
-            <Text style={styles.resumeInitial}>{initial}</Text>
-          </LinearGradient>
+          {/* Icon — show thumbnail if available, else coloured initial */}
+          {course.cover ? (
+            <Image
+              source={{ uri: course.cover }}
+              style={styles.resumeIconWrap}
+              resizeMode="cover"
+            />
+          ) : (
+            <LinearGradient colors={['#6366f1', '#8b5cf6']} style={styles.resumeIconWrap}>
+              <Text style={styles.resumeInitial}>{initial}</Text>
+            </LinearGradient>
+          )}
 
           {/* Info */}
           <View style={{ flex: 1 }}>
@@ -644,19 +652,28 @@ function SpecializationCard({
     >
       {/* ── Hero image area ── */}
       <View style={styles.specHero}>
+        {/* Always render the gradient as background */}
         <LinearGradient colors={heroColors} style={StyleSheet.absoluteFill} />
 
-        {/* TRACK badge — top-left, matches reference exactly */}
+        {/* Show uploaded thumbnail if available, otherwise fall back to the icon */}
+        {course.cover ? (
+          <Image
+            source={{ uri: course.cover }}
+            style={[StyleSheet.absoluteFill, { opacity: 0.92 }]}
+            resizeMode="cover"
+          />
+        ) : (
+          <GraduationCap
+            size={96}
+            color="rgba(255,255,255,0.38)"
+            strokeWidth={1.2}
+          />
+        )}
+
+        {/* TRACK badge — top-left */}
         <View style={styles.specBadge}>
           <Text style={styles.specBadgeText}>{course.category.toUpperCase()}</Text>
         </View>
-
-        {/* Large graduation cap illustration — centered, same watermark feel as reference */}
-        <GraduationCap
-          size={96}
-          color="rgba(255,255,255,0.38)"
-          strokeWidth={1.2}
-        />
       </View>
 
       {/* ── Content area ── */}

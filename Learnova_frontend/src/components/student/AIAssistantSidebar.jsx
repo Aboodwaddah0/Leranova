@@ -44,6 +44,7 @@ function SourceBadge({ source, isArabic }) {
   const config = {
     general: { label: isArabic ? 'معرفة عامة' : 'General Knowledge', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
     hybrid:  { label: isArabic ? 'درس + معرفة عامة' : 'Lesson + General', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
+    web:     { label: isArabic ? 'بحث في الويب' : 'Web Search', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
   };
   const badge = config[source];
   if (!badge) return null;
@@ -336,10 +337,10 @@ export default function AIAssistantSidebar({ isArabic, lessonId: lessonIdProp })
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-24 right-5 z-[80] inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 via-purple-600 to-cyan-500 text-white shadow-2xl shadow-indigo-500/35 transition hover:scale-105 hover:shadow-indigo-500/50 lg:bottom-8"
+        className="fixed bottom-24 right-5 z-[80] inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 via-purple-600 to-cyan-500 text-white shadow-2xl shadow-indigo-500/35 transition hover:scale-105 hover:shadow-indigo-500/50 lg:bottom-8"
         aria-label={isArabic ? 'فتح المساعد الذكي' : 'Open AI assistant'}
       >
-        <Sparkles size={22} />
+        <Sparkles size={26} />
       </button>
 
       <AnimatePresence>
@@ -357,11 +358,11 @@ export default function AIAssistantSidebar({ isArabic, lessonId: lessonIdProp })
             />
 
             <motion.aside
-              initial={{ x: 420 }}
+              initial={{ x: 520 }}
               animate={{ x: 0 }}
-              exit={{ x: 420 }}
+              exit={{ x: 520 }}
               transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-              className="fixed right-0 top-0 z-[90] h-screen w-full max-w-[360px] shadow-2xl shadow-slate-900/30 backdrop-blur-xl"
+              className="fixed right-0 top-0 z-[90] h-screen w-full max-w-[480px] shadow-2xl shadow-slate-900/30 backdrop-blur-xl"
               style={{ borderLeft: `1px solid ${A.panelBorder}`, background: A.panel }}
             >
               <div className="flex h-full flex-col">

@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Pagination from "../../components/ui/Pagination";
 import { useSelector } from "react-redux";
-import { FileText, Trash2, Send, X, ChevronDown, ChevronUp } from "lucide-react";
+import { FileText, Trash2, Send, X, ChevronDown, ChevronUp, Info } from "lucide-react";
 import InstructorLayout from "../../components/instructor/InstructorLayout";
 import EducationLoading from "../../components/ui/EducationLoading";
 import {
@@ -167,6 +167,58 @@ function NotePanel({ student, isArabic, onClose }) {
   );
 }
 
+/* ── Age calculator ── */
+const calcAge = (dob) => {
+  if (!dob) return null;
+  const birth = new Date(dob);
+  if (isNaN(birth)) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  if (today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
+  return age;
+};
+
+/* ── Student detail modal ── */
+function StudentDetailModal({ entry, isArabic, onClose }) {
+  const name    = entry.user?.name    || "-";
+  const email   = entry.user?.email   || "-";
+  const address = entry.user?.address || "-";
+  // dob is stored lowercase inside the nested student object
+  const dob     = entry.student?.dob  ?? null;
+  const dobAge  = calcAge(dob);
+  // fall back to the stored integer age for academy students who have no DOB
+  const age     = dobAge !== null ? dobAge : (entry.user?.age ?? null);
+  const gender  = entry.user?.gender  || "-";
+
+  const row = (label, value) => (
+    <div className="flex justify-between gap-4 border-b border-slate-100 py-2.5 last:border-0">
+      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{label}</span>
+      <span className="text-sm font-semibold text-slate-800 text-right">{value}</span>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+         onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl"
+           onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          <h3 className="font-black text-slate-900">{isArabic ? "تفاصيل الطالب" : "Student Details"}</h3>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"><X size={16} /></button>
+        </div>
+        <div className="px-5 py-4 space-y-0">
+          {row(isArabic ? "الاسم"         : "Name",         name)}
+          {row(isArabic ? "البريد"        : "Email",        email)}
+          {row(isArabic ? "العنوان"       : "Address",      address)}
+          {row(isArabic ? "تاريخ الميلاد" : "Date of Birth", dob ? String(dob).slice(0, 10) : "-")}
+          {row(isArabic ? "العمر"         : "Age",          age !== null ? `${age} ${isArabic ? "سنة" : "yrs"}` : "-")}
+          {row(isArabic ? "الجنس"         : "Gender",       gender === "MALE" ? (isArabic ? "ذكر" : "Male") : gender === "FEMALE" ? (isArabic ? "أنثى" : "Female") : gender)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function InstructorStudentsPage() {
   const { isArabic } = useLanguage();
   const user = useSelector((s) => s.auth?.user);
@@ -178,7 +230,11 @@ export default function InstructorStudentsPage() {
   const [students, setStudents]           = useState([]);
   const [subjects, setSubjects]           = useState([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState(null);
+
+  // Reset filter to "All" every time the page is entered
+  useEffect(() => { setSelectedSubjectId(null); }, []);
   const [noteStudent, setNoteStudent]     = useState(null);
+  const [detailStudent, setDetailStudent] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -245,14 +301,14 @@ export default function InstructorStudentsPage() {
         {/* Filter bar */}
         <div className="px-6 py-4 flex items-center gap-4 border-b border-slate-100">
           <label className="text-sm font-semibold text-slate-600">
-            {isArabic ? "فلتر حسب المادة:" : "Filter by subject:"}
+            {isArabic ? "فلتر حسب الكورس:" : "Filter by course:"}
           </label>
           <select
             className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:border-indigo-400"
             value={selectedSubjectId ?? ""}
             onChange={(e) => { setSelectedSubjectId(e.target.value ? Number(e.target.value) : null); setNoteStudent(null); }}
           >
-            <option value="">{isArabic ? "كل المواد" : "All subjects"}</option>
+            <option value="">{isArabic ? "كل الكورسات" : "All courses"}</option>
             {subjects.map((s) => (
               <option key={s.id} value={s.id}>{s.name || s.Name}</option>
             ))}
@@ -268,46 +324,54 @@ export default function InstructorStudentsPage() {
             <tr>
               <th className="px-4 py-3">{isArabic ? "الاسم" : "Name"}</th>
               <th className="px-4 py-3">{isArabic ? "البريد" : "Email"}</th>
-              <th className="px-4 py-3">{isArabic ? "الصف" : "Grade"}</th>
-              <th className="px-4 py-3">{isArabic ? "الحالة" : "Status"}</th>
-              {isSchool && <th className="px-4 py-3 text-center">{isArabic ? "ملاحظات" : "Notes"}</th>}
+              <th className="px-4 py-3">{isArabic ? "العمر" : "Age"}</th>
+              <th className="px-4 py-3">{isArabic ? "العنوان" : "Address"}</th>
+              <th className="px-4 py-3 text-center">{isArabic ? "الإجراءات" : "Actions"}</th>
             </tr>
           </thead>
           <tbody>
             {students.length === 0 ? (
               <tr>
-                <td colSpan={isSchool ? 5 : 4} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
                   {isArabic ? "لا يوجد طلاب لهذه المادة." : "No students found for this subject."}
                 </td>
               </tr>
             ) : pagedStudents.map((entry) => {
-              const statusKey = String(entry.student?.academicStatus || entry.student?.AcademicStatus || "ACTIVE").toUpperCase();
-              const { label, cls } = statusMap[statusKey] || { label: statusKey, cls: "bg-slate-100 text-slate-500" };
+              const dob      = entry.student?.dob ?? null;
+              const dobAge   = calcAge(dob);
+              const age      = dobAge !== null ? dobAge : (entry.user?.age ?? null);
+              const address  = entry.user?.address || "-";
               const isSelected = noteStudent?.id === entry.id || noteStudent?.user?.email === entry.user?.email;
               return (
                 <tr key={entry.id} className={`border-t border-slate-100 transition ${isSelected ? 'bg-indigo-50/30' : 'hover:bg-slate-50'}`}>
                   <td className="px-4 py-3 font-semibold text-slate-900">{entry.user?.name || "-"}</td>
                   <td className="px-4 py-3 text-slate-700">{entry.user?.email || "-"}</td>
-                  <td className="px-4 py-3 text-slate-700">{entry.student?.gradeLevel ?? entry.student?.GradeLevel ?? "-"}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${cls}`}>{label}</span>
-                  </td>
-                  {isSchool && (
-                    <td className="px-4 py-3 text-center">
+                  <td className="px-4 py-3 text-slate-700">{age !== null ? age : "-"}</td>
+                  <td className="px-4 py-3 text-slate-700 max-w-[160px]"><p className="truncate">{address}</p></td>
+                  <td className="px-4 py-3 text-center">
+                    <div className="inline-flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setNoteStudent(isSelected ? null : entry)}
-                        className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition ${
-                          isSelected
-                            ? 'bg-indigo-600 text-white'
-                            : 'border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                        }`}
+                        onClick={() => setDetailStudent(entry)}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100"
                       >
-                        <FileText size={13} />
-                        {isArabic ? "ملاحظة" : "Note"}
+                        <Info size={13} />
+                        {isArabic ? "تفاصيل" : "Details"}
                       </button>
-                    </td>
-                  )}
+                      {isSchool && (
+                        <button
+                          type="button"
+                          onClick={() => setNoteStudent(isSelected ? null : entry)}
+                          className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                            isSelected ? 'bg-indigo-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          <FileText size={13} />
+                          {isArabic ? "ملاحظة" : "Note"}
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               );
             })}
@@ -324,6 +388,15 @@ export default function InstructorStudentsPage() {
           student={noteStudent}
           isArabic={isArabic}
           onClose={() => setNoteStudent(null)}
+        />
+      )}
+
+      {/* Student detail modal */}
+      {detailStudent && (
+        <StudentDetailModal
+          entry={detailStudent}
+          isArabic={isArabic}
+          onClose={() => setDetailStudent(null)}
         />
       )}
     </InstructorLayout>

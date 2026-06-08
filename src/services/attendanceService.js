@@ -1,5 +1,6 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
+import { createNotification } from './notificationService.js';
 
 const resolveOrgId = async (user) => {
   const role = String(user?.role ?? '').trim().toUpperCase();
@@ -40,6 +41,42 @@ const ensureTeacherOwnsSubject = async (teacherId, subjectId) => {
   });
   if (!subject) throw new AppError('Subject not found or not assigned to you', 403);
   return subject;
+};
+
+// Fire absent/late notifications for students (and their parents) — fire-and-forget
+const notifyAbsentLate = async (records, date) => {
+  const flagged = records.filter((r) => r.status === 'ABSENT' || r.status === 'LATE');
+  if (!flagged.length) return;
+
+  const students = await prisma.student.findMany({
+    where: { Student_id: { in: flagged.map((r) => r.studentId) } },
+    select: { Student_id: true, Parent_id: true, user: { select: { id: true, name: true } } },
+  });
+
+  const dateStr = new Date(date).toLocaleDateString('en-GB');
+
+  students.forEach((student) => {
+    const status = flagged.find((r) => r.studentId === student.Student_id)?.status;
+    const label  = status === 'ABSENT' ? 'absent' : 'late';
+
+    if (student.user?.id) {
+      createNotification({
+        userId: student.user.id,
+        content: `You were marked ${label} on ${dateStr}`,
+        type: 'ATTENDANCE',
+        url: '/student/attendance',
+      }).catch(() => {});
+    }
+
+    if (student.Parent_id) {
+      createNotification({
+        userId: student.Parent_id,
+        content: `${student.user?.name ?? 'Your child'} was marked ${label} on ${dateStr}`,
+        type: 'ATTENDANCE',
+        url: '/dashboard/parent',
+      }).catch(() => {});
+    }
+  });
 };
 
 const getActiveAcademicYearId = async (orgId) => {
@@ -98,10 +135,12 @@ export const markAttendance = async (user, classId, { date, records }) => {
     )
   );
 
+  notifyAbsentLate(records, parsedDate).catch(() => {});
+
   return results.map(toDto);
 };
 
-export const getClassAttendance = async (user, classId, { date, academicYearId } = {}) => {
+export const getClassAttendance = async (user, classId, { date, academicYearId, termId } = {}) => {
   const orgId = await resolveOrgId(user);
 
   const cls = await prisma.track.findFirst({
@@ -111,11 +150,21 @@ export const getClassAttendance = async (user, classId, { date, academicYearId }
 
   const yearId = academicYearId ? Number(academicYearId) : undefined;
 
+  let dateFilter = {};
+  if (date) {
+    dateFilter = { date: new Date(date) };
+  } else if (termId) {
+    const term = await prisma.term.findUnique({ where: { id: Number(termId) } });
+    if (term) {
+      dateFilter = { date: { gte: term.startDate, lte: term.endDate } };
+    }
+  }
+
   const records = await prisma.attendance.findMany({
     where: {
       classId,
       orgId,
-      ...(date ? { date: new Date(date) } : {}),
+      ...dateFilter,
       ...(yearId ? { academicYearId: yearId } : {}),
     },
     include: {
@@ -250,6 +299,8 @@ export const markSubjectAttendance = async (user, subjectId, { date, records }) 
       })
     )
   );
+
+  notifyAbsentLate(records, parsedDate).catch(() => {});
 
   return results.map(toDto);
 };

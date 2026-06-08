@@ -609,7 +609,7 @@ export default function StudentSubjectPage() {
                 { key: 'comments',    icon: <MessageCircle size={15}/>, label: isArabic ? 'التعليقات' : 'Comments', badge: comments.length },
                 { key: 'flashcards',  icon: <Brain size={15}/>, label: isArabic ? 'البطاقات التعليمية' : 'Flashcards' },
                 { key: 'mindmap',     icon: <Map size={15}/>, label: isArabic ? 'الخريطة الذهنية' : 'Mind Map' },
-                ...(lessonQuiz ? [{ key: 'quiz', icon: <ClipboardList size={15}/>, label: `🧠 ${isArabic ? 'الاختبار' : 'Quiz'}` }] : []),
+                ...((lessonQuiz || selectedLesson?.quiz?.isPublished) ? [{ key: 'quiz', icon: <ClipboardList size={15}/>, label: `🧠 ${isArabic ? 'الاختبار' : 'Quiz'}` }] : []),
               ].map((tab) => {
                 const active = lessonTab === tab.key;
                 return (

@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  LayoutDashboard, Building2, TrendingUp, CreditCard,
+  LayoutDashboard, Building2, TrendingUp,
   Menu, X, Sun, Moon, LogOut, ShieldCheck,
 } from "lucide-react";
 import NotificationDropdown from "../shared/NotificationDropdown";
@@ -27,7 +27,6 @@ export default function AdminLayout({ title, subtitle, children, actions }) {
     { to: "/admin",                label: t.admin.tabs.overview,       icon: LayoutDashboard, end: true },
     { to: "/admin/organizations",  label: t.admin.tabs.organizations,  icon: Building2 },
     { to: "/admin/revenue",        label: t.admin.tabs.revenue,        icon: TrendingUp },
-    { to: "/admin/plans",          label: t.admin.tabs.plans,          icon: CreditCard },
   ], [t]);
 
   const displayName = adminUser?.name || adminUser?.Name || adminUser?.email || "Admin";

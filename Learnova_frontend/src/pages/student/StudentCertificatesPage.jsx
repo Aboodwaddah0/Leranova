@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Award } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
 import CertificatePDF from '../../components/student/CertificatePDF';
+import AcademyCertificatePDF from '../../components/student/AcademyCertificatePDF';
 import { fetchMyCertificates } from '../../services/studentService';
 import { useLanguage } from '../../utils/i18n';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -71,11 +72,72 @@ export default function StudentCertificatesPage() {
       ) : (
         <div className="mt-6 space-y-5">
           {certs.map((cert) => {
+            const isAcademy = !cert.termId;
             const avg       = Number(cert.overallAverage ?? 0);
             const gc        = gradeColor(avg);
             const passed    = avg >= 50;
             const subPassed = cert.subjects?.filter(s => s.isPassed).length ?? 0;
+            const hours     = Math.max(5, (cert.lessonCount ?? 3) * 2);
 
+            // ── Academy certificate card ──────────────────────────────────
+            if (isAcademy) {
+              return (
+                <div key={cert.id} style={{
+                  border: `1.5px solid ${border}`,
+                  borderRadius: '1.75rem',
+                  background: isDark ? 'rgba(255,255,255,0.03)' : '#fff',
+                  overflow: 'hidden',
+                }}>
+                  {/* Header strip */}
+                  <div style={{ background: 'linear-gradient(135deg,#7c3aed,#6366f1,#0891b2)', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>🎓</div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: 'rgba(255,255,255,0.75)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                        {cert.orgName} · Certificate of Completion
+                      </p>
+                      <p style={{ margin: '3px 0 0', fontSize: 16, fontWeight: 900, color: '#fff' }}>
+                        {cert.subjectName || 'Course'}
+                      </p>
+                      {cert.trackName && (
+                        <p style={{ margin: '2px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.65)' }}>{cert.trackName}</p>
+                      )}
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{hours}+ hours</p>
+                      <p style={{ margin: '2px 0 0', fontSize: 11, fontWeight: 800, color: '#86efac' }}>Completed ✓</p>
+                    </div>
+                  </div>
+
+                  <div style={{ padding: '16px 20px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, marginBottom: 14 }}>
+                      {[
+                        { label: 'Student',        value: cert.studentName },
+                        { label: 'Date of Issue',  value: cert.issuedAt ? new Date(cert.issuedAt).toLocaleDateString() : '—' },
+                        { label: 'Certificate ID', value: CERT_ID(cert.id), mono: true },
+                      ].map(({ label, value, mono }) => (
+                        <div key={label}>
+                          <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: sub, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</p>
+                          <p style={{ margin: '1px 0 0', fontSize: 13, fontWeight: 800, color: isDark ? '#e2e0f0' : '#1e1b4b', fontFamily: mono ? 'monospace' : 'inherit' }}>{value || '—'}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ marginBottom: 14, padding: '12px 16px', borderRadius: 12, background: isDark ? 'rgba(168,85,247,0.08)' : '#f5f3ff', border: `1px solid ${isDark ? 'rgba(168,85,247,0.2)' : '#e0e7ff'}` }}>
+                      <p style={{ margin: 0, fontSize: 13, color: isDark ? '#c4b5fd' : '#7c3aed', fontWeight: 700 }}>
+                        ✓ Successfully completed with {hours}+ hours of learning
+                      </p>
+                    </div>
+
+                    <button type="button" onClick={() => setViewing(cert)}
+                      style={{ width: '100%', padding: '11px 0', borderRadius: 14, background: 'linear-gradient(135deg,#7c3aed,#6366f1)', color: '#fff', fontWeight: 800, fontSize: 14, border: 'none', cursor: 'pointer' }}>
+                      🏆 View & Download Certificate
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            // ── School certificate card ───────────────────────────────────
             return (
               <div key={cert.id} style={{
                 border: `1.5px solid ${border}`,
@@ -201,9 +263,11 @@ export default function StudentCertificatesPage() {
         </div>
       )}
 
-      {/* PDF viewer */}
+      {/* PDF viewer — academy vs school */}
       {viewing && (
-        <CertificatePDF cert={viewing} isArabic={isArabic} onClose={() => setViewing(null)} />
+        viewing.termId
+          ? <CertificatePDF cert={viewing} isArabic={isArabic} onClose={() => setViewing(null)} />
+          : <AcademyCertificatePDF cert={viewing} onClose={() => setViewing(null)} />
       )}
     </StudentLayout>
   );

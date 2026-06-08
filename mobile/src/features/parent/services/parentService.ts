@@ -1,5 +1,5 @@
 import apiClient, { unwrap, ensureArray } from '../../../shared/services/apiClient';
-import type { ParentProfile, Child, TeacherNote, ChildMark } from '../../../types/parent';
+import type { ParentProfile, Child, TeacherNote, ChildMark, CalendarEvent, ChildAttendanceGroup } from '../../../types/parent';
 
 export async function fetchMyParentProfile(): Promise<ParentProfile | null> {
   try {
@@ -45,6 +45,24 @@ export async function fetchParentChildrenMarks(): Promise<ChildMark[]> {
   try {
     const res = await apiClient.get('/parent/marks');
     return ensureArray<ChildMark>(unwrap(res));
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchChildrenAttendance(): Promise<ChildAttendanceGroup[]> {
+  try {
+    const res = await apiClient.get('/attendance/children');
+    return ensureArray<ChildAttendanceGroup>(unwrap(res));
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchParentCalendar(params?: { from?: string; to?: string }): Promise<CalendarEvent[]> {
+  try {
+    const res = await apiClient.get('/parent/calendar', { params });
+    return ensureArray<CalendarEvent>(unwrap(res));
   } catch {
     return [];
   }

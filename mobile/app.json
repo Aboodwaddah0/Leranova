@@ -10,14 +10,23 @@
       "bundleIdentifier": "com.learnova.mobile"
     },
     "android": {
-      "package": "com.learnova.mobile"
+      "package": "com.learnova.mobile",
+      "googleServicesFile": "./android/app/google-services.json"
     },
     "plugins": [
       "expo-secure-store",
       "expo-av",
       "expo-file-system",
       "expo-image-picker",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#6366f1",
+          "sounds": []
+        }
+      ]
     ]
   }
 }

@@ -112,6 +112,13 @@ const evaluateStudentDecision = async (tx, student, settings, activeYearId) => {
       marksBySubject.set(mark.Subject_id, list);
     }
 
+    const subjectCourses = await tx.course.findMany({
+      where: { id: { in: subjectIds } },
+      select: { id: true, name: true },
+    });
+    const subjectNameMap = {};
+    for (const c of subjectCourses) subjectNameMap[c.id] = c.name;
+
     const minSubjectPass = Number(settings.minSubjectPassPercentage);
     subjectResults = [];
 
@@ -134,7 +141,7 @@ const evaluateStudentDecision = async (tx, student, settings, activeYearId) => {
       }
 
       const avgScore = (weightedScore / weightedOutOf) * 100;
-      subjectResults.push({ subjectId, avgScore, isPassed: avgScore >= minSubjectPass });
+      subjectResults.push({ subjectId, avgScore, isPassed: avgScore >= minSubjectPass, subjectName: subjectNameMap[subjectId] ?? null });
     }
   }
 
@@ -158,22 +165,36 @@ const evaluateStudentDecision = async (tx, student, settings, activeYearId) => {
     return { ...base, decision: 'REPEATED', reason: `Failed required subject: ${reqName}` };
   }
 
+  // Single threshold: "Max Failed Subjects" is the absolute ceiling on how
+  // many subjects a student may fail and still be promoted. "Allow
+  // Conditional Promotion" only controls whether promotions that involve
+  // failed subjects are labelled Conditional or treated as a clean Pass.
   const maxFailed     = Number(settings.maxFailedSubjects ?? 0);
   const passThreshold = Number(settings.passThresholdPercentage);
+  const failNames = () => failedSubjects.map((r) => r.subjectName ?? `Subject ${r.subjectId}`).join(', ');
 
-  if (finalPercentage < passThreshold || failedCount > maxFailed) {
-    if (settings.allowConditionalPromotion && failedCount <= Number(settings.conditionalMaxFailed ?? 1)) {
-      const failNames = failedSubjects.map((r) => r.subjectName ?? `Subject ${r.subjectId}`).join(', ');
-      return { ...base, decision: 'CONDITIONAL', reason: `Conditional promotion — failed: ${failNames}` };
-    }
+  // Below the overall pass threshold is always a Fail, regardless of how many
+  // individual subjects were failed — Conditional Promotion requires the
+  // overall average to meet the threshold first.
+  if (finalPercentage < passThreshold) {
     if (failedCount > 0) {
-      const failNames = failedSubjects.map((r) => r.subjectName ?? `Subject ${r.subjectId}`).join(', ');
-      return { ...base, decision: 'REPEATED', reason: `Failed ${failedCount} subject(s): ${failNames}` };
+      return { ...base, decision: 'REPEATED', reason: `Average ${finalPercentage}% is below the pass threshold of ${passThreshold}% — failed ${failedCount} subject(s): ${failNames()}` };
     }
     return { ...base, decision: 'REPEATED', reason: `Average ${finalPercentage}% is below the pass threshold of ${passThreshold}%` };
   }
 
-  return { ...base, decision: 'PROMOTED', reason: `Passed all subjects with ${finalPercentage}% average` };
+  if (failedCount === 0) {
+    return { ...base, decision: 'PROMOTED', reason: `Passed all subjects with ${finalPercentage}% average` };
+  }
+
+  if (failedCount <= maxFailed) {
+    if (settings.allowConditionalPromotion) {
+      return { ...base, decision: 'CONDITIONAL', reason: `Conditional promotion — failed: ${failNames()}` };
+    }
+    return { ...base, decision: 'PROMOTED', reason: `Promoted with ${finalPercentage}% average — failed: ${failNames()}` };
+  }
+
+  return { ...base, decision: 'REPEATED', reason: `Failed ${failedCount} subject(s): ${failNames()}` };
 };
 
 const ensureSchoolOrg = async (tx, orgId) => {
@@ -325,7 +346,7 @@ export const runAnnualPromotionForOrg = async (orgId, options = {}) => {
       },
     });
 
-    if (existingRun) {
+    if (existingRun && !options.force) {
       return {
         orgId,
         schoolYear,
@@ -366,10 +387,20 @@ export const runAnnualPromotionForOrg = async (orgId, options = {}) => {
       pending: records.filter((r) => r.decision === 'PENDING').length,
     };
 
-    await tx.organization_promotion_run.create({
-      data: {
+    await tx.organization_promotion_run.upsert({
+      where: {
+        OrgId_schoolYear: {
+          OrgId: orgId,
+          schoolYear,
+        },
+      },
+      create: {
         OrgId: orgId,
         schoolYear,
+        status: 'SUCCESS',
+        summary,
+      },
+      update: {
         status: 'SUCCESS',
         summary,
       },
@@ -390,6 +421,53 @@ export const runAnnualPromotionForOrg = async (orgId, options = {}) => {
       summary,
       records,
     };
+  });
+};
+
+export const promoteStudentById = async (orgId, studentId, options = {}) => {
+  // Gate: if an active academic year exists, all its terms must be CLOSED or LOCKED —
+  // a single student shouldn't be promoted on unfinalized grades either.
+  const activeYear = await prisma.academic_year.findFirst({
+    where: { OrgId: orgId, isActive: true },
+    include: { terms: { select: { id: true, status: true } } },
+  });
+  if (activeYear && activeYear.terms.length > 0) {
+    const allClosed = activeYear.terms.every((t) => t.status === 'CLOSED' || t.status === 'LOCKED');
+    if (!allClosed) {
+      throw new AppError('All terms must be CLOSED or LOCKED before running promotion', 409);
+    }
+  }
+
+  return prisma.$transaction(async (tx) => {
+    await ensureSchoolOrg(tx, orgId);
+
+    const settings = await getOrCreateSchoolSettings(orgId, tx);
+    const schoolYear = options.schoolYear ?? getPromotionSchoolYear(settings);
+
+    const student = await tx.student.findFirst({
+      where: {
+        Student_id: studentId,
+        OrgId: orgId,
+        AcademicStatus: { notIn: ['GRADUATED', 'FILED'] },
+      },
+      select: {
+        Student_id:    true,
+        Course_id:     true,
+        GradeLevel:    true,
+        AcademicStatus: true,
+        DOB:           true,
+        user:          { select: { name: true, registrationNumber: true } },
+      },
+    });
+
+    if (!student) {
+      throw new AppError('Student not found', 404);
+    }
+
+    const decision = await evaluateStudentDecision(tx, student, settings, activeYear?.id ?? null);
+    const record = await applyPromotionDecision(tx, student, decision, schoolYear, orgId, activeYear?.id ?? null);
+
+    return { orgId, studentId, schoolYear, record };
   });
 };
 

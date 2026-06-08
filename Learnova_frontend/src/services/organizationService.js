@@ -208,6 +208,11 @@ export const runAnnualPromotion = async (payload = {}) => {
   return data?.data || null;
 };
 
+export const promoteStudentById = async (payload) => {
+  const { data } = await api.post("/school-settings/promotions/student", payload);
+  return data?.data || null;
+};
+
 export const addStudentToCourse = async (studentUserId, courseId, isSchool = false) => {
   const payload = isSchool
     ? { studentUserId, Course_id: courseId }
@@ -385,4 +390,17 @@ export const unpublishCertificates = async (yearId, termId) => {
 
 export const deleteTimetableSlot = async (id) => {
   await api.delete(`/timetable/${id}`);
+};
+
+// ── Reports ──────────────────────────────────────────────────────────────────
+const buildReportQuery = (params = {}) =>
+  Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== null && v !== "")
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join("&");
+
+export const fetchReport = async (reportPath, params = {}) => {
+  const qs = buildReportQuery(params);
+  const { data } = await api.get(`/reports/${reportPath}${qs ? `?${qs}` : ""}`);
+  return data?.data || null;
 };

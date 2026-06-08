@@ -66,16 +66,33 @@ export const issueAcademyCertificate = async (userId, subjectId) => {
 
   const context = await resolveStudentContext(userId);
 
-  const cert = await prisma.student_certificate.upsert({
-    where: { studentId_subjectId: { studentId: userId, subjectId } },
-    create: { studentId: userId, orgId: context.orgId, subjectId, trackId: check.trackId },
+  // student_certificate.studentId has a FK to student.Student_id.
+  // Academy students only exist in academy_user, so we ensure a student row exists
+  // (with the academy orgId and no class/grade) to satisfy the constraint.
+  await prisma.student.upsert({
+    where:  { Student_id: userId },
+    create: { Student_id: userId, OrgId: context.orgId, AcademicStatus: 'ACTIVE' },
     update: {},
+  });
+
+  // Use raw INSERT ... ON DUPLICATE KEY UPDATE to handle NULL termId correctly
+  // (Prisma upsert rejects NULL in the compound unique key)
+  await prisma.$executeRaw`
+    INSERT INTO student_certificate (studentId, orgId, subjectId, trackId, termId, isPublished, issuedAt, createdAt)
+    VALUES (${userId}, ${context.orgId}, ${subjectId}, ${check.trackId}, NULL, 0, NOW(), NOW())
+    ON DUPLICATE KEY UPDATE issuedAt = issuedAt
+  `;
+
+  const cert = await prisma.student_certificate.findFirst({
+    where: { studentId: userId, subjectId, termId: null },
     include: {
       subject: { select: { id: true, name: true } },
-      track: { select: { id: true, Name: true } },
+      track:   { select: { id: true, Name: true } },
       organization: { select: { id: true, Name: true } },
     },
   });
+
+  if (!cert) throw new AppError('Certificate could not be created', 500);
 
   return _certDto(cert, userId);
 };
@@ -127,6 +144,18 @@ export const getStudentCertificates = async (userId) => {
       ? Number((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2))
       : 0;
 
+    // For academy certificates (no termId), include subject name and lesson count
+    let subjectName = null;
+    let lessonCount = 0;
+    if (!c.termId && c.subjectId) {
+      const subject = await prisma.course.findUnique({
+        where: { id: c.subjectId },
+        select: { name: true, _count: { select: { lesson: true } } },
+      });
+      subjectName = subject?.name ?? null;
+      lessonCount = subject?._count?.lesson ?? 0;
+    }
+
     result.push({
       id:             c.id,
       studentId:      userId,
@@ -137,6 +166,10 @@ export const getStudentCertificates = async (userId) => {
       termId:         c.termId,
       termName:       c.term?.name ?? null,
       academicYear:   c.term?.academic_year?.name ?? null,
+      // Academy-specific
+      subjectId:      c.subjectId ?? null,
+      subjectName,
+      lessonCount,
       subjects,
       overallAverage,
       issuedAt:       c.issuedAt,

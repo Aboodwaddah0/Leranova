@@ -4,15 +4,26 @@ import {
   loginWithRole,
   registerOrganization,
 } from "../../services/authService";
+import { registerFcmToken, clearFcmToken } from "../../utils/fcm";
 
 export const loginThunk = createAsyncThunk(
   "auth/login",
   async (credentials, { rejectWithValue }) => {
     try {
-      return await loginWithRole(credentials);
+      const result = await loginWithRole(credentials);
+      // Register FCM token after successful login — fire-and-forget
+      registerFcmToken().catch(() => {});
+      return result;
     } catch (error) {
       return rejectWithValue(error.message);
     }
+  },
+);
+
+export const logoutThunk = createAsyncThunk(
+  "auth/logout",
+  async () => {
+    await clearFcmToken().catch(() => {});
   },
 );
 

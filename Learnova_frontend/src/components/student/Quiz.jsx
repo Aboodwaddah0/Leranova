@@ -79,6 +79,18 @@ export default function Quiz({ quiz, onSubmit, submitting, isArabic }) {
     </div>
   );
 
+  if (quiz.status === 'no_questions') {
+    return (
+      <div className="flex flex-col items-center gap-3 py-16 text-center">
+        <span className="text-5xl">🧠</span>
+        <p className="text-base font-black" style={{ color: D.text }}>{quiz.title}</p>
+        <p className="text-sm font-semibold" style={{ color: D.muted }}>
+          {isArabic ? 'الاختبار منشور ولكن الأسئلة لم تُضف بعد.' : 'Quiz is published but questions are not ready yet.'}
+        </p>
+      </div>
+    );
+  }
+
   if (quiz.status === 'not_yet_available') {
     const dateStr = quiz.availableFrom ? new Date(quiz.availableFrom).toLocaleString(isArabic ? 'ar-SA' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '';
     return (

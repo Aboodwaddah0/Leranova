@@ -8,6 +8,7 @@ import {
   getMyParentProfileController,
   updateMyParentProfileController,
 } from '../controllers/noteController.js';
+import { listPublicEventsController } from '../controllers/calendarController.js';
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.get('/children', getParentChildrenController);
 router.get('/notes', getParentNotesController);
 router.patch('/notes/:noteId/read', markNoteReadController);
 router.get('/marks', getParentMarksController);
+router.get('/calendar', listPublicEventsController);
 
 export default router;

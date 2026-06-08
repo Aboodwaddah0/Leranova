@@ -111,9 +111,9 @@ export default function StudentSubjectsPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {subjects.length ? (
           subjects.map((subject) => (
-            <article key={subject.id} className="overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/90 shadow-xl shadow-indigo-500/5 backdrop-blur-sm">
+            <article key={subject.id} className="overflow-hidden rounded-[1.75rem] bg-white/90 shadow-xl shadow-indigo-500/5 backdrop-blur-sm">
               {subject.imageUrl ? (
-                <img src={subject.imageUrl} alt={subject.name} className="h-36 w-full object-cover" loading="lazy" />
+                <img src={subject.imageUrl} alt={subject.name} className="h-36 w-full object-contain" loading="lazy" />
               ) : (
                 <div className="flex h-36 items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600">
                   <span className="text-4xl text-white/60">📚</span>

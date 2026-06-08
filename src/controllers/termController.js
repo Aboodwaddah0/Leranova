@@ -27,11 +27,18 @@ const parseTermId = (req, next) => {
   return id;
 };
 
-const getOrgIdForUser = async (userId, userRole) => {
+/**
+ * Resolves the organization ID and the actor user ID for audit logs.
+ * Organization actors (SCHOOL / ACADEMY) use their own ID as orgId but have
+ * no corresponding row in the `user` table, so actorUserId is null for them.
+ * Returns { orgId, actorUserId }.
+ */
+const resolveActorContext = async (userId, userRole) => {
   const role = String(userRole || '').trim().toUpperCase();
 
-  if (role === 'SCHOOL') {
-    return userId;
+  // Organization admins — orgId IS the userId; no matching user row
+  if (role === 'SCHOOL' || role === 'ACADEMY') {
+    return { orgId: userId, actorUserId: null };
   }
 
   if (role === 'TEACHER') {
@@ -40,7 +47,7 @@ const getOrgIdForUser = async (userId, userRole) => {
       select: { OrgId: true },
     });
     if (!teacher) throw new AppError('Teacher profile not found', 404);
-    return teacher.OrgId;
+    return { orgId: teacher.OrgId, actorUserId: userId };
   }
 
   if (role === 'STUDENT') {
@@ -49,10 +56,16 @@ const getOrgIdForUser = async (userId, userRole) => {
       select: { OrgId: true },
     });
     if (!student) throw new AppError('Student profile not found', 404);
-    return student.OrgId;
+    return { orgId: student.OrgId, actorUserId: userId };
   }
 
   throw new AppError('Invalid user role for term access', 403);
+};
+
+// Keep the old helper for read-only routes that only need orgId
+const getOrgIdForUser = async (userId, userRole) => {
+  const { orgId } = await resolveActorContext(userId, userRole);
+  return orgId;
 };
 
 export const createTermController = async (req, res, next) => {
@@ -60,12 +73,12 @@ export const createTermController = async (req, res, next) => {
     const yearId = parseYearId(req, next);
     if (yearId === null) return;
 
-    const orgId = await getOrgIdForUser(req.user.id, req.user.role);
+    const { orgId, actorUserId } = await resolveActorContext(req.user.id, req.user.role);
 
     const { error, value } = createTermSchema.validate(req.body);
     if (error) return next(new AppError(error.details[0].message, 400));
 
-    const data = await createTerm(orgId, yearId, value, req.user.id);
+    const data = await createTerm(orgId, yearId, value, actorUserId);
     return res.status(201).json({ message: 'Term created successfully', data });
   } catch (err) { next(err); }
 };
@@ -101,13 +114,13 @@ export const updateTermController = async (req, res, next) => {
     const termId = parseTermId(req, next);
     if (termId === null) return;
 
-    const orgId = await getOrgIdForUser(req.user.id, req.user.role);
+    const { orgId, actorUserId } = await resolveActorContext(req.user.id, req.user.role);
 
     const { error, value } = updateTermSchema.validate(req.body);
     if (error) return next(new AppError(error.details[0].message, 400));
 
     const { changeReason, ...fields } = value;
-    const data = await updateTerm(orgId, yearId, termId, fields, req.user.id, changeReason);
+    const data = await updateTerm(orgId, yearId, termId, fields, actorUserId, changeReason);
     return res.status(200).json({ message: 'Term updated successfully', data });
   } catch (err) { next(err); }
 };
@@ -119,12 +132,12 @@ export const reopenTermController = async (req, res, next) => {
     const termId = parseTermId(req, next);
     if (termId === null) return;
 
-    const orgId = await getOrgIdForUser(req.user.id, req.user.role);
+    const { orgId, actorUserId } = await resolveActorContext(req.user.id, req.user.role);
 
     const { error, value } = reopenTermSchema.validate(req.body);
     if (error) return next(new AppError(error.details[0].message, 400));
 
-    const data = await reopenTerm(orgId, yearId, termId, req.user.id, value.changeReason);
+    const data = await reopenTerm(orgId, yearId, termId, actorUserId, value.changeReason);
     return res.status(200).json({ message: 'Term reopened successfully', data });
   } catch (err) { next(err); }
 };
@@ -136,8 +149,8 @@ export const activateTermController = async (req, res, next) => {
     const termId = parseTermId(req, next);
     if (termId === null) return;
 
-    const orgId = await getOrgIdForUser(req.user.id, req.user.role);
-    const data = await activateTerm(orgId, yearId, termId, req.user.id);
+    const { orgId, actorUserId } = await resolveActorContext(req.user.id, req.user.role);
+    const data = await activateTerm(orgId, yearId, termId, actorUserId);
     return res.status(200).json({ message: 'Term activated successfully', data });
   } catch (err) { next(err); }
 };

@@ -1,22 +1,20 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LogOut, BarChart2, Home, Settings, CalendarDays, ClipboardList } from 'lucide-react';
+import { LogOut, Home, Settings, CalendarDays } from 'lucide-react';
 import NotificationDropdown from '../shared/NotificationDropdown';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../../redux/slices/authSlice';
 import { useLanguage } from '../../utils/i18n';
 
 export default function ParentLayout({ children }) {
-  const { isArabic, lang } = useLanguage();
+  const { isArabic, lang, toggleLang } = useLanguage();
   const dispatch = useDispatch();
   const user = useSelector((s) => s.auth?.user);
   const { pathname } = useLocation();
 
   const navLinks = [
-    { to: '/dashboard/parent',            icon: Home,          en: 'Home',       ar: 'الرئيسية',  exact: true  },
-    { to: '/dashboard/parent/marks',      icon: BarChart2,     en: 'Marks',      ar: 'الدرجات',  exact: false },
-    { to: '/dashboard/parent/attendance', icon: ClipboardList, en: 'Attendance', ar: 'الحضور',   exact: false },
-    { to: '/dashboard/parent/calendar',   icon: CalendarDays,  en: 'Calendar',   ar: 'التقويم',  exact: false },
-    { to: '/dashboard/parent/settings',   icon: Settings,      en: 'Settings',   ar: 'الإعدادات', exact: false },
+    { to: '/dashboard/parent',          icon: Home,          en: 'Home',     ar: 'الرئيسية',   exact: true  },
+    { to: '/dashboard/parent/calendar', icon: CalendarDays,  en: 'Calendar', ar: 'التقويم',    exact: false },
+    { to: '/dashboard/parent/settings', icon: Settings,      en: 'Settings', ar: 'الإعدادات',  exact: false },
   ];
 
   const initial = (user?.name || 'P').charAt(0).toUpperCase();
@@ -69,6 +67,15 @@ export default function ParentLayout({ children }) {
                 {user?.name || (isArabic ? 'ولي الأمر' : 'Parent')}
               </span>
             </div>
+
+            {/* Language toggle */}
+            <button
+              type="button"
+              onClick={toggleLang}
+              className="dashboard-lang-btn rounded-2xl border px-4 py-2 text-sm font-semibold"
+            >
+              {lang === 'en' ? 'العربية' : 'English'}
+            </button>
 
             <button
               type="button"

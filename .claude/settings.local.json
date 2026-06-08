@@ -49,7 +49,20 @@
       "Bash(npx expo *)",
       "Bash(Remove-Item -Recurse -Force \"C:\\\\Users\\\\Eng Mohammad\\\\Desktop\\\\repo\\\\last-v\\\\Leranova\\\\mobile\\\\src\\\\app\")",
       "Bash(cd \"/mnt/c/Users/Eng Mohammad/Desktop/repo/last-v/Leranova/mobile\" && npx tsc --noEmit 2>&1)",
-      "Bash(findstr /i \"firebase socket realtime\")"
+      "Bash(findstr /i \"firebase socket realtime\")",
+      "Bash(npx --yes eslint src/pages/LandingPage.jsx --max-warnings=0)",
+      "Bash(git stash *)",
+      "Bash(npx eslint *)",
+      "Bash(npx vite *)",
+      "PowerShell(cd \"C:\\\\Users\\\\PC\\\\Documents\\\\learnova_v5\\\\Leranova\"; $env:PRISMA_MIGRATE_SKIP_GENERATE=\"true\"; npx prisma db push 2>&1)",
+      "Bash(del \"C:\\\\Users\\\\PC\\\\Documents\\\\learnova_v5\\\\Leranova\\\\add_fcm_token.sql\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\PC\\\\Documents\\\\learnova_v5\\\\Leranova\\\\mobile\\\\android\\\\app\")",
+      "Bash(ls /mnt/c/Users/PC/Documents/learnova_v5/)",
+      "Read(//c/Users/PC/Documents//**)",
+      "Read(//c/Users/PC/Documents/**)",
+      "Bash(ip addr *)",
+      "Bash(awk '{print $2}')",
+      "Bash(ipconfig)"
     ]
   }
 }

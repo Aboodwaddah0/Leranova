@@ -11,12 +11,21 @@ import {
   markAsReadThunk,
   markAllReadThunk,
 } from "../../redux/thunks/notificationThunks";
+import { addNotification } from "../../redux/slices/notificationSlice";
+import { listenForegroundMessages } from "../../utils/fcm";
 
-const formatTime = (dateStr) => {
+const formatTime = (dateStr, isArabic) => {
   const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
-  if (diff < 60) return "Just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (isArabic) {
+    if (diff < 60)     return "الآن";
+    if (diff < 3600)   return `منذ ${Math.floor(diff / 60)} د`;
+    if (diff < 86400)  return `منذ ${Math.floor(diff / 3600)} س`;
+    if (diff < 604800) return `منذ ${Math.floor(diff / 86400)} ي`;
+    return new Date(dateStr).toLocaleDateString("ar-EG");
+  }
+  if (diff < 60)     return "Just now";
+  if (diff < 3600)   return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400)  return `${Math.floor(diff / 3600)}h ago`;
   if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
   return new Date(dateStr).toLocaleDateString();
 };
@@ -46,6 +55,24 @@ export default function NotificationDropdown({ variant = "auto" }) {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  useEffect(() => {
+    let unsub = () => {};
+    listenForegroundMessages((payload) => {
+      const { body, title } = payload.notification ?? {};
+      const url = payload.data?.url ?? null;
+      const type = payload.data?.type ?? "LESSON";
+      dispatch(addNotification({
+        id: `fcm-${Date.now()}`,
+        content: body ?? title ?? "",
+        type,
+        url,
+        isSeen: false,
+        createdAt: new Date().toISOString(),
+      }));
+    }).then((fn) => { if (fn) unsub = fn; });
+    return () => unsub();
+  }, [dispatch]);
 
   const toggle = () => {
     setOpen((prev) => {
@@ -194,7 +221,7 @@ export default function NotificationDropdown({ variant = "auto" }) {
                       {notif.content}
                     </p>
                     <p style={{ fontSize: 11, color: isDark ? "rgba(255,255,255,0.38)" : "#94a3b8", margin: "4px 0 0" }}>
-                      {formatTime(notif.createdAt)}
+                      {formatTime(notif.createdAt, isArabic)}
                     </p>
                   </button>
                 ))

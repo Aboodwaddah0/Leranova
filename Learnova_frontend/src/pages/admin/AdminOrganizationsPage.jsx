@@ -4,7 +4,7 @@ import AdminLayout from "../../components/admin/AdminLayout";
 import { setOrganizationFilters, clearAdminState } from "../../redux/slices/adminSlice";
 import { logout } from "../../redux/slices/authSlice";
 import { fetchDashboardMetricsThunk, fetchOrganizationsThunk } from "../../redux/thunks/adminThunks";
-import { updateAdminOrganization } from "../../services/adminService";
+import { updateAdminOrganization, fetchOrganizationDetails } from "../../services/adminService";
 import { useLanguage } from "../../utils/i18n";
 import { notifyError } from "../../lib/notify";
 import Pagination from "../../components/ui/Pagination";
@@ -16,6 +16,7 @@ export default function AdminOrganizationsPage() {
   const { t, isArabic } = useLanguage();
   const { organizations, organizationFilters, loading, error } = useSelector((state) => state.admin);
   const [rejectModal, setRejectModal] = useState({ open: false, orgId: null, reason: "" });
+  const [detailsModal, setDetailsModal] = useState({ open: false, loading: false, organization: null });
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -63,6 +64,21 @@ export default function AdminOrganizationsPage() {
 
   const handleRejectCancel = () => {
     setRejectModal({ open: false, orgId: null, reason: "" });
+  };
+
+  const handleViewDetails = async (organizationId) => {
+    setDetailsModal({ open: true, loading: true, organization: null });
+    try {
+      const organization = await fetchOrganizationDetails(organizationId);
+      setDetailsModal({ open: true, loading: false, organization });
+    } catch (err) {
+      notifyError(err);
+      setDetailsModal({ open: false, loading: false, organization: null });
+    }
+  };
+
+  const handleDetailsClose = () => {
+    setDetailsModal({ open: false, loading: false, organization: null });
   };
 
   const filters = useMemo(() => organizationFilters, [organizationFilters]);
@@ -140,20 +156,23 @@ export default function AdminOrganizationsPage() {
                   <td className="py-3 pr-4 text-slate-600">{organization.Role}</td>
                   <td className="py-3 pr-4 text-slate-600">{new Date(organization.createdAt).toLocaleDateString()}</td>
                   <td className="py-3 pr-4">
-                    {organization.status === "EMAIL_VERIFIED" ? (
-                      <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={() => handleApprove(organization.id)} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white">
-                          {t.admin.organizations.approve}
-                        </button>
-                        <button type="button" onClick={() => handleRejectClick(organization.id)} className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white">
-                          {t.admin.organizations.reject}
-                        </button>
-                      </div>
-                    ) : organization.status === "PENDING" ? (
-                      <span className="text-xs text-slate-400">{t.admin.organizations.awaitingEmailVerification}</span>
-                    ) : (
-                      <span className="text-xs text-slate-400">{t.admin.common.noActions}</span>
-                    )}
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={() => handleViewDetails(organization.id)} className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-indigo-200">
+                        {t.admin.organizations.viewDetails}
+                      </button>
+                      {organization.status === "EMAIL_VERIFIED" ? (
+                        <>
+                          <button type="button" onClick={() => handleApprove(organization.id)} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white">
+                            {t.admin.organizations.approve}
+                          </button>
+                          <button type="button" onClick={() => handleRejectClick(organization.id)} className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white">
+                            {t.admin.organizations.reject}
+                          </button>
+                        </>
+                      ) : organization.status === "PENDING" ? (
+                        <span className="self-center text-xs text-slate-400">{t.admin.organizations.awaitingEmailVerification}</span>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -186,6 +205,47 @@ export default function AdminOrganizationsPage() {
               <button type="button" onClick={handleRejectConfirm}
                 className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">
                 {t.admin.organizations.rejectConfirm}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {detailsModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" dir={isArabic ? "rtl" : "ltr"}>
+          <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-xl">
+            <h3 className="mb-4 text-base font-black text-slate-900">{t.admin.organizations.detailsTitle}</h3>
+
+            {detailsModal.loading ? (
+              <p className="text-sm text-slate-500">{t.common.loading}</p>
+            ) : detailsModal.organization ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[
+                  [t.admin.organizations.name, detailsModal.organization.Name],
+                  [t.admin.organizations.email, detailsModal.organization.Email],
+                  [t.admin.organizations.role, detailsModal.organization.Role],
+                  [t.admin.organizations.status, statusLabel(detailsModal.organization.status)],
+                  [t.admin.organizations.detailsPhone, detailsModal.organization.Phone],
+                  [t.admin.organizations.detailsPhoneNumber, detailsModal.organization.PhoneNumber],
+                  [t.admin.organizations.detailsFounded, detailsModal.organization.Founded ? new Date(detailsModal.organization.Founded).toLocaleDateString() : null],
+                  [t.admin.organizations.detailsAddress, detailsModal.organization.Address],
+                  [t.admin.organizations.detailsDescription, detailsModal.organization.Description],
+                  [t.admin.organizations.detailsRejectionReason, detailsModal.organization.rejectionReason],
+                ].map(([label, value]) => (
+                  <div key={label} className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+                    <p className="text-sm text-slate-700">{value || t.admin.organizations.detailsNotProvided}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">{t.admin.organizations.empty}</p>
+            )}
+
+            <div className="mt-6 flex justify-end">
+              <button type="button" onClick={handleDetailsClose}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300">
+                {t.admin.organizations.detailsClose}
               </button>
             </div>
           </div>

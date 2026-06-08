@@ -1,5 +1,25 @@
 import type { StudentMode } from './auth';
 
+// ── School student extras ─────────────────────────────────────────────────────
+export type StudentAttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
+
+export interface StudentAttendanceRecord {
+  id: number;
+  date: string;
+  status: StudentAttendanceStatus;
+  note?: string | null;
+}
+
+export interface StudentCalendarEvent {
+  id: number;
+  title: string;
+  description?: string | null;
+  startDate: string;
+  endDate: string;
+  type: 'HOLIDAY' | 'EXAM' | 'PTA_MEETING' | 'ACTIVITY' | 'ANNOUNCEMENT' | 'OTHER';
+  isPublished: boolean;
+}
+
 // ── Context ──────────────────────────────────────────────────────────────────
 export interface StudentContext {
   mode: StudentMode;
@@ -41,6 +61,32 @@ export interface Subject {
   name: string;
   description?: string;
   teacher?: { name: string; title?: string } | null;
+}
+
+/** Subject returned by GET /student/academy/tracks/:id/subjects — includes subscription state */
+export interface AcademySubject {
+  id: number;
+  name: string;
+  trackId: number;
+  description?: string | null;
+  imageUrl?: string | null;
+  isPaid: boolean;
+  price: number;
+  isSubscribed: boolean;
+  subscriptionStatus?: string | null;
+  lessonCount: number;
+  level?: string | null;
+  teacher?: { id: number | null; name: string | null } | null;
+}
+
+export interface AcademyTrackData {
+  track: {
+    id: number;
+    name: string;
+    description?: string | null;
+    thumbnail?: string | null;
+  };
+  subjects: AcademySubject[];
 }
 
 export interface LessonAttachment {

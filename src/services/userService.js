@@ -644,6 +644,7 @@ export const getAllUsers = async (orgId, orgRole, filters = {}) => {
         Parent_id: true,
         Course_id: true,
         AcademicStatus: true,
+        DOB: true,
         parent: {
           select: {
             user: {
@@ -683,6 +684,7 @@ export const getAllUsers = async (orgId, orgRole, filters = {}) => {
     password: user.passwordEncrypted ? decryptPassword(user.passwordEncrypted) : null,
     student: user.student || null,
     status: user.student?.AcademicStatus || user.academy_user?.AcademicStatus || null,
+    dob: user.student?.DOB || user.academy_user?.DOB || null,
     academy_user: user.academy_user,
     parentName: user.student?.parent?.user?.name || null,
   }));
@@ -708,6 +710,7 @@ export const updateUser = async (id, data, orgId, orgRole) => {
   if (data.gender !== undefined)  updateData.gender  = data.gender;
   if (data.role !== undefined)    updateData.role    = data.role;
   if (data.address !== undefined) updateData.address = data.address;
+  if (data.phone !== undefined)   updateData.phone   = data.phone || null;
   if (data.password !== undefined && String(data.password).trim() !== '') {
     updateData.passwordHashed = await hashPassword(data.password);
     updateData.passwordEncrypted = encryptPassword(data.password);
@@ -784,12 +787,12 @@ export const generateSampleExcel = (role, orgType) => {
       headers  = ['firstName', 'lastName', 'Role',    'email', 'gender', 'address',         'phone',        'DOB',        'ParentNationalId', 'fatherName'];
       exampleRow = ['John',    'Doe',      'STUDENT', '',      'MALE',   '123 Main Street', '+1234567890', '2010-05-15', '1234567890',        'Ahmed Hassan'];
     } else {
-      headers  = ['firstName', 'lastName', 'Role',    'email', 'gender',  'address',        'phone'];
-      exampleRow = ['Jane',    'Smith',    'STUDENT', '',      'FEMALE',  '456 Oak Avenue', '+1234567890'];
+      headers  = ['firstName', 'lastName', 'Role',    'email', 'gender',  'address',        'phone',         'DOB'];
+      exampleRow = ['Jane',    'Smith',    'STUDENT', '',      'FEMALE',  '456 Oak Avenue', '+1234567890',   '2000-06-20'];
     }
   } else if (normalizedRole === 'TEACHER') {
-    headers  = ['firstName', 'lastName', 'Role',    'email',              'Work',           'Specialization', 'Bio',                      'age', 'gender'];
-    exampleRow = ['Ahmed',   'Hassan',   'TEACHER', 'ahmed@example.com', 'Private School', 'Mathematics',    'Experienced math teacher', 35,    'MALE'];
+    headers  = ['firstName', 'lastName', 'Role',    'email',              'phone',          'Specialization', 'Bio',                      'age', 'gender'];
+    exampleRow = ['Ahmed',   'Hassan',   'TEACHER', 'ahmed@example.com', '+1234567890',    'Mathematics',    'Experienced math teacher', 35,    'MALE'];
   } else if (normalizedRole === 'PARENT') {
     headers  = ['firstName', 'lastName', 'Role',   'email', 'Work'];
     exampleRow = ['Sara',    'Ali',      'PARENT', '',      'Engineer'];

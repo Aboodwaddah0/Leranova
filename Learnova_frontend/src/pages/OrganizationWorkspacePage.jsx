@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { BadgeCheck, Bell, CalendarDays, CalendarRange, BookOpen, Building2, ChevronDown, ChevronRight, Eye, FolderOpen, GraduationCap, Search, UserCircle2, Users, UserCheck, Trash2, Pencil } from "lucide-react";
+import { BadgeCheck, Bell, CalendarDays, CalendarRange, BookOpen, Building2, ChevronDown, ChevronRight, Download, Eye, FolderOpen, GraduationCap, Search, UserCircle2, Users, UserCheck, Trash2, Pencil } from "lucide-react";
 import NotificationDropdown from "../components/shared/NotificationDropdown";
 import { useDispatch, useSelector } from "react-redux";
 import { logout, setAuthSession } from "../redux/slices/authSlice";
@@ -27,6 +27,7 @@ import {
   importUsersFromExcel,
   downloadSampleExcel,
   linkParentToStudents,
+  promoteStudentById,
   removeStudentFromCourse,
   runAnnualPromotion,
   updateCourseSubject,
@@ -59,17 +60,18 @@ import {
   fetchComputedGrades,
   fetchGradeRankings,
 } from "../services/organizationService";
+import api from "../utils/api";
 import { useLanguage, getSubjectLabels } from "../utils/i18n";
 import { notifyError, notifySuccess } from "../lib/notify";
 import { formatGradeName } from "../utils/gradeHelpers";
 import QuantumMeshBackground from "../components/ui/QuantumMeshBackground";
 import Modal from "../components/ui/Modal";
 import Pagination from "../components/ui/Pagination";
-import OrgAIChat from "../components/organization/OrgAIChat";
 import SchoolCalendar from "../components/organization/SchoolCalendar";
 import AttendanceTracker from "../components/organization/AttendanceTracker";
 import OrgOnboardingWizard from "../components/organization/OrgOnboardingWizard";
 import OrgGradesPanel from "../components/organization/OrgGradesPanel";
+import OrgReportsPanel from "../components/organization/OrgReportsPanel";
 import TimetableManager from "../components/organization/TimetableManager";
 import CertificatesManager from "../components/organization/CertificatesManager";
 
@@ -230,6 +232,9 @@ function LessonsViewModal({ open, subject, lessons, loading, isArabic, onClose }
 const DEFAULT_COURSE_THUMBNAIL =
   "https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=600&auto=format&fit=crop&ixlib=rb-4.0.3";
 
+const DEFAULT_CLASS_THUMBNAIL =
+  "https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=600&auto=format&fit=crop";
+
 /* ─── Session selector banner shown above session-scoped tabs ──────────── */
 function SessionBanner({ academicYears, viewingYearId, onSelect, isArabic }) {
   if (!academicYears || academicYears.length === 0) return null;
@@ -320,6 +325,7 @@ const TABS = {
   FINANCE: "finance",
   CALENDAR: "calendar",
   ATTENDANCE: "attendance",
+  REPORTS: "reports",
 };
 
 const AUTO_GRADE_RE = /^Auto-created grade course for level (\d+)$/i;
@@ -366,9 +372,12 @@ const formatSkippedRows = (rows) => {
 
 const normalizeText = (value) => String(value || "").trim().toLowerCase();
 
-const getCourseThumbnailUrl = (thumbnail) => {
+const getCourseThumbnailUrl = (thumbnail, kind) => {
   const value = String(thumbnail || "").trim();
-  return value || DEFAULT_COURSE_THUMBNAIL;
+  if (value) return value;
+  return String(kind || "").toUpperCase() === "CLASS"
+    ? DEFAULT_CLASS_THUMBNAIL
+    : DEFAULT_COURSE_THUMBNAIL;
 };
 
 const includesQuery = (fields, query) => {
@@ -588,7 +597,10 @@ export default function OrganizationWorkspacePage() {
     lastName: "",
     email: "",
     password: "",
+    phone: "",
     specialization: "",
+    age: "",
+    gender: "",
     bio: "",
   });
   const [teacherEmailAuto, setTeacherEmailAuto] = useState(false);
@@ -663,6 +675,7 @@ export default function OrganizationWorkspacePage() {
   const [courseSearch, setCourseSearch] = useState("");
   const [courseTrack, setCourseTrack] = useState("ALL");
   const [coursePrice, setCoursePrice] = useState("ALL");
+  const [subjectPrice, setSubjectPrice] = useState("ALL");
   const [subjectSearch, setSubjectSearch] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
   const [studentStatus, setStudentStatus] = useState("ALL");
@@ -687,7 +700,6 @@ export default function OrganizationWorkspacePage() {
     ],
     maxFailedSubjects: 0,
     allowConditionalPromotion: false,
-    conditionalMaxFailed: 1,
     requiredSubjectIds: [],
   });
   const [schoolSettingsModalOpen, setSchoolSettingsModalOpen] = useState(false);
@@ -698,6 +710,7 @@ export default function OrganizationWorkspacePage() {
   const [certGradeFilter, setCertGradeFilter] = useState('');
   // ── Promote Students page ──────────────────────────────────────────────────
   const [showPromotePage, setShowPromotePage] = useState(false);
+  const [showPromotionResultsPage, setShowPromotionResultsPage] = useState(false);
   const [promoteSrcYearId, setPromoteSrcYearId] = useState('');
   const [promoteTgtYearId, setPromoteTgtYearId] = useState('');
   const [promotionRunning, setPromotionRunning] = useState(false);
@@ -705,6 +718,9 @@ export default function OrganizationWorkspacePage() {
   const [promotionFilter, setPromotionFilter]   = useState('ALL');
   const [promotionSearch, setPromotionSearch]   = useState('');
   const [expandedStudents, setExpandedStudents] = useState(new Set());
+  const [singlePromoteId, setSinglePromoteId]           = useState('');
+  const [singlePromoteRunning, setSinglePromoteRunning] = useState(false);
+  const [singlePromoteResult, setSinglePromoteResult]   = useState(null);
 
   // ── Marks tab state ────────────────────────────────────────────────────────
   const [orgMarks, setOrgMarks] = useState([]);
@@ -747,6 +763,8 @@ export default function OrganizationWorkspacePage() {
   const [lessonsModalLoading, setLessonsModalLoading] = useState(false);
   const [studentModalOpen, setStudentModalOpen] = useState(false);
   const [parentModalOpen, setParentModalOpen] = useState(false);
+  const [childrenModalParent, setChildrenModalParent] = useState(null);
+  const [studentDetailModal, setStudentDetailModal] = useState(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   const studentUsers = useMemo(
@@ -781,6 +799,9 @@ export default function OrganizationWorkspacePage() {
       list.push({
         id: Number(student?.id),
         name: student?.name || "-",
+        registrationNumber: student?.registrationNumber || "-",
+        status: student?.status || "-",
+        email: student?.email || "-",
       });
       map.set(parentId, list);
     }
@@ -880,9 +901,13 @@ export default function OrganizationWorkspacePage() {
         gradeLabel,
       ], subjectSearch);
 
-      return matchesTeacher && matchesSearch;
+      const matchesPrice = !isAcademy || subjectPrice === "ALL"
+        || (subjectPrice === "PAID" && subject?.isPaid)
+        || (subjectPrice === "FREE" && !subject?.isPaid);
+
+      return matchesTeacher && matchesSearch && matchesPrice;
     });
-  }, [currentSubjects, subjectSearch, selectedTeacherId, isArabic, isSchool]);
+  }, [currentSubjects, subjectSearch, selectedTeacherId, subjectPrice, isArabic, isSchool, isAcademy]);
 
   const sortedSubjectCourses = useMemo(() => {
     const list = Array.isArray(courses) ? [...courses] : [];
@@ -1022,10 +1047,10 @@ export default function OrganizationWorkspacePage() {
           { key: "students", label: isArabic ? "تسجيل الطلاب"           : "Enroll Students",         done: overviewStats.totalStudents > 0, Icon: UserCheck,      tab: TABS.STUDENTS, wizard: false },
         ]
       : [
-          { key: "teachers", label: isArabic ? "إضافة معلمين"            : "Add Teachers",           done: teachers.length > 0,             Icon: Users,          tab: TABS.TEACHERS, wizard: false },
-          { key: "courses",  label: isArabic ? "إنشاء كورسات"            : "Create Courses",          done: courses.length > 0,              Icon: GraduationCap,  tab: TABS.COURSES,  wizard: false },
-          { key: "subjects", label: isArabic ? "إضافة مواد دراسية"       : "Add Subjects",           done: overviewStats.totalSubjects > 0, Icon: BookOpen,       tab: "subjects",    wizard: false },
-          { key: "students", label: isArabic ? "تسجيل الطلاب"           : "Enroll Students",         done: overviewStats.totalStudents > 0, Icon: UserCheck,      tab: TABS.STUDENTS, wizard: false },
+          { key: "teachers", label: isArabic ? "إضافة معلم"              : "Add Teacher",             done: teachers.length > 0,             Icon: Users,          tab: TABS.TEACHERS, wizard: false },
+          { key: "courses",  label: isArabic ? "إضافة تخصصات"           : "Add Specializations",     done: courses.length > 0,              Icon: GraduationCap,  tab: TABS.COURSES,  wizard: false },
+          { key: "subjects", label: isArabic ? "إضافة كورسات"            : "Add Courses",             done: overviewStats.totalSubjects > 0, Icon: BookOpen,       tab: "subjects",    wizard: false },
+          { key: "students", label: isArabic ? "تسجيل الطلاب"            : "Enroll Students",         done: overviewStats.totalStudents > 0, Icon: UserCheck,      tab: TABS.STUDENTS, wizard: false },
         ];
     const completedCount = steps.filter((s) => s.done).length;
     return { steps, completedCount, allDone: completedCount === steps.length };
@@ -1121,7 +1146,6 @@ export default function OrganizationWorkspacePage() {
             classRanges: Array.isArray(settings.classRanges) ? settings.classRanges : [],
             maxFailedSubjects: Number(settings.maxFailedSubjects ?? 0),
             allowConditionalPromotion: Boolean(settings.allowConditionalPromotion),
-            conditionalMaxFailed: Number(settings.conditionalMaxFailed ?? 1),
             requiredSubjectIds: Array.isArray(settings.requiredSubjectIds) ? settings.requiredSubjectIds : [],
           });
         }
@@ -1214,7 +1238,7 @@ export default function OrganizationWorkspacePage() {
       return [];
     }
 
-    if (!force && subjectsByCourse[courseId]) {
+    if (!force && subjectsByCourse[courseId] !== undefined) {
       return subjectsByCourse[courseId];
     }
 
@@ -1229,9 +1253,18 @@ export default function OrganizationWorkspacePage() {
   };
 
   useEffect(() => {
-    loadSubjectsForCourse(selectedCourseId);
+    // Force-reload whenever selectedCourseId changes so stale cache never hides courses
+    loadSubjectsForCourse(selectedCourseId, { force: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCourseId]);
+
+  // Also force-reload when the user navigates back to the Courses tab
+  useEffect(() => {
+    if (activeTab === "subjects" && selectedCourseId) {
+      loadSubjectsForCourse(selectedCourseId, { force: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== "subjects" || subjectsFilterInitialized || sortedSubjectCourses.length === 0) {
@@ -1343,7 +1376,7 @@ export default function OrganizationWorkspacePage() {
     [firstName, lastName].filter(Boolean).join(" ").trim();
 
   const resetTeacherForm = () => {
-    setTeacherForm({ id: null, firstName: "", lastName: "", email: "", password: "", specialization: "", bio: "" });
+    setTeacherForm({ id: null, firstName: "", lastName: "", email: "", password: "", phone: "", specialization: "", age: "", gender: "", bio: "" });
     setTeacherEmailAuto(false);
   };
 
@@ -1514,10 +1547,15 @@ export default function OrganizationWorkspacePage() {
 
     const teacherFullName = combineName(teacherForm.firstName, teacherForm.lastName);
     await handleAction(async () => {
+      const teacherAge    = teacherForm.age    ? Number(teacherForm.age)  : undefined;
+      const teacherGender = teacherForm.gender || undefined;
       if (teacherForm.id) {
         await updateOrganizationTeacher(teacherForm.id, {
           name: teacherFullName,
+          phone: teacherForm.phone || undefined,
           specialization: teacherForm.specialization || undefined,
+          age: teacherAge,
+          gender: teacherGender,
           bio: teacherForm.bio || undefined,
         });
         const next = await fetchOrganizationTeachers();
@@ -1528,6 +1566,9 @@ export default function OrganizationWorkspacePage() {
         const generated = await createOrganizationUserWithGeneratedCredentials({
           name: teacherFullName,
           role: "TEACHER",
+          phone: teacherForm.phone || undefined,
+          age: teacherAge,
+          gender: teacherGender,
           specialization: teacherForm.specialization || undefined,
           bio: teacherForm.bio || undefined,
         });
@@ -1551,6 +1592,9 @@ export default function OrganizationWorkspacePage() {
         const created = await createOrganizationTeacher({
           name: teacherFullName,
           email: teacherForm.email,
+          phone: teacherForm.phone || undefined,
+          age: teacherAge,
+          gender: teacherGender,
           specialization: teacherForm.specialization || undefined,
           bio: teacherForm.bio || undefined,
         });
@@ -1677,8 +1721,8 @@ export default function OrganizationWorkspacePage() {
       if (subjectImageFile) {
         const fd = new FormData();
         fd.append("image", subjectImageFile);
-        const res = await fetch(`/api/courses/${selectedCourseId}/subjects/upload-image`, { method: "POST", body: fd, headers: { Authorization: `Bearer ${localStorage.getItem("learnova_token")}` } });
-        if (res.ok) { const json = await res.json(); imageUrl = json?.data?.imageUrl || imageUrl; }
+        const uploadRes = await api.post(`/courses/${selectedCourseId}/subjects/upload-image`, fd);
+        imageUrl = uploadRes?.data?.data?.imageUrl || uploadRes?.data?.imageUrl || imageUrl;
       }
 
       const payload = {
@@ -2000,6 +2044,9 @@ export default function OrganizationWorkspacePage() {
       const nextUsers = await fetchOrganizationUsers();
       setUsers(nextUsers);
 
+      setStudentModalOpen(false);
+      resetStudentForm();
+
       if (skippedRows.length > 0) {
         setError(`Some rows were skipped (${skippedRows.length}): ${formatSkippedRows(skippedRows)}`);
       }
@@ -2037,6 +2084,9 @@ export default function OrganizationWorkspacePage() {
       setTeachers(nextTeachers);
       setUsers(nextUsers);
 
+      setTeacherModalOpen(false);
+      resetTeacherForm();
+
       if (skippedRows.length > 0) {
         setError(`Some rows were skipped (${skippedRows.length}): ${formatSkippedRows(skippedRows)}`);
       }
@@ -2054,6 +2104,87 @@ export default function OrganizationWorkspacePage() {
     }, t.organization.messages.teacherImportDone);
 
     event.target.value = "";
+  };
+
+  const handleDownloadPromotionPdf = async (result, ctx) => {
+    if (!result) return;
+    try {
+      const html2pdf = (await import("html2pdf.js")).default;
+      const { allRecords, failedRecords, sortedGroups, passRate, avgScore } = ctx;
+      const DECISION_LABEL = {
+        PROMOTED: 'Promoted', CONDITIONAL: 'Conditional', GRADUATED: 'Graduated', REPEATED: 'Repeated', PENDING: 'Pending',
+      };
+
+      const studentRowHtml = (r) => `
+        <tr>
+          <td style="border:1px solid #ccc;padding:5px 10px;font-size:11px;">${r.studentName || `#${r.studentId}`}${r.registrationNumber ? ` (${r.registrationNumber})` : ''}</td>
+          <td style="border:1px solid #ccc;padding:5px 10px;font-size:11px;text-align:center;">${r.fromGradeLevel ?? '—'} → ${r.toGradeLevel ?? '—'}</td>
+          <td style="border:1px solid #ccc;padding:5px 10px;font-size:11px;text-align:center;">${r.finalPercentage ?? 0}%</td>
+          <td style="border:1px solid #ccc;padding:5px 10px;font-size:11px;text-align:center;">${DECISION_LABEL[r.decision] || r.decision || '—'}</td>
+        </tr>`;
+
+      const groupTablesHtml = sortedGroups.map(([gradeLevel, records]) => `
+        <h3 style="margin:18px 0 6px;font-size:14px;">Grade ${gradeLevel} (${records.length})</h3>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
+          <thead><tr>
+            <th style="border:1px solid #333;padding:6px 10px;background:#f0f0f0;text-align:left;font-size:11px;text-transform:uppercase;">Student</th>
+            <th style="border:1px solid #333;padding:6px 10px;background:#f0f0f0;text-align:center;font-size:11px;text-transform:uppercase;">Grade Change</th>
+            <th style="border:1px solid #333;padding:6px 10px;background:#f0f0f0;text-align:center;font-size:11px;text-transform:uppercase;">Score</th>
+            <th style="border:1px solid #333;padding:6px 10px;background:#f0f0f0;text-align:center;font-size:11px;text-transform:uppercase;">Decision</th>
+          </tr></thead>
+          <tbody>${records.map(studentRowHtml).join('')}</tbody>
+        </table>`).join('');
+
+      const failedTableHtml = failedRecords.length === 0 ? '' : `
+        <h3 style="margin:22px 0 6px;font-size:14px;">Failed / Repeated Students (${failedRecords.length})</h3>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr>
+            <th style="border:1px solid #333;padding:6px 10px;background:#f0f0f0;text-align:left;font-size:11px;text-transform:uppercase;">Student</th>
+            <th style="border:1px solid #333;padding:6px 10px;background:#f0f0f0;text-align:center;font-size:11px;text-transform:uppercase;">Grade</th>
+            <th style="border:1px solid #333;padding:6px 10px;background:#f0f0f0;text-align:center;font-size:11px;text-transform:uppercase;">Score</th>
+            <th style="border:1px solid #333;padding:6px 10px;background:#f0f0f0;text-align:left;font-size:11px;text-transform:uppercase;">Reason</th>
+          </tr></thead>
+          <tbody>${failedRecords.map(r => `
+            <tr>
+              <td style="border:1px solid #ccc;padding:5px 10px;font-size:11px;">${r.studentName || `#${r.studentId}`}${r.registrationNumber ? ` (${r.registrationNumber})` : ''}</td>
+              <td style="border:1px solid #ccc;padding:5px 10px;font-size:11px;text-align:center;">${r.fromGradeLevel ?? '—'}</td>
+              <td style="border:1px solid #ccc;padding:5px 10px;font-size:11px;text-align:center;">${r.finalPercentage ?? 0}%</td>
+              <td style="border:1px solid #ccc;padding:5px 10px;font-size:11px;">${r.reason || '—'}</td>
+            </tr>`).join('')}</tbody>
+        </table>`;
+
+      const summary = result.summary || {};
+      const html = `
+        <div style="font-family:Arial,Helvetica,sans-serif;color:#111;padding:20px;">
+          <h2 style="margin:0 0 4px;font-size:18px;">Promotion Summary — School Year ${result.schoolYear ?? ''}</h2>
+          <p style="margin:0 0 16px;font-size:11px;color:#555;">Generated: ${new Date().toLocaleString()}</p>
+          <p style="margin:0 0 16px;font-size:12px;">
+            Total: ${allRecords.length} &nbsp;|&nbsp;
+            Promoted: ${summary.promoted ?? 0} &nbsp;|&nbsp;
+            Conditional: ${summary.conditional ?? 0} &nbsp;|&nbsp;
+            Graduated: ${summary.graduated ?? 0} &nbsp;|&nbsp;
+            Repeated: ${summary.repeated ?? 0} &nbsp;|&nbsp;
+            Pending: ${summary.pending ?? 0} &nbsp;|&nbsp;
+            Pass rate: ${passRate}% &nbsp;|&nbsp;
+            Avg score: ${avgScore}%
+          </p>
+          ${groupTablesHtml}
+          ${failedTableHtml}
+        </div>`;
+
+      html2pdf()
+        .set({
+          margin: [10, 10, 10, 10],
+          filename: `promotion-summary-${result.schoolYear ?? 'results'}.pdf`,
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+          pagebreak: { mode: ["css", "legacy"] },
+        })
+        .from(html)
+        .save();
+    } catch {
+      notifyError(isArabic ? "فشل تحميل ملخص الترفيع" : "Failed to download promotion summary");
+    }
   };
 
   const handleDownloadSample = async (role) => {
@@ -2077,6 +2208,8 @@ export default function OrganizationWorkspacePage() {
         passThresholdPercentage: Number(schoolForm.passThresholdPercentage),
         minSubjectPassPercentage: Number(schoolForm.minSubjectPassPercentage),
         requireAllSubjectsPass: Boolean(schoolForm.requireAllSubjectsPass),
+        maxFailedSubjects: Number(schoolForm.maxFailedSubjects),
+        allowConditionalPromotion: Boolean(schoolForm.allowConditionalPromotion),
         classRanges: schoolForm.classRanges,
       };
 
@@ -2336,6 +2469,8 @@ export default function OrganizationWorkspacePage() {
     if (isAcademy) {
       baseTabs.push({ id: TABS.FINANCE, label: isArabic ? "الإيرادات" : "Finance" });
     }
+
+    baseTabs.push({ id: TABS.REPORTS, label: isArabic ? "التقارير" : "Reports" });
 
     return baseTabs;
   }, [isSchool, isAcademy, isArabic, t.organization.tabs, sl]);
@@ -2946,7 +3081,16 @@ export default function OrganizationWorkspacePage() {
                   <input name="lastName" value={teacherForm.lastName} onChange={setField(setTeacherForm)} placeholder={isArabic ? "اسم العائلة" : "Last Name"} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
                 </div>
                 <input name="email" value={teacherForm.email} onChange={setField(setTeacherForm)} placeholder={t.organization.teachers.email} className="h-11 w-full rounded-xl border border-slate-200 px-3" required={!teacherForm.id} />
-                <input name="specialization" value={teacherForm.specialization} onChange={setField(setTeacherForm)} placeholder={isSchool ? (isArabic ? "الصف الذي يدرّسه" : "Class e.g. Class 4") : t.organization.teachers.specialization} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
+                <input name="phone" value={teacherForm.phone} onChange={setField(setTeacherForm)} placeholder={isArabic ? "رقم الهاتف" : "Phone Number"} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
+                <input name="specialization" value={teacherForm.specialization} onChange={setField(setTeacherForm)} placeholder={isArabic ? "التخصص" : "Specialization"} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
+                <div className="grid grid-cols-2 gap-3">
+                  <input name="age" type="number" min="18" value={teacherForm.age} onChange={setField(setTeacherForm)} placeholder={isArabic ? "العمر" : "Age"} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
+                  <select name="gender" value={teacherForm.gender} onChange={setField(setTeacherForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3">
+                    <option value="">{isArabic ? "الجنس" : "Gender"}</option>
+                    <option value="MALE">{isArabic ? "ذكر" : "Male"}</option>
+                    <option value="FEMALE">{isArabic ? "أنثى" : "Female"}</option>
+                  </select>
+                </div>
                 <textarea name="bio" value={teacherForm.bio} onChange={setField(setTeacherForm)} placeholder={t.organization.teachers.bio} className="min-h-20 w-full rounded-xl border border-slate-200 px-3 py-2" />
                 <div className="flex gap-2 pt-1">
                   <button type="submit" disabled={actionLoading} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">{t.organization.common.save}</button>
@@ -2991,7 +3135,7 @@ export default function OrganizationWorkspacePage() {
                 </label>
 
                 <select value={teacherTrack} onChange={(event) => setTeacherTrack(event.target.value)} className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">
-                  <option value="ALL">{isArabic ? (isSchool ? "كل الصفوف" : "كل التخصصات") : (isSchool ? "All Classes" : "All Specializations")}</option>
+                  <option value="ALL">{isArabic ? "كل التخصصات" : "All Specializations"}</option>
                   {teacherTrackOptions.map((track) => (
                     <option key={track} value={track}>{track}</option>
                   ))}
@@ -3021,24 +3165,21 @@ export default function OrganizationWorkspacePage() {
                       <th className="px-5 py-3">{isArabic ? "المدرس" : "Teacher"}</th>
                       <th className="px-5 py-3">{isArabic ? "رقم المعرف" : "ID"}</th>
                       <th className="px-5 py-3">{isArabic ? "البريد الإلكتروني" : "Email"}</th>
-                      <th className="px-5 py-3">{isArabic ? (isSchool ? "الصف" : "التخصص") : (isSchool ? "Class" : "Specialization")}</th>
-                      <th className="px-5 py-3 text-center">{isArabic ? "المواد" : "Courses"}</th>
-                      <th className="px-5 py-3 text-center">{isArabic ? "الطلاب" : "Students"}</th>
+                      <th className="px-5 py-3">{isArabic ? "الهاتف" : "Phone"}</th>
+                      <th className="px-5 py-3">{isArabic ? "التخصص" : "Specialization"}</th>
                       <th className="px-5 py-3">{t.organization.common.actions}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {filteredTeachers.length === 0 ? (
                       <tr>
-                        <td colSpan="7" className="px-5 py-10 text-center text-slate-400">{t.organization.common.empty}</td>
+                        <td colSpan="6" className="px-5 py-10 text-center text-slate-400">{t.organization.common.empty}</td>
                       </tr>
                     ) : pagedTeachers.map((teacher) => {
                       const initials = String(teacher?.user?.name || teacher?.name || "T")
                         .trim().split(/\s+/).filter(Boolean).slice(0, 2)
                         .map((p) => p[0]?.toUpperCase()).join("") || "T";
                       const specialization = teacher?.specialization || "-";
-                      const courseCount = Number(teacher?.subjectCount || teacher?.coursesCount || teacher?.courseCount || 0);
-                      const studentCount = Number(teacher?.studentsCount || teacher?.studentCount || 0);
 
                       return (
                         <tr key={teacher.id} className="hover:bg-slate-50/60">
@@ -3052,16 +3193,15 @@ export default function OrganizationWorkspacePage() {
                           </td>
                           <td className="px-5 py-3 font-mono text-xs font-bold text-emerald-700">{teacher?.user?.registrationNumber || "-"}</td>
                           <td className="px-5 py-3 text-slate-500">{teacher?.user?.email || "-"}</td>
+                          <td className="px-5 py-3 text-slate-500">{teacher?.phone || teacher?.user?.phone || "-"}</td>
                           <td className="px-5 py-3">
                             <span className="inline-flex rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700">{specialization}</span>
                           </td>
-                          <td className="px-5 py-3 text-center font-black text-purple-600">{courseCount}</td>
-                          <td className="px-5 py-3 text-center font-black text-purple-600">{studentCount}</td>
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() => { const { firstName, lastName } = splitName(teacher?.user?.name); setTeacherForm({ id: teacher.id, firstName, lastName, email: teacher?.user?.email || "", password: "", specialization: teacher?.specialization || "", bio: teacher?.bio || "" }); setTeacherModalOpen(true); }}
+                                onClick={() => { const { firstName, lastName } = splitName(teacher?.user?.name); setTeacherForm({ id: teacher.id, firstName, lastName, email: teacher?.user?.email || "", password: "", phone: teacher?.phone || teacher?.user?.phone || "", specialization: teacher?.specialization || "", age: teacher?.user?.age || "", gender: teacher?.user?.gender || "", bio: teacher?.bio || "" }); setTeacherModalOpen(true); }}
                                 className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
                                 title={t.organization.common.edit}
                               >
@@ -3098,6 +3238,7 @@ export default function OrganizationWorkspacePage() {
                 <Pagination page={teacherPage} totalPages={Math.ceil(filteredTeachers.length / TEACHER_PAGE_SIZE)} totalItems={filteredTeachers.length} pageSize={TEACHER_PAGE_SIZE} onPageChange={setTeacherPage} isArabic={isArabic} />
               </div>
             </article>
+
           </section>
         )}
 
@@ -3201,17 +3342,9 @@ export default function OrganizationWorkspacePage() {
                   ))}
                 </select>
 
-                {!isSchool && (
-                  <select value={coursePrice} onChange={(event) => setCoursePrice(event.target.value)} className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">
-                    <option value="ALL">{isArabic ? "كل الأسعار" : "All Prices"}</option>
-                    <option value="FREE">{isArabic ? "مجاني" : "Free"}</option>
-                    <option value="PAID">{isArabic ? "مدفوع" : "Paid"}</option>
-                  </select>
-                )}
-
                 <button
                   type="button"
-                  onClick={() => { setCourseSearch(""); setCourseTrack("ALL"); setCoursePrice("ALL"); }}
+                  onClick={() => { setCourseSearch(""); setCourseTrack("ALL"); }}
                   className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   {isArabic ? "مسح" : "Clear"}
@@ -3224,9 +3357,7 @@ export default function OrganizationWorkspacePage() {
                   <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center text-sm text-slate-500 md:col-span-2 xl:col-span-3">
                     {t.organization.common.empty}
                   </div>
-                ) : filteredCourses.map((course, index) => {
-                  const accentClasses = ["from-cyan-500 to-blue-600", "from-violet-500 to-fuchsia-600", "from-amber-500 to-orange-500", "from-emerald-500 to-teal-500"];
-                  const accent = accentClasses[index % accentClasses.length];
+                ) : filteredCourses.map((course) => {
                   const trackLabel = formatGradeName(course, isSchool, isArabic) || course.Name || course.name || "-";
                   const priceLabel = course?.isPaid ? (isArabic ? "مدفوع" : "Paid") : (isArabic ? "مجاني" : "Free");
                   const courseLevel = course?.level || null;
@@ -3243,48 +3374,53 @@ export default function OrganizationWorkspacePage() {
                   })();
 
                   return (
-                    <article key={course.id} className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-                      <div className={`flex h-44 items-center justify-center bg-gradient-to-br ${accent} p-6`}>
+                    <article key={course.id} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
+                      {/* Thumbnail */}
+                      <div className="relative h-44 overflow-hidden bg-slate-100">
                         <img
-                          src={getCourseThumbnailUrl(course.Thumbnail)}
+                          src={getCourseThumbnailUrl(course.Thumbnail, course.kind)}
                           alt={course.Name || (isArabic ? 'صورة الكورس' : 'Course image')}
                           onError={(event) => {
-                            event.currentTarget.src = DEFAULT_COURSE_THUMBNAIL;
+                            event.currentTarget.src = getCourseThumbnailUrl("", course.kind);
                           }}
-                          className="h-full w-full rounded-[20px] object-cover shadow-lg shadow-black/10"
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                         />
+                        {levelInfo && (
+                          <span className={`absolute left-3 top-3 rounded-full px-2.5 py-0.5 text-xs font-bold shadow-sm ${levelInfo.cls}`}>
+                            {isArabic ? levelInfo.ar : levelInfo.en}
+                          </span>
+                        )}
                       </div>
+
+                      {/* Body */}
                       <div className="p-5">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <h3 className="truncate text-lg font-black text-slate-900">{trackLabel}</h3>
-                            {teacherName && (
-                              <p className="mt-1 text-sm text-slate-500">{teacherName}</p>
-                            )}
-                          </div>
-                        </div>
+                        <h3 className="truncate text-base font-bold text-slate-900">{trackLabel}</h3>
+                        {teacherName && (
+                          <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                            <UserCircle2 size={13} className="shrink-0" />
+                            {teacherName}
+                          </p>
+                        )}
+                        <p className="mt-2.5 line-clamp-2 text-sm leading-relaxed text-slate-500">
+                          {translateCourseDescription(course.Description, isArabic) || (isArabic ? "لا يوجد وصف" : "No description")}
+                        </p>
 
-                        <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">{translateCourseDescription(course.Description, isArabic) || (isArabic ? "لا يوجد وصف" : "No description")}</p>
-
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">{trackLabel}</span>
-                        </div>
-
-                        <div className="mt-5 flex items-center justify-end border-t border-slate-200 pt-4">
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => enterCourse(course)}
-                              className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100"
-                              title={isArabic ? "فتح الكورس" : "Open course"}
-                            >
-                              <FolderOpen size={13} />
-                              {isArabic ? "فتح" : "Open"}
-                            </button>
+                        {/* Footer */}
+                        <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
+                          <button
+                            type="button"
+                            onClick={() => enterCourse(course)}
+                            className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white transition hover:bg-slate-700"
+                            title={isArabic ? "فتح الكورس" : "Open course"}
+                          >
+                            <FolderOpen size={13} />
+                            {isArabic ? "فتح" : "Open"}
+                          </button>
+                          <div className="flex items-center gap-1">
                             <button
                               type="button"
                               onClick={() => openCourseEditor(course)}
-                              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+                              className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                               title={t.organization.common.edit}
                             >
                               <Pencil size={14} />
@@ -3311,7 +3447,7 @@ export default function OrganizationWorkspacePage() {
                                   }, t.organization.messages.courseDeleted);
                                 },
                               })}
-                              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-rose-50 hover:text-rose-700"
+                              className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
                               title={t.organization.common.delete}
                             >
                               <Trash2 size={14} />
@@ -3363,7 +3499,7 @@ export default function OrganizationWorkspacePage() {
                               <td className="px-4 py-3 text-sm font-semibold text-slate-600">{idx + 1}</td>
                               <td className="px-4 py-3 text-sm font-semibold text-slate-900">{subject.name}</td>
                               <td className="px-4 py-3 text-sm text-slate-700">{subject?.teacher?.user?.name || "-"}</td>
-                              <td className="px-4 py-3 text-sm text-slate-600 line-clamp-2">{subject.Description || "-"}</td>
+                              <td className="px-4 py-3 max-w-xs"><p className="line-clamp-2 text-sm text-slate-600">{subject.Description || "-"}</p></td>
                               <td className="px-4 py-3 text-center">
                                 <div className="flex items-center justify-center gap-2">
                                   <button type="button" onClick={() => enterSubject(subject)} className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100">
@@ -3489,7 +3625,7 @@ export default function OrganizationWorkspacePage() {
                 <div className="rounded-[20px] border border-slate-200 bg-gradient-to-br from-green-50 to-white p-5">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "المسار الحالي" : "Current Track"}</p>
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{isSchool ? (isArabic ? "الصف الحالي" : "Current Class") : (isArabic ? "التخصص الحالي" : "Current Specialization")}</p>
                       <p className="mt-2 text-lg font-black text-slate-900 line-clamp-1">{selectedCourseId ? (formatGradeName(courses.find((c) => c.id === selectedCourseId), isSchool, isArabic) || "-") : "-"}</p>
                     </div>
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-xl">🎓</div>
@@ -3502,16 +3638,21 @@ export default function OrganizationWorkspacePage() {
               <form onSubmit={saveSubject} className="space-y-3">
                 <p className="text-xs text-slate-500">{isSchool ? sl.gradeHint : sl.courseHint}</p>
                 <div className="mt-4 space-y-3">
-                  <select value={selectedCourseId || ""} onChange={(event) => handleSubjectsCourseChange(Number(event.target.value) || null)} className="h-11 w-full rounded-xl border border-slate-200 px-3">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                      {isSchool ? (isArabic ? "الصف" : "Class") : (isArabic ? "التخصص" : "Specialization")}
+                    </label>
+                    <select value={selectedCourseId || ""} onChange={(event) => handleSubjectsCourseChange(Number(event.target.value) || null)} className="h-11 w-full rounded-xl border border-slate-200 px-3">
                      <option value="">
                        {isSchool ? sl.selectGradeFirst : sl.selectCourseFirst}
                      </option>
                      {sortedSubjectCourses.map((course) => (
                        <option key={course.id} value={course.id}>{formatGradeName(course, isSchool, isArabic) || course.Name}</option>
                      ))}
-                  </select>
+                    </select>
+                  </div>
                   <input name="name" value={subjectForm.name} onChange={setField(setSubjectForm)} placeholder={sl.name} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
-                  <textarea name="Description" value={subjectForm.Description} onChange={setField(setSubjectForm)} placeholder={sl.description} className="min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2" />
+                  <textarea name="Description" value={subjectForm.Description} onChange={setField(setSubjectForm)} placeholder={sl.description} rows={4} className="w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-sm leading-6 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200" style={{ minHeight: "100px" }} />
                   <select name="Teacher_id" value={subjectForm.Teacher_id} onChange={setField(setSubjectForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3">
                     <option value="">{isArabic ? "اختر المدرس (اختياري)" : "Select teacher (optional)"}</option>
                     {teacherOptions.map((option) => (
@@ -3641,7 +3782,7 @@ export default function OrganizationWorkspacePage() {
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
                 <div>
                   <h2 className="text-2xl font-black text-slate-900">{sl.managementTitle}</h2>
-                  <p className="mt-1 text-sm text-slate-600">{isArabic ? `إدارة ${sl.plural} حسب المسار والمدرس` : `Manage all ${sl.plural.toLowerCase()} across your tracks & grades`}</p>
+                  <p className="mt-1 text-sm text-slate-600">{isArabic ? `إدارة ${sl.plural} حسب التخصص والمدرس` : `Manage all ${sl.plural.toLowerCase()} across your specializations`}</p>
                 </div>
                 <button type="button" onClick={() => { resetSubjectForm(); setSubjectModalOpen(true); }} className="rounded-full bg-purple-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-purple-700">
                   {sl.addNewBtn}
@@ -3651,7 +3792,7 @@ export default function OrganizationWorkspacePage() {
               <div className="mt-6 space-y-4">
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="flex-1 min-w-[200px]">
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "اختر الصف/المسار" : "Select Track"}</label>
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "اختر التخصص" : "Select Specialization"}</label>
                     <select
                       value={selectedCourseId || ""}
                       onChange={(event) => handleSubjectsCourseChange(Number(event.target.value) || null)}
@@ -3676,21 +3817,32 @@ export default function OrganizationWorkspacePage() {
                   </div>
 
                   <div className="flex-1 min-w-[240px]">
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "بحث" : "Search Subjects"}</label>
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "بحث" : "Search Courses"}</label>
                     <div className="flex items-center gap-2 rounded-[14px] border border-slate-300 bg-white px-4">
                       <Search size={16} className="text-slate-400" />
                       <input
                         value={subjectSearch}
                         onChange={(e) => setSubjectSearch(e.target.value)}
-                        placeholder={isArabic ? "ابحث عن مادة أو معلم" : "Name, teacher, course..."}
+                        placeholder={isArabic ? "ابحث عن كورس أو معلم" : "Name, teacher, specialization..."}
                         className="w-full bg-transparent py-3 text-sm outline-none"
                       />
                     </div>
                   </div>
 
+                  {isAcademy && (
+                    <div>
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">{isArabic ? "السعر" : "Price"}</label>
+                      <select value={subjectPrice} onChange={(e) => setSubjectPrice(e.target.value)} className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">
+                        <option value="ALL">{isArabic ? "كل الأسعار" : "All Prices"}</option>
+                        <option value="FREE">{isArabic ? "مجاني" : "Free"}</option>
+                        <option value="PAID">{isArabic ? "مدفوع" : "Paid"}</option>
+                      </select>
+                    </div>
+                  )}
+
                   <button
                     type="button"
-                    onClick={() => { setSelectedTeacherId(""); setSubjectSearch(""); }}
+                    onClick={() => { setSelectedTeacherId(""); setSubjectSearch(""); setSubjectPrice("ALL"); }}
                     className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                   >
                     {isArabic ? "مسح" : "Clear"}
@@ -3711,7 +3863,7 @@ export default function OrganizationWorkspacePage() {
                       <tr className="border-b border-slate-200">
                         <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">#</th>
                         <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{sl.columnName}</th>
-                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "الصف/المسار" : "Track"}</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isSchool ? (isArabic ? "الصف" : "Class") : (isArabic ? "التخصص" : "Specialization")}</th>
                         <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "المدرس" : "Teacher"}</th>
                         <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "الوصف" : "Description"}</th>
                         {isAcademy && <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">{isArabic ? "المستوى" : "Level"}</th>}
@@ -3729,7 +3881,7 @@ export default function OrganizationWorkspacePage() {
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm text-slate-700">{subject?.teacher?.user?.name || "-"}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600 line-clamp-2">{subject.Description || "-"}</td>
+                          <td className="px-4 py-3 max-w-xs"><p className="line-clamp-2 text-sm text-slate-600">{subject.Description || "-"}</p></td>
                           {isAcademy && (
                             <td className="px-4 py-3">
                               {subject.level ? (
@@ -3809,13 +3961,13 @@ export default function OrganizationWorkspacePage() {
           </section>
         )}
 
-        {!loading && activeTab === TABS.STUDENTS && showPromotePage && (
+        {!loading && activeTab === TABS.STUDENTS && showPromotePage && !showPromotionResultsPage && (
           <section className="space-y-5">
             {/* ── Promote Students page ─────────────────────────────────── */}
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => { setShowPromotePage(false); setPromotionResult(null); }}
+                onClick={() => { setShowPromotePage(false); setShowPromotionResultsPage(false); setPromotionResult(null); }}
                 className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition"
               >
                 <ChevronDown size={14} className="rotate-90" />
@@ -3889,6 +4041,7 @@ export default function OrganizationWorkspacePage() {
                     try {
                       const res = await runAnnualPromotion({ academicYearId: Number(promoteSrcYearId) });
                       setPromotionResult(res);
+                      if (res && !res.alreadyRan) setShowPromotionResultsPage(true);
                     } catch (err) {
                       notifyError(err?.response?.data?.message || err?.message || 'Promotion failed');
                     } finally {
@@ -3904,220 +4057,445 @@ export default function OrganizationWorkspacePage() {
               </div>
             </div>
 
-            {/* Results */}
-            {promotionResult && (() => {
-              const DECISION_META = {
-                PROMOTED:    { label: isArabic ? 'مرفّع'  : 'Promoted',    cls: 'bg-emerald-100 text-emerald-700', dot: '#10b981' },
-                CONDITIONAL: { label: isArabic ? 'مشروط' : 'Conditional', cls: 'bg-amber-100 text-amber-700',   dot: '#f59e0b' },
-                GRADUATED:   { label: isArabic ? 'متخرج' : 'Graduated',   cls: 'bg-indigo-100 text-indigo-700', dot: '#6366f1' },
-                REPEATED:    { label: isArabic ? 'راسب'  : 'Repeated',    cls: 'bg-rose-100 text-rose-700',     dot: '#ef4444' },
-                PENDING:     { label: isArabic ? 'معلق'  : 'Pending',     cls: 'bg-slate-100 text-slate-600',   dot: '#94a3b8' },
-              };
-              const allRecords = Array.isArray(promotionResult.records) ? promotionResult.records : [];
-              const visibleRecords = allRecords.filter(r => {
-                if (promotionFilter !== 'ALL' && r.decision !== promotionFilter) return false;
-                if (promotionSearch.trim() && !(r.studentName || '').toLowerCase().includes(promotionSearch.toLowerCase())) return false;
-                return true;
-              });
-              const totalStudents = allRecords.length;
-              const avgScore = totalStudents > 0
-                ? (allRecords.filter(r => r.finalPercentage != null).reduce((s, r) => s + Number(r.finalPercentage), 0) / totalStudents).toFixed(1)
-                : 0;
-              const passRate = totalStudents > 0
-                ? (((promotionResult.summary?.promoted ?? 0) + (promotionResult.summary?.graduated ?? 0)) / totalStudents * 100).toFixed(0)
-                : 0;
+            {/* Promote a single student by ID */}
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <p className="mb-1.5 text-xs font-black uppercase tracking-wider text-slate-500">
+                {isArabic ? "ترفيع طالب واحد" : "Promote a Single Student"}
+              </p>
+              <p className="mb-3 text-sm text-slate-500">
+                {isArabic ? "أدخل معرّف الطالب لتقييمه وترفيعه بشكل منفرد دون تشغيل الترفيع الجماعي" : "Enter a student ID to evaluate and promote just that student, without running the bulk promotion"}
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  type="number"
+                  min="1"
+                  value={singlePromoteId}
+                  onChange={(e) => { setSinglePromoteId(e.target.value); setSinglePromoteResult(null); }}
+                  placeholder={isArabic ? "معرّف الطالب" : "Student ID"}
+                  className="h-11 w-48 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700 focus:border-amber-400 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  disabled={!singlePromoteId || singlePromoteRunning}
+                  onClick={async () => {
+                    setSinglePromoteRunning(true);
+                    setSinglePromoteResult(null);
+                    try {
+                      const res = await promoteStudentById({ studentId: Number(singlePromoteId) });
+                      setSinglePromoteResult(res);
+                    } catch (err) {
+                      notifyError(err?.response?.data?.message || err?.message || 'Promotion failed');
+                    } finally {
+                      setSinglePromoteRunning(false);
+                    }
+                  }}
+                  className="rounded-xl bg-slate-900 px-6 py-2.5 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-40 transition"
+                >
+                  {singlePromoteRunning
+                    ? (isArabic ? "جارٍ التقييم..." : "Evaluating…")
+                    : (isArabic ? "ترفيع" : "Promote")}
+                </button>
+              </div>
 
-              return (
-                <div className="space-y-4">
-                  {promotionResult.alreadyRan ? (
-                    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                      <p className="font-semibold text-slate-700">{isArabic ? "تم تشغيل الترفيع مسبقًا لهذه الجلسة." : "Promotion was already run for this session."}</p>
-                      <p className="mt-1 text-sm text-slate-500">{isArabic ? "لا يمكن تشغيل الترفيع مرتين للسنة الدراسية نفسها." : "Promotion cannot run twice for the same school year."}</p>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Summary */}
-                      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 className="mb-4 text-base font-bold text-slate-900">{isArabic ? "ملخص نتائج الترفيع" : "Promotion Summary"}</h3>
-                        <div className="flex flex-wrap gap-3 mb-4">
-                          {[
-                            { key: 'PROMOTED',    label: isArabic ? 'مرفّع'  : 'Promoted',    value: promotionResult.summary?.promoted,    color: 'bg-emerald-100 text-emerald-700' },
-                            { key: 'CONDITIONAL', label: isArabic ? 'مشروط' : 'Conditional', value: promotionResult.summary?.conditional, color: 'bg-amber-100 text-amber-700' },
-                            { key: 'GRADUATED',   label: isArabic ? 'متخرج' : 'Graduated',   value: promotionResult.summary?.graduated,   color: 'bg-indigo-100 text-indigo-700' },
-                            { key: 'REPEATED',    label: isArabic ? 'راسب'  : 'Repeated',    value: promotionResult.summary?.repeated,    color: 'bg-rose-100 text-rose-700' },
-                            { key: 'PENDING',     label: isArabic ? 'معلق'  : 'Pending',     value: promotionResult.summary?.pending,     color: 'bg-slate-100 text-slate-600' },
-                          ].map(({ key, label, value, color }) => (
-                            <button key={key} type="button"
-                              onClick={() => setPromotionFilter(prev => prev === key ? 'ALL' : key)}
-                              className={`flex flex-col items-center rounded-2xl px-5 py-3 transition ring-2 ${color} ${promotionFilter === key ? 'ring-current' : 'ring-transparent hover:ring-current/30'}`}>
-                              <span className="text-2xl font-black">{value ?? 0}</span>
-                              <span className="mt-0.5 text-xs font-semibold uppercase tracking-wide">{label}</span>
-                            </button>
-                          ))}
-                          <div className="flex flex-col items-center rounded-2xl px-5 py-3 bg-sky-50 text-sky-700">
-                            <span className="text-2xl font-black">{passRate}%</span>
-                            <span className="mt-0.5 text-xs font-semibold uppercase tracking-wide">{isArabic ? 'نسبة النجاح' : 'Pass Rate'}</span>
-                          </div>
-                          <div className="flex flex-col items-center rounded-2xl px-5 py-3 bg-violet-50 text-violet-700">
-                            <span className="text-2xl font-black">{avgScore}%</span>
-                            <span className="mt-0.5 text-xs font-semibold uppercase tracking-wide">{isArabic ? 'متوسط الدرجات' : 'Avg Score'}</span>
-                          </div>
-                        </div>
-
-                        {/* Search + filter row */}
-                        {allRecords.length > 0 && (
-                          <div className="flex flex-wrap gap-2 items-center border-t border-slate-100 pt-4">
-                            <input
-                              value={promotionSearch}
-                              onChange={e => setPromotionSearch(e.target.value)}
-                              placeholder={isArabic ? 'ابحث عن طالب...' : 'Search student...'}
-                              className="h-9 rounded-xl border border-slate-200 px-3 text-sm w-52"
-                            />
-                            <button type="button" onClick={() => setPromotionFilter('ALL')}
-                              className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${promotionFilter === 'ALL' ? 'bg-slate-800 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-                              {isArabic ? 'الكل' : 'All'} ({allRecords.length})
-                            </button>
-                            {['PROMOTED','REPEATED','CONDITIONAL','PENDING'].map(d => {
-                              const cnt = allRecords.filter(r => r.decision === d).length;
-                              if (!cnt) return null;
-                              const m = DECISION_META[d];
-                              return (
-                                <button key={d} type="button" onClick={() => setPromotionFilter(prev => prev === d ? 'ALL' : d)}
-                                  className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${promotionFilter === d ? m.cls + ' ring-2 ring-current' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-                                  {m.label} ({cnt})
-                                </button>
-                              );
-                            })}
-                            <span className="text-xs text-slate-400 ml-auto">{visibleRecords.length} {isArabic ? 'طالب' : 'students'}</span>
-                          </div>
-                        )}
+              {singlePromoteResult?.record && (() => {
+                const SINGLE_DECISION_META = {
+                  PROMOTED:    { label: isArabic ? 'مرفّع'  : 'Promoted',    cls: 'bg-emerald-100 text-emerald-700', dot: '#10b981' },
+                  CONDITIONAL: { label: isArabic ? 'مشروط' : 'Conditional', cls: 'bg-amber-100 text-amber-700',   dot: '#f59e0b' },
+                  GRADUATED:   { label: isArabic ? 'متخرج' : 'Graduated',   cls: 'bg-indigo-100 text-indigo-700', dot: '#6366f1' },
+                  REPEATED:    { label: isArabic ? 'راسب'  : 'Repeated',    cls: 'bg-rose-100 text-rose-700',     dot: '#ef4444' },
+                  PENDING:     { label: isArabic ? 'معلق'  : 'Pending',     cls: 'bg-slate-100 text-slate-600',   dot: '#94a3b8' },
+                };
+                const r = singlePromoteResult.record;
+                const meta = SINGLE_DECISION_META[r.decision] || SINGLE_DECISION_META.PENDING;
+                const pct = r.finalPercentage ?? 0;
+                const barColor = r.decision === 'PROMOTED' || r.decision === 'GRADUATED' ? '#10b981' : r.decision === 'CONDITIONAL' ? '#f59e0b' : '#ef4444';
+                return (
+                  <div className="mt-5 rounded-2xl border border-slate-200 overflow-hidden">
+                    <div className="flex items-center gap-4 px-5 py-4">
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ background: meta.dot }} />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-slate-900 truncate">{r.studentName || `#${r.studentId}`}</p>
+                        {r.registrationNumber && <p className="text-xs text-slate-400 font-mono">{r.registrationNumber}</p>}
                       </div>
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 shrink-0">
+                        <span className="rounded-lg bg-slate-100 px-2 py-0.5">{isArabic ? 'الصف' : 'G'}{r.fromGradeLevel ?? '—'}</span>
+                        <span>→</span>
+                        <span className="rounded-lg bg-slate-100 px-2 py-0.5">{isArabic ? 'الصف' : 'G'}{r.toGradeLevel ?? '—'}</span>
+                      </div>
+                      <div className="w-28 shrink-0">
+                        <div className="flex justify-between text-[10px] font-bold mb-1">
+                          <span style={{ color: barColor }}>{pct}%</span>
+                          <span className="text-slate-400">{r.passedCount ?? 0}/{((r.passedCount ?? 0) + (r.failedCount ?? 0))}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, background: barColor }} />
+                        </div>
+                      </div>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-bold shrink-0 ${meta.cls}`}>{meta.label}</span>
+                    </div>
 
-                      {/* Student expandable cards */}
-                      {visibleRecords.length > 0 && (
-                        <div className="space-y-3">
-                          {visibleRecords.map((r) => {
-                            const meta    = DECISION_META[r.decision] || DECISION_META.PENDING;
-                            const isOpen  = expandedStudents.has(r.studentId);
-                            const toggle  = () => setExpandedStudents(prev => { const s = new Set(prev); s.has(r.studentId) ? s.delete(r.studentId) : s.add(r.studentId); return s; });
-                            const pct     = r.finalPercentage ?? 0;
-                            const barColor = r.decision === 'PROMOTED' || r.decision === 'GRADUATED' ? '#10b981' : r.decision === 'CONDITIONAL' ? '#f59e0b' : '#ef4444';
-                            return (
-                              <div key={r.studentId} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                                {/* Header row */}
-                                <button type="button" onClick={toggle}
-                                  className="w-full flex items-center gap-4 px-5 py-4 text-start hover:bg-slate-50/60 transition">
-                                  {/* Decision dot */}
-                                  <div className="w-3 h-3 rounded-full shrink-0" style={{ background: meta.dot }} />
-
-                                  {/* Name + reg */}
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-bold text-slate-900 truncate">{r.studentName || `#${r.studentId}`}</p>
-                                    {r.registrationNumber && <p className="text-xs text-slate-400 font-mono">{r.registrationNumber}</p>}
-                                  </div>
-
-                                  {/* Grade arrow */}
-                                  <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 shrink-0">
-                                    <span className="rounded-lg bg-slate-100 px-2 py-0.5">{isArabic ? 'الصف' : 'G'}{r.fromGradeLevel ?? '—'}</span>
-                                    <span>→</span>
-                                    <span className="rounded-lg bg-slate-100 px-2 py-0.5">{isArabic ? 'الصف' : 'G'}{r.toGradeLevel ?? '—'}</span>
-                                  </div>
-
-                                  {/* Score bar */}
-                                  <div className="w-28 shrink-0">
-                                    <div className="flex justify-between text-[10px] font-bold mb-1">
-                                      <span style={{ color: barColor }}>{pct}%</span>
-                                      <span className="text-slate-400">{r.passedCount ?? 0}/{( (r.passedCount ?? 0) + (r.failedCount ?? 0) )}</span>
-                                    </div>
-                                    <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                                      <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, background: barColor }} />
-                                    </div>
-                                  </div>
-
-                                  {/* Decision badge */}
-                                  <span className={`rounded-full px-2.5 py-1 text-xs font-bold shrink-0 ${meta.cls}`}>{meta.label}</span>
-
-                                  {/* Chevron */}
-                                  <span className="text-slate-400 text-xs shrink-0">{isOpen ? '▲' : '▼'}</span>
-                                </button>
-
-                                {/* Expanded detail */}
-                                {isOpen && (
-                                  <div className="border-t border-slate-100 px-5 py-4 space-y-3">
-                                    {/* Terms used */}
-                                    {r.termsUsed?.length > 0 && (
-                                      <p className="text-xs text-slate-500">
-                                        <span className="font-semibold">{isArabic ? 'الفصول المحتسبة:' : 'Terms used:'}</span>{' '}
-                                        {r.termsUsed.map(t => t.termName).join(' + ')}
-                                      </p>
-                                    )}
-
-                                    {/* Reason */}
-                                    <div className={`rounded-xl px-3 py-2 text-xs font-semibold ${r.decision === 'PROMOTED' || r.decision === 'GRADUATED' ? 'bg-emerald-50 text-emerald-700' : r.decision === 'CONDITIONAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'}`}>
-                                      {r.reason || '—'}
-                                    </div>
-
-                                    {/* Subject breakdown table */}
-                                    {r.subjectBreakdown?.length > 0 && (
-                                      <div className="overflow-hidden rounded-xl border border-slate-100">
-                                        <table className="min-w-full text-xs">
-                                          <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                                            <tr>
-                                              <th className="px-3 py-2 text-start">{isArabic ? 'المادة' : 'Subject'}</th>
-                                              {/* Term score columns */}
-                                              {(r.termsUsed || []).map(t => (
-                                                <th key={t.termId} className="px-3 py-2 text-center">{t.termName}</th>
-                                              ))}
-                                              <th className="px-3 py-2 text-center">{isArabic ? 'المتوسط' : 'Average'}</th>
-                                              <th className="px-3 py-2 text-center">{isArabic ? 'النتيجة' : 'Result'}</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody className="divide-y divide-slate-50">
-                                            {r.subjectBreakdown.map(s => (
-                                              <tr key={s.subjectId} className={s.isPassed ? '' : 'bg-rose-50/40'}>
-                                                <td className="px-3 py-2 font-semibold text-slate-800">{s.subjectName || `#${s.subjectId}`}</td>
-                                                {(r.termsUsed || []).map(t => {
-                                                  const ts = s.termScores?.find(x => x.termId === t.termId);
-                                                  return (
-                                                    <td key={t.termId} className="px-3 py-2 text-center">
-                                                      {ts ? (
-                                                        <span className={ts.isPassed ? 'text-emerald-700' : 'text-rose-600 font-bold'}>{ts.rawScore.toFixed(1)}%</span>
-                                                      ) : <span className="text-slate-300">—</span>}
-                                                    </td>
-                                                  );
-                                                })}
-                                                <td className="px-3 py-2 text-center font-bold text-slate-700">{s.avgScore.toFixed(1)}%</td>
-                                                <td className="px-3 py-2 text-center">
-                                                  {s.isPassed
-                                                    ? <span className="text-emerald-600 font-bold">✓</span>
-                                                    : <span className="text-rose-600 font-bold">✗ {isArabic ? 'راسب' : 'Fail'}</span>}
-                                                </td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
+                    <div className="border-t border-slate-100 px-5 py-4 space-y-3">
+                      {r.termsUsed?.length > 0 && (
+                        <p className="text-xs text-slate-500">
+                          <span className="font-semibold">{isArabic ? 'الفصول المحتسبة:' : 'Terms used:'}</span>{' '}
+                          {r.termsUsed.map(t => t.termName).join(' + ')}
+                        </p>
+                      )}
+                      <div className={`rounded-xl px-3 py-2 text-xs font-semibold ${r.decision === 'PROMOTED' || r.decision === 'GRADUATED' ? 'bg-emerald-50 text-emerald-700' : r.decision === 'CONDITIONAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'}`}>
+                        {r.reason || '—'}
+                      </div>
+                      {r.subjectBreakdown?.length > 0 && (
+                        <div className="overflow-hidden rounded-xl border border-slate-100">
+                          <table className="min-w-full text-xs">
+                            <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                              <tr>
+                                <th className="px-3 py-2 text-start">{isArabic ? 'المادة' : 'Subject'}</th>
+                                {(r.termsUsed || []).map(t => (
+                                  <th key={t.termId} className="px-3 py-2 text-center">{t.termName}</th>
+                                ))}
+                                <th className="px-3 py-2 text-center">{isArabic ? 'المتوسط' : 'Average'}</th>
+                                <th className="px-3 py-2 text-center">{isArabic ? 'النتيجة' : 'Result'}</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                              {r.subjectBreakdown.map(s => (
+                                <tr key={s.subjectId} className={s.isPassed ? '' : 'bg-rose-50/40'}>
+                                  <td className="px-3 py-2 font-semibold text-slate-800">{s.subjectName || `#${s.subjectId}`}</td>
+                                  {(r.termsUsed || []).map(t => {
+                                    const ts = s.termScores?.find(x => x.termId === t.termId);
+                                    return (
+                                      <td key={t.termId} className="px-3 py-2 text-center">
+                                        {ts ? (
+                                          <span className={ts.isPassed ? 'text-emerald-700' : 'text-rose-600 font-bold'}>{ts.rawScore.toFixed(1)}%</span>
+                                        ) : <span className="text-slate-300">—</span>}
+                                      </td>
+                                    );
+                                  })}
+                                  <td className="px-3 py-2 text-center font-bold text-slate-700">{s.avgScore.toFixed(1)}%</td>
+                                  <td className="px-3 py-2 text-center">
+                                    {s.isPassed
+                                      ? <span className="text-emerald-600 font-bold">✓</span>
+                                      : <span className="text-rose-600 font-bold">✗ {isArabic ? 'راسب' : 'Fail'}</span>}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
                       )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
 
-                      {visibleRecords.length === 0 && allRecords.length > 0 && (
-                        <div className="rounded-2xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">
-                          {isArabic ? 'لا توجد نتائج تطابق الفلتر المحدد' : 'No results match the current filter'}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })()}
+            {/* Already-ran notice (full results render on the dedicated results page) */}
+            {promotionResult?.alreadyRan && (
+              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <p className="font-semibold text-slate-700">{isArabic ? "تم تشغيل الترفيع مسبقًا لهذه الجلسة." : "Promotion was already run for this session."}</p>
+                <p className="mt-1 text-sm text-slate-500">{isArabic ? "يمكنك إعادة تشغيله لأغراض الاختبار — سيُعاد تقييم جميع الطلاب وتحديث النتائج." : "You can re-run it for testing purposes — every student will be re-evaluated and the results overwritten."}</p>
+                <button
+                  type="button"
+                  disabled={!promoteSrcYearId || promotionRunning}
+                  onClick={async () => {
+                    setPromotionRunning(true);
+                    setPromotionResult(null);
+                    setPromotionFilter('ALL');
+                    setPromotionSearch('');
+                    setExpandedStudents(new Set());
+                    try {
+                      const res = await runAnnualPromotion({ academicYearId: Number(promoteSrcYearId), force: true });
+                      setPromotionResult(res);
+                      if (res && !res.alreadyRan) setShowPromotionResultsPage(true);
+                    } catch (err) {
+                      notifyError(err?.response?.data?.message || err?.message || 'Promotion failed');
+                    } finally {
+                      setPromotionRunning(false);
+                    }
+                  }}
+                  className="mt-4 rounded-xl bg-amber-500 px-6 py-2.5 text-sm font-bold text-white hover:bg-amber-600 disabled:opacity-40 transition"
+                >
+                  {promotionRunning
+                    ? (isArabic ? "جارٍ إعادة التشغيل..." : "Re-running…")
+                    : (isArabic ? "إعادة تشغيل الترفيع (اختبار)" : "Run again (force re-test)")}
+                </button>
+              </div>
+            )}
           </section>
         )}
+
+        {!loading && activeTab === TABS.STUDENTS && showPromotePage && showPromotionResultsPage && promotionResult && !promotionResult.alreadyRan && (() => {
+          const DECISION_META = {
+            PROMOTED:    { label: isArabic ? 'مرفّع'  : 'Promoted',    cls: 'bg-emerald-100 text-emerald-700', dot: '#10b981' },
+            CONDITIONAL: { label: isArabic ? 'مشروط' : 'Conditional', cls: 'bg-amber-100 text-amber-700',   dot: '#f59e0b' },
+            GRADUATED:   { label: isArabic ? 'متخرج' : 'Graduated',   cls: 'bg-indigo-100 text-indigo-700', dot: '#6366f1' },
+            REPEATED:    { label: isArabic ? 'راسب'  : 'Repeated',    cls: 'bg-rose-100 text-rose-700',     dot: '#ef4444' },
+            PENDING:     { label: isArabic ? 'معلق'  : 'Pending',     cls: 'bg-slate-100 text-slate-600',   dot: '#94a3b8' },
+          };
+          const allRecords = Array.isArray(promotionResult.records) ? promotionResult.records : [];
+          const visibleRecords = allRecords.filter(r => {
+            if (promotionFilter !== 'ALL' && r.decision !== promotionFilter) return false;
+            if (promotionSearch.trim() && !(r.studentName || '').toLowerCase().includes(promotionSearch.toLowerCase())) return false;
+            return true;
+          });
+          const totalStudents = allRecords.length;
+          const avgScore = totalStudents > 0
+            ? (allRecords.filter(r => r.finalPercentage != null).reduce((s, r) => s + Number(r.finalPercentage), 0) / totalStudents).toFixed(1)
+            : 0;
+          const passRate = totalStudents > 0
+            ? (((promotionResult.summary?.promoted ?? 0) + (promotionResult.summary?.graduated ?? 0)) / totalStudents * 100).toFixed(0)
+            : 0;
+          const failedRecords = allRecords.filter(r => r.decision === 'REPEATED');
+
+          // Group visible records by their source grade level (class)
+          const groups = new Map();
+          visibleRecords.forEach((r) => {
+            const key = r.fromGradeLevel ?? '—';
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(r);
+          });
+          const sortedGroups = Array.from(groups.entries()).sort((a, b) => {
+            const an = Number(a[0]); const bn = Number(b[0]);
+            if (Number.isNaN(an) || Number.isNaN(bn)) return String(a[0]).localeCompare(String(b[0]));
+            return an - bn;
+          });
+
+          const renderStudentRow = (r) => {
+            const meta    = DECISION_META[r.decision] || DECISION_META.PENDING;
+            const isOpen  = expandedStudents.has(r.studentId);
+            const toggle  = () => setExpandedStudents(prev => { const s = new Set(prev); s.has(r.studentId) ? s.delete(r.studentId) : s.add(r.studentId); return s; });
+            const pct     = r.finalPercentage ?? 0;
+            const barColor = r.decision === 'PROMOTED' || r.decision === 'GRADUATED' ? '#10b981' : r.decision === 'CONDITIONAL' ? '#f59e0b' : '#ef4444';
+            return (
+              <div key={r.studentId} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <button type="button" onClick={toggle}
+                  className="w-full flex items-center gap-4 px-5 py-4 text-start hover:bg-slate-50/60 transition">
+                  <div className="w-3 h-3 rounded-full shrink-0" style={{ background: meta.dot }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-slate-900 truncate">{r.studentName || `#${r.studentId}`}</p>
+                    {r.registrationNumber && <p className="text-xs text-slate-400 font-mono">{r.registrationNumber}</p>}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 shrink-0">
+                    <span className="rounded-lg bg-slate-100 px-2 py-0.5">{isArabic ? 'الصف' : 'G'}{r.fromGradeLevel ?? '—'}</span>
+                    <span>→</span>
+                    <span className="rounded-lg bg-slate-100 px-2 py-0.5">{isArabic ? 'الصف' : 'G'}{r.toGradeLevel ?? '—'}</span>
+                  </div>
+                  <div className="w-28 shrink-0">
+                    <div className="flex justify-between text-[10px] font-bold mb-1">
+                      <span style={{ color: barColor }}>{pct}%</span>
+                      <span className="text-slate-400">{r.passedCount ?? 0}/{((r.passedCount ?? 0) + (r.failedCount ?? 0))}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, background: barColor }} />
+                    </div>
+                  </div>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-bold shrink-0 ${meta.cls}`}>{meta.label}</span>
+                  <span className="text-slate-400 text-xs shrink-0">{isOpen ? '▲' : '▼'}</span>
+                </button>
+
+                {isOpen && (
+                  <div className="border-t border-slate-100 px-5 py-4 space-y-3">
+                    {r.termsUsed?.length > 0 && (
+                      <p className="text-xs text-slate-500">
+                        <span className="font-semibold">{isArabic ? 'الفصول المحتسبة:' : 'Terms used:'}</span>{' '}
+                        {r.termsUsed.map(t => t.termName).join(' + ')}
+                      </p>
+                    )}
+                    <div className={`rounded-xl px-3 py-2 text-xs font-semibold ${r.decision === 'PROMOTED' || r.decision === 'GRADUATED' ? 'bg-emerald-50 text-emerald-700' : r.decision === 'CONDITIONAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'}`}>
+                      {r.reason || '—'}
+                    </div>
+                    {r.subjectBreakdown?.length > 0 && (
+                      <div className="overflow-hidden rounded-xl border border-slate-100">
+                        <table className="min-w-full text-xs">
+                          <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                            <tr>
+                              <th className="px-3 py-2 text-start">{isArabic ? 'المادة' : 'Subject'}</th>
+                              {(r.termsUsed || []).map(t => (
+                                <th key={t.termId} className="px-3 py-2 text-center">{t.termName}</th>
+                              ))}
+                              <th className="px-3 py-2 text-center">{isArabic ? 'المتوسط' : 'Average'}</th>
+                              <th className="px-3 py-2 text-center">{isArabic ? 'النتيجة' : 'Result'}</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                            {r.subjectBreakdown.map(s => (
+                              <tr key={s.subjectId} className={s.isPassed ? '' : 'bg-rose-50/40'}>
+                                <td className="px-3 py-2 font-semibold text-slate-800">{s.subjectName || `#${s.subjectId}`}</td>
+                                {(r.termsUsed || []).map(t => {
+                                  const ts = s.termScores?.find(x => x.termId === t.termId);
+                                  return (
+                                    <td key={t.termId} className="px-3 py-2 text-center">
+                                      {ts ? (
+                                        <span className={ts.isPassed ? 'text-emerald-700' : 'text-rose-600 font-bold'}>{ts.rawScore.toFixed(1)}%</span>
+                                      ) : <span className="text-slate-300">—</span>}
+                                    </td>
+                                  );
+                                })}
+                                <td className="px-3 py-2 text-center font-bold text-slate-700">{s.avgScore.toFixed(1)}%</td>
+                                <td className="px-3 py-2 text-center">
+                                  {s.isPassed
+                                    ? <span className="text-emerald-600 font-bold">✓</span>
+                                    : <span className="text-rose-600 font-bold">✗ {isArabic ? 'راسب' : 'Fail'}</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          };
+
+          return (
+            <section className="space-y-5">
+              {/* ── Promotion Results page ─────────────────────────────────── */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPromotionResultsPage(false);
+                      setPromotionResult(null);
+                      setPromotionFilter('ALL');
+                      setPromotionSearch('');
+                      setExpandedStudents(new Set());
+                    }}
+                    className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition"
+                  >
+                    <ChevronDown size={14} className="rotate-90" />
+                    {isArabic ? "العودة" : "Back"}
+                  </button>
+                  <div>
+                    <h2 className="text-2xl font-black text-slate-900">{isArabic ? "نتائج الترفيع" : "Promotion Results"}</h2>
+                    <p className="text-sm text-slate-500">{isArabic ? "النتائج مجمّعة حسب الصف الدراسي" : "Results grouped by class / grade level"}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadPromotionPdf(promotionResult, { DECISION_META, allRecords, failedRecords, sortedGroups, passRate, avgScore })}
+                  className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800 transition"
+                >
+                  <Download size={16} />
+                  {isArabic ? "تحميل PDF" : "Download PDF"}
+                </button>
+              </div>
+
+              {/* Summary */}
+              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 className="mb-4 text-base font-bold text-slate-900">{isArabic ? "ملخص نتائج الترفيع" : "Promotion Summary"}</h3>
+                <div className="flex flex-wrap gap-3 mb-4">
+                  {[
+                    { key: 'PROMOTED',    label: isArabic ? 'مرفّع'  : 'Promoted',    value: promotionResult.summary?.promoted,    color: 'bg-emerald-100 text-emerald-700' },
+                    { key: 'CONDITIONAL', label: isArabic ? 'مشروط' : 'Conditional', value: promotionResult.summary?.conditional, color: 'bg-amber-100 text-amber-700' },
+                    { key: 'GRADUATED',   label: isArabic ? 'متخرج' : 'Graduated',   value: promotionResult.summary?.graduated,   color: 'bg-indigo-100 text-indigo-700' },
+                    { key: 'REPEATED',    label: isArabic ? 'راسب'  : 'Repeated',    value: promotionResult.summary?.repeated,    color: 'bg-rose-100 text-rose-700' },
+                    { key: 'PENDING',     label: isArabic ? 'معلق'  : 'Pending',     value: promotionResult.summary?.pending,     color: 'bg-slate-100 text-slate-600' },
+                  ].map(({ key, label, value, color }) => (
+                    <button key={key} type="button"
+                      onClick={() => setPromotionFilter(prev => prev === key ? 'ALL' : key)}
+                      className={`flex flex-col items-center rounded-2xl px-5 py-3 transition ring-2 ${color} ${promotionFilter === key ? 'ring-current' : 'ring-transparent hover:ring-current/30'}`}>
+                      <span className="text-2xl font-black">{value ?? 0}</span>
+                      <span className="mt-0.5 text-xs font-semibold uppercase tracking-wide">{label}</span>
+                    </button>
+                  ))}
+                  <div className="flex flex-col items-center rounded-2xl px-5 py-3 bg-sky-50 text-sky-700">
+                    <span className="text-2xl font-black">{passRate}%</span>
+                    <span className="mt-0.5 text-xs font-semibold uppercase tracking-wide">{isArabic ? 'نسبة النجاح' : 'Pass Rate'}</span>
+                  </div>
+                  <div className="flex flex-col items-center rounded-2xl px-5 py-3 bg-violet-50 text-violet-700">
+                    <span className="text-2xl font-black">{avgScore}%</span>
+                    <span className="mt-0.5 text-xs font-semibold uppercase tracking-wide">{isArabic ? 'متوسط الدرجات' : 'Avg Score'}</span>
+                  </div>
+                </div>
+
+                {/* Search + filter row */}
+                {allRecords.length > 0 && (
+                  <div className="flex flex-wrap gap-2 items-center border-t border-slate-100 pt-4">
+                    <input
+                      value={promotionSearch}
+                      onChange={e => setPromotionSearch(e.target.value)}
+                      placeholder={isArabic ? 'ابحث عن طالب...' : 'Search student...'}
+                      className="h-9 rounded-xl border border-slate-200 px-3 text-sm w-52"
+                    />
+                    <button type="button" onClick={() => setPromotionFilter('ALL')}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${promotionFilter === 'ALL' ? 'bg-slate-800 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                      {isArabic ? 'الكل' : 'All'} ({allRecords.length})
+                    </button>
+                    {['PROMOTED','REPEATED','CONDITIONAL','PENDING'].map(d => {
+                      const cnt = allRecords.filter(r => r.decision === d).length;
+                      if (!cnt) return null;
+                      const m = DECISION_META[d];
+                      return (
+                        <button key={d} type="button" onClick={() => setPromotionFilter(prev => prev === d ? 'ALL' : d)}
+                          className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${promotionFilter === d ? m.cls + ' ring-2 ring-current' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                          {m.label} ({cnt})
+                        </button>
+                      );
+                    })}
+                    <span className="text-xs text-slate-400 ml-auto">{visibleRecords.length} {isArabic ? 'طالب' : 'students'}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Failed / repeated students */}
+              {failedRecords.length > 0 && (
+                <div className="rounded-3xl border border-rose-200 bg-rose-50/40 p-6 shadow-sm">
+                  <h3 className="mb-3 flex items-center gap-2 text-base font-bold text-rose-700">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                    {isArabic ? `الطلاب الراسبون (${failedRecords.length})` : `Failed / Repeated Students (${failedRecords.length})`}
+                  </h3>
+                  <div className="overflow-hidden rounded-2xl border border-rose-100 bg-white">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-rose-50 text-[10px] font-black uppercase tracking-wider text-rose-400">
+                        <tr>
+                          <th className="px-4 py-2 text-start">{isArabic ? 'الطالب' : 'Student'}</th>
+                          <th className="px-4 py-2 text-center">{isArabic ? 'الصف' : 'Grade'}</th>
+                          <th className="px-4 py-2 text-center">{isArabic ? 'النسبة' : 'Score'}</th>
+                          <th className="px-4 py-2 text-start">{isArabic ? 'السبب' : 'Reason'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-rose-50">
+                        {failedRecords.map(r => (
+                          <tr key={r.studentId}>
+                            <td className="px-4 py-2.5">
+                              <p className="font-bold text-slate-900">{r.studentName || `#${r.studentId}`}</p>
+                              {r.registrationNumber && <p className="text-xs text-slate-400 font-mono">{r.registrationNumber}</p>}
+                            </td>
+                            <td className="px-4 py-2.5 text-center font-semibold text-slate-600">{isArabic ? 'الصف' : 'G'}{r.fromGradeLevel ?? '—'}</td>
+                            <td className="px-4 py-2.5 text-center font-bold text-rose-600">{r.finalPercentage ?? 0}%</td>
+                            <td className="px-4 py-2.5 text-rose-700">{r.reason || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Results grouped by class / grade */}
+              {sortedGroups.map(([gradeLevel, records]) => (
+                <div key={gradeLevel} className="space-y-3">
+                  <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-wide text-slate-500">
+                    <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-slate-700">{isArabic ? `الصف ${gradeLevel}` : `Grade ${gradeLevel}`}</span>
+                    <span className="text-slate-400">({records.length})</span>
+                  </h3>
+                  <div className="space-y-3">
+                    {records.map(renderStudentRow)}
+                  </div>
+                </div>
+              ))}
+
+              {visibleRecords.length === 0 && allRecords.length > 0 && (
+                <div className="rounded-2xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">
+                  {isArabic ? 'لا توجد نتائج تطابق الفلتر المحدد' : 'No results match the current filter'}
+                </div>
+              )}
+            </section>
+          );
+        })()}
 
         {!loading && activeTab === TABS.STUDENTS && !showPromotePage && (
           <section className="space-y-4">
@@ -4128,7 +4506,12 @@ export default function OrganizationWorkspacePage() {
                   <input name="lastName" value={studentForm.lastName} onChange={setField(setStudentForm)} placeholder={isArabic ? "اسم العائلة" : "Last Name"} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
                 </div>
                 <input name="email" value={studentForm.email} onChange={setField(setStudentForm)} placeholder={isArabic ? "البريد الإلكتروني (اختياري)" : "Email (optional)"} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
-                <input name="dob" type="date" value={studentForm.dob} onChange={setField(setStudentForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                    {isArabic ? "تاريخ الميلاد" : "Date of Birth"}
+                  </label>
+                  <input name="dob" type="date" value={studentForm.dob} onChange={setField(setStudentForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
+                </div>
                 {isSchool && <input name="parentNationalId" value={studentForm.parentNationalId} onChange={setField(setStudentForm)} placeholder={t.organization.students.parentNationalId} className="h-11 w-full rounded-xl border border-slate-200 px-3" />}
                 {isSchool && <input name="fatherName" value={studentForm.fatherName} onChange={setField(setStudentForm)} placeholder={isArabic ? "اسم الأب" : "Father Name"} className="h-11 w-full rounded-xl border border-slate-200 px-3" />}
                 <select name="gender" value={studentForm.gender} onChange={setField(setStudentForm)} className="h-11 w-full rounded-xl border border-slate-200 px-3">
@@ -4205,25 +4588,12 @@ export default function OrganizationWorkspacePage() {
                   ))}
                 </select>
 
-                <select
-                  value={studentStatus}
-                  onChange={(event) => setStudentStatus(event.target.value)}
-                  className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700"
-                >
-                  <option value="ALL">{isArabic ? "كل الحالات" : "All Status"}</option>
-                  <option value="ACTIVE">{isArabic ? "نشط" : "Active"}</option>
-                  <option value="INACTIVE">{isArabic ? "غير نشط" : "Inactive"}</option>
-                  <option value="GRADUATED">{isArabic ? "متخرج" : "Graduated"}</option>
-                  <option value="FILED">{isArabic ? "مؤرشف" : "Filed"}</option>
-                </select>
-
                 <button
                   type="button"
                   onClick={() => {
                     setStudentSearch("");
                     setSelectedCourseId(null);
                     setStudentGenderFilter("ALL");
-                    setStudentStatus("ALL");
                   }}
                   className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
@@ -4247,9 +4617,8 @@ export default function OrganizationWorkspacePage() {
                         <th className="px-4 py-3">#</th>
                         <th className="px-4 py-3">{t.organization.students.name}</th>
                         <th className="px-4 py-3">{isArabic ? "رقم القيد" : "Student ID"}</th>
-                        <th className="px-4 py-3">{isSchool ? (isArabic ? "الصف" : "Class") : (isArabic ? "المسار" : "Track")}</th>
-                        <th className="px-4 py-3">{t.organization.students.age}</th>
-                        <th className="px-4 py-3">{isArabic ? "الحالة" : "Status"}</th>
+                        <th className="px-4 py-3">{isSchool ? (isArabic ? "الصف" : "Class") : (isArabic ? "التخصص" : "Specialization")}</th>
+                        <th className="px-4 py-3">{isArabic ? "العمر" : "Age"}</th>
                         <th className="px-4 py-3">{t.organization.common.actions}</th>
                       </tr>
                     </thead>
@@ -4279,9 +4648,18 @@ export default function OrganizationWorkspacePage() {
                             <td className="px-4 py-4 font-semibold text-slate-900">{student.name}</td>
                             <td className="px-4 py-4 font-mono text-xs font-bold text-emerald-700">{student.registrationNumber || "-"}</td>
                             <td className="px-4 py-4 text-slate-600">{selectedCourseId ? (formatGradeName(courses.find((course) => course.id === selectedCourseId), isSchool, isArabic) || "-") : (isArabic ? "الكل" : "All")}</td>
-                            <td className="px-4 py-4 text-slate-600">{student.age ?? "-"}</td>
-                            <td className="px-4 py-4">
-                              <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${statusClass}`}>{statusLabel}</span>
+                            <td className="px-4 py-4 text-slate-600">
+                              {(() => {
+                                const dob = student.dob;
+                                if (!dob) return "-";
+                                const birth = new Date(dob);
+                                if (isNaN(birth)) return "-";
+                                const today = new Date();
+                                let age = today.getFullYear() - birth.getFullYear();
+                                const notYetHad = today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate());
+                                if (notYetHad) age--;
+                                return age;
+                              })()}
                             </td>
                             <td className="px-4 py-4">
                               <div className="flex flex-wrap gap-2">
@@ -4315,6 +4693,13 @@ export default function OrganizationWorkspacePage() {
                                   title={t.organization.common.edit}
                                 >
                                   <Pencil size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setStudentDetailModal(student)}
+                                  className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
+                                >
+                                  {isArabic ? "التفاصيل" : "Details"}
                                 </button>
                                 <button
                                   type="button"
@@ -4361,6 +4746,56 @@ export default function OrganizationWorkspacePage() {
                 </div>
               </div>
             </article>
+
+            {/* Student Detail Modal */}
+            <Modal
+              open={!!studentDetailModal}
+              onClose={() => setStudentDetailModal(null)}
+              title={studentDetailModal ? (isArabic ? `تفاصيل: ${studentDetailModal.name}` : `Details: ${studentDetailModal.name}`) : ""}
+              maxWidth="max-w-md"
+            >
+              {studentDetailModal && (
+                <div className="space-y-3 text-sm">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{isArabic ? "رقم الحساب" : "Account ID"}</p>
+                      <p className="mt-1 font-mono font-bold text-emerald-700">{studentDetailModal.registrationNumber || "-"}</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{isArabic ? "الجنس" : "Gender"}</p>
+                      <p className="mt-1 font-medium text-slate-700">{studentDetailModal.gender || "-"}</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{isArabic ? "تاريخ الميلاد" : "Date of Birth"}</p>
+                      <p className="mt-1 font-medium text-slate-700">{studentDetailModal.dob ? String(studentDetailModal.dob).slice(0, 10) : "-"}</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{isArabic ? "رقم الهاتف" : "Phone"}</p>
+                      <p className="mt-1 font-medium text-slate-700">{studentDetailModal.phone || "-"}</p>
+                    </div>
+                    <div className="col-span-2 rounded-xl bg-slate-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{isArabic ? "البريد الإلكتروني" : "Email"}</p>
+                      <p className="mt-1 font-medium text-slate-700 break-all">{studentDetailModal.email || "-"}</p>
+                    </div>
+                    <div className="col-span-2 rounded-xl bg-slate-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{isArabic ? "العنوان" : "Address"}</p>
+                      <p className="mt-1 font-medium text-slate-700">{studentDetailModal.address || "-"}</p>
+                    </div>
+                    {isSchool && (
+                      <div className="col-span-2 rounded-xl bg-slate-50 p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{isArabic ? "ولي الأمر" : "Parent"}</p>
+                        <p className="mt-1 font-medium text-slate-700">{studentDetailModal.parentName || "-"}</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex justify-end pt-1">
+                    <button type="button" onClick={() => setStudentDetailModal(null)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                      {isArabic ? "إغلاق" : "Close"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </Modal>
           </section>
         )}
 
@@ -4427,26 +4862,38 @@ export default function OrganizationWorkspacePage() {
                 <table className="min-w-full text-left text-sm">
                   <thead className="text-xs uppercase tracking-wider text-slate-500">
                     <tr>
+                      <th className="py-2 pr-3">{isArabic ? "معرف ولي الأمر" : "Parent ID"}</th>
                       <th className="py-2 pr-3">{t.organization.parents.name}</th>
-                      <th className="py-2 pr-3">{isArabic ? "رقم المعرف" : "Parent ID"}</th>
-                      <th className="py-2 pr-3">{t.organization.parents.childrenLinked}</th>
-                      <th className="py-2 pr-3">{t.organization.parents.children}</th>
-                      <th className="py-2 pr-3">{t.organization.parents.address}</th>
+                      <th className="py-2 pr-3 text-center">{isArabic ? "عدد الأبناء" : "Children Count"}</th>
+                      <th className="py-2 pr-3">{isArabic ? "أسماء الأبناء" : "Children Names"}</th>
                       <th className="py-2 pr-3">{t.organization.common.actions}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredParents.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="py-4 text-slate-500">{t.organization.common.empty}</td>
+                        <td colSpan="5" className="py-4 text-slate-500">{t.organization.common.empty}</td>
                       </tr>
-                    ) : pagedParents.map((parent) => (
+                    ) : pagedParents.map((parent) => {
+                      const children = childrenByParentId.get(Number(parent.id)) || [];
+                      const childNames = children.map((c) => c.name).slice(0, 3).join(", ");
+                      const moreCount = children.length > 3 ? ` +${children.length - 3}` : "";
+                      return (
                       <tr key={parent.id} className="border-t border-slate-100">
-                        <td className="py-2 pr-3">{parent.name || "-"}</td>
                         <td className="py-2 pr-3 font-mono text-xs font-bold text-emerald-700">{parent.registrationNumber || "-"}</td>
-                        <td className="py-2 pr-3">{linkedParentIds.has(Number(parent.id)) ? t.organization.parents.linkedYes : t.organization.parents.linkedNo}</td>
-                        <td className="py-2 pr-3">{(childrenByParentId.get(Number(parent.id)) || []).map((child) => `${child.name} (ID: ${child.id})`).join("، ") || "-"}</td>
-                        <td className="py-2 pr-3">{parent.address || "-"}</td>
+                        <td className="py-2 pr-3 font-medium">{parent.name || "-"}</td>
+                        <td className="py-2 pr-3 text-center">{children.length}</td>
+                        <td className="py-2 pr-3 text-slate-600">
+                          {children.length ? (
+                            <button
+                              type="button"
+                              onClick={() => setChildrenModalParent(parent)}
+                              className="text-indigo-600 hover:underline text-xs font-semibold"
+                            >
+                              {`${childNames}${moreCount}`}
+                            </button>
+                          ) : "-"}
+                        </td>
                         <td className="py-2 pr-3">
                           <div className="flex gap-2">
                             <button
@@ -4486,10 +4933,20 @@ export default function OrganizationWorkspacePage() {
                                 {t.organization.parents.linkChildrenAction}
                               </button>
                             ) : null}
+                            {children.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setChildrenModalParent(parent)}
+                                className="rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                              >
+                                {isArabic ? "عرض الأبناء" : "View Children"}
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
                 <div className="mt-3 px-1">
@@ -4497,6 +4954,54 @@ export default function OrganizationWorkspacePage() {
                 </div>
               </div>
             </article>
+
+            {/* Children Detail Modal */}
+            <Modal
+              open={!!childrenModalParent}
+              onClose={() => setChildrenModalParent(null)}
+              title={childrenModalParent ? (isArabic ? `أبناء: ${childrenModalParent.name}` : `Children of: ${childrenModalParent.name}`) : ""}
+              maxWidth="max-w-lg"
+            >
+              {childrenModalParent && (() => {
+                const children = childrenByParentId.get(Number(childrenModalParent.id)) || [];
+                return (
+                  <div className="space-y-3">
+                    <p className="text-sm text-slate-500">{isArabic ? `إجمالي الأبناء: ${children.length}` : `Total children: ${children.length}`}</p>
+                    <div className="overflow-x-auto rounded-xl border border-slate-100">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+                          <tr>
+                            <th className="px-4 py-2 text-left">{isArabic ? "الاسم" : "Name"}</th>
+                            <th className="px-4 py-2 text-left">{isArabic ? "رقم الحساب" : "Account ID"}</th>
+                            <th className="px-4 py-2 text-left">{isArabic ? "البريد" : "Email"}</th>
+                            <th className="px-4 py-2 text-left">{isArabic ? "الحالة" : "Status"}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {children.map((child) => (
+                            <tr key={child.id} className="border-t border-slate-100">
+                              <td className="px-4 py-2 font-medium text-slate-800">{child.name}</td>
+                              <td className="px-4 py-2 font-mono text-xs text-emerald-700">{child.registrationNumber}</td>
+                              <td className="px-4 py-2 text-slate-500 text-xs">{child.email}</td>
+                              <td className="px-4 py-2">
+                                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${child.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : child.status === 'GRADUATED' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+                                  {child.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="flex justify-end pt-1">
+                      <button type="button" onClick={() => setChildrenModalParent(null)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                        {isArabic ? "إغلاق" : "Close"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </Modal>
           </section>
         )}
 
@@ -5380,8 +5885,13 @@ export default function OrganizationWorkspacePage() {
                 <p className="mb-3 text-xs font-black uppercase tracking-wider text-slate-500">{isArabic ? "قواعد الترفيع الموسعة" : "Extended Promotion Rules"}</p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block">
-                    <span className="mb-1.5 block text-sm font-semibold text-slate-700">{isArabic ? "أقصى مواد راسبة مسموحة" : "Max Failed Subjects"}</span>
+                    <span className="mb-1.5 block text-sm font-semibold text-slate-700">{isArabic ? "أقصى مواد راسبة مسموحة للترفيع" : "Max Failed Subjects"}</span>
                     <input name="maxFailedSubjects" type="number" min="0" max="20" value={schoolForm.maxFailedSubjects} onChange={setField(setSchoolForm)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm" />
+                    <span className="mt-1 block text-xs text-slate-500">
+                      {isArabic
+                        ? "أقصى عدد من المواد التي يمكن أن يرسب بها الطالب ويظل مؤهلاً للترفيع. النجاح في كل المواد = ترفيع كامل، وإن رسب ضمن هذا الحد فسيُرفّع (مشروطاً إن تم تفعيل الخيار أدناه)، وما بعده يُعتبر إعادة سنة."
+                        : "Max subjects a student can fail and still be promoted. 0 failed = clean Pass; failing up to this many is still promoted (Conditional if enabled below); beyond it the student repeats the year."}
+                    </span>
                   </label>
                   <label className="flex cursor-pointer items-start gap-3 pt-5">
                     <input
@@ -5390,14 +5900,15 @@ export default function OrganizationWorkspacePage() {
                       onChange={(e) => setSchoolForm((f) => ({ ...f, allowConditionalPromotion: e.target.checked }))}
                       className="mt-0.5 h-4 w-4 accent-amber-500"
                     />
-                    <span className="block text-sm font-semibold text-slate-800">{isArabic ? "السماح بالترفيع المشروط" : "Allow Conditional Promotion"}</span>
+                    <span className="block text-sm font-semibold text-slate-800">
+                      {isArabic ? "السماح بالترفيع المشروط" : "Allow Conditional Promotion"}
+                      <span className="mt-0.5 block text-xs font-normal text-slate-500">
+                        {isArabic
+                          ? "عند التفعيل، يُصنَّف الترفيع مع وجود مواد راسبة (ضمن الحد أعلاه) كـ«مشروط» بدلاً من «ناجح»"
+                          : "When enabled, promotions with failed subjects (within the limit above) are labeled Conditional instead of a clean Pass"}
+                      </span>
+                    </span>
                   </label>
-                  {schoolForm.allowConditionalPromotion && (
-                    <label className="block sm:col-span-2">
-                      <span className="mb-1.5 block text-sm font-semibold text-slate-700">{isArabic ? "أقصى مواد راسبة للترفيع المشروط" : "Max Failed for Conditional"}</span>
-                      <input name="conditionalMaxFailed" type="number" min="1" max="10" value={schoolForm.conditionalMaxFailed} onChange={setField(setSchoolForm)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm" />
-                    </label>
-                  )}
                 </div>
               </div>
 
@@ -5643,6 +6154,32 @@ export default function OrganizationWorkspacePage() {
             </div>
           </div>
         )}
+
+        {/* ── Reports tab ──────────────────────────────────────────────────── */}
+        {!loading && activeTab === TABS.REPORTS && (
+          <article className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-6 border-b border-slate-200 pb-5">
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-indigo-700">
+                {isArabic ? "التقارير" : "Reports"}
+              </p>
+              <h2 className="mt-1 text-2xl font-black text-slate-900">
+                {isArabic ? "لوحة التقارير" : "Reports Center"}
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {isArabic ? "توليد تقارير مفصلة وتصديرها" : "Generate detailed reports and export to CSV"}
+              </p>
+            </div>
+            <OrgReportsPanel
+              isArabic={isArabic}
+              isSchool={isSchool}
+              courses={courses.filter((c) => c.kind === "TRACK")}
+              classes={courses.filter((c) => c.kind === "CLASS")}
+              subjects={Object.values(subjectsByCourse).flat()}
+              academicYears={academicYears}
+              terms={yearTerms}
+            />
+          </article>
+        )}
         </section>
       </div>
 
@@ -5783,7 +6320,6 @@ export default function OrganizationWorkspacePage() {
           }}
         />
       )}
-      <OrgAIChat isArabic={isArabic} isSchool={isSchool} />
 
       {/* ── Certificate modal ── */}
       {certModal ? (

@@ -7,7 +7,8 @@ import {
   CheckCircle2, ChevronRight, Globe2, LayoutDashboard,
   Menu, MessageCircle, Sparkles, Target, Users, X, Zap,
   Trophy, Flame, Star, TrendingUp, Map, Award, Cpu, FileText,
-  Lightbulb, Shield,
+  Lightbulb, Shield, Smartphone, School, CalendarDays,
+  ClipboardList, UserCheck, Bell, GraduationCap, Download,
 } from "lucide-react";
 import { getPlansThunk } from "../redux/thunks/authThunks";
 import { AUTH_ROLES } from "../utils/constants";
@@ -28,9 +29,23 @@ const getDashboardPath = (role) => {
 const scrollTo = (id) =>
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
+const KNOWN_ACRONYMS = new Set(["AI", "RAG", "XP", "LMS", "API", "SMS", "PDF", "QR"]);
+
+const humanizeFeatureName = (str) => {
+  if (!str) return "";
+  // Leave already-readable strings untouched (contain spaces, mixed case)
+  if (str.includes(" ") || (str !== str.toUpperCase() && !str.includes("_"))) return str;
+  return str
+    .split("_")
+    .map((word) => KNOWN_ACRONYMS.has(word) ? word : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+};
+
 const formatFeatureList = (features = []) =>
   Array.isArray(features)
-    ? features.map((i) => (typeof i === "string" ? i : i?.name || i?.feature || i?.label || i?.title || "")).filter(Boolean)
+    ? features
+        .map((i) => humanizeFeatureName(typeof i === "string" ? i : i?.name || i?.feature || i?.label || i?.title || ""))
+        .filter(Boolean)
     : [];
 
 /* ─── Animation presets ────────────────────────────────────────────────────── */
@@ -124,6 +139,7 @@ export default function LandingPage() {
 
   const navLinks = [
     { id: "features",   label: isArabic ? "المميزات"   : "Features"   },
+    { id: "mobile",     label: isArabic ? "التطبيق"     : "Mobile App" },
     { id: "ai-section", label: isArabic ? "الذكاء"      : "AI"         },
     { id: "experience", label: isArabic ? "التجربة"     : "Experience" },
     { id: "pricing",    label: isArabic ? "الأسعار"     : "Pricing"    },
@@ -141,6 +157,15 @@ export default function LandingPage() {
     { icon: BarChart3,      title: isArabic ? "تحليلات متقدمة" : "Analytics",         desc: isArabic ? "لوحات بيانات لحظية للمعلمين."          : "Real-time dashboards for instructors.",                 color: "#22d3ee" },
     { icon: LayoutDashboard,title: isArabic ? "لوحة المعلمين"  : "Instructor Hub",    desc: isArabic ? "إدارة كاملة للدروس من مكان واحد."      : "Full lesson management in one workspace.",              color: "#a78bfa" },
     { icon: Users,          title: isArabic ? "تعلم اجتماعي"  : "Social Learning",   desc: isArabic ? "تغذية اجتماعية وتعاون بين الطلاب."    : "Social feed and peer collaboration tools.",             color: "#34d399" },
+  ];
+
+  const schoolFeatures = [
+    { icon: ClipboardList, title: isArabic ? "تتبع الحضور"      : "Attendance Tracker",    desc: isArabic ? "حضور يومي بنقرة واحدة مع تقارير تلقائية."       : "One-click daily attendance with automated reports.",      color: "#6366f1" },
+    { icon: UserCheck,     title: isArabic ? "بوابة الوالدين"   : "Parent Portal",          desc: isArabic ? "الوالدان يرون الدرجات والحضور لحظياً."           : "Parents see grades and attendance in real time.",          color: "#8b5cf6" },
+    { icon: CalendarDays,  title: isArabic ? "تقويم المدرسة"    : "School Calendar",        desc: isArabic ? "جدول الأحداث والاختبارات للطلاب والمعلمين."     : "Events and exam schedules visible to all roles.",          color: "#0ea5e9" },
+    { icon: GraduationCap, title: isArabic ? "تقارير الدرجات"  : "Grade Reports",           desc: isArabic ? "تقارير شاملة قابلة للتصدير بصيغة Excel."        : "Comprehensive grade reports exportable to Excel.",         color: "#10b981" },
+    { icon: Bell,          title: isArabic ? "إشعارات الوالدين" : "Parent Notifications",   desc: isArabic ? "تنبيهات فورية للغياب والدرجات والأحداث."         : "Instant alerts for absences, grades, and events.",         color: "#f59e0b" },
+    { icon: School,        title: isArabic ? "إدارة الفصول"     : "Class Management",       desc: isArabic ? "فصول، شُعب، وجداول في مكان واحد."                : "Classes, sections, and schedules in one workspace.",       color: "#f43f5e" },
   ];
 
   const testimonials = [
@@ -482,6 +507,7 @@ export default function LandingPage() {
       {/* ══════════ FEATURES ══════════ */}
       <section id="features" className="py-28 bg-slate-50">
         <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
+          {/* ── All-plan features ── */}
           <motion.div {...fadeUp(0)} className={`mb-16 ${isArabic ? "text-right" : "text-left"}`}>
             <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-indigo-600">
               <Zap size={11} /> {isArabic ? "المميزات" : "Platform features"}
@@ -493,8 +519,8 @@ export default function LandingPage() {
             </h2>
             <p className="mt-4 max-w-2xl text-base leading-8 text-slate-500">
               {isArabic
-                ? "Learnova تجمع الذكاء الاصطناعي، التحفيز، والتحليلات في بيئة تعليمية متكاملة."
-                : "Learnova combines AI, gamification, and analytics in one connected educational environment."}
+                ? "Learnova تجمع الذكاء الاصطناعي، التحفيز، والتحليلات في بيئة تعليمية متكاملة — للأكاديميات والمدارس على حد سواء."
+                : "Learnova combines AI, gamification, and analytics in one connected environment — for both academies and schools."}
             </p>
           </motion.div>
 
@@ -513,7 +539,6 @@ export default function LandingPage() {
                   e.currentTarget.style.boxShadow    = "";
                 }}
               >
-                {/* Accent top bar */}
                 <div className="absolute inset-x-0 top-0 h-0.5 opacity-0 transition-opacity group-hover:opacity-100"
                   style={{ background: `linear-gradient(90deg,transparent,${f.color},transparent)` }} />
                 <div className="lnv-icon-hover mb-5 flex h-11 w-11 items-center justify-center rounded-xl"
@@ -525,6 +550,319 @@ export default function LandingPage() {
               </motion.article>
             ))}
           </div>
+
+          {/* ── School Edition separator ── */}
+          <motion.div {...fadeUp(0.05)} className="mt-24">
+            <div className="mb-12 flex flex-col items-center text-center gap-4">
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 w-16 bg-slate-200" />
+                <span className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-xs font-black uppercase tracking-widest text-white"
+                  style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 4px 20px rgba(99,102,241,.30)" }}>
+                  <School size={12} />
+                  {isArabic ? "حصري للمدارس" : "School Edition Only"}
+                </span>
+                <div className="h-px flex-1 w-16 bg-slate-200" />
+              </div>
+              <h3 className="text-2xl font-black tracking-tight text-slate-900 md:text-3xl">
+                {isArabic
+                  ? <>{isArabic ? "مميزات مخصصة" : "Purpose-built"} <span style={GT2}>{isArabic ? "للبيئة المدرسية" : "for schools"}</span></>
+                  : <>Purpose-built <span style={GT2}>for schools</span></>}
+              </h3>
+              <p className="max-w-xl text-sm leading-7 text-slate-500">
+                {isArabic
+                  ? "بالإضافة إلى كل مميزات المنصة، المدارس تحصل على أدوات متخصصة تربط الإدارة، المعلمين، الطلاب، والأهل معاً."
+                  : "On top of every platform feature, schools get specialized tools that connect administration, teachers, students, and parents together."}
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {schoolFeatures.map((f, i) => (
+                <motion.article key={f.title} {...fadeUp(i * 0.08)}
+                  className="lnv-card group relative cursor-default overflow-hidden rounded-2xl border p-6 shadow-sm"
+                  style={{ background: "rgba(99,102,241,0.03)", borderColor: "rgba(99,102,241,0.18)" }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = `${f.color}60`;
+                    e.currentTarget.style.background   = `${f.color}08`;
+                    e.currentTarget.style.boxShadow    = `0 8px 30px ${f.color}18`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "rgba(99,102,241,0.18)";
+                    e.currentTarget.style.background   = "rgba(99,102,241,0.03)";
+                    e.currentTarget.style.boxShadow    = "";
+                  }}
+                >
+                  <div className="absolute inset-x-0 top-0 h-0.5 opacity-60"
+                    style={{ background: `linear-gradient(90deg,transparent,${f.color},transparent)` }} />
+                  <div className="lnv-icon-hover mb-5 flex h-11 w-11 items-center justify-center rounded-xl"
+                    style={{ background: `${f.color}18`, border: `1px solid ${f.color}30` }}>
+                    <f.icon size={19} style={{ color: f.color }} />
+                  </div>
+                  <h3 className="text-lg font-black text-slate-900">{f.title}</h3>
+                  <p className="mt-2 text-sm leading-7 text-slate-500">{f.desc}</p>
+                  <span className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-[10px] font-bold text-indigo-600">
+                    <School size={9} /> {isArabic ? "مدارس" : "Schools"}
+                  </span>
+                </motion.article>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ══════════ MOBILE APP ══════════ */}
+      <section id="mobile" className="relative overflow-hidden py-28"
+        style={{ background: "linear-gradient(160deg,#0f0c29 0%,#302b63 50%,#24243e 100%)" }}>
+        {/* Grid overlay */}
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0"
+          style={{ backgroundImage: "linear-gradient(rgba(99,102,241,0.08) 1px,transparent 1px),linear-gradient(90deg,rgba(99,102,241,0.08) 1px,transparent 1px)", backgroundSize: "56px 56px" }} />
+        {/* Glow orbs */}
+        <div aria-hidden="true" className="lnv-orb pointer-events-none absolute -left-32 top-1/4 h-[600px] w-[600px] rounded-full"
+          style={{ background: "radial-gradient(circle,rgba(99,102,241,0.18) 0%,transparent 65%)" }} />
+        <div aria-hidden="true" className="lnv-orb pointer-events-none absolute -right-32 bottom-0 h-[500px] w-[500px] rounded-full"
+          style={{ background: "radial-gradient(circle,rgba(139,92,246,0.14) 0%,transparent 65%)", animationDelay: "2s" }} />
+
+        <div className="relative z-10 mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
+          {/* Header */}
+          <motion.div {...fadeUp(0)} className="mb-16 text-center">
+            <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-indigo-300">
+              <Smartphone size={11} /> {isArabic ? "التطبيق المحمول" : "Mobile App"}
+            </span>
+            <h2 className="mt-4 text-4xl font-black tracking-tight text-white md:text-5xl" style={{ lineHeight: 1.1 }}>
+              {isArabic
+                ? <>{isArabic ? "التعلم في جيبك" : "Learning in your pocket"}<br /><span style={GT}>{isArabic ? "للطلاب والأهل" : "for students & parents"}</span></>
+                : <>Learning in your pocket<br /><span style={GT}>for students & parents</span></>}
+            </h2>
+            <p className="mx-auto mt-4 max-w-xl text-base leading-8 text-white/55">
+              {isArabic
+                ? "تطبيق محمول متكامل يتيح للطلاب متابعة دروسهم ومهامهم، وللأهل مراقبة تقدم أبنائهم — في أي وقت ومن أي مكان."
+                : "A full-featured mobile app that lets students follow their lessons and tasks, and parents monitor their child's progress — anytime, anywhere."}
+            </p>
+          </motion.div>
+
+          {/* Two-column: Student + Parent apps */}
+          <div className="grid gap-8 lg:grid-cols-2">
+
+            {/* ── Student App ── */}
+            <motion.div {...fadeUp(0.1)} className="flex flex-col">
+              {/* Label */}
+              <div className="mb-6 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl"
+                  style={{ background: "linear-gradient(135deg,#6366f1,#22d3ee)" }}>
+                  <GraduationCap size={18} className="text-white" />
+                </div>
+                <div>
+                  <p className="font-black text-white">{isArabic ? "تطبيق الطالب" : "Student App"}</p>
+                  <p className="text-xs text-white/45">{isArabic ? "التعلم، التحفيز، والاختبارات" : "Learning, gamification & quizzes"}</p>
+                </div>
+              </div>
+
+              {/* Phone mockup */}
+              <div className="flex-1 overflow-hidden rounded-2xl"
+                style={{ background: "rgba(8,8,26,0.92)", border: "1px solid rgba(99,102,241,0.30)", boxShadow: "0 40px 80px rgba(0,0,0,.6), 0 0 60px rgba(99,102,241,0.08)" }}>
+                {/* Chrome bar */}
+                <div className="flex items-center gap-1.5 border-b px-4 py-3" style={{ borderColor: "rgba(255,255,255,0.07)" }}>
+                  <span className="h-2.5 w-2.5 rounded-full bg-red-400/60" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400/60" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/60" />
+                  <div className="ms-3 flex items-center gap-1.5">
+                    <Smartphone size={10} className="text-white/25" />
+                    <span className="text-[10px] font-semibold text-white/22">Learnova · Student</span>
+                  </div>
+                </div>
+                <div className="space-y-3.5 p-5">
+                  {/* XP bar */}
+                  <div>
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="font-black uppercase tracking-wide text-indigo-400">⚡ Level 7</span>
+                      <span className="text-white/38">2,340 / 3,000 XP</span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
+                      <div style={{ width: "78%", height: "100%", borderRadius: 99, background: "linear-gradient(90deg,#6366f1,#22d3ee)" }} />
+                    </div>
+                  </div>
+                  {/* Today's lessons */}
+                  <div>
+                    <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-white/28">
+                      📚 {isArabic ? "دروس اليوم" : "Today's lessons"}
+                    </p>
+                    {[
+                      { title: isArabic ? "مقدمة في الفيزياء الكمية" : "Intro to Quantum Physics",     pct: 62, color: "#6366f1" },
+                      { title: isArabic ? "مشتقات الدوال المثلثية"    : "Trigonometric Derivatives",   pct: 40, color: "#22d3ee" },
+                      { title: isArabic ? "قصة: ألف ليلة وليلة"        : "Story: 1001 Nights",          pct: 88, color: "#34d399" },
+                    ].map((les) => (
+                      <div key={les.title} className="mb-2 rounded-xl px-3 py-2.5 last:mb-0"
+                        style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                        <div className="flex items-center justify-between">
+                          <span className="truncate text-xs font-semibold text-white/72 max-w-[200px]">{les.title}</span>
+                          <span className="ms-2 shrink-0 text-[10px] font-bold" style={{ color: les.color }}>{les.pct}%</span>
+                        </div>
+                        <div className="mt-1.5 h-1 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>
+                          <div style={{ width: `${les.pct}%`, height: "100%", borderRadius: 99, background: `linear-gradient(90deg,${les.color},${les.color}99)` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Quick tools */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { e: "🃏", l: isArabic ? "فلاش كاردز" : "Flashcards" },
+                      { e: "📝", l: isArabic ? "اختبار"      : "Quiz"       },
+                      { e: "🗺️", l: isArabic ? "خريطة ذهنية" : "Mind Map"  },
+                    ].map((t) => (
+                      <div key={t.l} className="flex flex-col items-center gap-1 rounded-xl py-3 text-center"
+                        style={{ background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.20)" }}>
+                        <span className="text-lg">{t.e}</span>
+                        <span className="text-[9px] font-bold text-indigo-300">{t.l}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Student app feature bullets */}
+              <div className="mt-6 grid grid-cols-2 gap-3">
+                {[
+                  { icon: Bot,           label: isArabic ? "مرشد ذكي بالذكاء"  : "AI Mentor chat"        },
+                  { icon: Flame,         label: isArabic ? "XP وسلاسل يومية"   : "XP & daily streaks"    },
+                  { icon: BookOpen,      label: isArabic ? "فلاش كاردز واختبارات" : "Flashcards & quizzes" },
+                  { icon: Trophy,        label: isArabic ? "قوائم متصدرين"      : "Live leaderboards"     },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center gap-2.5 rounded-xl border border-indigo-500/20 bg-indigo-500/8 px-3 py-2.5">
+                    <item.icon size={14} className="shrink-0 text-indigo-400" />
+                    <span className="text-xs font-semibold text-white/70">{item.label}</span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+
+            {/* ── Parent App ── */}
+            <motion.div {...fadeUp(0.18)} className="flex flex-col">
+              {/* Label */}
+              <div className="mb-6 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl"
+                  style={{ background: "linear-gradient(135deg,#8b5cf6,#f59e0b)" }}>
+                  <Users size={18} className="text-white" />
+                </div>
+                <div>
+                  <p className="font-black text-white">{isArabic ? "تطبيق ولي الأمر" : "Parent App"}</p>
+                  <p className="text-xs text-white/45">{isArabic ? "متابعة الأبناء والتواصل مع المدرسة" : "Track children & connect with school"}</p>
+                </div>
+              </div>
+
+              {/* Phone mockup */}
+              <div className="flex-1 overflow-hidden rounded-2xl"
+                style={{ background: "rgba(8,8,26,0.92)", border: "1px solid rgba(139,92,246,0.30)", boxShadow: "0 40px 80px rgba(0,0,0,.6), 0 0 60px rgba(139,92,246,0.08)" }}>
+                {/* Chrome bar */}
+                <div className="flex items-center gap-1.5 border-b px-4 py-3" style={{ borderColor: "rgba(255,255,255,0.07)" }}>
+                  <span className="h-2.5 w-2.5 rounded-full bg-red-400/60" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400/60" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/60" />
+                  <div className="ms-3 flex items-center gap-1.5">
+                    <Smartphone size={10} className="text-white/25" />
+                    <span className="text-[10px] font-semibold text-white/22">Learnova · Parent</span>
+                  </div>
+                </div>
+                <div className="space-y-3.5 p-5">
+                  {/* Child selector */}
+                  <div className="flex gap-2">
+                    {[
+                      { name: isArabic ? "سارة" : "Sara",   active: true  },
+                      { name: isArabic ? "أحمد" : "Ahmed",  active: false },
+                    ].map((ch) => (
+                      <div key={ch.name}
+                        className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-bold transition"
+                        style={ch.active
+                          ? { background: "linear-gradient(135deg,#8b5cf6,#6366f1)", color: "#fff" }
+                          : { background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.40)", border: "1px solid rgba(255,255,255,0.10)" }}>
+                        {ch.name}
+                      </div>
+                    ))}
+                  </div>
+                  {/* Stats grid */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { val: "94%",   label: isArabic ? "الحضور"   : "Attendance", color: "#34d399" },
+                      { val: "87%",   label: isArabic ? "المعدل"   : "Avg. Grade", color: "#22d3ee" },
+                      { val: "14",    label: isArabic ? "سلسلة"    : "Day streak",  color: "#f59e0b" },
+                    ].map((s) => (
+                      <div key={s.label} className="rounded-xl p-3 text-center"
+                        style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                        <p className="text-xl font-black" style={{ color: s.color }}>{s.val}</p>
+                        <p className="mt-0.5 text-[9px] text-white/32">{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Subject grades */}
+                  <div>
+                    <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-white/28">
+                      📊 {isArabic ? "درجات المواد" : "Subject grades"}
+                    </p>
+                    {[
+                      { subj: isArabic ? "الرياضيات" : "Mathematics", grade: "A+", pct: 96, color: "#34d399" },
+                      { subj: isArabic ? "العلوم"     : "Science",     grade: "A",  pct: 87, color: "#22d3ee" },
+                      { subj: isArabic ? "اللغة العربية" : "Arabic",  grade: "B+", pct: 78, color: "#f59e0b" },
+                    ].map((s) => (
+                      <div key={s.subj} className="mb-2 flex items-center gap-3">
+                        <span className="w-24 shrink-0 truncate text-xs text-white/50">{s.subj}</span>
+                        <div className="flex-1 overflow-hidden rounded-full h-1.5" style={{ background: "rgba(255,255,255,0.08)" }}>
+                          <div style={{ width: `${s.pct}%`, height: "100%", borderRadius: 99, background: s.color }} />
+                        </div>
+                        <span className="w-7 shrink-0 text-right text-[11px] font-black" style={{ color: s.color }}>{s.grade}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Notification */}
+                  <div className="flex items-start gap-3 rounded-xl p-3"
+                    style={{ background: "rgba(251,191,36,0.10)", border: "1px solid rgba(251,191,36,0.25)" }}>
+                    <Bell size={13} className="mt-0.5 shrink-0 text-amber-400" />
+                    <p className="text-xs leading-5 text-white/65">
+                      {isArabic
+                        ? "سارة لم تسجل حضور اليوم في مادة الرياضيات"
+                        : "Sara was absent today in Mathematics class"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Parent app feature bullets */}
+              <div className="mt-6 grid grid-cols-2 gap-3">
+                {[
+                  { icon: ClipboardList, label: isArabic ? "تتبع الحضور اليومي"  : "Daily attendance"      },
+                  { icon: BarChart3,     label: isArabic ? "درجات ومعدلات حية"   : "Live grades & GPA"     },
+                  { icon: Bell,          label: isArabic ? "إشعارات فورية"        : "Instant notifications" },
+                  { icon: MessageCircle, label: isArabic ? "تواصل مع المعلمين"    : "Teacher messaging"     },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center gap-2.5 rounded-xl border border-violet-500/20 bg-violet-500/8 px-3 py-2.5">
+                    <item.icon size={14} className="shrink-0 text-violet-400" />
+                    <span className="text-xs font-semibold text-white/70">{item.label}</span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Download note */}
+          <motion.div {...fadeUp(0.25)} className="mt-16 flex flex-col items-center gap-4 text-center">
+            <p className="text-sm font-semibold text-white/40">
+              {isArabic ? "التطبيق متاح على Android وiOS" : "Available on Android & iOS"}
+            </p>
+            <div className="flex flex-wrap justify-center gap-3">
+              <div className="flex items-center gap-2.5 rounded-xl border border-white/15 bg-white/8 px-5 py-3 backdrop-blur-sm">
+                <Download size={15} className="text-white/60" />
+                <div className={isArabic ? "text-right" : "text-left"}>
+                  <p className="text-[9px] font-semibold uppercase tracking-widest text-white/40">{isArabic ? "متاح على" : "Get it on"}</p>
+                  <p className="text-sm font-black text-white">Google Play</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 rounded-xl border border-white/15 bg-white/8 px-5 py-3 backdrop-blur-sm">
+                <Download size={15} className="text-white/60" />
+                <div className={isArabic ? "text-right" : "text-left"}>
+                  <p className="text-[9px] font-semibold uppercase tracking-widest text-white/40">{isArabic ? "حمّل من" : "Download on"}</p>
+                  <p className="text-sm font-black text-white">App Store</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
         </div>
       </section>
 
@@ -898,15 +1236,30 @@ export default function LandingPage() {
               {l.plansTitle}
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-base leading-8 text-slate-500">{l.plansSubtitle}</p>
+            {/* Trial banner */}
+            <div className="mt-7 inline-flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-3">
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="lnv-ping absolute h-full w-full rounded-full bg-emerald-500 opacity-75" />
+                <span className="relative h-2.5 w-2.5 rounded-full bg-emerald-500" />
+              </span>
+              <span className="text-sm font-black text-emerald-700">{l.planTrial}</span>
+            </div>
           </motion.div>
 
           {planList.length > 0 ? (
             <div className="grid gap-5 lg:grid-cols-3">
               {planList.map((plan, index) => {
-                const isPopular = Boolean(plan.isPopular || plan.recommended || index === 1);
-                const feats     = formatFeatureList(plan.features || plan.Features || []);
-                const price     = Number(plan.price ?? plan.Price ?? 0);
-                const label     = plan.name || plan.Name || `Plan ${index + 1}`;
+                const isPopular   = Boolean(plan.isPopular || plan.recommended || index === 1);
+                const isSchool    = String(plan.name || '').toLowerCase().includes('school');
+                const feats        = formatFeatureList(plan.features || plan.Features || []);
+                const SCHOOL_FEAT_NAMES = ['Attendance Tracking','Parent Portal','School Calendar','Grade Reports','Parent Notifications','Class Management','Academic Years & Terms','Timetable Management'];
+                const PRO_NEW_NAMES     = ['AI Chat','Notifications','Analytics'];
+                const schoolFeats  = feats.filter(f => SCHOOL_FEAT_NAMES.includes(f));
+                const proNewFeats  = feats.filter(f => PRO_NEW_NAMES.includes(f));
+                const coreFeats    = feats.filter(f => !schoolFeats.includes(f) && !proNewFeats.includes(f));
+                const isPro        = String(plan.name || '').toLowerCase().includes('pro');
+                const price        = Number(plan.price ?? plan.Price ?? 0);
+                const label        = plan.name || plan.Name || `Plan ${index + 1}`;
                 return (
                   <motion.article key={plan.id || label} {...fadeUp(index * 0.1)}
                     className="relative flex flex-col rounded-2xl p-7"
@@ -918,12 +1271,6 @@ export default function LandingPage() {
                       background: "#f8fafc",
                       border: "1px solid #e2e8f0",
                     }}>
-                    {isPopular && (
-                      <div className="absolute -top-3.5 start-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-4 py-1 text-xs font-black text-white"
-                        style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", boxShadow: "0 4px 16px rgba(99,102,241,.4)" }}>
-                        ★ {isArabic ? "الأكثر شيوعاً" : "Most popular"}
-                      </div>
-                    )}
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                       {plan.durationDays} {isArabic ? "يوم" : "days"}
                     </p>
@@ -938,13 +1285,68 @@ export default function LandingPage() {
                       {plan.description || plan.Description || (isArabic ? "خطة جاهزة للاستخدام." : "Ready-to-use plan.")}
                     </p>
                     {feats.length > 0 && (
-                      <ul className="mt-6 space-y-2.5 border-t border-slate-200 pt-6 text-sm text-slate-500">
-                        {feats.slice(0, 5).map((item) => (
+                      <ul className="mt-6 space-y-2 border-t border-slate-200 pt-6 text-sm text-slate-500">
+                        {/* Inherited / core features */}
+                        {coreFeats.slice(0, 6).map((item) => (
                           <li key={item} className="flex items-start gap-2.5">
-                            <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-indigo-500" />
+                            <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-indigo-500" />
                             <span>{item}</span>
                           </li>
                         ))}
+
+                        {/* Academy Pro — new features section */}
+                        {isPro && proNewFeats.length > 0 && (
+                          <>
+                            <li className="pt-2">
+                              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                {isArabic ? "ما الجديد في Pro" : "New in Pro"}
+                              </span>
+                            </li>
+                            {proNewFeats.map((item) => (
+                              <li key={item} className="flex items-start gap-2.5">
+                                <div className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full"
+                                  style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}>
+                                  <CheckCircle2 size={10} className="text-white" />
+                                </div>
+                                <div>
+                                  <span className="font-bold text-slate-800">{item}</span>
+                                  {item === 'AI Chat' && (
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                      {isArabic ? "مساعد ذكي مرتبط بمحتوى دروسك" : "RAG-powered tutor grounded in your lessons"}
+                                    </p>
+                                  )}
+                                  {item === 'Notifications' && (
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                      {isArabic ? "إشعارات فورية للطلاب والمعلمين" : "Real-time push alerts for students & teachers"}
+                                    </p>
+                                  )}
+                                  {item === 'Analytics' && (
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                      {isArabic ? "لوحات أداء لحظية للمعلمين" : "Live performance dashboards for instructors"}
+                                    </p>
+                                  )}
+                                </div>
+                              </li>
+                            ))}
+                          </>
+                        )}
+
+                        {/* School Edition — school-only features */}
+                        {isSchool && schoolFeats.length > 0 && (
+                          <>
+                            <li className="pt-2">
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-indigo-600">
+                                <School size={9} /> {isArabic ? "حصري للمدارس" : "School only"}
+                              </span>
+                            </li>
+                            {schoolFeats.slice(0, 4).map((item) => (
+                              <li key={item} className="flex items-start gap-2.5">
+                                <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-violet-500" />
+                                <span className="font-medium text-violet-700">{item}</span>
+                              </li>
+                            ))}
+                          </>
+                        )}
                       </ul>
                     )}
                     <Link
@@ -1016,7 +1418,7 @@ export default function LandingPage() {
           </motion.div>
 
           <motion.p {...fadeIn(0.36)} className="mt-8 text-sm text-slate-400">
-            {isArabic ? "لا بطاقة ائتمانية · إعداد فوري · دعم مباشر" : "No credit card required · Instant setup · Direct support"}
+            {isArabic ? "تجربة مجانية 30 يوم · إعداد فوري · دعم مباشر" : "30-day free trial · Instant setup · Direct support"}
           </motion.p>
         </div>
       </section>
