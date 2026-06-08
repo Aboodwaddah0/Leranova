@@ -896,10 +896,10 @@ export default function InstructorCoursesPage() {
                     const label=resolvedIsAcademy?item.name:trackLabel(item);
                     const li=item.level?LEVEL_LABELS[item.level]:null;
                     return(
-                      <article key={item.id} className="group overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-sm cursor-pointer transition hover:-translate-y-1 hover:shadow-lg" onClick={()=>resolvedIsAcademy?enterCourse(item):enterTrack(item)}>
+                      <article key={item.id} className="group overflow-hidden rounded-[22px] bg-white shadow-sm cursor-pointer transition hover:-translate-y-1 hover:shadow-lg" onClick={()=>resolvedIsAcademy?enterCourse(item):enterTrack(item)}>
                         <div className={`relative h-40 bg-gradient-to-br ${acc} overflow-hidden`}>
                           {item.Thumbnail||item.imageUrl?(
-                            <img src={item.Thumbnail||item.imageUrl} alt={label} onError={(e)=>{e.currentTarget.src=DEFAULT_THUMB;}} className="h-full w-full object-cover"/>
+                            <img src={item.Thumbnail||item.imageUrl} alt={label} onError={(e)=>{e.currentTarget.src=DEFAULT_THUMB;}} className="h-full w-full object-contain"/>
                           ):<span className="absolute inset-0 flex items-center justify-center text-5xl text-white/30">📚</span>}
                           <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/25">
                             <span className="translate-y-3 rounded-xl bg-white px-4 py-2 text-sm font-bold text-slate-900 opacity-0 shadow transition group-hover:translate-y-0 group-hover:opacity-100">{isArabic?"فتح":"Open →"}</span>
@@ -1231,13 +1231,9 @@ export default function InstructorCoursesPage() {
                         {quizGenerating?<RefreshCw size={13} className="animate-spin"/>:<Sparkles size={13}/>}
                         {quizGenerating?(isArabic?"جاري التوليد...":"Generating..."):(quiz?(isArabic?"توليد أسئلة":"Generate Questions"):(isArabic?"إنشاء اختبار":"Create Quiz"))}
                       </button>
-                      {quiz&&<button type="button" onClick={async()=>{
-                        try { const u = await updateLessonQuiz(drillCourse.id, drillLesson.id, quiz.id, { isPublished: !quiz.isPublished }); setQuiz(u); }
-                        catch(err){ notifyError(safeError(err)); }
-                      }} className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition ${quiz.isPublished?"border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100":"border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`}>
-                        {quiz.isPublished?<Eye size={13}/>:<EyeOff size={13}/>}
-                        {quiz.isPublished?(isArabic?"منشور":"Published"):(isArabic?"غير منشور":"Unpublished")}
-                      </button>}
+                      {quiz&&<span className="flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-700">
+                        <Eye size={13}/>{isArabic?"منشور":"Published"}
+                      </span>}
                       {quiz&&<button type="button" onClick={()=>{
                         setPeriodForm({
                           availableFrom: quiz.availableFrom ? new Date(quiz.availableFrom).toISOString().slice(0,16) : "",

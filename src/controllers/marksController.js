@@ -72,6 +72,7 @@ export const getMyMarksController = async (req, res, next) => {
 
 		const marks = await getStudentMarks(req.user.id, {
 			...(value.Subject_id ? { Subject_id: value.Subject_id } : {}),
+			...(req.query.academicYearId ? { academicYearId: req.query.academicYearId } : {}),
 		});
 
 		return res.status(200).json({
@@ -134,8 +135,8 @@ export const getOrgMarksController = async (req, res, next) => {
 	try {
 		const orgId = req.user?.id;
 		if (!orgId) throw new AppError('Unauthorized', 401);
-		const { subjectId, gradeLevel, studentName, dateFrom, dateTo, markType } = req.query;
-		const marks = await getOrgMarks(orgId, { subjectId, gradeLevel, studentName, dateFrom, dateTo, markType });
+		const { subjectId, gradeLevel, studentName, dateFrom, dateTo, markType, academicYearId } = req.query;
+		const marks = await getOrgMarks(orgId, { subjectId, gradeLevel, studentName, dateFrom, dateTo, markType, academicYearId });
 		return res.status(200).json({ success: true, status: 200, data: marks, error: null, timestamp: new Date().toISOString() });
 	} catch (err) { next(err); }
 };

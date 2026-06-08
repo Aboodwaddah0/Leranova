@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Brain, ClipboardList, Clock3, CreditCard, FileText, Lock, Map, MessageCircle, PlayCircle, SendHorizontal } from 'lucide-react';
+import { ArrowLeft, Award, Brain, ClipboardList, Clock3, CreditCard, FileText, Lock, Map, MessageCircle, PlayCircle, SendHorizontal } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
 import AIAssistantSidebar from '../../components/student/AIAssistantSidebar';
 import Flashcards from '../../components/student/Flashcards';
@@ -21,6 +21,8 @@ import {
   submitStudentQuizAttempt,
   subscribeAcademyMaterial,
   updateStudentLessonProgress,
+  fetchAcademyCertEligibility,
+  claimAcademyCertificate,
 } from '../../services/studentService';
 import { useLanguage } from '../../utils/i18n';
 import { isLessonCompleted, setLessonCompleted, subscribeToProgress } from '../../utils/studentProgress';
@@ -80,6 +82,8 @@ export default function StudentSubjectPage() {
   const [error, setError] = useState('');
   const [studentContext, setStudentContext] = useState(null);
   const [isLocked, setIsLocked] = useState(false);
+  const [eligibility, setEligibility] = useState(null);
+  const [certClaiming, setCertClaiming] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [progressTick, setProgressTick] = useState(0);
   const [selectedLessonId, setSelectedLessonId] = useState('');
@@ -110,6 +114,9 @@ export default function StudentSubjectPage() {
           fetchAcademyTrackSubjects(numericCourseId).catch(() => null),
         ]);
         setStudentContext(context);
+        if (context?.mode === 'ACADEMY') {
+          fetchAcademyCertEligibility(numericSubjectId).then(setEligibility).catch(() => {});
+        }
         const matchedCourse = (courses || []).find((item) => Number(item.id) === numericCourseId) || null;
         let matchedSubject = (subjects || []).find((item) => Number(item.id) === numericSubjectId) || null;
 
@@ -127,9 +134,13 @@ export default function StudentSubjectPage() {
           setIsLocked(false);
         }
 
+        // Always fetch lessons — for paid unsubscribed subjects the API returns
+        // preview metadata with isLocked flags on lessons beyond the first 3
         let lessonData = [];
-        if (!isEffectivelyLocked) {
+        try {
           lessonData = await fetchSubjectLessons(numericSubjectId);
+        } catch {
+          lessonData = [];
         }
 
         if (cancelled) return;
@@ -463,33 +474,100 @@ export default function StudentSubjectPage() {
         </div>
       </section>
 
-      {studentContext?.mode === 'ACADEMY' && isLocked ? (
-        <div className="mt-6 rounded-[1.75rem] p-6" style={{ background: T.lockBg, border: `1px solid ${T.lockBorder}`, color: T.lockText }}>
-          <div className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.18em]">
-            <Lock size={16} /> {isArabic ? 'المادة مقفلة' : 'Subject Locked'}
+      {/* ── Academy certificate eligibility widget ── */}
+      {studentContext?.mode === 'ACADEMY' && !isLocked && eligibility ? (
+        <div className="mt-6 rounded-[1.75rem] p-5 shadow-lg" style={{ border: `1px solid ${T.cardBorder}`, background: T.card }}>
+          <div className="flex items-center gap-2 mb-4">
+            <Award size={18} style={{ color: eligibility.eligible ? '#10b981' : T.accent }} />
+            <span className="text-sm font-black" style={{ color: T.text }}>
+              {isArabic ? 'متطلبات الشهادة' : 'Certificate Requirements'}
+            </span>
           </div>
-          <p className="mt-3 text-sm leading-7">
-            {isArabic ? 'يجب شراء هذه المادة أولاً عبر Stripe لفتح الدروس والمرفقات والدردشة الخاصة بها.' : 'You must purchase this subject via Stripe first to unlock lessons, attachments, and its dedicated chat.'}
-          </p>
+          <div className="grid grid-cols-1 gap-3">
+            {(() => {
+              const p = eligibility.quizProgress;
+              const pct = p?.total > 0 ? Math.round((p.passed / p.total) * 100) : 100;
+              const done = !p?.total || p.passed / p.total >= 0.8;
+              return (
+                <div className="rounded-xl p-3" style={{ background: T.innerBg, border: `1px solid ${T.innerBorder}` }}>
+                  <p className="text-xs font-semibold mb-2" style={{ color: T.sub }}>
+                    {isArabic ? 'نجاح الاختبارات (80%)' : 'Quiz Pass Rate (80%)'}
+                  </p>
+                  <div className="h-2 rounded-full overflow-hidden" style={{ background: T.cardBorder }}>
+                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, background: done ? '#10b981' : '#6366f1' }} />
+                  </div>
+                  <p className="mt-1.5 text-xs font-bold" style={{ color: T.sub }}>{p?.passed ?? 0}/{p?.total ?? 0} — {pct}%</p>
+                </div>
+              );
+            })()}
+          </div>
+          {eligibility.eligible ? (
+            <button
+              type="button"
+              disabled={certClaiming}
+              onClick={async () => {
+                setCertClaiming(true);
+                try {
+                  await claimAcademyCertificate(numericSubjectId);
+                  window.location.href = '/student/certificates';
+                } finally { setCertClaiming(false); }
+              }}
+              className="mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-60"
+            >
+              <Award size={16} />
+              {certClaiming
+                ? (isArabic ? 'جارٍ...' : 'Claiming...')
+                : (isArabic ? 'احصل على شهادتك' : 'Claim Certificate')}
+            </button>
+          ) : (
+            <p className="mt-3 text-xs" style={{ color: T.sub }}>
+              {isArabic ? 'اجتز 80% من الاختبارات للحصول على شهادتك.' : 'Pass 80% of quizzes to claim your certificate.'}
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      {studentContext?.mode === 'ACADEMY' && isLocked ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl px-5 py-3"
+          style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)' }}>
+          <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: '#4338ca' }}>
+            <Lock size={14} />
+            {isArabic ? 'المحتوى الكامل مقفل — أول 3 دروس متاحة مجاناً' : 'Full content locked — first 3 lessons are free preview'}
+          </div>
           <button
             type="button"
             onClick={handleBuySubject}
             disabled={isPurchasing}
-            className="mt-4 inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-indigo-500 disabled:opacity-60"
           >
-            <CreditCard size={16} />
-            {isPurchasing
-              ? (isArabic ? 'جاري التحويل للدفع...' : 'Redirecting to checkout...')
-              : (isArabic ? 'اشترِ الآن' : 'Buy Now')}
+            <CreditCard size={14} />
+            {isPurchasing ? (isArabic ? 'جاري التحويل...' : 'Redirecting...') : (isArabic ? 'اشترك الآن لفتح الكل' : 'Subscribe to Unlock All')}
           </button>
         </div>
       ) : null}
 
-      {!(studentContext?.mode === 'ACADEMY' && isLocked) ? (
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <section className="space-y-6 overflow-hidden rounded-[1.75rem] p-0 shadow-xl shadow-indigo-500/5 backdrop-blur-xl" style={{ border: `1px solid ${T.wrapBorder}`, background: T.panel }}>
           <div className="bg-slate-950">
-            {selectedLessonVideoUrl ? (
+            {selectedLesson?.isLocked ? (
+              /* Locked lesson — show subscribe prompt */
+              <div className="flex h-[360px] items-center justify-center bg-[radial-gradient(circle_at_top,_#1e1b4b_0%,_#020617_75%)] text-slate-200">
+                <div className="text-center px-8">
+                  <Lock size={48} className="mx-auto text-indigo-400 mb-4" />
+                  <p className="text-lg font-black text-white">{isArabic ? 'هذا الدرس مقفل' : 'This lesson is locked'}</p>
+                  <p className="mt-2 text-sm text-slate-400">{isArabic ? 'اشترك في المادة للوصول لجميع الدروس' : 'Subscribe to this subject to unlock all lessons'}</p>
+                  <button
+                    type="button"
+                    onClick={handleBuySubject}
+                    disabled={isPurchasing}
+                    className="mt-5 inline-flex items-center gap-2 rounded-full bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-indigo-500 disabled:opacity-60"
+                  >
+                    <CreditCard size={16} />
+                    {isPurchasing ? (isArabic ? 'جاري التحويل...' : 'Redirecting...') : (isArabic ? 'اشترك الآن' : 'Subscribe Now')}
+                  </button>
+                </div>
+              </div>
+            ) : selectedLessonVideoUrl ? (
               <video
                 key={selectedLesson?.id || 'lesson-video'}
                 controls
@@ -531,7 +609,7 @@ export default function StudentSubjectPage() {
                 { key: 'comments',    icon: <MessageCircle size={15}/>, label: isArabic ? 'التعليقات' : 'Comments', badge: comments.length },
                 { key: 'flashcards',  icon: <Brain size={15}/>, label: isArabic ? 'البطاقات التعليمية' : 'Flashcards' },
                 { key: 'mindmap',     icon: <Map size={15}/>, label: isArabic ? 'الخريطة الذهنية' : 'Mind Map' },
-                ...(lessonQuiz ? [{ key: 'quiz', icon: <ClipboardList size={15}/>, label: `🧠 ${isArabic ? 'الاختبار' : 'Quiz'}` }] : []),
+                ...((lessonQuiz || selectedLesson?.quiz?.isPublished) ? [{ key: 'quiz', icon: <ClipboardList size={15}/>, label: `🧠 ${isArabic ? 'الاختبار' : 'Quiz'}` }] : []),
               ].map((tab) => {
                 const active = lessonTab === tab.key;
                 return (
@@ -666,45 +744,82 @@ export default function StudentSubjectPage() {
             <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: T.badge, color: T.badgeText }}>{lessonItems.length}</span>
           </div>
 
+          {/* Preview badge when some lessons are locked */}
+          {lessonItems.some(l => l.isLocked) && (
+            <div className="mt-3 rounded-xl px-3 py-2 text-xs font-semibold flex items-center gap-2"
+              style={{ background: 'rgba(245,158,11,0.1)', color: '#92400e', border: '1px solid rgba(245,158,11,0.3)' }}>
+              <span>🎬</span>
+              {isArabic ? `أول ${lessonItems.filter(l => l.isPreview).length} دروس مجانية — اشترك للوصول لجميع الدروس` : `First ${lessonItems.filter(l => l.isPreview).length} lessons are free — subscribe to unlock all`}
+            </div>
+          )}
+
           <div className="mt-4 space-y-3 max-h-[58vh] overflow-auto pr-1">
             {lessonItems.length ? lessonItems.map((lesson, index) => {
-              const active = String(lesson.id) === String(selectedLesson?.id);
+              const active    = String(lesson.id) === String(selectedLesson?.id);
+              const isLocked  = Boolean(lesson.isLocked);
+              const isPreview = Boolean(lesson.isPreview);
               return (
                 <button
                   key={lesson.id}
                   type="button"
                   onClick={() => {
+                    if (isLocked) return; // blocked
                     clearAutoNext();
                     setSelectedLessonId(String(lesson.id));
                     setLessonTab('attachments');
                   }}
                   className="group flex w-full items-start gap-3 rounded-2xl px-4 py-3 text-left transition"
-                  style={active
-                    ? { border: `1px solid ${T.lessonActiveBorder}`, background: T.lessonActive }
-                    : { border: `1px solid ${T.cardBorder}`, background: T.card }}
+                  style={isLocked
+                    ? { border: `1px solid ${T.cardBorder}`, background: T.card, opacity: 0.75, cursor: 'not-allowed' }
+                    : active
+                      ? { border: `1px solid ${T.lessonActiveBorder}`, background: T.lessonActive }
+                      : { border: `1px solid ${T.cardBorder}`, background: T.card }}
                 >
-                  <div className="mt-1">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(lesson.isCompleted) || isLessonCompleted(lesson.id)}
-                      onChange={(event) => {
-                        event.stopPropagation();
-                        void markLessonCompletion(lesson.id, event.target.checked);
-                      }}
-                      onClick={(event) => event.stopPropagation()}
-                      className="h-4 w-4 cursor-pointer"
-                    />
-                  </div>
+                  {/* Checkbox — hidden for locked lessons */}
+                  {!isLocked && (
+                    <div className="mt-1">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(lesson.isCompleted) || isLessonCompleted(lesson.id)}
+                        onChange={(event) => {
+                          event.stopPropagation();
+                          void markLessonCompletion(lesson.id, event.target.checked);
+                        }}
+                        onClick={(event) => event.stopPropagation()}
+                        className="h-4 w-4 cursor-pointer"
+                      />
+                    </div>
+                  )}
+                  {/* Icon */}
                   <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full"
-                    style={active
-                      ? { background: T.lessonIconActBg, color: T.lessonIconAct }
-                      : { background: T.lessonIconBg, color: T.lessonIconTx }}>
-                    <PlayCircle size={16} />
+                    style={isLocked
+                      ? { background: 'rgba(100,116,139,0.1)', color: '#94a3b8' }
+                      : active
+                        ? { background: T.lessonIconActBg, color: T.lessonIconAct }
+                        : { background: T.lessonIconBg, color: T.lessonIconTx }}>
+                    {isLocked ? <Lock size={15} /> : <PlayCircle size={16} />}
                   </div>
+                  {/* Title + meta */}
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <p className="truncate text-sm font-bold" style={{ color: active ? T.accent : T.text }}>{lesson.title || lesson.name}</p>
-                      {lesson.quiz?.isPublished ? <span className="flex-shrink-0 text-xs" title={isArabic ? 'يحتوي على اختبار' : 'Has quiz'}>🧠</span> : null}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="truncate text-sm font-bold" style={{ color: isLocked ? T.muted : active ? T.accent : T.text }}>
+                        {lesson.title || lesson.name}
+                      </p>
+                      {isPreview && !isLocked && (
+                        <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black"
+                          style={{ background: 'rgba(16,185,129,0.12)', color: '#065f46' }}>
+                          {isArabic ? 'معاينة مجانية' : 'FREE'}
+                        </span>
+                      )}
+                      {isLocked && (
+                        <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black"
+                          style={{ background: 'rgba(239,68,68,0.1)', color: '#991b1b' }}>
+                          {isArabic ? '🔒 مقفل' : '🔒 Locked'}
+                        </span>
+                      )}
+                      {!isLocked && lesson.quiz?.isPublished && (
+                        <span className="flex-shrink-0 text-xs" title={isArabic ? 'يحتوي على اختبار' : 'Has quiz'}>🧠</span>
+                      )}
                     </div>
                     <div className="mt-1 flex items-center gap-2 text-xs" style={{ color: T.muted }}>
                       <Clock3 size={13} />
@@ -719,7 +834,6 @@ export default function StudentSubjectPage() {
           </div>
         </aside>
       </div>
-      ) : null}
 
       <AIAssistantSidebar isArabic={isArabic} lessonId={selectedLesson?.id} />
     </StudentLayout>

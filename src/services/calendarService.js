@@ -101,3 +101,38 @@ export const deleteEvent = async (orgId, eventId) => {
   await prisma.school_event.delete({ where: { id: eventId } });
   return { id: eventId };
 };
+
+// Resolve org for any role and return published events only
+export const listPublicEvents = async (userId, role, filters = {}) => {
+  let orgId;
+  const r = String(role || '').trim().toUpperCase();
+  if (r === 'SCHOOL' || r === 'ACADEMY') {
+    orgId = userId;
+  } else if (r === 'TEACHER') {
+    const teacher = await prisma.teacher.findUnique({ where: { Teacher_id: userId }, select: { OrgId: true } });
+    if (!teacher) throw new AppError('Teacher profile not found', 404);
+    orgId = teacher.OrgId;
+  } else if (r === 'STUDENT') {
+    const student = await prisma.student.findUnique({ where: { Student_id: userId }, select: { OrgId: true } });
+    if (!student) throw new AppError('Student profile not found', 404);
+    orgId = student.OrgId;
+  } else if (r === 'PARENT') {
+    const child = await prisma.student.findFirst({ where: { Parent_id: userId }, select: { OrgId: true } });
+    if (!child) throw new AppError('No children found for this parent', 404);
+    orgId = child.OrgId;
+  } else {
+    throw new AppError('Access denied', 403);
+  }
+  // Delegate to existing listEvents with isPublished forced to true
+  const { termId, type, from, to } = filters;
+  return prisma.school_event.findMany({
+    where: {
+      orgId,
+      isPublished: true,
+      ...(termId ? { termId: Number(termId) } : {}),
+      ...(type ? { type } : {}),
+      ...(from || to ? { startDate: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}),
+    },
+    orderBy: { startDate: 'asc' },
+  }).then((rows) => rows.map(toDto));
+};

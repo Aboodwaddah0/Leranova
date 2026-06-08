@@ -29,9 +29,13 @@ const notificationSlice = createSlice({
     setLoading(state, action) {
       state.loading = action.payload;
     },
+    addNotification(state, action) {
+      state.notifications.unshift(action.payload);
+      state.unreadCount += 1;
+    },
   },
 });
 
-export const { setNotifications, setUnreadCount, markOneRead, markAllRead, setLoading } =
+export const { setNotifications, setUnreadCount, markOneRead, markAllRead, setLoading, addNotification } =
   notificationSlice.actions;
 export default notificationSlice.reducer;

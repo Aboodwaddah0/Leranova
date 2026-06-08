@@ -13,8 +13,19 @@ import InstructorStudentsPage from "./pages/instructor/InstructorStudentsPage";
 import InstructorMarksPage from "./pages/instructor/InstructorMarksPage";
 import InstructorSettingsPage from "./pages/instructor/InstructorSettingsPage";
 import InstructorAnalyticsPage from "./pages/instructor/InstructorAnalyticsPage";
+import InstructorAttendancePage from "./pages/instructor/InstructorAttendancePage";
+import InstructorCalendarPage from "./pages/instructor/InstructorCalendarPage";
+import InstructorChatPage from "./pages/instructor/InstructorChatPage";
+import InstructorTimetablePage from "./pages/instructor/InstructorTimetablePage";
+import StudentTimetablePage from "./pages/student/StudentTimetablePage";
+import StudentCalendarPage from "./pages/student/StudentCalendarPage";
+import StudentAttendancePage from "./pages/student/StudentAttendancePage";
+import ParentCalendarPage from "./pages/parent/ParentCalendarPage";
+import ParentAttendancePage from "./pages/parent/ParentAttendancePage";
 import StudentDashboardPage from "./pages/student/StudentDashboardPage";
 import StudentCoursesPage from "./pages/student/StudentCoursesPage";
+import StudentMyCoursesPage from "./pages/student/StudentMyCoursesPage";
+import StudentCertificatesPage from "./pages/student/StudentCertificatesPage";
 import StudentCourseDetailsPage from "./pages/student/StudentCourseDetailsPage";
 import StudentSchoolSubjectsPage from "./pages/student/StudentSchoolSubjectsPage";
 import StudentSchoolMarksPage from "./pages/student/StudentSchoolMarksPage";
@@ -32,11 +43,11 @@ import AdminLoginPage from "./pages/AdminLoginPage";
 import SignupPage from "./pages/SignupPage";
 import PaymentRedirect from "./components/auth/PaymentRedirect";
 import PaymentSuccessPage from "./pages/PaymentSuccessPage";
+import StudentSubjectPaymentSuccessPage from "./pages/student/StudentSubjectPaymentSuccessPage";
 import OrganizationWorkspacePage from "./pages/OrganizationWorkspacePage";
 import AdminOverviewPage from "./pages/admin/AdminOverviewPage";
 import AdminOrganizationsPage from "./pages/admin/AdminOrganizationsPage";
 import AdminRevenuePage from "./pages/admin/AdminRevenuePage";
-import AdminPlansPage from "./pages/admin/AdminPlansPage";
 import ParentDashboardPage from "./pages/parent/ParentDashboardPage";
 import ParentMarksPage from "./pages/parent/ParentMarksPage";
 import ParentSettingsPage from "./pages/parent/ParentSettingsPage";
@@ -72,9 +83,13 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/signup/checkout" element={<PaymentRedirect />} />
-        <Route path="/payment-success" element={<PaymentSuccessPage />} />
-        <Route path="/payment/success" element={<PaymentSuccessPage />} />
+        {/* Organization registration payment success */}
+        <Route path="/payment/success"    element={<PaymentSuccessPage />} />
         <Route path="/subscription/success" element={<PaymentSuccessPage />} />
+        {/* Legacy alias — keep for any outstanding org-registration Stripe sessions */}
+        <Route path="/payment-success"    element={<PaymentSuccessPage />} />
+        {/* Subject subscription payment success — separate page to avoid org-registration conflict */}
+        <Route path="/student/payment-success" element={<StudentSubjectPaymentSuccessPage />} />
         <Route path="/payment/cancel" element={<Navigate to="/signup" replace />} />
         <Route path="/subscription/cancel" element={<Navigate to="/signup" replace />} />
         <Route path="/verify-email/:token" element={<VerifyEmailPage />} />
@@ -89,6 +104,8 @@ function App() {
           </Route>
           <Route path="/dashboard/parent" element={<ParentDashboardPage />} />
           <Route path="/dashboard/parent/marks" element={<ParentMarksPage />} />
+          <Route path="/dashboard/parent/calendar" element={<ParentCalendarPage />} />
+          <Route path="/dashboard/parent/attendance" element={<ParentAttendancePage />} />
           <Route path="/dashboard/parent/settings" element={<ParentSettingsPage />} />
           <Route element={<InstructorProtectedRoute />}>
             <Route path="/dashboard/instructor" element={<InstructorDashboardPage />} />
@@ -99,18 +116,27 @@ function App() {
             <Route path="/dashboard/instructor/analytics" element={<InstructorAnalyticsPage />} />
             <Route element={<InstructorSchoolOnlyRoute />}>
               <Route path="/dashboard/instructor/marks" element={<InstructorMarksPage />} />
+              <Route path="/dashboard/instructor/attendance" element={<InstructorAttendancePage />} />
+              <Route path="/dashboard/instructor/calendar" element={<InstructorCalendarPage />} />
+              <Route path="/dashboard/instructor/chat" element={<InstructorChatPage />} />
+              <Route path="/dashboard/instructor/timetable" element={<InstructorTimetablePage />} />
             </Route>
           </Route>
           <Route element={<StudentProtectedRoute />}>
             <Route path="/dashboard/student" element={<StudentPageErrorBoundary><StudentDashboardPage /></StudentPageErrorBoundary>} />
             <Route path="/dashboard/student/overview" element={<StudentPageErrorBoundary><StudentDashboardPage /></StudentPageErrorBoundary>} />
             <Route path="/dashboard/student/courses" element={<StudentPageErrorBoundary><StudentCoursesPage /></StudentPageErrorBoundary>} />
+              <Route path="/student/my-courses" element={<StudentPageErrorBoundary><StudentMyCoursesPage /></StudentPageErrorBoundary>} />
               <Route path="/courses" element={<StudentPageErrorBoundary><StudentCoursesPage /></StudentPageErrorBoundary>} />
               <Route path="/dashboard/student/courses" element={<Navigate to="/courses" replace />} />
               <Route path="/student/courses" element={<Navigate to="/courses" replace />} />
               <Route path="/courses/:courseId" element={<StudentCourseDetailsPage />} />
               <Route path="/student/subjects" element={<StudentPageErrorBoundary><StudentSchoolSubjectsPage /></StudentPageErrorBoundary>} />
               <Route path="/student/marks" element={<StudentPageErrorBoundary><StudentSchoolMarksPage /></StudentPageErrorBoundary>} />
+              <Route path="/student/calendar" element={<StudentPageErrorBoundary><StudentCalendarPage /></StudentPageErrorBoundary>} />
+              <Route path="/student/attendance" element={<StudentPageErrorBoundary><StudentAttendancePage /></StudentPageErrorBoundary>} />
+              <Route path="/student/timetable" element={<StudentPageErrorBoundary><StudentTimetablePage /></StudentPageErrorBoundary>} />
+              <Route path="/student/certificates" element={<StudentPageErrorBoundary><StudentCertificatesPage /></StudentPageErrorBoundary>} />
               <Route path="/student/courses/:courseId" element={<LegacyStudentCourseRedirect />} />
               <Route path="/courses/:courseId/subjects/:subjectId" element={<StudentSubjectPage />} />
               <Route path="/student/subjects/:subjectId" element={<Navigate to="/courses" replace />} />
@@ -129,7 +155,6 @@ function App() {
           <Route path="/admin" element={<AdminOverviewPage />} />
           <Route path="/admin/organizations" element={<AdminOrganizationsPage />} />
           <Route path="/admin/revenue" element={<AdminRevenuePage />} />
-          <Route path="/admin/plans" element={<AdminPlansPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />

@@ -16,7 +16,7 @@ const fmt = (d) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit",
 
 const EMPTY_FORM = { title: "", description: "", startDate: "", endDate: "", type: "OTHER", isPublished: true };
 
-export default function SchoolCalendar({ isArabic, courses }) {
+export default function SchoolCalendar({ isArabic, courses, academicYearId, sessionFrom, sessionTo, isArchive }) {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -32,15 +32,19 @@ export default function SchoolCalendar({ isArabic, courses }) {
     setLoading(true);
     setError("");
     try {
-      const params = filterType !== "ALL" ? `?type=${filterType}` : "";
-      const res = await api.get(`/school-calendar${params}`);
+      const parts = [];
+      if (filterType !== "ALL") parts.push(`type=${filterType}`);
+      if (sessionFrom) parts.push(`from=${sessionFrom}`);
+      if (sessionTo) parts.push(`to=${sessionTo}`);
+      const query = parts.length ? `?${parts.join("&")}` : "";
+      const res = await api.get(`/school-calendar${query}`);
       setEvents(res.data?.data || []);
     } catch {
       setError(isArabic ? "تعذّر تحميل الأحداث" : "Failed to load events");
     } finally {
       setLoading(false);
     }
-  }, [filterType, isArabic]);
+  }, [filterType, isArabic, sessionFrom, sessionTo]);
 
   useEffect(() => { loadEvents(); }, [loadEvents]);
 
@@ -106,13 +110,15 @@ export default function SchoolCalendar({ isArabic, courses }) {
             {isArabic ? "الأحداث والمناسبات" : "Events & Occasions"}
           </h2>
         </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          style={{ padding: "10px 20px", borderRadius: 12, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer" }}
-        >
-          {isArabic ? "+ إضافة حدث" : "+ Add Event"}
-        </button>
+        {!isArchive && (
+          <button
+            type="button"
+            onClick={openCreate}
+            style={{ padding: "10px 20px", borderRadius: 12, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer" }}
+          >
+            {isArabic ? "+ إضافة حدث" : "+ Add Event"}
+          </button>
+        )}
       </div>
 
       {success && <div style={{ marginBottom: 12, padding: "10px 16px", borderRadius: 10, background: "#d1fae5", color: "#065f46", fontSize: 13, fontWeight: 600 }}>{success}</div>}
@@ -183,14 +189,16 @@ export default function SchoolCalendar({ isArabic, courses }) {
                     {fmt(ev.startDate)} {ev.endDate && ev.endDate !== ev.startDate ? `→ ${fmt(ev.endDate)}` : ""}
                   </p>
                 </div>
-                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                  <button type="button" onClick={() => openEdit(ev)} style={{ padding: "6px 14px", borderRadius: 10, border: "1px solid #e2e8f0", background: "#f8fafc", fontSize: 12, fontWeight: 700, color: "#475569", cursor: "pointer" }}>
-                    {isArabic ? "تعديل" : "Edit"}
-                  </button>
-                  <button type="button" onClick={() => setDeleteConfirm(ev.id)} style={{ padding: "6px 14px", borderRadius: 10, border: "1px solid #fee2e2", background: "#fff5f5", fontSize: 12, fontWeight: 700, color: "#dc2626", cursor: "pointer" }}>
-                    {isArabic ? "حذف" : "Delete"}
-                  </button>
-                </div>
+                {!isArchive && (
+                  <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                    <button type="button" onClick={() => openEdit(ev)} style={{ padding: "6px 14px", borderRadius: 10, border: "1px solid #e2e8f0", background: "#f8fafc", fontSize: 12, fontWeight: 700, color: "#475569", cursor: "pointer" }}>
+                      {isArabic ? "تعديل" : "Edit"}
+                    </button>
+                    <button type="button" onClick={() => setDeleteConfirm(ev.id)} style={{ padding: "6px 14px", borderRadius: 10, border: "1px solid #fee2e2", background: "#fff5f5", fontSize: 12, fontWeight: 700, color: "#dc2626", cursor: "pointer" }}>
+                      {isArabic ? "حذف" : "Delete"}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}

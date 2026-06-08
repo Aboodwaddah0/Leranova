@@ -45,6 +45,7 @@ function _weeklyStart() {
 
 export async function getEngagementFeed(studentId) {
   const d90         = new Date(Date.now() - 90 * 86_400_000);
+  const d7          = new Date(Date.now() -  7 * 86_400_000);
   const weeklyStart = _weeklyStart();
 
   const [xpRow, streakRow, recentEvents, recentAchievements, missionStats] = await Promise.all([

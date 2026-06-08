@@ -728,6 +728,7 @@ export default function InstructorMarksPage() {
           <Pagination page={marksPage} totalPages={Math.ceil(visibleMarks.length / MARKS_PAGE_SIZE)} totalItems={visibleMarks.length} pageSize={MARKS_PAGE_SIZE} onPageChange={setMarksPage} isArabic={isArabic} />
         </div>
       </div>
+
     </InstructorLayout>
   );
 }

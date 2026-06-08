@@ -29,3 +29,13 @@ export const fetchParentChildrenMarks = async () => {
   const { data } = await api.get('/parent/marks');
   return data?.data || [];
 };
+
+export const fetchCalendar = async (params = {}) => {
+  const { data } = await api.get('/school-calendar/public', { params });
+  return data?.data || [];
+};
+
+export const fetchChildrenAttendance = async (params = {}) => {
+  const { data } = await api.get('/attendance/children', { params });
+  return data?.data || [];
+};

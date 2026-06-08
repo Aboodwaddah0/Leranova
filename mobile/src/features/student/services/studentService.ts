@@ -4,7 +4,7 @@
  */
 import apiClient, { unwrap, ensureArray } from '../../../shared/services/apiClient';
 import type {
-  StudentContext, Course, Subject, Lesson, Comment,
+  StudentContext, Course, Subject, AcademyTrackData, Lesson, Comment,
   LessonAiContent, Teacher, StudentProfile, GamificationStats,
   StudentMark, Chat, ChatMessage, QuizAttemptAnswer, QuizResult,
   MissionsData, AchievementsData, AIMentor, ActivityFeedData, SocialData,
@@ -124,6 +124,39 @@ export async function fetchStudentCourseCatalog(): Promise<Course[]> {
 export async function fetchCourseSubjects(courseId: number): Promise<Subject[]> {
   const res = await apiClient.get(`/courses/${courseId}/subjects`);
   return ensureArray<Subject>(unwrap(res));
+}
+
+/** Academy-specific: returns ALL subjects for a track including unsubscribed paid ones */
+export async function fetchAcademyTrackSubjects(trackId: number): Promise<AcademyTrackData> {
+  const res = await apiClient.get(`/student/academy/tracks/${trackId}/subjects`);
+  const data = unwrap<AcademyTrackData>(res);
+  return data ?? { track: { id: trackId, name: '' }, subjects: [] };
+}
+
+/** Subscribe to an academy subject (free or redirect to Stripe) */
+export async function subscribeAcademyMaterial(subjectId: number): Promise<{
+  requiresPayment: boolean;
+  checkoutUrl?: string;
+  checkoutSessionId?: string;
+  status?: string;
+} | null> {
+  const res = await apiClient.post(`/student/academy/subjects/${subjectId}/subscribe`, {
+    paymentMethod: 'STRIPE',
+  });
+  return unwrap(res);
+}
+
+/** Verify a completed Stripe checkout session for a subject subscription */
+export async function verifyAcademyCheckoutSession(sessionId: string): Promise<{
+  verified: boolean;
+  subjectId?: number;
+  subjectName?: string;
+  status?: string;
+} | null> {
+  const res = await apiClient.get('/student/academy/checkout/verify', {
+    params: { session_id: sessionId },
+  });
+  return unwrap(res);
 }
 
 export async function fetchSubjectLessons(subjectId: number): Promise<Lesson[]> {
@@ -345,6 +378,25 @@ export async function fetchActivityFeed(): Promise<ActivityFeedData | null> {
     return unwrap<ActivityFeedData>(res);
   } catch {
     return null;
+  }
+}
+
+// ── School: Attendance & Calendar ────────────────────────────────────────────
+export async function fetchMyAttendance(): Promise<import('../../../types/student').StudentAttendanceRecord[]> {
+  try {
+    const res = await apiClient.get('/attendance/me');
+    return ensureArray(unwrap(res));
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchMyCalendar(params?: { from?: string; to?: string }): Promise<import('../../../types/student').StudentCalendarEvent[]> {
+  try {
+    const res = await apiClient.get('/school-calendar/public', { params });
+    return ensureArray(unwrap(res));
+  } catch {
+    return [];
   }
 }
 

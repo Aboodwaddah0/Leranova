@@ -75,6 +75,8 @@ const teacherSelect = {
       id: true,
       name: true,
       email: true,
+      phone: true,
+      registrationNumber: true,
       gender: true,
       age: true,
       address: true,
@@ -89,7 +91,6 @@ const teacherSelfSelect = {
       id: true,
       Name: true,
       Role: true,
-      portal: true,
       status: true,
     },
   },
@@ -125,6 +126,7 @@ const serializeTeacher = (teacher) => ({
   organizationId: teacher.OrgId,
   name: teacher?.user?.name || '',
   email: teacher?.user?.email || '',
+  phone: teacher?.user?.phone ?? null,
   work: teacher.Work,
   specialization: teacher.specialization,
   bio: teacher.bio,
@@ -152,6 +154,8 @@ const serializeTeacher = (teacher) => ({
     id: teacher?.user?.id,
     name: teacher?.user?.name || '',
     email: teacher?.user?.email || '',
+    registrationNumber: teacher?.user?.registrationNumber || null,
+    phone: teacher?.user?.phone ?? null,
     gender: teacher?.user?.gender ?? null,
     age: teacher?.user?.age ?? null,
     address: teacher?.user?.address ?? null,
@@ -165,7 +169,6 @@ const serializeTeacherSelfProfile = (teacher) => ({
         id: teacher.organization.id,
         name: teacher.organization.Name,
         role: teacher.organization.Role,
-        portal: teacher.organization.portal,
         status: teacher.organization.status,
       }
     : null,
@@ -226,6 +229,7 @@ export const createTeacher = async (orgId, data) => {
           passwordEncrypted,
           mustChangePassword: true,
           role: 'TEACHER',
+          phone: data.phone ?? null,
           age: data.age ?? null,
           gender: data.gender ?? null,
           address: data.address ?? null,
@@ -257,9 +261,30 @@ export const createTeacher = async (orgId, data) => {
     throw error;
   }
 
+  const updatedOrg = await prisma.organization.update({
+    where: { id: orgId },
+    data: { userSequence: { increment: 1 } },
+    select: { userSequence: true, organizationCode: true, Name: true },
+  });
+
+  let prefix = updatedOrg.organizationCode;
+  if (!prefix) {
+    const words = String(updatedOrg.Name || '').split(/[\s\-_]+/).filter(Boolean);
+    const initials = words.map((w) => w.replace(/[^a-zA-Z]/g, '')[0] || '').join('').toUpperCase();
+    prefix = initials.length >= 2 ? initials.slice(0, 5) : String(updatedOrg.Name || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) || 'ORG';
+    const taken = await prisma.organization.findFirst({ where: { organizationCode: prefix, id: { not: orgId } }, select: { id: true } });
+    if (taken) prefix = `${prefix}${orgId}`;
+    await prisma.organization.update({ where: { id: orgId }, data: { organizationCode: prefix } });
+  }
+
+  const regNum = `${prefix}-${String(updatedOrg.userSequence).padStart(5, '0')}`;
+  await prisma.user.update({ where: { id: teacher.Teacher_id }, data: { registrationNumber: regNum } });
+  const serialized = serializeTeacher(teacher);
+  serialized.user.registrationNumber = regNum;
+
   console.info('Teacher created successfully', { orgId, email: data.email, teacherId: teacher.Teacher_id });
 
-  return { teacher: serializeTeacher(teacher), tempPassword };
+  return { teacher: serialized, tempPassword, registrationNumber: regNum };
 };
 
 export const getTeachers = async (requester) => {
@@ -319,6 +344,7 @@ export const updateTeacher = async (orgId, teacherId, data) => {
   await ensureTeacherBelongsToOrg(orgId, teacherId);
 
   const userData = {
+    phone: data.phone ?? undefined,
     age: data.age ?? undefined,
     gender: data.gender ?? undefined,
     address: data.address ?? undefined,

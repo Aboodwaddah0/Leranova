@@ -43,3 +43,52 @@ export const getStudentAttendanceController = async (req, res, next) => {
     return res.status(200).json({ success: true, status: 200, data, error: null, timestamp: ts() });
   } catch (err) { next(err); }
 };
+
+// ── Student self / parent children controllers ─────────────────────────────
+
+export const getMyAttendanceController = async (req, res, next) => {
+  try {
+    const data = await attendanceService.getMyStudentAttendance(req.user.id, req.query);
+    return res.status(200).json({ success: true, status: 200, data, error: null, timestamp: ts() });
+  } catch (err) { next(err); }
+};
+
+export const getChildrenAttendanceController = async (req, res, next) => {
+  try {
+    if (req.user?.role !== 'PARENT') return next(new AppError('Access denied. Parent account required.', 403));
+    const data = await attendanceService.getChildrenAttendance(req.user.id, req.query);
+    return res.status(200).json({ success: true, status: 200, data, error: null, timestamp: ts() });
+  } catch (err) { next(err); }
+};
+
+// ── Subject-level (period) attendance controllers ──────────────────────────
+
+export const getSubjectStudentsController = async (req, res, next) => {
+  try {
+    const subjectId = Number(req.params.subjectId);
+    if (Number.isNaN(subjectId)) return next(new AppError('Invalid subject id', 400));
+    const data = await attendanceService.getSubjectStudents(req.user, subjectId);
+    return res.status(200).json({ success: true, status: 200, data, error: null, timestamp: ts() });
+  } catch (err) { next(err); }
+};
+
+export const markSubjectAttendanceController = async (req, res, next) => {
+  try {
+    const subjectId = Number(req.params.subjectId);
+    if (Number.isNaN(subjectId)) return next(new AppError('Invalid subject id', 400));
+    const { date, records } = req.body;
+    if (!date) return next(new AppError('date is required', 400));
+    if (!Array.isArray(records) || records.length === 0) return next(new AppError('records array is required', 400));
+    const data = await attendanceService.markSubjectAttendance(req.user, subjectId, { date, records });
+    return res.status(200).json({ success: true, status: 200, data, error: null, timestamp: ts() });
+  } catch (err) { next(err); }
+};
+
+export const getSubjectAttendanceController = async (req, res, next) => {
+  try {
+    const subjectId = Number(req.params.subjectId);
+    if (Number.isNaN(subjectId)) return next(new AppError('Invalid subject id', 400));
+    const data = await attendanceService.getSubjectAttendance(req.user, subjectId, req.query);
+    return res.status(200).json({ success: true, status: 200, data, error: null, timestamp: ts() });
+  } catch (err) { next(err); }
+};

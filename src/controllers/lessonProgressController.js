@@ -20,7 +20,9 @@ export const upsertLessonProgressController = async (req, res, next) => {
     }
 
     const isCompleted = Boolean(req.body?.isCompleted);
-    const data = await upsertLessonProgress({ studentId, lessonId, isCompleted });
+    const watchedSeconds = typeof req.body?.watchedSeconds === 'number' ? Math.floor(req.body.watchedSeconds) : undefined;
+    const videoDurationSeconds = typeof req.body?.videoDurationSeconds === 'number' ? Math.floor(req.body.videoDurationSeconds) : undefined;
+    const data = await upsertLessonProgress({ studentId, lessonId, isCompleted, watchedSeconds, videoDurationSeconds });
 
     return res.status(200).json({
       success: true,

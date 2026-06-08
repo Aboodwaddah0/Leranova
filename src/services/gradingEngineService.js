@@ -136,11 +136,13 @@ export const listComputedGrades = async (orgId, { termId, subjectId, studentId }
     where,
     include: {
       student: {
-        include: {
-          user: { select: { firstName: true, lastName: true, email: true } },
+        select: {
+          Student_id: true,
+          GradeLevel: true,
+          user: { select: { name: true, email: true } },
         },
       },
-      course: { select: { id: true, name: true } },
+      course: { select: { id: true, name: true, Course_id: true } },
       term: { select: { id: true, name: true } },
     },
     orderBy: [{ rawScore: 'desc' }],
@@ -149,10 +151,12 @@ export const listComputedGrades = async (orgId, { termId, subjectId, studentId }
   return rows.map((g) => ({
     ...gradeDTO(g),
     studentName: g.student?.user
-      ? `${g.student.user.firstName || ''} ${g.student.user.lastName || ''}`.trim()
+      ? (g.student.user.name || '').trim()
       : `Student ${g.studentId}`,
     studentEmail: g.student?.user?.email || null,
     subjectName: g.course?.name || null,
+    classId: g.course?.Course_id ?? null,
+    gradeLevel: g.student?.GradeLevel ?? null,
     termName: g.term?.name || null,
   }));
 };
@@ -168,7 +172,7 @@ export const getTermRankings = async (orgId, { termId, courseId } = {}) => {
     include: {
       student: {
         include: {
-          user: { select: { firstName: true, lastName: true } },
+          user: { select: { name: true } },
         },
       },
     },
@@ -182,7 +186,7 @@ export const getTermRankings = async (orgId, { termId, courseId } = {}) => {
       byStudent[g.studentId] = {
         studentId: g.studentId,
         studentName: g.student?.user
-          ? `${g.student.user.firstName || ''} ${g.student.user.lastName || ''}`.trim()
+          ? (g.student.user.name || '').trim()
           : `Student ${g.studentId}`,
         scores: [],
         grades: [],

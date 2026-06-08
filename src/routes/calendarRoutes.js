@@ -5,12 +5,11 @@ import * as ctrl from '../controllers/calendarController.js';
 
 const router = Router();
 
-router.use(authMiddleware, isOrganization);
-
-router.get('/', ctrl.listEventsController);
-router.post('/', ctrl.createEventController);
-router.get('/:id', ctrl.getEventController);
-router.patch('/:id', ctrl.updateEventController);
-router.delete('/:id', ctrl.deleteEventController);
+// Org-only routes
+router.get('/',    authMiddleware, isOrganization, ctrl.listEventsController);
+router.post('/',   authMiddleware, isOrganization, ctrl.createEventController);
+router.get('/:id', authMiddleware, isOrganization, ctrl.getEventController);
+router.patch('/:id',  authMiddleware, isOrganization, ctrl.updateEventController);
+router.delete('/:id', authMiddleware, isOrganization, ctrl.deleteEventController);
 
 export default router;

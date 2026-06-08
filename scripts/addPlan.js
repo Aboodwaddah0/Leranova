@@ -78,27 +78,29 @@ const createSinglePlan = async ({ name, price, days, description, features }) =>
 };
 
 const seedDefaultPlans = async () => {
+  // NOTE: for a full reset with plan_feature relations use `npm run plan:seed` (resetPlans.js).
+  // This function only creates the basic plan rows (legacy features JSON).
   const defaults = [
     {
-      name: 'Starter',
+      name: 'Academy Starter',
       price: 49,
       days: 30,
-      description: 'Starter monthly plan',
-      features: ['GROUP_CHAT', 'NOTIFICATIONS'],
+      description: 'Perfect for small academies getting started. Core LMS tools, basic quiz generation, and group chat for up to 50 students.',
+      features: ['Course Management', 'Lesson Management', 'Student Enrollment', 'Quiz Generation', 'Progress Tracking', 'Group Chat'],
     },
     {
-      name: 'Growth',
-      price: 129,
+      name: 'Academy Pro',
+      price: 99,
       days: 30,
-      description: 'Growth monthly plan',
-      features: ['AI_CHAT', 'GROUP_CHAT', 'NOTIFICATIONS', 'ANALYTICS'],
+      description: 'Designed for growing academies that need more powerful learning tools. Includes everything in Academy Starter, plus AI Chat, Notifications, and Analytics.',
+      features: ['Course Management', 'Lesson Management', 'Student Enrollment', 'Quiz Generation', 'Progress Tracking', 'Group Chat', 'AI Chat', 'Notifications', 'Analytics'],
     },
     {
-      name: 'Enterprise',
-      price: 999,
-      days: 365,
-      description: 'Enterprise annual plan',
-      features: ['AI_CHAT', 'GROUP_CHAT', 'NOTIFICATIONS', 'ANALYTICS', 'REPORTS', 'MAX_USERS'],
+      name: 'School Edition',
+      price: 199,
+      days: 30,
+      description: 'Built specifically for schools. Everything in Academy Pro, plus school-exclusive tools: attendance tracking, parent portal, school calendar, and grade reports.',
+      features: ['Course Management', 'Lesson Management', 'Student Enrollment', 'Quiz Generation', 'Progress Tracking', 'Group Chat', 'AI Chat', 'Notifications', 'Analytics', 'Attendance Tracking', 'Parent Portal', 'School Calendar', 'Grade Reports', 'Parent Notifications', 'Class Management', 'Academic Years & Terms', 'Timetable Management'],
     },
   ];
 

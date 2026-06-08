@@ -14,6 +14,7 @@ const markInclude = {
 				},
 			},
 		},
+		// Parent_id is a direct column on student — needed for parent notification
 	},
 	course: {
 		select: {
@@ -179,12 +180,23 @@ export const createMark = async (teacherId, data) => {
 		include: markInclude,
 	});
 
+	// Notify student
 	createNotification({
 		userId: mark.student.user.id,
 		content: `Your mark for "${mark.course.name}" has been recorded: ${mark.Numbers}/${mark.OutOf}`,
 		type: 'MARK',
 		url: '/student/marks',
 	}).catch(() => {});
+
+	// Notify parent (Parent_id is the parent's user.id directly)
+	if (mark.student.Parent_id) {
+		createNotification({
+			userId: mark.student.Parent_id,
+			content: `${mark.student.user.name}'s mark for "${mark.course.name}": ${mark.Numbers}/${mark.OutOf}`,
+			type: 'MARK',
+			url: '/dashboard/parent',
+		}).catch(() => {});
+	}
 
 	return serializeMark(mark);
 };
@@ -253,6 +265,7 @@ export const getStudentMarks = async (studentId, filters = {}) => {
 		where: {
 			Student_id: studentId,
 			...(filters.Subject_id ? { Subject_id: filters.Subject_id } : {}),
+			...(filters.academicYearId ? { term: { academicYearId: Number(filters.academicYearId) } } : {}),
 		},
 		include: markInclude,
 		orderBy: {
@@ -298,7 +311,7 @@ const orgMarkInclude = {
 };
 
 export const getOrgMarks = async (orgId, filters = {}) => {
-	const { subjectId, gradeLevel, studentName, dateFrom, dateTo, markType } = filters;
+	const { subjectId, gradeLevel, studentName, dateFrom, dateTo, markType, academicYearId } = filters;
 
 	// Build the where clause scoped to this org via the subject → track relation
 	const where = {
@@ -307,6 +320,7 @@ export const getOrgMarks = async (orgId, filters = {}) => {
 			...(subjectId ? { id: Number(subjectId) } : {}),
 			...(gradeLevel ? { track: { Org_id: Number(orgId), GradeLevel: Number(gradeLevel) } } : {}),
 		},
+		...(academicYearId ? { term: { academicYearId: Number(academicYearId) } } : {}),
 		...(markType ? { MarkType: markType } : {}),
 		...((dateFrom || dateTo) ? {
 			time: {

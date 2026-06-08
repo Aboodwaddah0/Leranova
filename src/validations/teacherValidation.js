@@ -3,6 +3,7 @@ import Joi from 'joi';
 export const createTeacherSchema = Joi.object({
   name: Joi.string().max(255).required(),
   email: Joi.string().email().max(255).required(),
+  phone: Joi.string().max(50).allow('', null),
   age: Joi.number().integer().min(0).allow(null),
   gender: Joi.string().valid('FEMALE', 'MALE').allow(null),
   address: Joi.string().max(255).allow('', null),
@@ -12,6 +13,7 @@ export const createTeacherSchema = Joi.object({
 });
 
 export const updateTeacherSchema = Joi.object({
+  phone: Joi.string().max(50).allow('', null),
   work: Joi.string().max(255).allow('', null),
   specialization: Joi.string().max(255).allow('', null),
   bio: Joi.string().allow('', null),
@@ -23,6 +25,7 @@ export const updateTeacherSchema = Joi.object({
 
 export const updateMyTeacherProfileSchema = Joi.object({
   name:           Joi.string().max(255),
+  phone:          Joi.string().max(50).allow('', null),
   gender:         Joi.string().valid('FEMALE', 'MALE').allow(null),
   age:            Joi.number().integer().min(0).allow(null),
   address:        Joi.string().max(255).allow('', null),

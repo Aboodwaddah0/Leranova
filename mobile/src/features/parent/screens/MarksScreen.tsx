@@ -70,8 +70,8 @@ function MarkCard({ mark, T }: { mark: ChildMark; T: ReturnType<typeof useTheme>
       <View style={styles.markTop}>
         <View style={styles.markLeft}>
           <Text style={[styles.markChild, { color: T.text }]}>👤 {mark.childName}</Text>
-          <Text style={[styles.subjectName, { color: T.subtext }]}>{mark.subject.name}</Text>
-          {mark.subject.course && (
+          <Text style={[styles.subjectName, { color: T.subtext }]}>{mark.subject?.name ?? '—'}</Text>
+          {mark.subject?.course && (
             <Text style={[styles.courseName, { color: T.muted }]}>{mark.subject.course.name}</Text>
           )}
         </View>

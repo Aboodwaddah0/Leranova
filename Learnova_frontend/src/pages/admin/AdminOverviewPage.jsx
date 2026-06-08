@@ -5,7 +5,7 @@ import AdminLayout from "../../components/admin/AdminLayout";
 import AdminStatCard from "../../components/admin/AdminStatCard";
 import { clearAdminState } from "../../redux/slices/adminSlice";
 import { logout } from "../../redux/slices/authSlice";
-import { fetchDashboardMetricsThunk, fetchOrganizationsThunk, fetchRevenueThunk, fetchPlansThunk } from "../../redux/thunks/adminThunks";
+import { fetchDashboardMetricsThunk, fetchOrganizationsThunk, fetchRevenueThunk } from "../../redux/thunks/adminThunks";
 import { useLanguage } from "../../utils/i18n";
 import { notifyError } from "../../lib/notify";
 
@@ -19,7 +19,6 @@ export default function AdminOverviewPage() {
     dispatch(fetchDashboardMetricsThunk());
     dispatch(fetchOrganizationsThunk(organizationFilters));
     dispatch(fetchRevenueThunk({ days: 30 }));
-    dispatch(fetchPlansThunk());
   }, [dispatch]);
 
   useEffect(() => {
@@ -63,7 +62,6 @@ export default function AdminOverviewPage() {
         <AdminStatCard label={t.admin.metrics.pending} value={metrics?.pendingOrganizations ?? "—"} />
         <AdminStatCard label={t.admin.metrics.activeSubscriptions} value={metrics?.activeSubscriptions ?? "—"} />
         <AdminStatCard label={t.admin.metrics.revenue} value={formatMoney(metrics?.totalRevenue)} />
-        <AdminStatCard label={t.admin.metrics.plans} value={metrics?.totalPlans ?? "—"} />
         <AdminStatCard label={t.admin.metrics.payments} value={metrics?.totalPayments ?? "—"} />
       </div>
 

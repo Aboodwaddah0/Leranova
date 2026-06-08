@@ -109,6 +109,32 @@ export const activateAcademicYear = async (orgId, yearId) => {
   return toAcademicYearDto(updated);
 };
 
+export const deleteAcademicYear = async (orgId, yearId) => {
+  await ensureSchoolOrg(orgId);
+
+  const year = await prisma.academic_year.findFirst({
+    where: { id: yearId, OrgId: orgId },
+    include: {
+      terms: { select: { id: true } },
+      attendance: { select: { id: true }, take: 1 },
+    },
+  });
+  if (!year) throw new AppError('Session not found', 404);
+  if (year.isActive) throw new AppError('Cannot delete the active session. Activate another session first.', 409);
+
+  const termIds = year.terms.map((t) => t.id);
+  if (termIds.length > 0) {
+    const hasMarks = await prisma.marks.findFirst({ where: { termId: { in: termIds } }, select: { id: true } });
+    if (hasMarks) throw new AppError('Cannot delete a session that has recorded marks. Archive it instead.', 409);
+  }
+  if (year.attendance.length > 0) {
+    throw new AppError('Cannot delete a session that has attendance records. Archive it instead.', 409);
+  }
+
+  await prisma.academic_year.delete({ where: { id: yearId } });
+  return { id: yearId };
+};
+
 export const updateAcademicYear = async (orgId, yearId, data) => {
   await ensureSchoolOrg(orgId);
 

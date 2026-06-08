@@ -249,3 +249,94 @@ export const createStudentNote = async ({ studentId, title, content }) => {
 export const deleteStudentNote = async (noteId) => {
   await api.delete(`/notes/${noteId}`);
 };
+
+// ── Teacher subject chats ────────────────────────────────────────────────────
+
+export const fetchTeacherChats = async () => {
+  const { data } = await api.get('/chats');
+  return data?.data || [];
+};
+
+export const fetchTeacherChatMessages = async (chatId) => {
+  const { data } = await api.get(`/chats/${chatId}/messages`);
+  return data?.data || [];
+};
+
+export const sendTeacherChatMessage = async (chatId, content, replyToMessageId = null, files = []) => {
+  const hasFiles = Array.isArray(files) && files.length > 0;
+
+  if (hasFiles) {
+    const form = new FormData();
+    if (content) form.append('content', content);
+    if (Number.isInteger(Number(replyToMessageId)) && Number(replyToMessageId) > 0) {
+      form.append('replyToMessageId', String(Number(replyToMessageId)));
+    }
+    files.forEach((file) => form.append('files', file));
+    const { data } = await api.post(`/chats/${chatId}/messages`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data?.data || null;
+  }
+
+  const payload = {
+    content,
+    ...(Number.isInteger(Number(replyToMessageId)) && Number(replyToMessageId) > 0
+      ? { replyToMessageId: Number(replyToMessageId) }
+      : {}),
+  };
+  const { data } = await api.post(`/chats/${chatId}/messages`, payload);
+  return data?.data || null;
+};
+
+export const deleteTeacherChatMessage = async (chatId, messageId) => {
+  try {
+    await api.delete(`/chats/messages/${messageId}`);
+  } catch {
+    await api.delete(`/chats/${chatId}/messages/${messageId}`);
+  }
+  return true;
+};
+
+export const editTeacherChatMessage = async (messageId, content) => {
+  const payload = { content: String(content || '').trim() };
+  const { data } = await api.patch(`/chats/messages/${messageId}`, payload);
+  return data?.data || null;
+};
+
+export const reactTeacherChatMessage = async (messageId, reaction) => {
+  const payload = { reaction: String(reaction || '').trim() };
+  const { data } = await api.patch(`/chats/messages/${messageId}/reaction`, payload);
+  return data?.data || null;
+};
+
+export const clearTeacherChat = async (chatId) => {
+  await api.delete(`/chats/${chatId}/clear`);
+  return true;
+};
+
+export const fetchMyTimetable = async () => {
+  const { data } = await api.get('/timetable/me');
+  return data?.data || [];
+};
+
+export const fetchInstructorCalendar = async (params = {}) => {
+  const { data } = await api.get('/school-calendar/public', { params });
+  return data?.data || [];
+};
+
+// ── Attendance (period/subject level) ──────────────────────────────────────
+
+export const fetchSubjectStudentsForAttendance = async (subjectId) => {
+  const { data } = await api.get(`/attendance/subject/${subjectId}/students`);
+  return data?.data || [];
+};
+
+export const fetchSubjectAttendance = async (subjectId, params = {}) => {
+  const { data } = await api.get(`/attendance/subject/${subjectId}`, { params });
+  return data?.data || [];
+};
+
+export const saveSubjectAttendance = async (subjectId, payload) => {
+  const { data } = await api.post(`/attendance/subject/${subjectId}`, payload);
+  return data?.data || [];
+};

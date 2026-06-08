@@ -65,6 +65,8 @@ const serializeStudentChatListItem = (chat) => ({
   subjectId: chat.subject_id ?? null,
   createdAt: chat.created_at,
   title: chat.title ?? null,
+  className: chat.className ?? null,
+  classGradeLevel: chat.classGradeLevel ?? null,
   lastMessage: chat.lastMessage ?? null,
   lastMessageAt: chat.lastMessageAt ?? chat.created_at,
   unreadCount: Number(chat.unreadCount || 0),
@@ -1429,6 +1431,37 @@ const verifyStudentAccessToChat = async ({ chatId, userId }) => {
   }
 
   if (chat.type === 'GROUP' && chat.subject_id) {
+    // Check if school student — school students access via class enrollment, no subscription needed
+    const schoolStudent = await prisma.student.findFirst({
+      where: { Student_id: userId },
+      select: { OrgId: true, Course_id: true, organization: { select: { Role: true } } },
+    });
+
+    if (schoolStudent?.organization?.Role === 'SCHOOL') {
+      // Verify subject belongs to the student's enrolled class
+      const subject = await prisma.course.findFirst({
+        where: { id: chat.subject_id, Course_id: schoolStudent.Course_id },
+        select: { id: true },
+      });
+      if (!subject) throw new AppError('This chat does not belong to your class', 403);
+      return chat;
+    }
+
+    // Teacher — check if they teach this subject
+    const teacher = await prisma.teacher.findFirst({
+      where: { Teacher_id: userId },
+      select: { Teacher_id: true },
+    });
+    if (teacher) {
+      const owns = await prisma.course.findFirst({
+        where: { id: chat.subject_id, Teacher_id: userId },
+        select: { id: true },
+      });
+      if (!owns) throw new AppError('This subject is not assigned to you', 403);
+      return chat;
+    }
+
+    // Academy student — check paid subscription
     const subscribed = await prisma.student_subject_subscription.findUnique({
       where: {
         user_Academy_id_Subject_id: {
@@ -1436,10 +1469,7 @@ const verifyStudentAccessToChat = async ({ chatId, userId }) => {
           Subject_id: chat.subject_id,
         },
       },
-      select: {
-        paymentStatus: true,
-        status: true,
-      },
+      select: { paymentStatus: true, status: true },
     });
 
     const paid = subscribed
@@ -1474,6 +1504,79 @@ const verifyStudentAccessToChat = async ({ chatId, userId }) => {
 
   await verifyUserChatAccess(chat.id, userId);
   return chat;
+};
+
+export const listChatsForTeacher = async ({ userId }) => {
+  // Get all subjects taught by this teacher
+  const teacher = await prisma.teacher.findUnique({
+    where: { Teacher_id: userId },
+    select: { OrgId: true },
+  });
+  if (!teacher) throw new AppError('Teacher profile not found', 404);
+
+  const subjects = await prisma.course.findMany({
+    where: { Teacher_id: userId },
+    select: { id: true, name: true, Course_id: true },
+  });
+  if (!subjects.length) return [];
+
+  const subjectIds = subjects.map(s => s.id);
+
+  // Map each subject to its parent class/track name so chats with the same
+  // subject title (e.g. "Mathematics" taught in both Grade 4 and Grade 5)
+  // can be told apart in the chat list.
+  const trackIds = [...new Set(subjects.map(s => s.Course_id))];
+  const tracks = trackIds.length ? await prisma.track.findMany({
+    where: { id: { in: trackIds } },
+    select: { id: true, Name: true, GradeLevel: true },
+  }) : [];
+  const trackById = new Map(tracks.map(t => [t.id, t]));
+  const classBySubjectId = new Map(subjects.map(s => [s.id, trackById.get(s.Course_id) ?? null]));
+
+  // Find or create GROUP chats for each subject
+  const ensuredChats = await Promise.all(subjects.map(async (sub) => {
+    const existing = await prisma.chats.findFirst({
+      where: { organization_id: teacher.OrgId, subject_id: sub.id, type: 'GROUP' },
+      select: { id: true, organization_id: true, course_id: true, class_id: true, subject_id: true, type: true, title: true, created_at: true },
+    });
+    if (existing) return existing;
+    return prisma.chats.create({
+      data: { organization_id: teacher.OrgId, subject_id: sub.id, type: 'GROUP', title: sub.name, created_by: userId },
+      select: { id: true, organization_id: true, course_id: true, class_id: true, subject_id: true, type: true, title: true, created_at: true },
+    });
+  }));
+
+  const chatIds = ensuredChats.map(c => c.id);
+  const latestMessages = chatIds.length ? await prisma.messages.findMany({
+    where: { chat_id: { in: chatIds }, is_deleted: false },
+    include: { user: { select: { id: true, name: true, email: true } } },
+    orderBy: { sent_at: 'desc' },
+    distinct: ['chat_id'],
+  }) : [];
+  const unreadCounts = chatIds.length ? await prisma.messages.groupBy({
+    by: ['chat_id'],
+    where: { chat_id: { in: chatIds }, is_deleted: false, is_seen: false, NOT: { sender_user_id: userId } },
+    _count: { _all: true },
+  }) : [];
+
+  const latestByChat = new Map(latestMessages.map(m => [m.chat_id, m]));
+  const unreadByChat = new Map(unreadCounts.map(i => [i.chat_id, i._count._all]));
+
+  const enriched = ensuredChats.map(chat => {
+    const latest = latestByChat.get(chat.id);
+    const classInfo = chat.subject_id ? classBySubjectId.get(chat.subject_id) : null;
+    return {
+      ...chat,
+      lastMessage: latest ? { id: latest.id, content: latest.content, senderId: latest.sender_user_id, createdAt: latest.sent_at, senderName: latest.user?.name || null } : null,
+      lastMessageAt: latest?.sent_at || chat.created_at,
+      unreadCount: unreadByChat.get(chat.id) || 0,
+      className: classInfo?.Name ?? null,
+      classGradeLevel: classInfo?.GradeLevel ?? null,
+    };
+  });
+
+  enriched.sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime());
+  return enriched.map(serializeStudentChatListItem);
 };
 
 export const listChatsForStudent = async ({ userId }) => {
@@ -1578,74 +1681,71 @@ export const listChatsForStudent = async ({ userId }) => {
     return enriched.map(serializeStudentChatListItem);
   }
 
-  const classChat = await prisma.chats.findFirst({
-    where: {
-      organization_id: context.orgId,
-      class_id: context.classId,
-      type: 'CLASS_GROUP',
-    },
-    select: {
-      id: true,
-      organization_id: true,
-      course_id: true,
-      class_id: true,
-      type: true,
-      title: true,
-      created_at: true,
-    },
+  // SCHOOL mode: show per-subject GROUP chats (auto-create if missing)
+  const trackId = context.courseId; // Course_id on student = trackId (the class track)
+  if (!trackId) return [];
+
+  // Get all subjects for the student's class
+  const subjects = await prisma.course.findMany({
+    where: { Course_id: trackId },
+    select: { id: true, name: true, Teacher_id: true },
     orderBy: { id: 'asc' },
   });
+  if (!subjects.length) return [];
 
-  if (!classChat) {
-    return [];
-  }
+  // Ensure a GROUP chat exists for each subject
+  const ensuredChats = await Promise.all(subjects.map(async (sub) => {
+    const existing = await prisma.chats.findFirst({
+      where: { organization_id: context.orgId, subject_id: sub.id, type: 'GROUP' },
+      select: { id: true, organization_id: true, course_id: true, class_id: true, subject_id: true, type: true, title: true, created_at: true },
+    });
+    if (existing) return existing;
 
-  const latest = await prisma.messages.findFirst({
-    where: {
-      chat_id: classChat.id,
-      is_deleted: false,
-    },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
+    // Create the subject GROUP chat
+    const createdBy = sub.Teacher_id ?? userId;
+    return prisma.chats.create({
+      data: {
+        organization_id: context.orgId,
+        subject_id: sub.id,
+        type: 'GROUP',
+        title: sub.name,
+        created_by: createdBy,
       },
-    },
-    orderBy: {
-      sent_at: 'desc',
-    },
+      select: { id: true, organization_id: true, course_id: true, class_id: true, subject_id: true, type: true, title: true, created_at: true },
+    });
+  }));
+
+  const chatIds = ensuredChats.map(c => c.id);
+
+  const latestMessages = chatIds.length ? await prisma.messages.findMany({
+    where: { chat_id: { in: chatIds }, is_deleted: false },
+    include: { user: { select: { id: true, name: true, email: true } } },
+    orderBy: { sent_at: 'desc' },
+    distinct: ['chat_id'],
+  }) : [];
+
+  const unreadCounts = chatIds.length ? await prisma.messages.groupBy({
+    by: ['chat_id'],
+    where: { chat_id: { in: chatIds }, is_deleted: false, is_seen: false, NOT: { sender_user_id: userId } },
+    _count: { _all: true },
+  }) : [];
+
+  const latestMessageByChat = new Map(latestMessages.map(m => [m.chat_id, m]));
+  const unreadByChat = new Map(unreadCounts.map(i => [i.chat_id, i._count._all]));
+
+  const enriched = ensuredChats.map(chat => {
+    const latest = latestMessageByChat.get(chat.id);
+    return {
+      ...chat,
+      lastMessage: latest ? { id: latest.id, content: latest.content, senderId: latest.sender_user_id, createdAt: latest.sent_at, senderName: latest.user?.name || null } : null,
+      lastMessageAt: latest?.sent_at || chat.created_at,
+      unreadCount: unreadByChat.get(chat.id) || 0,
+    };
   });
 
-  const unreadCount = await prisma.messages.count({
-    where: {
-      chat_id: classChat.id,
-      is_deleted: false,
-      is_seen: false,
-      NOT: {
-        sender_user_id: userId,
-      },
-    },
-  });
+  enriched.sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime());
+  return enriched.map(serializeStudentChatListItem);
 
-  return [
-    serializeStudentChatListItem({
-      ...classChat,
-      lastMessage: latest
-        ? {
-            id: latest.id,
-            content: latest.content,
-            senderId: latest.sender_user_id,
-            createdAt: latest.sent_at,
-            senderName: latest.user?.name || null,
-          }
-        : null,
-      lastMessageAt: latest?.sent_at || classChat.created_at,
-      unreadCount,
-    }),
-  ];
 };
 
 export const listMessagesForStudentChat = async ({ chatId, userId }) => {

@@ -1,25 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Mail, UserRound, GraduationCap } from 'lucide-react';
+import { ArrowLeft, BookOpen, Mail, UserRound, GraduationCap, UserCircle2 } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
 import { fetchStudentTeacherById } from '../../services/studentService';
 import { useLanguage } from '../../utils/i18n';
 import { useTheme } from '../../contexts/ThemeContext';
 
-const PEOPLE_FALLBACK_AVATARS = [
-  'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1542206395-9feb3edaa68d?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1541534401786-2077eed87a72?auto=format&fit=crop&w=500&q=80',
-];
-
-const getTeacherAvatarUrl = (teacher = {}) => {
-  if (teacher.avatarUrl) return teacher.avatarUrl;
-  const seed = Number(teacher.id || 0) % PEOPLE_FALLBACK_AVATARS.length;
-  return PEOPLE_FALLBACK_AVATARS[seed];
-};
 
 const formatDate = (value, isArabic) => {
   if (!value) return isArabic ? 'غير متوفر' : 'Not available';
@@ -91,7 +77,6 @@ export default function StudentTeacherProfilePage() {
     return () => { cancelled = true; };
   }, [isArabic, numericTeacherId]);
 
-  const avatarUrl = getTeacherAvatarUrl(teacher || {});
   const subjectNames = Array.isArray(teacher?.subjects) ? teacher.subjects.filter(Boolean) : [];
   const dynamicSubjectCount = subjectNames.length || Number(teacher?.subjectCount || 0);
   const teacherDescription = teacher?.bio
@@ -145,7 +130,10 @@ export default function StudentTeacherProfilePage() {
               className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl shadow-md shadow-indigo-500/10"
               style={{ border: `2px solid ${T.avatarBorder}`, background: T.avatarBg }}
             >
-              <img src={avatarUrl} alt={teacher.name} className="h-full w-full object-cover" />
+              <div className="flex h-full w-full items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, #7c5ce0, #9c6ff0)' }}>
+                <UserCircle2 size={56} color="rgba(255,255,255,0.9)" strokeWidth={1.5} />
+              </div>
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
@@ -163,30 +151,6 @@ export default function StudentTeacherProfilePage() {
             </div>
           </div>
 
-          {/* ── Subjects ── */}
-          <div
-            className="mt-6 rounded-2xl p-4"
-            style={{ border: `1px solid ${T.subjBorder}`, background: T.subjBg }}
-          >
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: T.muted }}>
-              {isArabic ? 'المواد التي يدرّسها' : 'Subjects Taught'}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {subjectNames.length ? subjectNames.map((subjectName) => (
-                <span
-                  key={subjectName}
-                  className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold shadow-sm"
-                  style={{ background: T.tagBg, color: T.tagText, border: `1px solid ${T.tagBorder}` }}
-                >
-                  {subjectName}
-                </span>
-              )) : (
-                <span className="text-sm" style={{ color: T.sub }}>
-                  {isArabic ? 'لا توجد مواد مرتبطة بهذا المعلم حالياً.' : 'No subjects linked to this teacher yet.'}
-                </span>
-              )}
-            </div>
-          </div>
 
           {/* ── Info rows ── */}
           <div className="mt-4 space-y-3">

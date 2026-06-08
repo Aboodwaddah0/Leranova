@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "109877569490",
+    "project_id": "notification-system-4b759",
+    "storage_bucket": "notification-system-4b759.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:109877569490:android:b84be2d332a149be590a0b",
+        "android_client_info": {
+          "package_name": "com.learnova.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8Cvk9M8y0VW1pEJ5XEweJFpFCqCNRGhc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

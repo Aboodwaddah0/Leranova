@@ -740,10 +740,11 @@ export default function InstructorLessonsPage() {
   const onTogglePublish = async () => {
     if (!quiz) return;
     const subjectId = getSubjectId();
+    if (!subjectId) { notifyError("Could not determine subject — please reload the page and try again."); return; }
     try {
       const updated = await updateLessonQuiz(subjectId, selectedLessonId, quiz.id, { isPublished: !quiz.isPublished });
       setQuiz(updated);
-    } catch (err) { setError(safeError(err)); }
+    } catch (err) { notifyError(safeError(err)); setError(safeError(err)); }
   };
 
   const onGenerateQuestions = async () => {
@@ -1306,8 +1307,8 @@ export default function InstructorLessonsPage() {
                   <span className="text-xl">🧠</span>
                   <h4 className="font-black text-slate-900">{isArabic ? 'الاختبار' : 'Quiz'}</h4>
                   {quiz ? (
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${quiz.isPublished ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                      {quiz.isPublished ? (isArabic ? 'منشور' : 'Published') : (isArabic ? 'مسودة' : 'Draft')}
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                      {isArabic ? '● منشور' : '● Published'}
                     </span>
                   ) : null}
                 </div>
@@ -1318,10 +1319,6 @@ export default function InstructorLessonsPage() {
                   </button>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <button type="button" onClick={onTogglePublish}
-                      className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${quiz.isPublished ? 'border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}>
-                      {quiz.isPublished ? (isArabic ? 'إلغاء النشر' : 'Unpublish') : (isArabic ? 'نشر' : 'Publish')}
-                    </button>
                     <button type="button" onClick={async () => {
                       const subjectId = getSubjectId();
                       try {

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { Sparkles, ShieldCheck, Eye, EyeOff } from "lucide-react";
-import { updateAuthUser } from "../redux/slices/authSlice";
+import { updateAuthUser, logout } from "../redux/slices/authSlice";
 import api from "../utils/api";
 import { useLanguage } from "../utils/i18n";
 import { notifyError, notifySuccess } from "../lib/notify";
@@ -48,10 +48,9 @@ export default function ForceChangePasswordPage() {
     setLoading(true);
     try {
       await api.patch("/auth/change-password", { newPassword });
-      dispatch(updateAuthUser({ mustChangePassword: false }));
-      notifySuccess(isArabic ? "تم تغيير كلمة المرور بنجاح" : "Password changed successfully");
-      const destination = rolePaths[String(role || user?.role || "").toUpperCase()] || "/dashboard";
-      navigate(destination, { replace: true });
+      notifySuccess(isArabic ? "تم تغيير كلمة المرور بنجاح، يرجى تسجيل الدخول من جديد" : "Password changed. Please log in with your new password.");
+      dispatch(logout());
+      navigate("/login", { replace: true });
     } catch (err) {
       notifyError(err.message || (isArabic ? "حدث خطأ" : "Something went wrong"));
     } finally {
