@@ -2,11 +2,13 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import type { AuthState, AuthUser, LoginPayload } from '../types/auth';
 import { StorageService } from '../shared/services/storage';
 import { authService } from '../features/auth/services/authService';
+import { registerFcmToken, clearFcmToken } from '../shared/utils/fcm';
 
 const initialState: AuthState = {
   user: null,
   token: null,
-  isLoading: true,
+  isLoading: false,        // login/logout spinner — does NOT unmount Auth stack
+  isBootstrapping: true,   // app launch: reading token from SecureStore
   isAuthenticated: false,
 };
 
@@ -23,6 +25,8 @@ export const login = createAsyncThunk('auth/login', async (payload: LoginPayload
     const result = await authService.login(payload);
     await StorageService.setToken(result.token);
     await StorageService.setUser(result.user);
+    // Register FCM token after login — fire-and-forget
+    registerFcmToken().catch(() => {});
     return result;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Login failed';
@@ -31,6 +35,7 @@ export const login = createAsyncThunk('auth/login', async (payload: LoginPayload
 });
 
 export const logout = createAsyncThunk('auth/logout', async () => {
+  await clearFcmToken().catch(() => {});
   await StorageService.clear();
 });
 
@@ -45,18 +50,18 @@ const authSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
-    // Bootstrap
+    // Bootstrap — only touches isBootstrapping, never isLoading
     builder.addCase(bootstrapAuth.fulfilled, (state, action) => {
       state.token = action.payload.token;
       state.user = action.payload.user;
       state.isAuthenticated = !!action.payload.token && !!action.payload.user;
-      state.isLoading = false;
+      state.isBootstrapping = false;
     });
     builder.addCase(bootstrapAuth.rejected, (state) => {
-      state.isLoading = false;
+      state.isBootstrapping = false;
     });
 
-    // Login
+    // Login — only touches isLoading; Auth stack stays mounted the entire time
     builder.addCase(login.pending, (state) => {
       state.isLoading = true;
     });

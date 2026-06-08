@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Building2, TrendingUp, CreditCard, LogOut } from "lucide-react";
+import { LayoutDashboard, Building2, TrendingUp, LogOut } from "lucide-react";
 import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { logout } from "../../redux/slices/authSlice";
@@ -17,7 +17,6 @@ export default function AdminSidebar() {
     { to: "/admin",               label: t.admin.tabs.overview,       icon: LayoutDashboard, end: true },
     { to: "/admin/organizations", label: t.admin.tabs.organizations,  icon: Building2 },
     { to: "/admin/revenue",       label: t.admin.tabs.revenue,        icon: TrendingUp },
-    { to: "/admin/plans",         label: t.admin.tabs.plans,          icon: CreditCard },
   ];
 
   const handleLogout = () => {

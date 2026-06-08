@@ -1,12 +1,12 @@
 import prisma from '../utils/prisma.js';
-import { constructStripeEvent } from '../services/stripeService.js';
+import { constructStripeEvent, refundPaymentIntent } from '../services/stripeService.js';
 
 const parseMetadataId = (value) => {
   const parsed = Number.parseInt(String(value || ''), 10);
   return Number.isNaN(parsed) ? null : parsed;
 };
 
-const markPaymentSucceeded = async (metadata) => {
+const markPaymentSucceeded = async (metadata, paymentIntentId) => {
   const paymentId = parseMetadataId(metadata.paymentId);
   const subscriptionId = parseMetadataId(metadata.subscriptionId);
 
@@ -31,18 +31,25 @@ const markPaymentSucceeded = async (metadata) => {
 
     await tx.subscription.update({
       where: { id: subscriptionId },
-      data: {
-        status: 'ACTIVE',
-      },
+      data: { status: 'ACTIVE' },
     });
-
-    if (subscription?.organizationId) {
-      await tx.organization.update({
-        where: { id: subscription.organizationId },
-        data: { status: 'APPROVED' },
-      });
-    }
+    // Do NOT change org status here — org must go through email verification
+    // then admin approval before becoming APPROVED.
   });
+
+  // Issue automatic trial refund — subscription stays ACTIVE for the free trial period
+  if (paymentIntentId) {
+    try {
+      await refundPaymentIntent(paymentIntentId);
+      await prisma.payment.update({
+        where: { id: paymentId },
+        data: { status: 'REFUNDED' },
+      });
+    } catch (err) {
+      // Refund failure must not roll back the subscription activation
+      console.error(`[Trial refund failed] paymentId=${paymentId}:`, err.message);
+    }
+  }
 };
 
 const markPaymentFailed = async (metadata) => {
@@ -190,13 +197,18 @@ export const handleStripeWebhook = async (req, res) => {
   try {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
-      if (String(session?.metadata?.type || '').toUpperCase() === 'SUBJECT_SUBSCRIPTION') {
+      const sessionType = String(session?.metadata?.type || '').toUpperCase();
+
+      if (sessionType === 'SUBJECT_SUBSCRIPTION') {
         await markSubjectSubscriptionSucceeded({
           ...(session.metadata || {}),
           stripeSessionId: session.id,
         });
       }
-      await markPaymentSucceeded(session.metadata || {});
+
+      // Only plan subscription payments get the trial refund (no type in metadata)
+      const isPlanPayment = !sessionType || (sessionType !== 'SUBJECT_SUBSCRIPTION' && sessionType !== 'COURSE_PAYMENT');
+      await markPaymentSucceeded(session.metadata || {}, isPlanPayment ? session.payment_intent : null);
     }
 
     if (event.type === 'checkout.session.expired' || event.type === 'checkout.session.async_payment_failed') {

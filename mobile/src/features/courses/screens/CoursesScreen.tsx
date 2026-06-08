@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../../shared/hooks/useTheme';
-import { Card, EmptyState, LoadingState, Badge } from '../../../shared/components';
+import { Card, EmptyState, LoadingState } from '../../../shared/components';
 import { spacing, radius, fontSize, fontWeight } from '../../../shared/theme';
 import { fetchStudentCourseCatalog, fetchStudentContext } from '../../student/services/studentService';
 import type { Course, StudentContext } from '../../../types/student';
@@ -64,7 +64,7 @@ export function CoursesScreen() {
         style={[styles.header, { paddingTop: insets.top + spacing[4] }]}
       >
         <Text style={styles.headerTitle}>
-          {context?.mode === 'ACADEMY' ? '📚 My Tracks' : '📚 My Courses'}
+          {context?.mode === 'ACADEMY' ? '📚 All Specializations' : '📚 My Courses'}
         </Text>
         <Text style={styles.headerSub}>{filtered.length} available</Text>
       </LinearGradient>
@@ -117,7 +117,6 @@ const CourseItem = memo(({ course, T, onPress }: {
           <View style={styles.itemBody}>
             <View style={styles.itemTopRow}>
               <Text style={[styles.itemName, { color: T.text }]} numberOfLines={1}>{course.name}</Text>
-              <Badge label={course.priceStatus} variant={course.priceStatus === 'PAID' ? 'success' : 'warning'} />
             </View>
             {course.description ? (
               <Text style={[styles.itemDesc, { color: T.muted }]} numberOfLines={1}>{course.description}</Text>

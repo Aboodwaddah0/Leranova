@@ -378,6 +378,7 @@ export const getAcademyTrackSubjects = async (userId, trackId) => {
       id: true,
       Name: true,
       Description: true,
+      Thumbnail: true,
     },
   });
 
@@ -429,6 +430,7 @@ export const getAcademyTrackSubjects = async (userId, trackId) => {
       id: track.id,
       name: track.Name,
       description: track.Description,
+      thumbnail: track.Thumbnail || null,
     },
     subjects: subjects.map((subject) => {
       const subscription = subject.subscriptions[0] || null;

@@ -65,6 +65,8 @@ const serializeStudentChatListItem = (chat) => ({
   subjectId: chat.subject_id ?? null,
   createdAt: chat.created_at,
   title: chat.title ?? null,
+  className: chat.className ?? null,
+  classGradeLevel: chat.classGradeLevel ?? null,
   lastMessage: chat.lastMessage ?? null,
   lastMessageAt: chat.lastMessageAt ?? chat.created_at,
   unreadCount: Number(chat.unreadCount || 0),
@@ -1520,6 +1522,17 @@ export const listChatsForTeacher = async ({ userId }) => {
 
   const subjectIds = subjects.map(s => s.id);
 
+  // Map each subject to its parent class/track name so chats with the same
+  // subject title (e.g. "Mathematics" taught in both Grade 4 and Grade 5)
+  // can be told apart in the chat list.
+  const trackIds = [...new Set(subjects.map(s => s.Course_id))];
+  const tracks = trackIds.length ? await prisma.track.findMany({
+    where: { id: { in: trackIds } },
+    select: { id: true, Name: true, GradeLevel: true },
+  }) : [];
+  const trackById = new Map(tracks.map(t => [t.id, t]));
+  const classBySubjectId = new Map(subjects.map(s => [s.id, trackById.get(s.Course_id) ?? null]));
+
   // Find or create GROUP chats for each subject
   const ensuredChats = await Promise.all(subjects.map(async (sub) => {
     const existing = await prisma.chats.findFirst({
@@ -1551,11 +1564,14 @@ export const listChatsForTeacher = async ({ userId }) => {
 
   const enriched = ensuredChats.map(chat => {
     const latest = latestByChat.get(chat.id);
+    const classInfo = chat.subject_id ? classBySubjectId.get(chat.subject_id) : null;
     return {
       ...chat,
       lastMessage: latest ? { id: latest.id, content: latest.content, senderId: latest.sender_user_id, createdAt: latest.sent_at, senderName: latest.user?.name || null } : null,
       lastMessageAt: latest?.sent_at || chat.created_at,
       unreadCount: unreadByChat.get(chat.id) || 0,
+      className: classInfo?.Name ?? null,
+      classGradeLevel: classInfo?.GradeLevel ?? null,
     };
   });
 

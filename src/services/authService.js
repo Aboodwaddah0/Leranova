@@ -256,7 +256,12 @@ export const verifyOrganizationEmail = async (token) => {
   });
 
   if (!organization) {
-    throw new AppError('This verification link has already been used or is invalid. If you have already verified your email, please log in.', 400);
+    // Token was cleared after a successful verification (e.g. React StrictMode double-call).
+    // Return success gracefully instead of an error — the org is already verified.
+    return {
+      message: 'Email already verified.',
+      autoApproved: false,
+    };
   }
 
   if (organization.emailVerificationExpiresAt < new Date()) {
@@ -270,25 +275,14 @@ export const verifyOrganizationEmail = async (token) => {
     };
   }
 
-  const businessEmail = isBusinessEmail(organization.Email);
-  const newStatus = businessEmail ? 'APPROVED' : 'EMAIL_VERIFIED';
-
   await prisma.organization.update({
     where: { id: organization.id },
     data: {
-      status: newStatus,
+      status: 'EMAIL_VERIFIED',
       emailVerificationToken: null,
       emailVerificationExpiresAt: null,
     },
   });
-
-  if (businessEmail) {
-    await sendOrgApprovedEmail({ to: organization.Email, name: organization.Name }).catch(() => {});
-    return {
-      message: 'Email verified. Your organization has been automatically approved. You can now log in.',
-      autoApproved: true,
-    };
-  }
 
   return {
     message: 'Email verified. Your account is pending admin review. You will receive an email once approved.',

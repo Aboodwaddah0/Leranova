@@ -4,9 +4,12 @@ import {
   RefreshControl, Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { LogOut, Edit2, Key, BookOpen, Trophy, Flame, X, Sun, Moon } from 'lucide-react-native';
+import { LogOut, Edit2, Key, BookOpen, Trophy, Flame, X, Sun, Moon, Bell } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../../shared/hooks/useTheme';
+import type { StudentStackParamList } from '../../../types/navigation';
 import { Card, Avatar, Separator, Button } from '../../../shared/components';
 import { spacing, radius, fontSize, fontWeight } from '../../../shared/theme';
 import {
@@ -19,8 +22,9 @@ import type { StudentProfile, GamificationStats } from '../../../types/student';
 
 export function StudentProfileScreen() {
   const { T, isDark, toggleTheme }  = useTheme();
-  const insets = useSafeAreaInsets();
+  const insets  = useSafeAreaInsets();
   const dispatch = useAppDispatch();
+  const nav      = useNavigation<NativeStackNavigationProp<StudentStackParamList>>();
 
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [stats,   setStats]   = useState<GamificationStats | null>(null);
@@ -161,6 +165,20 @@ export function StudentProfileScreen() {
               T={T}
             />
           </Card>
+
+          {/* Test Notifications */}
+          <TouchableOpacity
+            onPress={() => nav.navigate('NotificationTest')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.notifTestBtn, { borderColor: 'rgba(99,102,241,0.3)', backgroundColor: 'rgba(99,102,241,0.06)' }]}>
+              <Bell size={18} color="#6366f1" />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.notifTestTitle, { color: '#6366f1' }]}>🔔 Test Notifications</Text>
+                <Text style={[styles.notifTestSub, { color: T.muted }]}>Fire fake push notifications</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
 
           {/* Logout */}
           <TouchableOpacity onPress={handleLogout} activeOpacity={0.85}>
@@ -321,8 +339,11 @@ const styles = StyleSheet.create({
   actionIcon:  { width: 36, height: 36, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },
   actionLabel: { fontSize: fontSize.base, fontWeight: fontWeight.medium },
 
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2], padding: spacing[4], borderRadius: radius.xl, borderWidth: 1 },
-  logoutText: { color: '#f87171', fontSize: fontSize.base, fontWeight: fontWeight.bold },
+  logoutBtn:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2], padding: spacing[4], borderRadius: radius.xl, borderWidth: 1 },
+  logoutText:      { color: '#f87171', fontSize: fontSize.base, fontWeight: fontWeight.bold },
+  notifTestBtn:    { flexDirection: 'row', alignItems: 'center', gap: spacing[3], padding: spacing[4], borderRadius: radius.xl, borderWidth: 1 },
+  notifTestTitle:  { fontSize: fontSize.sm, fontWeight: fontWeight.extrabold },
+  notifTestSub:    { fontSize: fontSize.xs, marginTop: 2 },
 
   // Modals
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },

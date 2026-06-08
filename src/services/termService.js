@@ -103,7 +103,7 @@ const syncTermStatuses = async (terms, orgId) => {
         data: {
           termId: term.id,
           OrgId: orgId,
-          updatedByUserId: orgId, // org owner id as system actor
+          updatedByUserId: null,
           actionType: 'AUTO_STATUS_CHANGE',
           oldValues: { status: term.status },
           newValues: { status: newStatus },

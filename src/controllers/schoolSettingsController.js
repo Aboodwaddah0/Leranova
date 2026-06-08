@@ -4,8 +4,8 @@ import {
   toSchoolSettingsDto,
   updateSchoolSettingsByOrg,
 } from '../services/schoolSettingsService.js';
-import { runAnnualPromotionForOrg, runDuePromotions } from '../services/studentPromotionService.js';
-import { runPromotionSchema, updateSchoolSettingsSchema } from '../validations/schoolSettingsValidation.js';
+import { promoteStudentById, runAnnualPromotionForOrg, runDuePromotions } from '../services/studentPromotionService.js';
+import { promoteStudentSchema, runPromotionSchema, updateSchoolSettingsSchema } from '../validations/schoolSettingsValidation.js';
 
 const ensureSchoolOrg = (req) => {
   const role = String(req.user?.role || '').trim().toUpperCase();
@@ -60,12 +60,35 @@ export const runAnnualPromotionController = async (req, res, next) => {
 
     const result = await runAnnualPromotionForOrg(req.user.id, {
       schoolYear: value.schoolYear,
+      force: value.force,
     });
 
     return res.status(200).json({
       message: result.alreadyRan
         ? 'Promotion already executed for this school year'
         : 'Annual promotion executed successfully',
+      data: result,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const promoteStudentByIdController = async (req, res, next) => {
+  try {
+    ensureSchoolOrg(req);
+
+    const { error, value } = promoteStudentSchema.validate(req.body || {});
+    if (error) {
+      throw new AppError(error.details[0].message, 400);
+    }
+
+    const result = await promoteStudentById(req.user.id, value.studentId, {
+      schoolYear: value.schoolYear,
+    });
+
+    return res.status(200).json({
+      message: 'Student promotion executed successfully',
       data: result,
     });
   } catch (error) {

@@ -11,8 +11,6 @@ import lessonAttachmentRoutes from './routes/lessonAttachmentRoutes.js';
 import lessonProgressRoutes from './routes/lessonProgressRoutes.js';
 import commentRoutes from './routes/commentRoutes.js';
 import chatbotRoutes from './routes/chatbotRoutes.js';
-import orgAIRoutes from './routes/orgAIRoutes.js';
-import instructorAIRoutes from './routes/instructorAIRoutes.js';
 import lessonAiContentRoutes from './routes/lessonAiContentRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import organizationRoutes from './routes/organizationRoutes.js';
@@ -30,6 +28,7 @@ import quizRoutes from './routes/quizRoutes.js';
 import noteRoutes from './routes/noteRoutes.js';
 import parentRoutes from './routes/parentRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import meRoutes from './routes/meRoutes.js';
 import calendarRoutes from './routes/calendarRoutes.js';
 import timetableRoutes from './routes/timetableRoutes.js';
 import { listPublicEventsController } from './controllers/calendarController.js';
@@ -38,11 +37,13 @@ import certificateRoutes from './routes/certificateRoutes.js';
 import assessmentComponentRoutes from './routes/assessmentComponentRoutes.js';
 import gradeScaleRoutes from './routes/gradeScaleRoutes.js';
 import computedGradeRoutes from './routes/computedGradeRoutes.js';
+import reportRoutes from './routes/reportRoutes.js';
 
 import userRoutes from './routes/userRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import { handleStripeWebhook } from './controllers/stripeWebhookController.js';
+import { confirmCheckoutController } from './controllers/checkoutConfirmController.js';
 
 import { errorMiddleware } from './middlewares/errorMiddleware.js';
 import { authMiddleware } from './middlewares/authMiddleware.js';
@@ -53,6 +54,8 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), hand
 
 app.use(cors());
 app.use(express.json());
+
+app.get('/api/checkout/confirm', confirmCheckoutController);
 
 app.get('/', (_req, res) => {
 	res.status(200).json({
@@ -91,8 +94,6 @@ app.use('/api/admin/analytics', adminAnalyticsRoutes);
 app.use('/api/school-settings', schoolSettingsRoutes);
 app.use('/api/academic-years', academicYearRoutes);
 app.use('/api/chatbot', chatbotRoutes);
-app.use('/api/org-ai', orgAIRoutes);
-app.use('/api/instructor-ai', instructorAIRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/student/gamification', gamificationRoutes);
 app.use('/api/student/certificates', certificateRoutes);
@@ -101,6 +102,7 @@ app.use('/api/student', studentExperienceRoutes);
 app.use('/api/notes', noteRoutes);
 app.use('/api/parent', parentRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/me', meRoutes);
 // Public calendar read — any authenticated user (must come BEFORE the org-gated router)
 app.get('/api/school-calendar/public', authMiddleware, listPublicEventsController);
 app.use('/api/school-calendar', calendarRoutes);
@@ -109,6 +111,7 @@ app.use('/api/assessment-components', assessmentComponentRoutes);
 app.use('/api/grade-scale', gradeScaleRoutes);
 app.use('/api/computed-grades', computedGradeRoutes);
 app.use('/api/timetable', timetableRoutes);
+app.use('/api/reports', reportRoutes);
 
 // auth routes
 app.use('/api/auth', authRoutes);

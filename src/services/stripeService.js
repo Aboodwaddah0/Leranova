@@ -149,9 +149,11 @@ export const createSubjectCheckoutSession = async ({
 }) => {
   const stripe = getStripeClient();
 
+  // Use a dedicated success URL for subject subscriptions so it doesn't
+  // conflict with the organization-registration success page.
   const successUrl =
-    process.env.STRIPE_CHECKOUT_SUCCESS_URL ||
-    'http://localhost:5173/payment-success?session_id={CHECKOUT_SESSION_ID}';
+    process.env.STRIPE_SUBJECT_SUCCESS_URL ||
+    'http://localhost:5173/student/payment-success?session_id={CHECKOUT_SESSION_ID}';
   const cancelUrl =
     process.env.STRIPE_CHECKOUT_CANCEL_URL ||
     'http://localhost:5173/payment/cancel';
@@ -190,4 +192,9 @@ export const createSubjectCheckoutSession = async ({
 export const retrieveCheckoutSession = async (sessionId) => {
   const stripe = getStripeClient();
   return stripe.checkout.sessions.retrieve(sessionId);
+};
+
+export const refundPaymentIntent = async (paymentIntentId) => {
+  const stripe = getStripeClient();
+  return stripe.refunds.create({ payment_intent: paymentIntentId });
 };

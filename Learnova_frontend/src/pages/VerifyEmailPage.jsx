@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Sparkles, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import api from "../utils/api";
@@ -10,8 +10,13 @@ export default function VerifyEmailPage() {
   const [status, setStatus] = useState("loading");
   const [autoApproved, setAutoApproved] = useState(false);
   const [message, setMessage] = useState("");
+  // Guard against React 18 StrictMode double-invocation
+  const called = useRef(false);
 
   useEffect(() => {
+    if (called.current) return;
+    called.current = true;
+
     if (!token) {
       setStatus("error");
       setMessage(t.signup.verifyEmail.error);

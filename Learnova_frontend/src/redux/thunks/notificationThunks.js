@@ -1,6 +1,7 @@
 import api from "../../utils/api";
 import { setNotifications, setUnreadCount, markOneRead, markAllRead, setLoading } from "../slices/notificationSlice";
 
+
 export const fetchNotificationsThunk = () => async (dispatch) => {
   dispatch(setLoading(true));
   try {
@@ -14,10 +15,15 @@ export const fetchNotificationsThunk = () => async (dispatch) => {
   }
 };
 
-export const fetchUnreadCountThunk = () => async (dispatch) => {
+export const fetchUnreadCountThunk = () => async (dispatch, getState) => {
   try {
     const { data } = await api.get("/notifications/unread-count");
-    dispatch(setUnreadCount(data.data.unreadCount));
+    const newCount = data.data.unreadCount;
+    const prevCount = getState().notifications.unreadCount;
+    dispatch(setUnreadCount(newCount));
+    if (newCount > prevCount) {
+      dispatch(fetchNotificationsThunk());
+    }
   } catch {
     // silent
   }

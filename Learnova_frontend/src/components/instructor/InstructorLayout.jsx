@@ -7,7 +7,6 @@ import { logout } from "../../redux/slices/authSlice";
 import { fetchInstructorProfile } from "../../services/instructorService";
 import { ORG_TYPES } from "../../utils/constants";
 import { useLanguage } from "../../utils/i18n";
-import InstructorAIChat from "./InstructorAIChat";
 import NotificationDropdown from "../shared/NotificationDropdown";
 
 const navItems = [
@@ -207,7 +206,6 @@ export default function InstructorLayout({ title, subtitle, children, actions })
         </section>
       </div>
 
-      <InstructorAIChat isArabic={isArabic} isSchool={isSchool} />
     </main>
   );
 }

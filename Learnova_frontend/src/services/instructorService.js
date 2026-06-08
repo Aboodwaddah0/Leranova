@@ -262,9 +262,56 @@ export const fetchTeacherChatMessages = async (chatId) => {
   return data?.data || [];
 };
 
-export const sendTeacherChatMessage = async (chatId, content) => {
-  const { data } = await api.post(`/chats/${chatId}/messages`, { content, type: 'text' });
+export const sendTeacherChatMessage = async (chatId, content, replyToMessageId = null, files = []) => {
+  const hasFiles = Array.isArray(files) && files.length > 0;
+
+  if (hasFiles) {
+    const form = new FormData();
+    if (content) form.append('content', content);
+    if (Number.isInteger(Number(replyToMessageId)) && Number(replyToMessageId) > 0) {
+      form.append('replyToMessageId', String(Number(replyToMessageId)));
+    }
+    files.forEach((file) => form.append('files', file));
+    const { data } = await api.post(`/chats/${chatId}/messages`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data?.data || null;
+  }
+
+  const payload = {
+    content,
+    ...(Number.isInteger(Number(replyToMessageId)) && Number(replyToMessageId) > 0
+      ? { replyToMessageId: Number(replyToMessageId) }
+      : {}),
+  };
+  const { data } = await api.post(`/chats/${chatId}/messages`, payload);
   return data?.data || null;
+};
+
+export const deleteTeacherChatMessage = async (chatId, messageId) => {
+  try {
+    await api.delete(`/chats/messages/${messageId}`);
+  } catch {
+    await api.delete(`/chats/${chatId}/messages/${messageId}`);
+  }
+  return true;
+};
+
+export const editTeacherChatMessage = async (messageId, content) => {
+  const payload = { content: String(content || '').trim() };
+  const { data } = await api.patch(`/chats/messages/${messageId}`, payload);
+  return data?.data || null;
+};
+
+export const reactTeacherChatMessage = async (messageId, reaction) => {
+  const payload = { reaction: String(reaction || '').trim() };
+  const { data } = await api.patch(`/chats/messages/${messageId}/reaction`, payload);
+  return data?.data || null;
+};
+
+export const clearTeacherChat = async (chatId) => {
+  await api.delete(`/chats/${chatId}/clear`);
+  return true;
 };
 
 export const fetchMyTimetable = async () => {

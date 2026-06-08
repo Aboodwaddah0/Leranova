@@ -60,17 +60,6 @@ function MarksView({ marks, isArabic }) {
     return { ...subject, avg };
   });
 
-  const stats = (() => {
-    if (!marks.length) return { avg: 0, passing: 0, total: 0, best: null };
-    const percentages = marks.map((m) => pct(m.Numbers, m.OutOf));
-    const avg = percentages.reduce((s, v) => s + v, 0) / percentages.length;
-    const passing = percentages.filter((p) => p >= 50).length;
-    const best = marks.reduce((b, m) => pct(m.Numbers, m.OutOf) > pct(b.Numbers, b.OutOf) ? m : b, marks[0]);
-    return { avg, passing, total: marks.length, best };
-  })();
-
-  const overallGrade = gradeLabel(stats.avg);
-
   if (marks.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-[1.75rem] border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
@@ -85,47 +74,6 @@ function MarksView({ marks, isArabic }) {
 
   return (
     <div className="space-y-6">
-      {/* Summary cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-[1.5rem] border border-white/70 bg-gradient-to-br from-indigo-600 to-purple-600 p-5 text-white shadow-lg shadow-indigo-500/20">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-200">{isArabic ? 'المعدل العام' : 'Overall Average'}</p>
-          <p className="mt-2 text-4xl font-black">{fmt(stats.avg)}%</p>
-          <span className={`mt-2 inline-block rounded-full border px-2 py-0.5 text-xs font-bold ${overallGrade.color}`}>
-            {overallGrade.label}
-          </span>
-        </div>
-        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{isArabic ? 'عدد الدرجات' : 'Total Marks'}</p>
-          <p className="mt-2 text-4xl font-black text-slate-900">{stats.total}</p>
-          <p className="mt-1 text-sm text-slate-500">
-            {isArabic ? `عبر ${bySubject.length} مادة` : `across ${bySubject.length} subject${bySubject.length !== 1 ? 's' : ''}`}
-          </p>
-        </div>
-        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{isArabic ? 'ناجح / راسب' : 'Passing / Failing'}</p>
-          <p className="mt-2 text-4xl font-black text-slate-900">
-            <span className="text-emerald-600">{stats.passing}</span>
-            <span className="text-slate-300"> / </span>
-            <span className="text-rose-500">{stats.total - stats.passing}</span>
-          </p>
-          <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100">
-            <div
-              className="h-1.5 rounded-full bg-emerald-500 transition-all"
-              style={{ width: stats.total ? `${(stats.passing / stats.total) * 100}%` : '0%' }}
-            />
-          </div>
-        </div>
-        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{isArabic ? 'أفضل درجة' : 'Best Mark'}</p>
-          {stats.best ? (
-            <>
-              <p className="mt-2 text-4xl font-black text-slate-900">{fmt(pct(stats.best.Numbers, stats.best.OutOf))}%</p>
-              <p className="mt-1 truncate text-sm text-slate-500">{stats.best.subject?.name || '-'} · {stats.best.MarkType || ''}</p>
-            </>
-          ) : <p className="mt-2 text-slate-400">-</p>}
-        </div>
-      </div>
-
       {/* Per-subject sections */}
       <div className="space-y-4">
         {bySubject.map((subject) => {

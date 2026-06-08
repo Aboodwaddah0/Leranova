@@ -4,7 +4,7 @@ import {
   StyleSheet, TouchableOpacity, RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Save, LogOut } from 'lucide-react-native';
+import { LogOut, Moon, Sun } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../shared/hooks/useTheme';
 import { Card, Avatar, Button } from '../../../shared/components';
@@ -14,8 +14,8 @@ import { useAppDispatch } from '../../../store/hooks';
 import { logout, updateUser } from '../../../store/authSlice';
 import type { ParentProfile } from '../../../types/parent';
 
-export function ParentSettingsScreen() {
-  const { T }  = useTheme();
+export function ParentProfileScreen() {
+  const { T, toggleTheme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
 
@@ -84,7 +84,7 @@ export function ParentSettingsScreen() {
           <TextInput style={inputStyle} value={name} onChangeText={setName} placeholder="Full Name" placeholderTextColor={T.placeholder} />
 
           <Text style={[styles.label, { color: T.muted, marginTop: spacing[3] }]}>Phone</Text>
-          <TextInput style={inputStyle} value={phone} onChangeText={setPhone} placeholder="+962..." placeholderTextColor={T.placeholder} keyboardType="phone-pad" />
+          <TextInput style={inputStyle} value={phone} onChangeText={setPhone} placeholder="Phone number" placeholderTextColor={T.placeholder} keyboardType="phone-pad" />
 
           <Text style={[styles.label, { color: T.muted, marginTop: spacing[3] }]}>Email (read-only)</Text>
           <TextInput style={[inputStyle, { opacity: 0.6 }]} value={profile?.email ?? ''} editable={false} />
@@ -98,6 +98,17 @@ export function ParentSettingsScreen() {
           />
         </Card>
 
+        {/* Appearance */}
+        <Card>
+          <ActionRow
+            label={isDark ? 'Switch to Light' : 'Switch to Dark'}
+            icon={isDark ? Sun : Moon}
+            color={isDark ? '#f59e0b' : '#6366f1'}
+            onPress={toggleTheme}
+            T={T}
+          />
+        </Card>
+
         {/* Logout */}
         <TouchableOpacity onPress={() => dispatch(logout())} activeOpacity={0.85}>
           <View style={[styles.logoutBtn, { borderColor: 'rgba(239,68,68,0.3)', backgroundColor: 'rgba(239,68,68,0.06)' }]}>
@@ -107,6 +118,25 @@ export function ParentSettingsScreen() {
         </TouchableOpacity>
       </View>
     </ScrollView>
+  );
+}
+
+function ActionRow({
+  label, icon: Icon, color, onPress, T,
+}: {
+  label: string;
+  icon: React.ComponentType<{ size: number; color: string }>;
+  color: string;
+  onPress: () => void;
+  T: ReturnType<typeof useTheme>['T'];
+}) {
+  return (
+    <TouchableOpacity onPress={onPress} style={styles.actionRow} activeOpacity={0.7}>
+      <View style={[styles.actionIcon, { backgroundColor: `${color}20` }]}>
+        <Icon size={18} color={color} />
+      </View>
+      <Text style={[styles.actionLabel, { color: T.text }]}>{label}</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -125,4 +155,7 @@ const styles = StyleSheet.create({
   input:  { height: 50, borderRadius: radius.lg, borderWidth: 1, paddingHorizontal: spacing[4], fontSize: fontSize.base },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2], padding: spacing[4], borderRadius: radius.xl, borderWidth: 1 },
   logoutText: { color: '#f87171', fontSize: fontSize.base, fontWeight: fontWeight.bold },
+  actionRow:   { flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingVertical: spacing[1] },
+  actionIcon:  { width: 36, height: 36, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },
+  actionLabel: { fontSize: fontSize.base, fontWeight: fontWeight.medium },
 });

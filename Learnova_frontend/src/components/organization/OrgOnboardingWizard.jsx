@@ -58,7 +58,7 @@ const ACADEMY_STEPS = [
   {
     kind: "discovery",
     icon: "👩‍🏫",
-    title: "Add Your Teachers",
+    title: "Add Teacher",
     description:
       "Go to the Teachers tab to invite instructors. Login credentials are auto-generated.",
     actionLabel: "Go to Teachers",
@@ -67,19 +67,19 @@ const ACADEMY_STEPS = [
   {
     kind: "discovery",
     icon: "🎓",
-    title: "Create Courses",
+    title: "Add Specializations",
     description:
-      "In the Courses tab, create learning tracks and optionally set pricing for paid courses.",
-    actionLabel: "Go to Courses",
+      "In the Courses tab, create specializations (tracks) for your academy — e.g. Web Development, Design, Business.",
+    actionLabel: "Go to Specializations",
     actionTab: "courses",
   },
   {
     kind: "discovery",
     icon: "📚",
-    title: "Add Subjects",
+    title: "Add Courses",
     description:
-      "Attach subjects to each course and assign them to your instructors in the Subjects tab.",
-    actionLabel: "Go to Subjects",
+      "Attach courses to each specialization and assign them to your instructors in the Subjects tab.",
+    actionLabel: "Go to Courses",
     actionTab: "subjects",
   },
   {

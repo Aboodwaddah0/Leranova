@@ -14,4 +14,8 @@ router.get('/unread-count',      authMiddleware, notifFeature, ctrl.getUnreadCou
 router.post('/:id/mark-as-read', authMiddleware, notifFeature, ctrl.markAsRead);
 router.post('/mark-all-read',    authMiddleware, notifFeature, ctrl.markAllAsRead);
 
+// ── Test / Fake Notification endpoints ────────────────────────────────────────
+router.post('/test',             authMiddleware, ctrl.testNotification);
+router.post('/test-all',         authMiddleware, ctrl.testAllNotifications);
+
 export default router;

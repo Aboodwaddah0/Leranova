@@ -124,8 +124,10 @@ export const getQuizForLesson = async (actor, lessonId, lang = 'ar') => {
   const resolvedQuestions = preferredQs.length > 0 ? preferredQs : fallbackQs;
   const resolvedLang      = preferredQs.length > 0 ? preferred : (fallbackQs.length > 0 ? fallbackLang : preferred);
 
-  // For students: must have published quiz AND at least one language of questions
-  if (isStudent && resolvedQuestions.length === 0) return null;
+  // For students: published quiz with no questions yet — signal frontend rather than hiding entirely
+  if (isStudent && resolvedQuestions.length === 0) {
+    return { status: 'no_questions', title: quiz.title };
+  }
 
   const attempt = isStudent && quiz.attempts?.[0] ? {
     id: quiz.attempts[0].id,
@@ -161,6 +163,7 @@ export const createQuiz = async (actor, lessonId, { title, description, difficul
       description,
       difficulty,
       passingScore,
+      isPublished: true,
       isHidden: Boolean(isHidden),
       availableFrom: availableFrom ? new Date(availableFrom) : null,
       availableTo: availableTo ? new Date(availableTo) : null,
@@ -435,10 +438,15 @@ export const generateQuizQuestions = async (actor, quizId, { numQuestions, numMC
   if (!questions.length) throw new AppError('AI did not return valid questions', 502);
 
   // Replace only the questions for this language — other language's questions are preserved
+  // Auto-publish the quiz when questions are generated so students see it immediately.
   await prisma.$transaction([
     prisma.quiz_question.deleteMany({ where: { quizId: Number(quizId), lang: l } }),
     prisma.quiz_question.createMany({
       data: questions.map((q) => ({ ...q, quizId: Number(quizId) })),
+    }),
+    prisma.quiz.update({
+      where: { id: Number(quizId) },
+      data: { isPublished: true },
     }),
   ]);
 

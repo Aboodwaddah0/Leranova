@@ -1,16 +1,19 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StyleSheet } from 'react-native';
-import { LayoutDashboard, BarChart2, Settings } from 'lucide-react-native';
+import { LayoutDashboard, CalendarDays, User } from 'lucide-react-native';
 import { useTheme } from '../shared/hooks/useTheme';
-import type { ParentTabParamList } from '../types/navigation';
-import { ParentDashboardScreen } from '../features/parent/screens/DashboardScreen';
-import { ParentMarksScreen }     from '../features/parent/screens/MarksScreen';
-import { ParentSettingsScreen }  from '../features/parent/screens/SettingsScreen';
+import type { ParentTabParamList, ParentStackParamList } from '../types/navigation';
+import { ParentDashboardScreen }  from '../features/parent/screens/DashboardScreen';
+import { ParentCalendarScreen }   from '../features/parent/screens/CalendarScreen';
+import { ParentProfileScreen }    from '../features/parent/screens/SettingsScreen';
+import { ChildDetailScreen }     from '../features/parent/screens/ChildDetailScreen';
 
-const Tab = createBottomTabNavigator<ParentTabParamList>();
+const Tab   = createBottomTabNavigator<ParentTabParamList>();
+const Stack = createNativeStackNavigator<ParentStackParamList>();
 
-export function ParentNavigator() {
+function ParentTabs() {
   const { T } = useTheme();
   return (
     <Tab.Navigator
@@ -28,16 +31,25 @@ export function ParentNavigator() {
         options={{ tabBarIcon: ({ color, size }) => <LayoutDashboard color={color} size={size} />, tabBarLabel: 'Home' }}
       />
       <Tab.Screen
-        name="ParentMarks"
-        component={ParentMarksScreen}
-        options={{ tabBarIcon: ({ color, size }) => <BarChart2 color={color} size={size} />, tabBarLabel: 'Marks' }}
+        name="ParentCalendar"
+        component={ParentCalendarScreen}
+        options={{ tabBarIcon: ({ color, size }) => <CalendarDays color={color} size={size} />, tabBarLabel: 'Calendar' }}
       />
       <Tab.Screen
-        name="ParentSettings"
-        component={ParentSettingsScreen}
-        options={{ tabBarIcon: ({ color, size }) => <Settings color={color} size={size} />, tabBarLabel: 'Settings' }}
+        name="ParentProfile"
+        component={ParentProfileScreen}
+        options={{ tabBarIcon: ({ color, size }) => <User color={color} size={size} />, tabBarLabel: 'Profile' }}
       />
     </Tab.Navigator>
+  );
+}
+
+export function ParentNavigator() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="ParentTabs"  component={ParentTabs} />
+      <Stack.Screen name="ChildDetail" component={ChildDetailScreen} />
+    </Stack.Navigator>
   );
 }
 

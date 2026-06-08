@@ -10,7 +10,6 @@ import {
   fetchDashboardMetricsThunk,
   fetchOrganizationsThunk,
   fetchRevenueThunk,
-  fetchPlansThunk,
 } from "../../redux/thunks/adminThunks";
 import { useLanguage } from "../../utils/i18n";
 import QuantumMeshBackground from "../../components/ui/QuantumMeshBackground";
@@ -20,7 +19,7 @@ export default function AdminDashboardPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { lang, isArabic, t, toggleLang } = useLanguage();
-  const { metrics, organizations, revenue, plans, loading, error, organizationFilters } = useSelector((state) => state.admin);
+  const { metrics, organizations, revenue, loading, error, organizationFilters } = useSelector((state) => state.admin);
   const role = useSelector((state) => state.auth.role);
   const user = useSelector((state) => state.auth.user);
 
@@ -28,7 +27,6 @@ export default function AdminDashboardPage() {
     dispatch(fetchDashboardMetricsThunk());
     dispatch(fetchOrganizationsThunk(organizationFilters));
     dispatch(fetchRevenueThunk({ days: 30 }));
-    dispatch(fetchPlansThunk());
   }, [dispatch]);
 
   useEffect(() => {
@@ -199,33 +197,6 @@ export default function AdminDashboardPage() {
               </div>
             </section>
           </div>
-
-          <section className="rounded-3xl border border-slate-200 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-black text-slate-900">{t.admin.plans.title}</h2>
-              <span className="text-sm text-slate-500">{plans.length} {t.admin.plans.countSuffix}</span>
-            </div>
-            {plans.length === 0 ? (
-              <p className="mt-4 text-sm text-slate-500">{t.admin.plans.empty}</p>
-            ) : (
-              <div className="mt-4 grid gap-4 md:grid-cols-3">
-                {plans.map((plan) => (
-                  <div key={plan.id} className="rounded-3xl border border-slate-200 p-4">
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{plan.durationDays} {t.admin.common.days}</p>
-                    <h3 className="mt-2 text-xl font-black text-slate-900">{plan.name}</h3>
-                    <p className="mt-2 text-2xl font-black text-sky-700">{formatMoney(plan.price)}</p>
-                    {Array.isArray(plan.features) && plan.features.length > 0 && (
-                      <ul className="mt-3 space-y-1 text-sm text-slate-600">
-                        {plan.features.slice(0, 3).map((item, index) => (
-                          <li key={`${plan.id}-${index}`}>- {String(item)}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
 
           <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">
             <p><span className="font-semibold text-slate-900">{t.dashboard.rolePrefix}</span> {role}</p>

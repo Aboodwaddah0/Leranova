@@ -51,3 +51,8 @@ export const updateAdminOrganization = async (organizationId, payload) => {
   const { data } = await api.patch(`/organizations/${organizationId}`, payload);
   return data?.data || null;
 };
+
+export const fetchOrganizationDetails = async (organizationId) => {
+  const { data } = await api.get(`/organizations/${organizationId}`);
+  return data?.data || null;
+};

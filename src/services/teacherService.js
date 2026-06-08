@@ -75,6 +75,7 @@ const teacherSelect = {
       id: true,
       name: true,
       email: true,
+      phone: true,
       registrationNumber: true,
       gender: true,
       age: true,
@@ -125,6 +126,7 @@ const serializeTeacher = (teacher) => ({
   organizationId: teacher.OrgId,
   name: teacher?.user?.name || '',
   email: teacher?.user?.email || '',
+  phone: teacher?.user?.phone ?? null,
   work: teacher.Work,
   specialization: teacher.specialization,
   bio: teacher.bio,
@@ -153,6 +155,7 @@ const serializeTeacher = (teacher) => ({
     name: teacher?.user?.name || '',
     email: teacher?.user?.email || '',
     registrationNumber: teacher?.user?.registrationNumber || null,
+    phone: teacher?.user?.phone ?? null,
     gender: teacher?.user?.gender ?? null,
     age: teacher?.user?.age ?? null,
     address: teacher?.user?.address ?? null,
@@ -226,6 +229,7 @@ export const createTeacher = async (orgId, data) => {
           passwordEncrypted,
           mustChangePassword: true,
           role: 'TEACHER',
+          phone: data.phone ?? null,
           age: data.age ?? null,
           gender: data.gender ?? null,
           address: data.address ?? null,
@@ -340,6 +344,7 @@ export const updateTeacher = async (orgId, teacherId, data) => {
   await ensureTeacherBelongsToOrg(orgId, teacherId);
 
   const userData = {
+    phone: data.phone ?? undefined,
     age: data.age ?? undefined,
     gender: data.gender ?? undefined,
     address: data.address ?? undefined,
