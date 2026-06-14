@@ -33,8 +33,8 @@ const ALL_TABS = [
   { key: 'students',    label: 'Students',    icon: Users,           schoolOnly: false },
   { key: 'analytics',  label: 'Analytics',   icon: BarChart2,       schoolOnly: false },
   { key: 'marks',       label: 'Marks',       icon: FileText,        schoolOnly: true  },
-  { key: 'attendance',  label: 'Attendance',  icon: ClipboardList,   schoolOnly: false },
-  { key: 'chat',        label: 'Chat',        icon: MessageSquare,   schoolOnly: true  },
+  { key: 'attendance',  label: 'Attendance',  icon: ClipboardList,   schoolOnly: true  },
+  { key: 'chat',        label: 'Chat',        icon: MessageSquare,   schoolOnly: false },
   { key: 'timetable',   label: 'Timetable',   icon: Calendar,        schoolOnly: true  },
   { key: 'calendar',    label: 'Calendar',    icon: CalendarDays,    schoolOnly: true  },
   { key: 'settings',    label: 'Settings',    icon: Settings2,       schoolOnly: false },
@@ -134,6 +134,7 @@ export function InstructorWorkspaceScreen() {
         >
           {tabs.map(({ key, label, icon: Icon }) => {
             const isActive = activeTab === key;
+            const displayLabel = isSchool && key === 'courses' ? 'Classes' : label;
             return (
               <TouchableOpacity
                 key={key}
@@ -142,7 +143,7 @@ export function InstructorWorkspaceScreen() {
                 activeOpacity={0.7}
               >
                 <Icon size={15} color={isActive ? T.primary : T.muted} />
-                <Text style={[styles.tabLabel, { color: isActive ? T.primary : T.muted }]}>{label}</Text>
+                <Text style={[styles.tabLabel, { color: isActive ? T.primary : T.muted }]}>{displayLabel}</Text>
                 {isActive && <View style={[styles.tabIndicator, { backgroundColor: T.primary }]} />}
               </TouchableOpacity>
             );

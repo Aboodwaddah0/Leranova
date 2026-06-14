@@ -91,12 +91,23 @@ export const getLessonRagStatusController = async (req, res, next) => {
     const count = Number(chunkCount ?? 0);
     const ready = count > baseline;
 
+    let status;
+    if (ready) {
+      status = 'ready';
+    } else if (ragIngestionStatus?.status === 'failed') {
+      status = 'failed';
+    } else if (ragIngestionStatus?.status === 'processing') {
+      status = 'processing';
+    } else {
+      status = 'idle';
+    }
+
     return res.status(200).json({
       lessonId,
       chunkCount: count,
       baseline,
       ready,
-      status: ready ? 'ready' : (ragIngestionStatus?.status === 'failed' ? 'failed' : 'processing'),
+      status,
       ingestion: ragIngestionStatus,
     });
   } catch (error) {

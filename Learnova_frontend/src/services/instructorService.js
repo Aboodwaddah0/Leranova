@@ -231,8 +231,9 @@ export const deleteLessonQuizQuestion = async (subjectId, lessonId, quizId, ques
   await api.delete(`/subjects/${subjectId}/lessons/${lessonId}/quiz/${quizId}/questions/${questionId}`);
 };
 
-export const fetchInstructorAnalytics = async () => {
-  const { data } = await api.get('/teachers/me/analytics');
+export const fetchInstructorAnalytics = async (subjectId) => {
+  const query = buildQueryString(subjectId ? { Subject_id: subjectId } : {});
+  const { data } = await api.get(`/teachers/me/analytics${query}`);
   return data?.data || null;
 };
 

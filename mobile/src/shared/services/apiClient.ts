@@ -7,9 +7,9 @@ import { StorageService } from './storage';
  * • Android emulator:              use 10.0.2.2:5000  (maps to host localhost)
  * • iOS simulator:                 use localhost:5000
  *
- * Current LAN IP: 192.168.1.78
+ * Current LAN IP: 192.168.1.22
  */
-export const API_BASE_URL = 'http://192.168.1.78:5000/api';
+export const API_BASE_URL = 'http://192.168.1.22:5000/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -62,13 +62,14 @@ export function unwrap<T>(response: { data: { data?: T } | T }): T {
   return (d?.data ?? d) as T;
 }
 
-/** Ensure value is an array, checking common shape variants */
+/** Ensure value is an array, checking common shape variants. Filters out null/undefined elements. */
 export function ensureArray<T>(value: unknown): T[] {
-  if (Array.isArray(value)) return value as T[];
+  const extract = (arr: unknown[]): T[] => arr.filter((x) => x != null) as T[];
+  if (Array.isArray(value)) return extract(value);
   if (value && typeof value === 'object') {
     const v = value as Record<string, unknown>;
     for (const key of ['items', 'rows', 'data', 'results']) {
-      if (Array.isArray(v[key])) return v[key] as T[];
+      if (Array.isArray(v[key])) return extract(v[key] as unknown[]);
     }
   }
   return [];

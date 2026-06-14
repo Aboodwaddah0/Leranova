@@ -1,13 +1,12 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
-  RefreshControl, Alert, TextInput, Modal, ActivityIndicator,
-  ScrollView,
+  RefreshControl, Alert, TextInput, Modal, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { Search, Users, Eye, StickyNote, Plus, Trash2, X } from 'lucide-react-native';
 import { useTheme } from '../../../shared/hooks/useTheme';
 import { spacing, radius, fontSize, fontWeight } from '../../../shared/theme';
-import { LoadingState, EmptyState } from '../../../shared/components';
+import { LoadingState, EmptyState, Avatar } from '../../../shared/components';
 import { fetchStudents, fetchMySubjects, fetchStudentNotes, createStudentNote, deleteStudentNote } from '../services/instructorService';
 import type { InstructorStudent, InstructorSubject, StudentNote } from '../../../types/instructor';
 
@@ -24,9 +23,10 @@ export function InstructorStudentsTab({ isSchool }: Props) {
 
   const [students,   setStudents]   = useState<InstructorStudent[]>([]);
   const [subjects,   setSubjects]   = useState<InstructorSubject[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [search,     setSearch]     = useState('');
+  const [loading,       setLoading]       = useState(true);
+  const [filterLoading, setFilterLoading] = useState(false);
+  const [refreshing,    setRefreshing]    = useState(false);
+  const [search,        setSearch]        = useState('');
   const [subjectFilter, setSubjectFilter] = useState<number | null>(null);
 
   // Student detail modal
@@ -44,27 +44,37 @@ export function InstructorStudentsTab({ isSchool }: Props) {
   const PAGE_SIZE = 15;
   const [page, setPage] = useState(1);
 
-  const load = useCallback(async () => {
+  // Load subjects once on mount — independent of filter state
+  useEffect(() => {
+    fetchMySubjects().then(setSubjects).catch(() => {});
+  }, []);
+
+  const loadStudents = useCallback(async (filter: number | null, isRefresh = false) => {
+    if (!isRefresh) setFilterLoading(true);
     try {
       const params: Record<string, unknown> = {};
-      if (subjectFilter) params.Subject_id = subjectFilter;
-      const [s, sub] = await Promise.all([
-        fetchStudents(params),
-        fetchMySubjects().catch(() => []),
-      ]);
+      if (filter) params.Subject_id = filter;
+      const s = await fetchStudents(params);
       setStudents(s);
-      setSubjects(sub);
       setPage(1);
     } catch {
       Alert.alert('Error', 'Failed to load students.');
     } finally {
       setLoading(false);
+      setFilterLoading(false);
     }
-  }, [subjectFilter]);
+  }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadStudents(subjectFilter); }, [subjectFilter, loadStudents]);
 
-  const onRefresh = useCallback(async () => { setRefreshing(true); await load(); setRefreshing(false); }, [load]);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([
+      loadStudents(subjectFilter, true),
+      fetchMySubjects().then(setSubjects).catch(() => {}),
+    ]);
+    setRefreshing(false);
+  }, [subjectFilter, loadStudents]);
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -130,12 +140,17 @@ export function InstructorStudentsTab({ isSchool }: Props) {
             <TouchableOpacity
               key={s.id}
               style={[styles.chip, { borderColor: subjectFilter === s.id ? T.primary : T.inputBorder, backgroundColor: subjectFilter === s.id ? T.primary : T.inputBg }]}
-              onPress={() => setSubjectFilter(subjectFilter === s.id ? null : s.id)}
+              onPress={() => setSubjectFilter(prev => prev === s.id ? null : s.id)}
             >
               <Text style={{ color: subjectFilter === s.id ? '#fff' : T.muted, fontSize: fontSize.xs, fontWeight: fontWeight.semibold }} numberOfLines={1}>{s.name}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
+        {filterLoading && (
+          <View style={[styles.filterOverlay, { backgroundColor: T.background }]}>
+            <ActivityIndicator size="small" color={T.primary} />
+          </View>
+        )}
 
         {/* Search */}
         <View style={styles.searchPad}>
@@ -163,9 +178,7 @@ export function InstructorStudentsTab({ isSchool }: Props) {
             const age = calcAge(s.dob);
             return (
               <View style={[styles.row, { backgroundColor: T.surface, borderColor: T.border }]}>
-                <View style={[styles.avatar, { backgroundColor: 'rgba(99,102,241,0.12)' }]}>
-                  <Text style={styles.avatarText}>{s.firstName[0]}{s.lastName[0]}</Text>
-                </View>
+                <Avatar size={44} uri={s.avatarUrl} name={`${s.firstName ?? ''} ${s.lastName ?? ''}`} />
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.name, { color: T.text }]}>{s.firstName} {s.lastName}</Text>
                   {!!s.email && <Text style={[styles.sub, { color: T.muted }]}>{s.email}</Text>}
@@ -264,7 +277,8 @@ export function InstructorStudentsTab({ isSchool }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root:         { flex: 1 },
+  root:          { flex: 1 },
+  filterOverlay: { position: 'absolute', top: 46, left: 0, right: 0, alignItems: 'center', paddingVertical: 6, zIndex: 10 },
   filterBar:    { maxHeight: 46 },
   filterContent:{ paddingHorizontal: spacing[4], paddingVertical: spacing[2], gap: spacing[2], flexDirection: 'row' },
   chip:         { paddingHorizontal: spacing[3], paddingVertical: spacing[2], borderRadius: 999, borderWidth: 1, maxWidth: 140 },
@@ -275,8 +289,6 @@ const styles = StyleSheet.create({
   countText:    { fontSize: fontSize.xs, fontWeight: fontWeight.semibold },
   list:         { padding: spacing[4], paddingTop: 0, paddingBottom: spacing[10] },
   row:          { flexDirection: 'row', alignItems: 'center', gap: spacing[3], padding: spacing[4], borderRadius: radius.xl, borderWidth: 1 },
-  avatar:       { width: 44, height: 44, borderRadius: 99, alignItems: 'center', justifyContent: 'center' },
-  avatarText:   { fontSize: fontSize.sm, fontWeight: fontWeight.extrabold, color: '#6366f1' },
   name:         { fontSize: fontSize.sm, fontWeight: fontWeight.bold },
   sub:          { fontSize: fontSize.xs, marginTop: 2 },
   detailBtn:    { padding: spacing[2], borderRadius: radius.lg },

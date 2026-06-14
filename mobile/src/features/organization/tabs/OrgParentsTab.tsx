@@ -7,7 +7,7 @@ import {
 import { UserPlus, Search, Edit2, Trash2, X, Save, Link2, Users } from 'lucide-react-native';
 import { useTheme } from '../../../shared/hooks/useTheme';
 import { spacing, radius, fontSize, fontWeight } from '../../../shared/theme';
-import { LoadingState, EmptyState } from '../../../shared/components';
+import { LoadingState, EmptyState, Avatar } from '../../../shared/components';
 import {
   fetchUsers, createUser, updateUser, deleteUser, linkParentToStudents,
 } from '../services/organizationService';
@@ -171,9 +171,7 @@ export function OrgParentsTab({ orgType }: Props) {
           ListEmptyComponent={<EmptyState emoji="👨‍👩‍👧" title="No parents yet" subtitle={search ? 'No parents match.' : 'Add parents to get started.'} />}
           renderItem={({ item: p }) => (
             <View style={[styles.row, { backgroundColor: T.surface, borderColor: T.border }]}>
-              <View style={[styles.avatar, { backgroundColor: 'rgba(139,92,246,0.12)' }]}>
-                <Text style={styles.avatarText}>{(p.firstName[0] || '') + (p.lastName[0] || '')}</Text>
-              </View>
+              <Avatar size={44} uri={p.avatarUrl} name={`${p.firstName ?? ''} ${p.lastName ?? ''}`} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.name, { color: T.text }]}>{p.firstName} {p.lastName}</Text>
                 {!!p.email && <Text style={[styles.sub, { color: T.muted }]}>{p.email}</Text>}
@@ -294,8 +292,6 @@ const styles = StyleSheet.create({
   addBtn:       { width: 44, height: 44, borderRadius: radius.xl, alignItems: 'center', justifyContent: 'center' },
   list:         { padding: spacing[4], paddingTop: 0, paddingBottom: spacing[10] },
   row:          { flexDirection: 'row', alignItems: 'center', gap: spacing[3], padding: spacing[4], borderRadius: radius.xl, borderWidth: 1 },
-  avatar:       { width: 44, height: 44, borderRadius: 99, alignItems: 'center', justifyContent: 'center' },
-  avatarText:   { fontSize: fontSize.sm, fontWeight: fontWeight.extrabold, color: '#8b5cf6' },
   name:         { fontSize: fontSize.sm, fontWeight: fontWeight.bold },
   sub:          { fontSize: fontSize.xs, marginTop: 2 },
   actions:      { flexDirection: 'row', gap: spacing[1] },

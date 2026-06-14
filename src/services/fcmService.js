@@ -5,6 +5,8 @@ const TYPE_TITLES = {
   MARK:        'Mark Recorded',
   ATTENDANCE:  'Attendance Update',
   LESSON:      'New Lesson',
+  COURSE:      'New Course',
+  QUIZ:        'AI Content Ready',
   MESSAGE:     'New Message',
 };
 

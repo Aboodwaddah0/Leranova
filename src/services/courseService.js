@@ -212,7 +212,7 @@ export const deleteCourse = async (orgId, courseId) => {
   return { id: courseId };
 };
 
-export const ensureCourseForGradeLevel = async (orgId, gradeLevel, tx = prisma) => {
+export const ensureCourseForGradeLevel = async (orgId, gradeLevel, tx = prisma, { skipChat = false } = {}) => {
   const existingByGrade = await tx.track.findFirst({
     where: {
       Org_id: orgId,
@@ -222,12 +222,14 @@ export const ensureCourseForGradeLevel = async (orgId, gradeLevel, tx = prisma) 
   });
 
   if (existingByGrade) {
-    await ensureCourseChatForCourse({
-      tx,
-      organizationId: orgId,
-      courseId: existingByGrade.id,
-      title: `${existingByGrade.Name} Course Chat`,
-    });
+    if (!skipChat) {
+      await ensureCourseChatForCourse({
+        tx,
+        organizationId: orgId,
+        courseId: existingByGrade.id,
+        title: `${existingByGrade.Name} Course Chat`,
+      });
+    }
 
     return existingByGrade;
   }
@@ -249,22 +251,26 @@ export const ensureCourseForGradeLevel = async (orgId, gradeLevel, tx = prisma) 
         data: { GradeLevel: gradeLevel },
       });
 
-      await ensureCourseChatForCourse({
-        tx,
-        organizationId: orgId,
-        courseId: updatedCourse.id,
-        title: `${updatedCourse.Name} Course Chat`,
-      });
+      if (!skipChat) {
+        await ensureCourseChatForCourse({
+          tx,
+          organizationId: orgId,
+          courseId: updatedCourse.id,
+          title: `${updatedCourse.Name} Course Chat`,
+        });
+      }
 
       return updatedCourse;
     }
 
-    await ensureCourseChatForCourse({
-      tx,
-      organizationId: orgId,
-      courseId: existingByName.id,
-      title: `${existingByName.Name} Course Chat`,
-    });
+    if (!skipChat) {
+      await ensureCourseChatForCourse({
+        tx,
+        organizationId: orgId,
+        courseId: existingByName.id,
+        title: `${existingByName.Name} Course Chat`,
+      });
+    }
 
     return existingByName;
   }
@@ -281,12 +287,14 @@ export const ensureCourseForGradeLevel = async (orgId, gradeLevel, tx = prisma) 
     },
   });
 
-  await ensureCourseChatForCourse({
-    tx,
-    organizationId: orgId,
-    courseId: createdCourse.id,
-    title: `${createdCourse.Name} Course Chat`,
-  });
+  if (!skipChat) {
+    await ensureCourseChatForCourse({
+      tx,
+      organizationId: orgId,
+      courseId: createdCourse.id,
+      title: `${createdCourse.Name} Course Chat`,
+    });
+  }
 
   return createdCourse;
 };

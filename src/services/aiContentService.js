@@ -1,6 +1,7 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { triggerLessonRagIngestion, verifyQdrantLessonChunks } from './rag.service.js';
+import { notifyTrackMembers } from './notificationService.js';
 
 const RAG_SERVICE_URL  = process.env.RAG_SERVICE_URL  || 'http://rag-service:8000';
 const GROQ_API_URL     = process.env.GROQ_API_URL     || 'https://api.groq.com/openai/v1/chat/completions';
@@ -541,10 +542,13 @@ export const generateLessonAiContent = async (lessonId, lang = 'ar') => {
   const p = PROMPTS[lang] ?? PROMPTS.ar;
   const s = SYS[lang]    ?? SYS.ar;
 
-  const raw    = await callGroq(p.combined(lesson.name, content), s.combined, 'llama-3.1-8b-instant');
-  const parsed = extractJSON(raw);
-  const flashcards = normaliseFlashcards(parsed);
-  const mindmap    = normaliseMindmap(parsed, lesson.name);
+  // Call 1 — Flashcards only
+  const rawFlashcards = await callGroq(p.flashcards(lesson.name, content), s.flashcards, 'llama-3.1-8b-instant');
+  const flashcards = normaliseFlashcards(extractJSON(rawFlashcards));
+
+  // Call 2 — Mindmap only
+  const rawMindmap = await callGroq(p.mindmap(lesson.name, content), s.mindmap, 'llama-3.1-8b-instant');
+  const mindmap    = normaliseMindmap(extractJSON(rawMindmap), lesson.name);
 
   const existing = await prisma.lesson_ai_content.findUnique({ where: { lessonId: Number(lessonId) } });
   const newFlashcards = writeForLang(existing?.flashcards, flashcards, lang);
@@ -631,6 +635,19 @@ export const publishAiContent = async (lessonId) => {
     where: { lessonId: Number(lessonId) },
     data: { status: 'published', publishedAt: new Date() },
   });
+
+  prisma.lesson.findUnique({
+    where: { id: Number(lessonId) },
+    select: { name: true, course: { select: { Course_id: true } } },
+  }).then((lesson) => {
+    if (!lesson) return;
+    return notifyTrackMembers(lesson.course.Course_id, {
+      content: `New AI study tools (flashcards & mind map) are ready for "${lesson.name}"`,
+      type: 'QUIZ',
+      url: `/lessons/${lessonId}`,
+    });
+  }).catch(() => {});
+
   return { status: saved.status, publishedAt: saved.publishedAt };
 };
 
@@ -698,8 +715,8 @@ export const deleteAiMindmap = async (lessonId) => {
 
 /* ─── Power Slides ───────────────────────────────────────────────────────── */
 
-const _SLIDES_SYS_AR = 'أنت مصمم عروض تقديمية. أخرج JSON فقط — لا نص، لا شرح، لا ```json، فقط JSON خام يبدأ بـ [ أو {. اختر نوع الشريحة المناسب: comparison للمقارنة، timeline للتسلسل، process للخطوات، hierarchy للهياكل، chart للبيانات، content للشرح. لا تضف معلومات خارج النص. عربية فصحى، بدون تعريب صوتي.';
-const _SLIDES_SYS_EN = 'You are a presentation designer. Output raw JSON only — no text, no explanation, no ```json fences, just raw JSON starting with [ or {. CRITICAL: all slide text must be in English even if source is Arabic — translate it. Pick the best type per idea: comparison, timeline, process, hierarchy, chart, or content.';
+const _SLIDES_SYS_AR = 'أنت مصمم عروض تقديمية. أخرج JSON صالح فقط — لا نص، لا شرح، لا ```json. يجب أن يبدأ ردك بـ {"slides":[ وينتهي بـ ]} — لا تكتب الشرائح بشكل منفصل خارج هذا الكائن. اختر نوع الشريحة المناسب. عربية فصحى.';
+const _SLIDES_SYS_EN = 'You are a presentation designer. Output ONLY valid JSON — no text, no explanation, no ```json fences. Your response MUST start with {"slides":[ and end with ]} — never output slide objects outside this wrapper. CRITICAL: all slide text must be in English even if source is Arabic — translate it.';
 
 const _buildSlidesPrompt = (title, content, numSlides, lang, topic) => {
   const focusNote = topic?.trim()
@@ -709,84 +726,40 @@ const _buildSlidesPrompt = (title, content, numSlides, lang, topic) => {
     : '';
 
   if (lang === 'ar') {
-    return `أنشئ عرضاً تقديمياً تعليمياً من ${numSlides} شريحة بالضبط لدرس: "${title}".
+    return `أنشئ عرضاً تقديمياً تعليمياً من ${numSlides} شريحة لدرس: "${title}".
 
-أعد JSON صالح.
+مهم جداً: يجب أن يكون ردك كائن JSON واحد بهذا الشكل بالضبط:
+{"slides": [ ...الشرائح هنا... ]}
 
-أنواع الشرائح — اختر الأنسب لكل فكرة:
+أنواع الشرائح المتاحة:
+- "title": {"id":1,"type":"title","title":"...","subtitle":"..."}
+- "content": {"type":"content","title":"...","bullets":["..."],"notes":"..."}
+- "comparison": {"type":"comparison","title":"...","left":{"label":"...","points":[]},"right":{"label":"...","points":[]},"notes":"..."}
+- "timeline": {"type":"timeline","title":"...","steps":[{"year":"...","label":"...","description":"..."}],"notes":"..."}
+- "process": {"type":"process","title":"...","steps":["الخطوة 1","الخطوة 2"],"notes":"..."}
+- "summary": {"type":"summary","title":"الخلاصة","bullets":["..."],"notes":"..."}
 
-"title"   → الشريحة الأولى فقط
-{ "id":1, "type":"title", "title":"...", "subtitle":"..." }
-
-"content" → شرح عام ومفاهيم
-{ "id":2, "type":"content", "title":"...", "bullets":["...","..."], "notes":"..." }
-
-"comparison" → مقارنة مفهومين أو خيارين
-{ "type":"comparison", "title":"A مقابل B", "left":{"label":"A","points":["...","..."]}, "right":{"label":"B","points":["...","..."]}, "notes":"..." }
-
-"timeline" → تسلسل زمني أو مراحل
-{ "type":"timeline", "title":"...", "steps":[{"year":"2001","label":"الحدث","description":"وصف"}], "notes":"..." }
-
-"process" → خطوات أو إجراء (3-5 خطوات)
-{ "type":"process", "title":"...", "steps":["الخطوة 1","الخطوة 2","الخطوة 3"], "notes":"..." }
-
-"hierarchy" → هيكل تنظيمي أو تصنيف
-{ "type":"hierarchy", "title":"...", "root":"العنصر الجذر", "children":[{"label":"فرع","children":["عنصر 1","عنصر 2"]}], "notes":"..." }
-
-"chart" → بيانات كمية وإحصاءات
-{ "type":"chart", "title":"...", "chartType":"bar", "labels":["تسمية 1","تسمية 2"], "values":[10,25], "notes":"..." }
-
-"summary" → الشريحة الأخيرة فقط
-{ "type":"summary", "title":"الخلاصة", "bullets":["...","..."], "notes":"..." }
-
-قواعد:
-- الشريحة الأولى دائماً "title"، الأخيرة دائماً "summary"
-- اختر النوع الأنسب للمحتوى بدلاً من "content" دائماً
-- notes: جملة أو جملتان للمحاضر
-- عدد الشرائح بالضبط: ${numSlides}
+قواعد: الشريحة الأولى "title"، الأخيرة "summary"، عدد الشرائح ${numSlides}.
 ${focusNote}
 
 محتوى الدرس:
 ${content}`.trim();
   }
 
-  return `LANGUAGE REQUIREMENT: Write every word of the JSON output in English — translate Arabic content if needed. Do not output a single Arabic character.
+  return `Create a presentation of exactly ${numSlides} slides for: "${title}".
 
-Create a professional educational presentation of exactly ${numSlides} slides for the lesson: "${title}".
+CRITICAL: respond with ONE JSON object in this exact format:
+{"slides": [ ...slides here... ]}
 
-Return valid JSON.
+Slide types:
+- "title": {"id":1,"type":"title","title":"...","subtitle":"..."}
+- "content": {"type":"content","title":"...","bullets":["..."],"notes":"..."}
+- "comparison": {"type":"comparison","title":"...","left":{"label":"...","points":[]},"right":{"label":"...","points":[]},"notes":"..."}
+- "timeline": {"type":"timeline","title":"...","steps":[{"year":"...","label":"...","description":"..."}],"notes":"..."}
+- "process": {"type":"process","title":"...","steps":["Step 1","Step 2"],"notes":"..."}
+- "summary": {"type":"summary","title":"Key Takeaways","bullets":["..."],"notes":"..."}
 
-Available slide types — pick the best fit for each idea:
-
-"title"   → first slide only
-{ "id":1, "type":"title", "title":"...", "subtitle":"..." }
-
-"content" → general explanation with bullet points
-{ "type":"content", "title":"...", "bullets":["...","..."], "notes":"..." }
-
-"comparison" → contrast two concepts/approaches
-{ "type":"comparison", "title":"A vs B", "left":{"label":"A","points":["...","..."]}, "right":{"label":"B","points":["...","..."]}, "notes":"..." }
-
-"timeline" → chronological sequence or historical events
-{ "type":"timeline", "title":"...", "steps":[{"year":"2001","label":"Event","description":"brief desc"}], "notes":"..." }
-
-"process" → step-by-step procedure (3-5 steps)
-{ "type":"process", "title":"...", "steps":["Step 1","Step 2","Step 3"], "notes":"..." }
-
-"hierarchy" → organizational or categorical tree structure
-{ "type":"hierarchy", "title":"...", "root":"Root", "children":[{"label":"Branch","children":["item 1","item 2"]}], "notes":"..." }
-
-"chart" → quantitative data or statistics
-{ "type":"chart", "title":"...", "chartType":"bar", "labels":["Label 1","Label 2"], "values":[10,25], "notes":"..." }
-
-"summary" → last slide only
-{ "type":"summary", "title":"Key Takeaways", "bullets":["...","..."], "notes":"..." }
-
-Rules:
-- First slide always "title", last slide always "summary"
-- Choose the most appropriate type instead of defaulting to "content"
-- notes: 1-2 sentences for the instructor
-- Total slides: exactly ${numSlides}
+Rules: first slide "title", last slide "summary", exactly ${numSlides} slides. All text in English.
 ${focusNote}
 
 Lesson content:
@@ -795,13 +768,12 @@ ${content}`.trim();
 
 export const generatePowerSlides = async (lessonId, lang = 'ar', numSlides = 10, theme = 'blue', topic = '') => {
   const { lesson, content } = await gatherLessonContent(lessonId);
-  // Cap content to keep total request under the 6000 TPM limit of llama-3.1-8b-instant
-  const prompt       = _buildSlidesPrompt(lesson.name, content.slice(0, 2000), numSlides, lang, topic);
+  const prompt       = _buildSlidesPrompt(lesson.name, content.slice(0, 4000), numSlides, lang, topic);
   const systemPrompt = lang === 'ar' ? _SLIDES_SYS_AR : _SLIDES_SYS_EN;
 
   let raw, parsed;
   for (let attempt = 0; attempt < 2; attempt++) {
-    raw = await callGroq(prompt, systemPrompt, 'llama-3.1-8b-instant', 3500);
+    raw = await callGroq(prompt, systemPrompt, GROQ_MODEL, 4000);
     try {
       parsed = extractJSON(raw);
       break;
@@ -814,10 +786,25 @@ export const generatePowerSlides = async (lessonId, lang = 'ar', numSlides = 10,
     }
   }
 
-  // Model sometimes returns a bare array instead of {title, slides:[]}
-  const result = Array.isArray(parsed)
-    ? { title: lesson.name, slides: parsed }
-    : parsed;
+  // Normalise whatever shape the model returned into { slides: [...] }
+  let result;
+  if (Array.isArray(parsed)) {
+    // Bare array
+    result = { title: lesson.name, slides: parsed };
+  } else if (parsed?.slides && Array.isArray(parsed.slides)) {
+    // Correct wrapper
+    result = parsed;
+  } else if (parsed?.type) {
+    // Model returned a single slide object — salvage all objects from raw text
+    const matches = [...(raw || '').matchAll(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*/g)];
+    const salvaged = matches.reduce((acc, m) => {
+      try { const o = JSON.parse(m[0]); if (o?.type) acc.push(o); } catch { /* skip */ }
+      return acc;
+    }, []);
+    result = { title: lesson.name, slides: salvaged.length ? salvaged : [parsed] };
+  } else {
+    result = parsed;
+  }
 
   if (!result?.slides || !Array.isArray(result.slides) || result.slides.length === 0) {
     console.error('[SLIDES] Invalid structure — raw response:', raw?.slice(0, 500));

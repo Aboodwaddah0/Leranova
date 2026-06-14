@@ -188,7 +188,7 @@ export function InstructorAttendanceTab({ isSchool }: Props) {
                   activeOpacity={0.85}
                 >
                   <View style={[styles.avatar, { backgroundColor: meta.bg }]}>
-                    <Text style={[styles.avatarText, { color: meta.color }]}>{s.firstName[0]}{s.lastName[0]}</Text>
+                    <Text style={[styles.avatarText, { color: meta.color }]}>{(s.firstName ?? '')[0] ?? ''}{(s.lastName ?? '')[0] ?? ''}</Text>
                   </View>
                   <Text style={[styles.name, { color: T.text, flex: 1 }]}>{s.firstName} {s.lastName}</Text>
                   <View style={[styles.statusBadge, { backgroundColor: meta.bg, borderColor: meta.color }]}>

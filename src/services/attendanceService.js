@@ -176,6 +176,60 @@ export const getClassAttendance = async (user, classId, { date, academicYearId, 
   return records.map(toDto);
 };
 
+export const getClassAttendanceSummary = async (user, classId, { academicYearId, termId } = {}) => {
+  const orgId = await resolveOrgId(user);
+
+  const cls = await prisma.track.findFirst({ where: { id: classId, Org_id: orgId } });
+  if (!cls) throw new AppError('Class not found', 404);
+
+  const yearId = academicYearId ? Number(academicYearId) : undefined;
+
+  let dateFilter = {};
+  if (termId) {
+    const term = await prisma.term.findUnique({ where: { id: Number(termId) } });
+    if (term) dateFilter = { date: { gte: term.startDate, lte: term.endDate } };
+  }
+
+  const [students, records] = await Promise.all([
+    prisma.student.findMany({
+      where: { Course_id: classId, OrgId: orgId },
+      include: { user: { select: { name: true } } },
+      orderBy: { user: { name: 'asc' } },
+    }),
+    prisma.attendance.findMany({
+      where: { classId, orgId, ...dateFilter, ...(yearId ? { academicYearId: yearId } : {}) },
+      select: { studentId: true, status: true },
+    }),
+  ]);
+
+  const countMap = new Map();
+  for (const r of records) {
+    if (!countMap.has(r.studentId)) countMap.set(r.studentId, { present: 0, absent: 0, late: 0, excused: 0 });
+    const cnt = countMap.get(r.studentId);
+    const s = String(r.status ?? '').toUpperCase();
+    if (s === 'PRESENT') cnt.present++;
+    else if (s === 'ABSENT') cnt.absent++;
+    else if (s === 'LATE') cnt.late++;
+    else if (s === 'EXCUSED') cnt.excused++;
+  }
+
+  return students.map((s) => {
+    const cnt = countMap.get(s.Student_id) ?? { present: 0, absent: 0, late: 0, excused: 0 };
+    const total = cnt.present + cnt.absent + cnt.late + cnt.excused;
+    const attended = cnt.present + cnt.late;
+    return {
+      studentId: s.Student_id,
+      studentName: s.user?.name ?? '',
+      present: cnt.present,
+      absent: cnt.absent,
+      late: cnt.late,
+      excused: cnt.excused,
+      total,
+      percentage: total > 0 ? Math.round((attended / total) * 100) : 0,
+    };
+  });
+};
+
 export const getStudentAttendance = async (user, studentId, { from, to, academicYearId } = {}) => {
   const orgId = await resolveOrgId(user);
 

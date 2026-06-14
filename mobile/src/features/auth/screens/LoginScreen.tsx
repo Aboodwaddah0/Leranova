@@ -7,16 +7,22 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Eye, EyeOff, BookOpen } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { login } from '../../../store/authSlice';
 import { useTheme } from '../../../shared/hooks/useTheme';
 import { spacing, radius, fontSize, fontWeight } from '../../../shared/theme';
+import type { AuthStackParamList } from '../../../types/navigation';
+
+type Nav = NativeStackNavigationProp<AuthStackParamList>;
 
 export function LoginScreen() {
   const dispatch    = useAppDispatch();
   const { isLoading } = useAppSelector((s) => s.auth);
   const { T, isDark } = useTheme();
   const insets      = useSafeAreaInsets();
+  const nav         = useNavigation<Nav>();
 
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -118,6 +124,15 @@ export function LoginScreen() {
                 : <Text style={styles.loginBtnText}>Sign In</Text>
               }
             </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Forgot Password */}
+          <TouchableOpacity
+            onPress={() => nav.navigate('ForgotPassword')}
+            style={styles.forgotLink}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.forgotText, { color: T.primary }]}>Forgot Password?</Text>
           </TouchableOpacity>
         </View>
 
@@ -222,5 +237,13 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     textAlign: 'center',
     marginTop: spacing[8],
+  },
+  forgotLink: {
+    marginTop: spacing[4],
+    alignItems: 'center',
+  },
+  forgotText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
   },
 });

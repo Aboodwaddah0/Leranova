@@ -23,6 +23,7 @@ import {
   fetchAdaptiveMissions, fetchAIMentor, fetchActivityFeed,
 } from '../services/studentService';
 import { timeAgo } from '../../../shared/utils/date';
+import { NotificationBell } from '../../notifications/components/NotificationBell';
 import type {
   Course, GamificationStats, MissionsData,
   AIMentor, ActivityFeedItem, ActivityFeedData, LeaderboardEntry, Mission,
@@ -486,29 +487,34 @@ function HeroHeader({
             </View>
           </View>
 
-          {/* Avatar — glow aura + XP ring + level badge halo */}
-          <View style={styles.avatarContainer}>
-            {/* ① Purple glow aura behind avatar — most visible effect */}
-            <Animated.View style={[
-              styles.avatarGlowAura,
-              { opacity: avatarGlowOpacity, transform: [{ scale: avatarGlowScale }] },
-            ]} />
+          {/* Right side — notification bell + avatar */}
+          <View style={styles.heroRightCol}>
+            <NotificationBell />
 
-            {/* ② Avatar + XP ring */}
-            <View style={styles.avatarWrap}>
-              <XpRing xpInLevel={xpInLevel} size={76} />
-              <View style={styles.avatarInner}>
-                <Avatar name={user?.name} uri={user?.avatarUrl} size={52} />
-              </View>
+            {/* Avatar — glow aura + XP ring + level badge halo */}
+            <View style={styles.avatarContainer}>
+              {/* ① Purple glow aura behind avatar — most visible effect */}
+              <Animated.View style={[
+                styles.avatarGlowAura,
+                { opacity: avatarGlowOpacity, transform: [{ scale: avatarGlowScale }] },
+              ]} />
 
-              {/* ③ Level badge — gold halo radiates outward */}
-              <View style={styles.levelBadgeContainer}>
-                <Animated.View style={[
-                  styles.levelBadgeHalo,
-                  { opacity: badgeHaloOpacity, transform: [{ scale: badgeHaloScale }] },
-                ]} />
-                <View style={styles.levelBadge}>
-                  <Text style={styles.levelText}>{stats.level}</Text>
+              {/* ② Avatar + XP ring */}
+              <View style={styles.avatarWrap}>
+                <XpRing xpInLevel={xpInLevel} size={76} />
+                <View style={styles.avatarInner}>
+                  <Avatar name={user?.name} uri={user?.avatarUrl} size={52} />
+                </View>
+
+                {/* ③ Level badge — gold halo radiates outward */}
+                <View style={styles.levelBadgeContainer}>
+                  <Animated.View style={[
+                    styles.levelBadgeHalo,
+                    { opacity: badgeHaloOpacity, transform: [{ scale: badgeHaloScale }] },
+                  ]} />
+                  <View style={styles.levelBadge}>
+                    <Text style={styles.levelText}>{stats.level}</Text>
+                  </View>
                 </View>
               </View>
             </View>
@@ -1137,6 +1143,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(99,102,241,0.2)', borderColor: 'rgba(99,102,241,0.4)',
   },
   tierText: { color: '#a78bfa', fontSize: 9, fontWeight: fontWeight.extrabold, textTransform: 'uppercase', letterSpacing: 0.8 },
+
+  heroRightCol: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
 
   // Avatar glow system
   avatarContainer: {

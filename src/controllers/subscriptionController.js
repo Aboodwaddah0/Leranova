@@ -7,7 +7,8 @@ import {
   recordPayment,
   getPaymentHistory,
   cancelSubscription,
-  getSubscriptionLimits
+  getSubscriptionLimits,
+  initiatePlanCheckout
 } from '../services/subscriptionService.js';
 import { getSubscriptionFeatureCatalog, resolveOrganizationIdFromUser } from '../services/featureService.js';
 import AppError from '../utils/appError.js';
@@ -101,6 +102,40 @@ export const subscribe = async (req, res, next) => {
     return res.status(201).json({
       message: 'Subscription created successfully',
       data: subscription
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * Initiate Stripe checkout for a plan subscription (post-trial billing).
+ * POST /api/subscriptions/organizations/:orgId/checkout
+ * Body: { planId }
+ */
+export const initiateCheckout = async (req, res, next) => {
+  try {
+    const { orgId } = req.params;
+    const { planId } = req.body;
+
+    if (!planId) {
+      return next(new AppError('Plan ID is required', 400));
+    }
+
+    const requestedOrgId = parseInt(orgId, 10);
+    const callerOrgId = await resolveOrganizationIdFromUser(req.user);
+
+    if (!callerOrgId || callerOrgId !== requestedOrgId) {
+      return next(new AppError('You are not authorized to manage billing for this organization', 403));
+    }
+
+    const result = await initiatePlanCheckout(requestedOrgId, parseInt(planId, 10));
+
+    return res.status(200).json({
+      message: result.freeActivated
+        ? 'Free plan activated successfully'
+        : 'Checkout session created',
+      data: result,
     });
   } catch (error) {
     return next(error);

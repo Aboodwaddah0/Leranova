@@ -50,6 +50,15 @@ const resolveOrganizationIdFromUser = async (tokenUser) => {
     return academyStudent?.OrgId ?? null;
   }
 
+  if (role === 'PARENT') {
+    const child = await prisma.student.findFirst({
+      where: { Parent_id: userId },
+      select: { OrgId: true },
+    });
+
+    return child?.OrgId ?? null;
+  }
+
   const academyUser = await prisma.academy_user.findUnique({
     where: { user_academy_id: userId },
     select: { OrgId: true },

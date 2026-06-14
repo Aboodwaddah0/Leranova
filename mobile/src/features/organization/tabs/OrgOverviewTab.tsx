@@ -5,16 +5,11 @@ import {
 } from 'react-native';
 import {
   Building2, Users, GraduationCap, BookOpen, DollarSign,
-  Mail, Phone, MapPin, Calendar, Edit2, Save, X, Bell,
+  Mail, Phone, MapPin, Calendar, Edit2, Save, X,
 } from 'lucide-react-native';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../../shared/hooks/useTheme';
 import { spacing, radius, fontSize, fontWeight } from '../../../shared/theme';
 import { LoadingState, EmptyState } from '../../../shared/components';
-import type { OrgStackParamList } from '../../../types/navigation';
-
-type Nav = NativeStackNavigationProp<OrgStackParamList>;
 import {
   fetchOrgProfile, updateOrgProfile, fetchTeachers, fetchCourses,
   fetchUsers, fetchRevenue,
@@ -27,7 +22,6 @@ interface Props {
 
 export function OrgOverviewTab({ orgType }: Props) {
   const { T } = useTheme();
-  const nav = useNavigation<Nav>();
   const isSchool = orgType === 'SCHOOL';
 
   const [profile,    setProfile]    = useState<OrgProfile | null>(null);
@@ -86,7 +80,7 @@ export function OrgOverviewTab({ orgType }: Props) {
 
   const statCards = [
     { label: 'Teachers', value: stats.teachers, icon: Users, color: '#6366f1', bg: 'rgba(99,102,241,0.12)' },
-    { label: isSchool ? 'Classes' : 'Courses', value: stats.courses, icon: BookOpen, color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
+    { label: isSchool ? 'Classes' : 'Specializations', value: stats.courses, icon: BookOpen, color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
     { label: 'Students', value: stats.students, icon: GraduationCap, color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
     { label: 'Revenue', value: `$${stats.revenue.toFixed(0)}`, icon: DollarSign, color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' },
   ];
@@ -158,19 +152,6 @@ export function OrgOverviewTab({ orgType }: Props) {
             )}
           </View>
         )}
-
-        {/* Notification test button */}
-        <TouchableOpacity
-          style={[styles.notifBtn, { backgroundColor: 'rgba(99,102,241,0.08)', borderColor: 'rgba(99,102,241,0.25)' }]}
-          onPress={() => nav.navigate('NotificationTest')}
-          activeOpacity={0.8}
-        >
-          <Bell size={18} color="#6366f1" />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.notifTitle, { color: '#6366f1' }]}>🔔 Test Notifications</Text>
-            <Text style={[styles.notifSub, { color: T.muted }]}>Fire fake push notifications for Student, Teacher & Org</Text>
-          </View>
-        </TouchableOpacity>
       </ScrollView>
 
       {/* Edit Profile Modal */}
@@ -251,9 +232,6 @@ const styles = StyleSheet.create({
   infoLabel:  { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', marginBottom: 2 },
   infoValue:  { fontSize: fontSize.sm, fontWeight: fontWeight.semibold },
   descBox:    { padding: spacing[3], borderRadius: radius.lg, backgroundColor: 'rgba(99,102,241,0.06)' },
-  notifBtn:   { flexDirection: 'row', alignItems: 'center', gap: spacing[3], padding: spacing[4], borderRadius: radius.xl, borderWidth: 1 },
-  notifTitle: { fontSize: fontSize.sm, fontWeight: fontWeight.extrabold },
-  notifSub:   { fontSize: fontSize.xs, marginTop: 2 },
   descText:   { fontSize: fontSize.sm, lineHeight: 20 },
   modal:      { flex: 1 },
   modalHeader:{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing[5], paddingTop: spacing[6] },

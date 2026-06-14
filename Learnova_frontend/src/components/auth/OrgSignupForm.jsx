@@ -14,7 +14,7 @@ const initialState = {
   classRanges: [{ startGradeLevel: 1, endGradeLevel: 5 }],
 };
 
-export default function OrgSignupForm({ selectedPlanId, onSubmit, loading, t }) {
+export default function OrgSignupForm({ onSubmit, loading, t }) {
   const { isArabic } = useLanguage();
   const [formState, setFormState] = useState(initialState);
   const [error, setError]         = useState("");
@@ -41,7 +41,6 @@ export default function OrgSignupForm({ selectedPlanId, onSubmit, loading, t }) 
   const submit = (e) => {
     e.preventDefault();
     try {
-      const normalizedPlanId = selectedPlanId ? Number(selectedPlanId) : undefined;
       const classRanges = formState.Role === ORG_TYPES.SCHOOL ? formState.classRanges : [];
       if (formState.Role === ORG_TYPES.SCHOOL && classRanges.length === 0) {
         throw new Error(t.signup.classRanges.errorEmpty);
@@ -57,7 +56,6 @@ export default function OrgSignupForm({ selectedPlanId, onSubmit, loading, t }) 
         Founded:     formState.Founded || null,
         Description: formState.Description || null,
         PhoneNumber: formState.Phone,
-        ...(normalizedPlanId ? { planId: normalizedPlanId } : {}),
         ...(formState.Role === ORG_TYPES.SCHOOL ? { classRanges } : {}),
       });
     } catch (err) {
@@ -175,7 +173,7 @@ export default function OrgSignupForm({ selectedPlanId, onSubmit, loading, t }) 
       )}
 
       <button type="submit" disabled={loading} className="auth-btn-primary">
-        {loading ? t.signup.creating : t.signup.createAndPay}
+        {loading ? t.signup.creating : t.signup.create}
       </button>
     </form>
   );

@@ -1,10 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { CheckCircle2, Lock, School } from "lucide-react";
+import { CheckCircle2, Lock, School, Loader2 } from "lucide-react";
 import { getPlansThunk } from "../../redux/thunks/authThunks";
 import { useLanguage } from "../../utils/i18n";
 import api from "../../utils/api";
-import { useState } from "react";
 
 /* ── Feature humaniser (same logic as landing page) ─────── */
 const KNOWN_ACRONYMS = new Set(["AI", "RAG", "XP", "LMS", "API", "PDF"]);
@@ -26,7 +25,7 @@ const PRO_FEAT_DESC = {
 };
 
 /* ── Plan card ──────────────────────────────────────────── */
-function PlanCard({ plan, active, disabled, onSelect, isArabic, t }) {
+function PlanCard({ plan, isCurrent, disabled, schoolOnlyLocked, subscribing, onSubscribe, isArabic, t }) {
   const rawKeys    = Array.isArray(plan.features) ? plan.features : Object.values(plan.features || {});
   const schoolKeys = rawKeys.filter(k => SCHOOL_FEATS.has(String(k).toUpperCase()));
   const proNewKeys = rawKeys.filter(k => PRO_NEW_FEATS.has(String(k).toUpperCase()));
@@ -37,12 +36,9 @@ function PlanCard({ plan, active, disabled, onSelect, isArabic, t }) {
   const price    = Number(plan.price ?? 0);
 
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => !disabled && onSelect(plan.id)}
-      className="w-full rounded-2xl border p-5 text-start transition-all duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
-      style={active ? {
+    <div
+      className="w-full rounded-2xl border p-5 text-start"
+      style={isCurrent ? {
         borderColor: "#6366f1",
         background:  "linear-gradient(180deg,#f5f3ff 0%,#ede9fe 100%)",
         boxShadow:   "0 8px 24px rgba(99,102,241,.22)",
@@ -60,19 +56,14 @@ function PlanCard({ plan, active, disabled, onSelect, isArabic, t }) {
           </p>
           <h4 className="mt-1 text-lg font-black text-slate-900">{plan.name}</h4>
         </div>
-        {active   && <CheckCircle2 size={18} className="mt-1 shrink-0 text-indigo-600" />}
-        {disabled && <Lock size={16} className="mt-1 shrink-0 text-amber-500" />}
+        {isCurrent && <CheckCircle2 size={18} className="mt-1 shrink-0 text-indigo-600" />}
+        {disabled  && <Lock size={16} className="mt-1 shrink-0 text-amber-500" />}
       </div>
 
       {/* Price */}
-      <p className="mt-3 text-3xl font-black tracking-tight" style={{ color: active ? "#6366f1" : "#1e293b" }}>
+      <p className="mt-3 text-3xl font-black tracking-tight" style={{ color: isCurrent ? "#6366f1" : "#1e293b" }}>
         {price === 0 ? (isArabic ? "مجاني" : "Free") : `$${price}`}
         {price > 0 && <span className="ms-1 text-sm font-semibold text-slate-400">{isArabic ? "/شهر" : "/mo"}</span>}
-      </p>
-
-      {/* Trial note */}
-      <p className="mt-1 text-[11px] font-semibold text-emerald-600">
-        {isArabic ? "✓ تجربة مجانية 30 يوم" : "✓ 30-day free trial"}
       </p>
 
       {/* Description */}
@@ -86,13 +77,19 @@ function PlanCard({ plan, active, disabled, onSelect, isArabic, t }) {
         <p className="mt-2 text-xs font-semibold text-amber-600">Requires Stripe configuration</p>
       )}
 
+      {schoolOnlyLocked && (
+        <p className="mt-2 text-xs font-semibold text-amber-600">
+          {isArabic ? "متاح فقط لحسابات المدارس" : "Available for school accounts only"}
+        </p>
+      )}
+
       {/* Features list */}
       {rawKeys.length > 0 && (
         <ul className="mt-4 space-y-1.5 border-t border-slate-100 pt-4">
           {/* Core features */}
           {coreKeys.slice(0, 5).map((key) => (
             <li key={key} className="flex items-center gap-2 text-xs text-slate-600">
-              <CheckCircle2 size={12} className="shrink-0" style={{ color: active ? "#6366f1" : "#94a3b8" }} />
+              <CheckCircle2 size={12} className="shrink-0" style={{ color: isCurrent ? "#6366f1" : "#94a3b8" }} />
               <span>{humanize(key)}</span>
             </li>
           ))}
@@ -145,14 +142,35 @@ function PlanCard({ plan, active, disabled, onSelect, isArabic, t }) {
           )}
         </ul>
       )}
-    </button>
+
+      {/* Subscribe button */}
+      <button
+        type="button"
+        disabled={disabled || isCurrent || subscribing || schoolOnlyLocked}
+        onClick={() => onSubscribe(plan.id)}
+        className="mt-5 w-full rounded-xl px-4 py-2.5 text-sm font-black text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+        style={{ background: isCurrent ? "#94a3b8" : "linear-gradient(135deg,#6366f1,#8b5cf6)" }}
+      >
+        {subscribing ? (
+          <Loader2 size={16} className="mx-auto animate-spin" />
+        ) : isCurrent ? (
+          isArabic ? "الخطة الحالية" : "Current plan"
+        ) : schoolOnlyLocked ? (
+          isArabic ? "للمدارس فقط" : "School accounts only"
+        ) : price === 0 ? (
+          isArabic ? "تفعيل الخطة المجانية" : "Activate free plan"
+        ) : (
+          isArabic ? "اشترك وادفع" : "Subscribe & Pay"
+        )}
+      </button>
+    </div>
   );
 }
 
 /* ── Main component ─────────────────────────────────────── */
-export default function PlanSelector({ selectedPlanId, onSelect, t }) {
+export default function BillingPlanCards({ currentPlanId, subscribingPlanId, onSubscribe, organizationType }) {
   const dispatch = useDispatch();
-  const { isArabic } = useLanguage();
+  const { isArabic, t } = useLanguage();
   const { plans, loading } = useSelector((s) => s.auth);
   const [stripeEnabled, setStripeEnabled] = useState(true);
 
@@ -171,7 +189,6 @@ export default function PlanSelector({ selectedPlanId, onSelect, t }) {
     return (
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm">
         <p className="font-bold text-amber-900">{t.signup.noPlansTitle}</p>
-        <p className="mt-1 text-amber-700">{t.signup.noPlansText}</p>
       </div>
     );
   }
@@ -185,17 +202,24 @@ export default function PlanSelector({ selectedPlanId, onSelect, t }) {
         </div>
       )}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {plans.map((plan) => (
-          <PlanCard
-            key={plan.id}
-            plan={plan}
-            active={selectedPlanId === plan.id}
-            disabled={Number(plan.price ?? 0) > 0 && !stripeEnabled}
-            onSelect={onSelect}
-            isArabic={isArabic}
-            t={t}
-          />
-        ))}
+        {plans.map((plan) => {
+          const isSchoolPlan = String(plan.name || "").toLowerCase().includes("school");
+          const schoolOnlyLocked = organizationType === "ACADEMY" && isSchoolPlan;
+
+          return (
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              isCurrent={currentPlanId === plan.id}
+              disabled={Number(plan.price ?? 0) > 0 && !stripeEnabled}
+              schoolOnlyLocked={schoolOnlyLocked}
+              subscribing={subscribingPlanId === plan.id}
+              onSubscribe={onSubscribe}
+              isArabic={isArabic}
+              t={t}
+            />
+          );
+        })}
       </div>
     </div>
   );

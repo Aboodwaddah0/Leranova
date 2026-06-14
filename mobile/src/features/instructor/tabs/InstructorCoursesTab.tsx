@@ -23,7 +23,10 @@ import type { InstructorStackParamList } from '../../../types/navigation';
 
 type Nav = NativeStackNavigationProp<InstructorStackParamList>;
 
-const formatGradeName = (l: number | null | undefined) => l !== null && l !== undefined ? `Grade ${l}` : '';
+const formatClassName = (c: InstructorCourse, isSchool: boolean): string => {
+  if (isSchool && c.GradeLevel !== null && c.GradeLevel !== undefined) return `Class ${c.GradeLevel}`;
+  return c.Name ?? '';
+};
 
 type DrillLevel = 'courses' | 'subjects' | 'lessons';
 
@@ -236,7 +239,9 @@ export function InstructorCoursesTab({ isSchool }: Props) {
         </Text>
       </TouchableOpacity>
       <Text style={[styles.drillTitle, { color: T.text }]} numberOfLines={1}>
-        {level === 'subjects' ? selectedCourse?.Name : selectedSubject?.name}
+        {level === 'subjects'
+            ? (selectedCourse ? formatClassName(selectedCourse, isSchool) : '')
+            : selectedSubject?.name}
       </Text>
     </View>
   );
@@ -273,7 +278,7 @@ export function InstructorCoursesTab({ isSchool }: Props) {
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={T.primary} />}
           ItemSeparatorComponent={() => <View style={{ height: spacing[2] }} />}
-          ListEmptyComponent={<EmptyState emoji="📂" title="No courses" subtitle="Courses assigned to you will appear here." />}
+          ListEmptyComponent={<EmptyState emoji="📂" title={isSchool ? 'No classes' : 'No courses'} subtitle={isSchool ? 'Classes assigned to you will appear here.' : 'Courses assigned to you will appear here.'} />}
           showsVerticalScrollIndicator={false}
           renderItem={({ item: c }) => (
             <TouchableOpacity
@@ -285,11 +290,9 @@ export function InstructorCoursesTab({ isSchool }: Props) {
                 <BookOpen size={20} color="#6366f1" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.name, { color: T.text }]}>{c.Name}</Text>
-                {isSchool && c.GradeLevel !== null && c.GradeLevel !== undefined && (
-                  <Text style={[styles.badge, { color: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)' }]}>
-                    {formatGradeName(c.GradeLevel)}
-                  </Text>
+                <Text style={[styles.name, { color: T.text }]}>{formatClassName(c, isSchool)}</Text>
+                {isSchool && c.GradeLevel !== null && c.GradeLevel !== undefined && !!c.Name && (
+                  <Text style={[styles.sub, { color: T.muted }]}>{c.Name}</Text>
                 )}
                 {!isSchool && !!c.level && (
                   <Text style={[styles.sub, { color: T.muted }]}>{c.level}</Text>

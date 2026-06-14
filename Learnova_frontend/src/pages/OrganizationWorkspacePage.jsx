@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { BadgeCheck, Bell, CalendarDays, CalendarRange, BookOpen, Building2, ChevronDown, ChevronRight, Download, Eye, FolderOpen, GraduationCap, Search, UserCircle2, Users, UserCheck, Trash2, Pencil } from "lucide-react";
 import NotificationDropdown from "../components/shared/NotificationDropdown";
@@ -48,6 +49,8 @@ import {
   issueCertificates,
   publishCertificates,
   fetchCertificateStatus,
+  fetchOrganizationSubscription,
+  initiateBillingCheckout,
   fetchOrganizationMarks,
   fetchAssessmentComponents,
   createAssessmentComponent,
@@ -74,6 +77,7 @@ import OrgGradesPanel from "../components/organization/OrgGradesPanel";
 import OrgReportsPanel from "../components/organization/OrgReportsPanel";
 import TimetableManager from "../components/organization/TimetableManager";
 import CertificatesManager from "../components/organization/CertificatesManager";
+import BillingPlanCards from "../components/organization/BillingPlanCards";
 
 /* ─── Read-only lesson viewer used by org admins ──────────────────────── */
 function LessonsViewModal({ open, subject, lessons, loading, isArabic, onClose }) {
@@ -326,6 +330,7 @@ const TABS = {
   CALENDAR: "calendar",
   ATTENDANCE: "attendance",
   REPORTS: "reports",
+  BILLING: "billing",
 };
 
 const AUTO_GRADE_RE = /^Auto-created grade course for level (\d+)$/i;
@@ -436,6 +441,18 @@ const downloadExcelFromRows = (fileName, headers, rows) => {
   triggerBlobDownload(blob, fileName.replace(/\.csv$/, '.xls'));
 };
 
+const registrationIdLabel = (role, isArabic) => {
+  if (role === "TEACHER") return isArabic ? "رقم المعلم" : "Teacher ID";
+  if (role === "PARENT") return isArabic ? "رقم ولي الأمر" : "Parent ID";
+  if (role === "STUDENT") return isArabic ? "رقم القيد" : "Student ID";
+  return isArabic ? "رقم الحساب" : "Account ID";
+};
+
+const singleRoleOf = (users) => {
+  const roles = new Set((users || []).map((u) => u.role));
+  return roles.size === 1 ? roles.values().next().value : "";
+};
+
 const copyCredentialsToClipboard = async (email, password) => {
   const value = `${email || "-"} / ${password || "-"}`;
   if (!navigator?.clipboard?.writeText) {
@@ -518,11 +535,25 @@ export default function OrganizationWorkspacePage() {
   const canManageCourses = isSchool || isAcademy;
   const sl = getSubjectLabels(isAcademy, isArabic);
 
-  const [activeTab, setActiveTab] = useState(TABS.OVERVIEW);
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(
+    searchParams.get("tab") === TABS.BILLING ? TABS.BILLING : TABS.OVERVIEW
+  );
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // Billing
+  const [orgSubscription, setOrgSubscription] = useState(null);
+  const [billingActionLoading, setBillingActionLoading] = useState(null);
+  const [trialExpiredBanner, setTrialExpiredBanner] = useState(false);
+
+  useEffect(() => {
+    const handleTrialExpired = () => setTrialExpiredBanner(true);
+    window.addEventListener("learnova:trial-expired", handleTrialExpired);
+    return () => window.removeEventListener("learnova:trial-expired", handleTrialExpired);
+  }, []);
 
   const [teachers, setTeachers] = useState([]);
   const [courses, setCourses] = useState([]);
@@ -752,7 +783,7 @@ export default function OrganizationWorkspacePage() {
   const [rankings, setRankings] = useState([]);
   const [rankingsLoading, setRankingsLoading] = useState(false);
 
-  const [credentialsModal, setCredentialsModal] = useState({ open: false, name: "", email: "", password: "", registrationNumber: "" });
+  const [credentialsModal, setCredentialsModal] = useState({ open: false, name: "", email: "", password: "", registrationNumber: "", role: "" });
   const [bulkCredentialsModal, setBulkCredentialsModal] = useState({ open: false, users: [] });
   const [teacherModalOpen, setTeacherModalOpen] = useState(false);
   const [courseModalOpen, setCourseModalOpen] = useState(false);
@@ -1070,12 +1101,13 @@ export default function OrganizationWorkspacePage() {
     setError("");
 
     try {
-      const [profileResult, teachersResult, coursesResult, usersResult, revenueResult] = await Promise.allSettled([
+      const [profileResult, teachersResult, coursesResult, usersResult, revenueResult, subscriptionResult] = await Promise.allSettled([
         fetchMyOrganizationProfile(),
         fetchOrganizationTeachers(),
         fetchOrganizationCourses(),
         fetchOrganizationUsers(),
         isAcademy ? fetchOrganizationRevenue() : Promise.resolve(null),
+        fetchOrganizationSubscription(organization?.id),
       ]);
 
       const criticalFailure = [profileResult, teachersResult, coursesResult, usersResult].find(
@@ -1091,6 +1123,8 @@ export default function OrganizationWorkspacePage() {
       const coursesData = coursesResult.value;
       const usersData = usersResult.value;
       const revenueData = revenueResult.status === "fulfilled" ? revenueResult.value : null;
+
+      setOrgSubscription(subscriptionResult.status === "fulfilled" ? subscriptionResult.value : null);
 
       setOrganizationProfile(profileData || organization);
       setProfileForm({
@@ -1468,6 +1502,7 @@ export default function OrganizationWorkspacePage() {
 
   const enterCourse = async (course) => {
     setDrillCourse(course);
+    setSelectedCourseId(course.id);
     setDrillSubject(null);
     setDrillLessons([]);
     setDrillExpandedLesson(null);
@@ -1586,7 +1621,7 @@ export default function OrganizationWorkspacePage() {
         const email = generated?.data?.email || "-";
         const password = generated?.credentials?.password || "-";
         const registrationNumber = generated?.data?.registrationNumber || "";
-        setCredentialsModal({ open: true, name: teacherFullName, email, password, registrationNumber });
+        setCredentialsModal({ open: true, name: teacherFullName, email, password, registrationNumber, role: "TEACHER" });
         return isArabic ? "تم إنشاء حساب المدرس" : "Teacher account created";
       } else {
         const created = await createOrganizationTeacher({
@@ -1604,7 +1639,7 @@ export default function OrganizationWorkspacePage() {
         setTeacherModalOpen(false);
         const tempPassword = created?.data?.tempPassword || "-";
         const registrationNumber = created?.data?.registrationNumber || "";
-        setCredentialsModal({ open: true, name: teacherFullName, email: teacherForm.email, password: tempPassword, registrationNumber });
+        setCredentialsModal({ open: true, name: teacherFullName, email: teacherForm.email, password: tempPassword, registrationNumber, role: "TEACHER" });
         return isArabic ? "تم إنشاء حساب المدرس" : "Teacher account created";
       }
     }, t.organization.messages.teacherSaved);
@@ -1744,6 +1779,9 @@ export default function OrganizationWorkspacePage() {
         ...prev,
         [selectedCourseId]: nextSubjects,
       }));
+      if (drillCourse?.id === selectedCourseId) {
+        setDrillSubjects(nextSubjects);
+      }
       resetSubjectForm();
       setSubjectModalOpen(false);
     }, sl.saved);
@@ -1789,7 +1827,7 @@ export default function OrganizationWorkspacePage() {
         const password = generated?.credentials?.password || "-";
         const registrationNumber = generated?.data?.registrationNumber || "";
         const parentLinkMessage = buildParentLinkMessage(generated?.parentLinkStatus);
-        setCredentialsModal({ open: true, name: studentFullName, email, password, registrationNumber });
+        setCredentialsModal({ open: true, name: studentFullName, email, password, registrationNumber, role: "STUDENT" });
         return `${isArabic ? "تم إنشاء حساب الطالب" : "Student account created"}${parentLinkMessage}`;
       } else {
         const created = await createOrganizationUser({ ...basePayload, email: studentForm.email });
@@ -1800,7 +1838,7 @@ export default function OrganizationWorkspacePage() {
         const tempPassword = created?.tempPassword || "-";
         const registrationNumber = created?.registrationNumber || "";
         const parentLinkMessage = buildParentLinkMessage(created?.parentLinkStatus);
-        setCredentialsModal({ open: true, name: studentFullName, email: studentForm.email, password: tempPassword, registrationNumber });
+        setCredentialsModal({ open: true, name: studentFullName, email: studentForm.email, password: tempPassword, registrationNumber, role: "STUDENT" });
         return `${isArabic ? "تم إنشاء حساب الطالب" : "Student account created"}${parentLinkMessage}`;
       }
     }, t.organization.messages.studentSaved);
@@ -1832,7 +1870,7 @@ export default function OrganizationWorkspacePage() {
         const email = generated?.data?.email || "-";
         const password = generated?.credentials?.password || "-";
         const registrationNumber = generated?.data?.registrationNumber || "";
-        setCredentialsModal({ open: true, name: parentFullName, email, password, registrationNumber });
+        setCredentialsModal({ open: true, name: parentFullName, email, password, registrationNumber, role: "PARENT" });
         return isArabic ? "تم إنشاء حساب ولي الأمر" : "Parent account created";
       } else {
         const created = await createOrganizationUser({ ...basePayload, email: parentForm.email });
@@ -1842,7 +1880,7 @@ export default function OrganizationWorkspacePage() {
         setParentModalOpen(false);
         const tempPassword = created?.tempPassword || "-";
         const registrationNumber = created?.registrationNumber || "";
-        setCredentialsModal({ open: true, name: parentFullName, email: parentForm.email || "", password: tempPassword, registrationNumber });
+        setCredentialsModal({ open: true, name: parentFullName, email: parentForm.email || "", password: tempPassword, registrationNumber, role: "PARENT" });
         return isArabic ? "تم إنشاء حساب ولي الأمر" : "Parent account created";
       }
     }, t.organization.messages.parentSaved);
@@ -2444,6 +2482,25 @@ export default function OrganizationWorkspacePage() {
     finally { setRankingsLoading(false); }
   };
 
+  const handleSubscribeToPlan = async (planId) => {
+    if (!organization?.id) return;
+    setBillingActionLoading(planId);
+    try {
+      const result = await initiateBillingCheckout(organization.id, planId);
+      if (result?.freeActivated) {
+        notifySuccess(isArabic ? "تم تفعيل الخطة المجانية بنجاح" : "Free plan activated successfully");
+        const sub = await fetchOrganizationSubscription(organization.id);
+        setOrgSubscription(sub);
+      } else if (result?.checkoutUrl) {
+        window.location.href = result.checkoutUrl;
+      }
+    } catch (err) {
+      notifyError(safeError(err));
+    } finally {
+      setBillingActionLoading(null);
+    }
+  };
+
   const tabs = useMemo(() => {
     const courseTabLabel = isSchool
       ? (isArabic ? "الصفوف" : "Classes")
@@ -2471,6 +2528,7 @@ export default function OrganizationWorkspacePage() {
     }
 
     baseTabs.push({ id: TABS.REPORTS, label: isArabic ? "التقارير" : "Reports" });
+    baseTabs.push({ id: TABS.BILLING, label: isArabic ? "الفوترة" : "Billing" });
 
     return baseTabs;
   }, [isSchool, isAcademy, isArabic, t.organization.tabs, sl]);
@@ -2508,7 +2566,7 @@ export default function OrganizationWorkspacePage() {
               </div>
               {credentialsModal.registrationNumber && (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500">{isArabic ? "رقم القيد" : "Student ID"}</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500">{registrationIdLabel(credentialsModal.role, isArabic)}</p>
                   <p className="mt-0.5 font-mono text-sm font-bold text-emerald-700 tracking-wider">{credentialsModal.registrationNumber}</p>
                 </div>
               )}
@@ -2530,7 +2588,7 @@ export default function OrganizationWorkspacePage() {
               </button>
               <button
                 type="button"
-                onClick={() => setCredentialsModal({ open: false, name: "", email: "", password: "", registrationNumber: "" })}
+                onClick={() => setCredentialsModal({ open: false, name: "", email: "", password: "", registrationNumber: "", role: "" })}
                 className="flex-1 rounded-2xl bg-slate-900 py-2.5 text-sm font-bold text-white transition hover:bg-slate-700"
               >
                 {isArabic ? "تم، أغلق" : "Done"}
@@ -2559,8 +2617,10 @@ export default function OrganizationWorkspacePage() {
               <button
                 type="button"
                 onClick={() => {
+                  const bulkRole = singleRoleOf(bulkCredentialsModal.users);
+                  const idHeader = bulkRole === "TEACHER" ? "teacher_id" : bulkRole === "PARENT" ? "parent_id" : bulkRole === "STUDENT" ? "student_id" : "account_id";
                   const rows = bulkCredentialsModal.users.map((u) => [u.name, u.email, u.registrationNumber || "", u.password, u.role]);
-                  downloadExcelFromRows(`credentials-${new Date().toISOString().slice(0, 10)}.csv`, ["name", "email", "student_id", "temp_password", "role"], rows);
+                  downloadExcelFromRows(`credentials-${new Date().toISOString().slice(0, 10)}.csv`, ["name", "email", idHeader, "temp_password", "role"], rows);
                 }}
                 className="shrink-0 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 transition hover:bg-sky-100"
               >
@@ -2575,7 +2635,7 @@ export default function OrganizationWorkspacePage() {
                   <tr>
                     <th className="px-5 py-3">{isArabic ? "الاسم" : "Name"}</th>
                     <th className="px-5 py-3">{isArabic ? "البريد الإلكتروني" : "Email"}</th>
-                    <th className="px-5 py-3">{isArabic ? "رقم القيد" : "Student ID"}</th>
+                    <th className="px-5 py-3">{registrationIdLabel(singleRoleOf(bulkCredentialsModal.users), isArabic)}</th>
                     <th className="px-5 py-3">{isArabic ? "كلمة المرور المؤقتة" : "Temp Password"}</th>
                     <th className="px-5 py-3">{isArabic ? "الدور" : "Role"}</th>
                   </tr>
@@ -2753,6 +2813,33 @@ export default function OrganizationWorkspacePage() {
               </div>
             </div>
           </header>
+
+          {trialExpiredBanner && (
+            <article className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
+              <p className="text-sm font-bold text-rose-700">
+                {isArabic
+                  ? "انتهت فترتك التجريبية المجانية. اختر خطة للمتابعة."
+                  : "Your free trial has ended. Choose a plan to continue."}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab(TABS.BILLING); setTrialExpiredBanner(false); }}
+                  className="rounded-xl px-4 py-2 text-sm font-bold text-white transition hover:-translate-y-0.5"
+                  style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}
+                >
+                  {isArabic ? "الذهاب إلى الفوترة" : "Go to Billing"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTrialExpiredBanner(false)}
+                  className="rounded-xl border border-rose-200 px-3 py-2 text-sm font-bold text-rose-600 hover:bg-rose-100"
+                >
+                  {isArabic ? "إغلاق" : "Dismiss"}
+                </button>
+              </div>
+            </article>
+          )}
 
           {loading && <p className="text-sm text-slate-500">{t.common.loading}</p>}
         {!loading && activeTab === TABS.OVERVIEW && !setupChecklist.allDone && (
@@ -3376,14 +3463,20 @@ export default function OrganizationWorkspacePage() {
                   return (
                     <article key={course.id} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
                       {/* Thumbnail */}
-                      <div className="relative h-44 overflow-hidden bg-slate-100">
+                      <div className="relative aspect-video overflow-hidden bg-slate-100">
+                        <img
+                          src={getCourseThumbnailUrl(course.Thumbnail, course.kind)}
+                          alt=""
+                          aria-hidden="true"
+                          className="absolute inset-0 h-full w-full scale-110 object-cover object-center opacity-60 blur-xl"
+                        />
                         <img
                           src={getCourseThumbnailUrl(course.Thumbnail, course.kind)}
                           alt={course.Name || (isArabic ? 'صورة الكورس' : 'Course image')}
                           onError={(event) => {
                             event.currentTarget.src = getCourseThumbnailUrl("", course.kind);
                           }}
-                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          className="relative h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
                         />
                         {levelInfo && (
                           <span className={`absolute left-3 top-3 rounded-full px-2.5 py-0.5 text-xs font-bold shadow-sm ${levelInfo.cls}`}>
@@ -3469,9 +3562,16 @@ export default function OrganizationWorkspacePage() {
                       <p className="text-xs font-black uppercase tracking-[0.22em] text-indigo-700">{sl.plural}</p>
                       <h2 className="mt-2 text-2xl font-black text-slate-900">{formatGradeName(drillCourse, isSchool, isArabic) || drillCourse.Name || drillCourse.name}</h2>
                     </div>
-                    <span className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-sm font-bold text-indigo-700">
-                      {drillSubjects.length} {sl.countOf}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-sm font-bold text-indigo-700">
+                        {drillSubjects.length} {sl.countOf}
+                      </span>
+                      {canManageCourses && (
+                        <button type="button" onClick={() => { resetSubjectForm(); setSubjectModalOpen(true); }} className="rounded-full bg-purple-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-purple-700">
+                          {sl.addNewBtn}
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {drillSubjectsLoading ? (
                     <div className="mt-6 space-y-3">
@@ -3506,9 +3606,33 @@ export default function OrganizationWorkspacePage() {
                                     <FolderOpen size={13} />
                                     {isArabic ? "عرض الدروس" : "View Lessons"}
                                   </button>
-                                  <button type="button" onClick={() => { setSubjectForm({ id: subject.id, name: subject.name, Description: subject.Description || "", Teacher_id: subject.Teacher_id || "", isPaid: Boolean(subject.isPaid), price: subject.price ? String(subject.price) : "", level: subject.level || "", imageUrl: subject.imageUrl || "" }); setSubjectImageFile(null); setSubjectImagePreview(subject.imageUrl || ""); setSubjectModalOpen(true); }} className="rounded-lg border border-slate-300 bg-white p-2 text-slate-700 transition hover:bg-slate-50" title={isArabic ? "تعديل" : "Edit"}>
-                                    <Pencil size={14} />
-                                  </button>
+                                  {canManageCourses && (
+                                    <>
+                                      <button type="button" onClick={() => { setSubjectForm({ id: subject.id, name: subject.name, Description: subject.Description || "", Teacher_id: subject.Teacher_id || "", isPaid: Boolean(subject.isPaid), price: subject.price ? String(subject.price) : "", level: subject.level || "", imageUrl: subject.imageUrl || "" }); setSubjectImageFile(null); setSubjectImagePreview(subject.imageUrl || ""); setSubjectModalOpen(true); }} className="rounded-lg border border-slate-300 bg-white p-2 text-slate-700 transition hover:bg-slate-50" title={isArabic ? "تعديل" : "Edit"}>
+                                        <Pencil size={14} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => openDeleteConfirm({
+                                          title: isArabic ? "حذف المادة؟" : `Delete ${sl.singular}?`,
+                                          label: subject.name,
+                                          onConfirm: async () => {
+                                            await handleAction(async () => {
+                                              await deleteCourseSubject(drillCourse.id, subject.id);
+                                              const next = await fetchCourseSubjects(drillCourse.id);
+                                              setDrillSubjects(next);
+                                              setSubjectsByCourse((prev) => ({ ...prev, [drillCourse.id]: next }));
+                                              closeDeleteConfirm();
+                                            }, sl.deleted);
+                                          },
+                                        })}
+                                        className="rounded-lg border border-rose-300 bg-rose-50 p-2 text-rose-700 transition hover:bg-rose-100"
+                                        title={isArabic ? "حذف" : "Delete"}
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -3642,14 +3766,20 @@ export default function OrganizationWorkspacePage() {
                     <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
                       {isSchool ? (isArabic ? "الصف" : "Class") : (isArabic ? "التخصص" : "Specialization")}
                     </label>
-                    <select value={selectedCourseId || ""} onChange={(event) => handleSubjectsCourseChange(Number(event.target.value) || null)} className="h-11 w-full rounded-xl border border-slate-200 px-3">
-                     <option value="">
-                       {isSchool ? sl.selectGradeFirst : sl.selectCourseFirst}
-                     </option>
-                     {sortedSubjectCourses.map((course) => (
-                       <option key={course.id} value={course.id}>{formatGradeName(course, isSchool, isArabic) || course.Name}</option>
-                     ))}
-                    </select>
+                    {drillCourse ? (
+                      <p className="flex h-11 w-full items-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700">
+                        {formatGradeName(drillCourse, isSchool, isArabic) || drillCourse.Name || drillCourse.name}
+                      </p>
+                    ) : (
+                      <select value={selectedCourseId || ""} onChange={(event) => handleSubjectsCourseChange(Number(event.target.value) || null)} className="h-11 w-full rounded-xl border border-slate-200 px-3">
+                       <option value="">
+                         {isSchool ? sl.selectGradeFirst : sl.selectCourseFirst}
+                       </option>
+                       {sortedSubjectCourses.map((course) => (
+                         <option key={course.id} value={course.id}>{formatGradeName(course, isSchool, isArabic) || course.Name}</option>
+                       ))}
+                      </select>
+                    )}
                   </div>
                   <input name="name" value={subjectForm.name} onChange={setField(setSubjectForm)} placeholder={sl.name} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
                   <textarea name="Description" value={subjectForm.Description} onChange={setField(setSubjectForm)} placeholder={sl.description} rows={4} className="w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-sm leading-6 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200" style={{ minHeight: "100px" }} />
@@ -4505,7 +4635,7 @@ export default function OrganizationWorkspacePage() {
                   <input name="firstName" value={studentForm.firstName} onChange={setField(setStudentForm)} placeholder={isArabic ? "الاسم الأول" : "First Name"} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
                   <input name="lastName" value={studentForm.lastName} onChange={setField(setStudentForm)} placeholder={isArabic ? "اسم العائلة" : "Last Name"} className="h-11 w-full rounded-xl border border-slate-200 px-3" required />
                 </div>
-                <input name="email" value={studentForm.email} onChange={setField(setStudentForm)} placeholder={isArabic ? "البريد الإلكتروني (اختياري)" : "Email (optional)"} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
+                <input name="email" value={studentForm.email} onChange={setField(setStudentForm)} placeholder={isArabic ? "البريد الإلكتروني" : "Email"} className="h-11 w-full rounded-xl border border-slate-200 px-3" />
                 <div>
                   <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
                     {isArabic ? "تاريخ الميلاد" : "Date of Birth"}
@@ -6178,6 +6308,102 @@ export default function OrganizationWorkspacePage() {
               academicYears={academicYears}
               terms={yearTerms}
             />
+          </article>
+        )}
+
+        {/* ── Billing tab ──────────────────────────────────────────────────── */}
+        {!loading && activeTab === TABS.BILLING && (
+          <article className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-6 border-b border-slate-200 pb-5">
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-indigo-700">
+                {isArabic ? "الفوترة" : "Billing"}
+              </p>
+              <h2 className="mt-1 text-2xl font-black text-slate-900">
+                {isArabic ? "الاشتراك والفوترة" : "Subscription & Billing"}
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {isArabic
+                  ? "إدارة خطة اشتراك مؤسستك وطرق الدفع"
+                  : "Manage your organization's subscription plan and payments"}
+              </p>
+            </div>
+
+            {/* Trial banner */}
+            {(() => {
+              const trialEndsAt = organizationProfile?.trialEndsAt ? new Date(organizationProfile.trialEndsAt) : null;
+              const hasActiveSubscription = orgSubscription?.status === "ACTIVE";
+
+              if (!trialEndsAt || hasActiveSubscription) return null;
+
+              const now = new Date();
+              const isExpired = trialEndsAt <= now;
+              const daysRemaining = Math.max(0, Math.ceil((trialEndsAt - now) / (1000 * 60 * 60 * 24)));
+
+              return (
+                <div
+                  className={`mb-6 rounded-2xl border px-5 py-4 text-sm ${
+                    isExpired
+                      ? "border-rose-200 bg-rose-50 text-rose-700"
+                      : "border-amber-200 bg-amber-50 text-amber-800"
+                  }`}
+                >
+                  {isExpired ? (
+                    <p className="font-bold">
+                      {isArabic
+                        ? "انتهت فترتك التجريبية المجانية. اختر خطة للمتابعة."
+                        : "Your free trial has ended. Choose a plan below to continue."}
+                    </p>
+                  ) : (
+                    <p className="font-bold">
+                      {isArabic
+                        ? `تبقى ${daysRemaining} ${daysRemaining === 1 ? "يوم" : "أيام"} في فترتك التجريبية المجانية.`
+                        : `${daysRemaining} day${daysRemaining === 1 ? "" : "s"} remaining in your free trial.`}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Current plan summary */}
+            <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                {isArabic ? "الخطة الحالية" : "Current Plan"}
+              </p>
+              {orgSubscription ? (
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900">{orgSubscription.plan?.name || "-"}</h3>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {isArabic ? "الحالة" : "Status"}: {orgSubscription.status}
+                      {orgSubscription.endDate && (
+                        <>
+                          {" "}
+                          · {isArabic ? "ينتهي في" : "Renews/expires"}{" "}
+                          {String(orgSubscription.endDate).slice(0, 10)}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm font-semibold text-slate-500">
+                  {isArabic ? "لا يوجد اشتراك نشط" : "No active subscription"}
+                </p>
+              )}
+            </div>
+
+            {/* Plan picker */}
+            <div>
+              <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                {isArabic ? "الخطط المتاحة" : "Available Plans"}
+              </p>
+              <BillingPlanCards
+                currentPlanId={orgSubscription?.planId}
+                subscribingPlanId={billingActionLoading}
+                onSubscribe={handleSubscribeToPlan}
+                organizationType={organizationType}
+              />
+            </div>
           </article>
         )}
         </section>

@@ -4,6 +4,7 @@ import {
   getSchoolStudentSubjects,
   getAcademyTracks,
   getAcademyTrackSubjects,
+  getRecentAcademySubjects,
   subscribeAcademySubject,
   getAcademySubjectSubscriptions,
   verifyAcademySubjectCheckout,
@@ -74,6 +75,21 @@ export const getAcademyTrackSubjectsController = async (req, res, next) => {
 
     return res.status(200).json({
       success: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getRecentAcademySubjectsController = async (req, res, next) => {
+  try {
+    const userId = ensureStudentRole(req);
+    const data = await getRecentAcademySubjects(userId);
+
+    return res.status(200).json({
+      success: true,
+      total: data.length,
       data,
     });
   } catch (error) {

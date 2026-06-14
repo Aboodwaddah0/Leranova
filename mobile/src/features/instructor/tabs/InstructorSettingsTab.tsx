@@ -3,15 +3,10 @@ import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   RefreshControl, Alert, TextInput, ActivityIndicator,
 } from 'react-native';
-import { User, Lock, Save, Eye, EyeOff, Bell } from 'lucide-react-native';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { User, Lock, Save, Eye, EyeOff } from 'lucide-react-native';
 import { useTheme } from '../../../shared/hooks/useTheme';
 import { useAppDispatch } from '../../../store/hooks';
 import { updateUser } from '../../../store/authSlice';
-import type { InstructorStackParamList } from '../../../types/navigation';
-
-type Nav = NativeStackNavigationProp<InstructorStackParamList>;
 import { spacing, radius, fontSize, fontWeight } from '../../../shared/theme';
 import { LoadingState } from '../../../shared/components';
 import { fetchInstructorProfile, updateInstructorProfile } from '../services/instructorService';
@@ -22,7 +17,6 @@ interface Props { isSchool: boolean; }
 export function InstructorSettingsTab({ isSchool }: Props) {
   const { T } = useTheme();
   const dispatch = useAppDispatch();
-  const nav = useNavigation<Nav>();
 
   const [profile,    setProfile]    = useState<InstructorProfile | null>(null);
   const [loading,    setLoading]    = useState(true);
@@ -166,19 +160,6 @@ export function InstructorSettingsTab({ isSchool }: Props) {
         </TouchableOpacity>
       </View>
 
-      {/* Notification Test */}
-      <TouchableOpacity
-        style={[styles.notifTestBtn, { backgroundColor: 'rgba(99,102,241,0.08)', borderColor: 'rgba(99,102,241,0.25)' }]}
-        onPress={() => nav.navigate('NotificationTest')}
-        activeOpacity={0.8}
-      >
-        <Bell size={18} color="#6366f1" />
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.notifTitle, { color: '#6366f1' }]}>🔔 Test Notifications</Text>
-          <Text style={[styles.notifSub, { color: T.muted }]}>Fire fake notifications for Student, Teacher & Org roles</Text>
-        </View>
-      </TouchableOpacity>
-
       {/* Password form */}
       <View style={[styles.card, { backgroundColor: T.surface, borderColor: T.border }]}>
         <View style={styles.cardTitleRow}>
@@ -250,7 +231,4 @@ const styles = StyleSheet.create({
   eyeBtn:        { padding: spacing[3] },
   saveBtn:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2], paddingVertical: spacing[3], borderRadius: radius.xl },
   saveBtnText:   { color: '#fff', fontSize: fontSize.sm, fontWeight: fontWeight.bold },
-  notifTestBtn:  { flexDirection: 'row', alignItems: 'center', gap: spacing[3], padding: spacing[4], borderRadius: radius.xl, borderWidth: 1 },
-  notifTitle:    { fontSize: fontSize.sm, fontWeight: fontWeight.extrabold },
-  notifSub:      { fontSize: fontSize.xs, marginTop: 2 },
 });

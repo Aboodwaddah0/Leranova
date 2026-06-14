@@ -36,13 +36,14 @@ import StudentSubjectPage from "./pages/student/StudentSubjectPage";
 import StudentLessonPage from "./pages/student/StudentLessonPage";
 import StudentProfilePage from "./pages/student/StudentProfilePage";
 import StudentSocialPage from "./pages/student/StudentSocialPage";
+import StudentAchievementsPage from "./pages/student/StudentAchievementsPage";
 import StudentPageErrorBoundary from "./components/student/StudentPageErrorBoundary";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import SignupPage from "./pages/SignupPage";
-import PaymentRedirect from "./components/auth/PaymentRedirect";
 import PaymentSuccessPage from "./pages/PaymentSuccessPage";
+import BillingSuccessPage from "./pages/BillingSuccessPage";
 import StudentSubjectPaymentSuccessPage from "./pages/student/StudentSubjectPaymentSuccessPage";
 import OrganizationWorkspacePage from "./pages/OrganizationWorkspacePage";
 import AdminOverviewPage from "./pages/admin/AdminOverviewPage";
@@ -82,7 +83,6 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
-        <Route path="/signup/checkout" element={<PaymentRedirect />} />
         {/* Organization registration payment success */}
         <Route path="/payment/success"    element={<PaymentSuccessPage />} />
         <Route path="/subscription/success" element={<PaymentSuccessPage />} />
@@ -92,6 +92,9 @@ function App() {
         <Route path="/student/payment-success" element={<StudentSubjectPaymentSuccessPage />} />
         <Route path="/payment/cancel" element={<Navigate to="/signup" replace />} />
         <Route path="/subscription/cancel" element={<Navigate to="/signup" replace />} />
+        {/* Billing (post-trial plan subscription) checkout success/cancel */}
+        <Route path="/organization/billing/success" element={<BillingSuccessPage />} />
+        <Route path="/organization/billing/cancel" element={<Navigate to="/dashboard/organization?tab=billing" replace />} />
         <Route path="/verify-email/:token" element={<VerifyEmailPage />} />
 
         <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -114,11 +117,11 @@ function App() {
             <Route path="/dashboard/instructor/students" element={<InstructorStudentsPage />} />
             <Route path="/dashboard/instructor/settings" element={<InstructorSettingsPage />} />
             <Route path="/dashboard/instructor/analytics" element={<InstructorAnalyticsPage />} />
+            <Route path="/dashboard/instructor/chat" element={<InstructorChatPage />} />
             <Route element={<InstructorSchoolOnlyRoute />}>
               <Route path="/dashboard/instructor/marks" element={<InstructorMarksPage />} />
               <Route path="/dashboard/instructor/attendance" element={<InstructorAttendancePage />} />
               <Route path="/dashboard/instructor/calendar" element={<InstructorCalendarPage />} />
-              <Route path="/dashboard/instructor/chat" element={<InstructorChatPage />} />
               <Route path="/dashboard/instructor/timetable" element={<InstructorTimetablePage />} />
             </Route>
           </Route>
@@ -146,6 +149,7 @@ function App() {
             <Route path="/teachers/:teacherId" element={<StudentPageErrorBoundary><StudentTeacherProfilePage /></StudentPageErrorBoundary>} />
             <Route path="/student/chat" element={<StudentPageErrorBoundary><StudentChatPage /></StudentPageErrorBoundary>} />
             <Route path="/student/social" element={<StudentPageErrorBoundary><StudentSocialPage /></StudentPageErrorBoundary>} />
+            <Route path="/student/achievements" element={<StudentPageErrorBoundary><StudentAchievementsPage /></StudentPageErrorBoundary>} />
             <Route path="/student/profile" element={<StudentProfilePage />} />
           </Route>
           <Route path="/dashboard/:role" element={<DashboardPlaceholderPage />} />

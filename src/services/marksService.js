@@ -29,8 +29,17 @@ const markInclude = {
 					GradeLevel: true,
 					isPaid: true,
 					price: true,
+					Org_id: true,
 				},
 			},
+		},
+	},
+	component: {
+		select: {
+			id: true,
+			name: true,
+			weight: true,
+			maxScore: true,
 		},
 	},
 };
@@ -136,6 +145,24 @@ const getTeacherMarkOrThrow = async (teacherId, markId) => {
 	return mark;
 };
 
+const ensureComponentValid = async (componentId, orgId, subjectId) => {
+	if (componentId === undefined || componentId === null) return null;
+
+	const component = await prisma.assessment_component.findFirst({
+		where: {
+			id: Number(componentId),
+			OrgId: orgId,
+			OR: [{ subjectId: null }, { subjectId: Number(subjectId) }],
+		},
+	});
+
+	if (!component) {
+		throw new AppError('Assessment component not found or does not apply to this subject', 404);
+	}
+
+	return component;
+};
+
 const assertWeightBudget = async (studentId, subjectId, addingPct, excludeMarkId = null) => {
 	if (!addingPct && addingPct !== 0) return; // no weight provided — skip
 	const agg = await prisma.marks.aggregate({
@@ -166,6 +193,7 @@ export const createMark = async (teacherId, data) => {
 	}
 
 	await assertWeightBudget(data.Student_id, data.Subject_id, data.ExamPercentage);
+	await ensureComponentValid(data.componentId, subject.track.Org_id, data.Subject_id);
 
 	const mark = await prisma.marks.create({
 		data: {
@@ -175,6 +203,7 @@ export const createMark = async (teacherId, data) => {
 			OutOf: data.OutOf,
 			ExamPercentage: data.ExamPercentage,
 			MarkType: data.MarkType,
+			componentId: data.componentId ? Number(data.componentId) : null,
 			time: data.time ? new Date(data.time) : null,
 		},
 		include: markInclude,
@@ -234,6 +263,10 @@ export const updateMark = async (teacherId, markId, data) => {
 	const newPct = data.ExamPercentage ?? existingMark.ExamPercentage;
 	await assertWeightBudget(existingMark.Student_id, existingMark.Subject_id, newPct, markId);
 
+	if (Object.prototype.hasOwnProperty.call(data, 'componentId')) {
+		await ensureComponentValid(data.componentId, existingMark.course.track.Org_id, existingMark.Subject_id);
+	}
+
 	const updated = await prisma.marks.update({
 		where: { id: markId },
 		data: {
@@ -241,6 +274,9 @@ export const updateMark = async (teacherId, markId, data) => {
 			OutOf: data.OutOf ?? undefined,
 			ExamPercentage: data.ExamPercentage ?? undefined,
 			MarkType: data.MarkType ?? undefined,
+			componentId: Object.prototype.hasOwnProperty.call(data, 'componentId')
+				? (data.componentId ? Number(data.componentId) : null)
+				: undefined,
 			time: Object.prototype.hasOwnProperty.call(data, 'time')
 				? (data.time ? new Date(data.time) : null)
 				: undefined,

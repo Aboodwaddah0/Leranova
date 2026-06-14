@@ -4,6 +4,7 @@ import {
   getPlan,
   getOrgSubscription,
   subscribe,
+  initiateCheckout,
   cancel,
   recordPaymentHandler,
   getOrgPayments,
@@ -26,6 +27,7 @@ router.get('/plans/:planId', getPlan);
  */
 router.get('/organizations/:orgId', authMiddleware, getOrgSubscription);
 router.post('/organizations/:orgId/subscribe', authMiddleware, subscribe);
+router.post('/organizations/:orgId/checkout', authMiddleware, initiateCheckout);
 router.delete('/:subscriptionId', authMiddleware, cancel);
 router.post('/payments', authMiddleware, recordPaymentHandler);
 router.get('/organizations/:orgId/payments', authMiddleware, getOrgPayments);

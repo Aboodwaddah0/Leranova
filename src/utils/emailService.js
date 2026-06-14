@@ -73,6 +73,38 @@ export const sendPasswordResetEmail = async ({ to, name, resetLink, expiresMinut
   });
 };
 
+export const sendPasswordResetCodeEmail = async ({ to, name, code, expiresMinutes }) => {
+  const from = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+  if (!from) throw new AppError('EMAIL_FROM is not configured', 500);
+
+  const safeName = name || 'there';
+  const text = [
+    `Hello ${safeName},`,
+    '',
+    'Your Learnova password reset code is:',
+    '',
+    `  ${code}`,
+    '',
+    `This code expires in ${expiresMinutes} minutes.`,
+    'If you did not request this, you can ignore this email.',
+  ].join('\n');
+
+  const html = `
+    <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:24px;">
+      <h2 style="color:#4f46e5;">Learnova Password Reset</h2>
+      <p>Hello ${safeName},</p>
+      <p>Use the code below to reset your password:</p>
+      <div style="text-align:center;margin:32px 0;">
+        <span style="font-size:40px;font-weight:900;letter-spacing:12px;color:#1e1b4b;background:#ede9fe;padding:16px 28px;border-radius:12px;">${code}</span>
+      </div>
+      <p style="color:#6b7280;">This code expires in <strong>${expiresMinutes} minutes</strong>.</p>
+      <p style="color:#9ca3af;font-size:13px;">If you did not request this, you can safely ignore this email.</p>
+    </div>
+  `;
+
+  await getTransporter().sendMail({ from, to, subject: 'Learnova — Password Reset Code', text, html });
+};
+
 export const sendOrgVerificationEmail = async ({ to, name, verificationLink }) => {
   const from = process.env.EMAIL_FROM || process.env.EMAIL_USER;
   if (!from) throw new AppError('EMAIL_FROM is not configured', 500);

@@ -80,7 +80,7 @@ function OptionBtn({
         S.optText,
         { color: bubbleStyle.text },
         state === 'wrong' && { textDecorationLine: 'line-through', opacity: 0.65 },
-      ]} dir="auto">
+      ]}>
         {String(text)}
       </Text>
     </TouchableOpacity>

@@ -16,6 +16,7 @@ export const createMarkSchema = Joi.object({
 	OutOf: Joi.number().positive().precision(2).default(100),
 	ExamPercentage: Joi.number().min(0).max(100).precision(2).default(100),
 	MarkType: Joi.string().trim().max(50).default('EXAM'),
+	componentId: Joi.number().integer().positive().allow(null),
 	time: Joi.date().iso().optional().allow(null),
 })
 	.custom(validateNumbersWithinOutOf)
@@ -27,6 +28,7 @@ export const updateMarkSchema = Joi.object({
 	OutOf: Joi.number().positive().precision(2),
 	ExamPercentage: Joi.number().min(0).max(100).precision(2),
 	MarkType: Joi.string().trim().max(50),
+	componentId: Joi.number().integer().positive().allow(null),
 	time: Joi.date().iso().optional().allow(null),
 })
 	.custom(validateNumbersWithinOutOf)

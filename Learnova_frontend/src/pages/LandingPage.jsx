@@ -1418,7 +1418,7 @@ export default function LandingPage() {
           </motion.div>
 
           <motion.p {...fadeIn(0.36)} className="mt-8 text-sm text-slate-400">
-            {isArabic ? "تجربة مجانية 30 يوم · إعداد فوري · دعم مباشر" : "30-day free trial · Instant setup · Direct support"}
+            {isArabic ? "تجربة مجانية 14 يوم · إعداد فوري · دعم مباشر" : "14-day free trial · Instant setup · Direct support"}
           </motion.p>
         </div>
       </section>

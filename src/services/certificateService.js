@@ -76,10 +76,12 @@ export const issueAcademyCertificate = async (userId, subjectId) => {
   });
 
   // Use raw INSERT ... ON DUPLICATE KEY UPDATE to handle NULL termId correctly
-  // (Prisma upsert rejects NULL in the compound unique key)
+  // (Prisma upsert rejects NULL in the compound unique key).
+  // Academy certificates are self-claimed by the student once eligible, so
+  // there is no separate org-side publishing step — mark published immediately.
   await prisma.$executeRaw`
     INSERT INTO student_certificate (studentId, orgId, subjectId, trackId, termId, isPublished, issuedAt, createdAt)
-    VALUES (${userId}, ${context.orgId}, ${subjectId}, ${check.trackId}, NULL, 0, NOW(), NOW())
+    VALUES (${userId}, ${context.orgId}, ${subjectId}, ${check.trackId}, NULL, 1, NOW(), NOW())
     ON DUPLICATE KEY UPDATE issuedAt = issuedAt
   `;
 

@@ -1,5 +1,6 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
+import { ensureStripeConfigured, createPlanSubscriptionCheckoutSession } from './stripeService.js';
 
 const featureSelect = {
   id: true,
@@ -11,6 +12,29 @@ const featureSelect = {
 };
 
 const normalizeFeatureKey = (value) => String(value ?? '').trim().toUpperCase();
+
+const SCHOOL_ONLY_FEATURE_KEYS = new Set([
+  'ATTENDANCE_TRACKING',
+  'PARENT_PORTAL',
+  'SCHOOL_CALENDAR',
+  'GRADE_REPORTS',
+  'PARENT_NOTIFICATIONS',
+  'CLASS_MANAGEMENT',
+  'ACADEMIC_YEARS',
+  'TIMETABLE',
+]);
+
+const isSchoolOnlyPlan = (plan) => {
+  const legacyKeys = Array.isArray(plan?.features)
+    ? plan.features.map((item) => normalizeFeatureKey(typeof item === 'string' ? item : item?.featureKey ?? item?.key ?? item?.name))
+    : [];
+
+  const planFeatureKeys = Array.isArray(plan?.planFeatures)
+    ? plan.planFeatures.map((pf) => normalizeFeatureKey(pf?.feature?.featureKey))
+    : [];
+
+  return [...legacyKeys, ...planFeatureKeys].some((key) => SCHOOL_ONLY_FEATURE_KEYS.has(key));
+};
 
 const buildPlanFeatureList = async (plan) => {
   const featureMap = new Map();
@@ -216,6 +240,91 @@ export const createSubscription = async (organizationId, planId, autoRenew = tru
   });
 
   return subscription;
+};
+
+/**
+ * Initiate a Stripe checkout session for a paid plan subscription.
+ * Creates PENDING subscription + payment rows for an already-APPROVED
+ * organization choosing/upgrading a plan post-trial.
+ */
+export const initiatePlanCheckout = async (organizationId, planId) => {
+  const plan = await getPlanById(planId);
+
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { id: true, Email: true, Name: true, status: true, Role: true },
+  });
+
+  if (!organization) {
+    throw new AppError('Organization not found', 404);
+  }
+
+  if (organization.Role === 'ACADEMY' && isSchoolOnlyPlan(plan)) {
+    throw new AppError('This plan is only available for school accounts', 403);
+  }
+
+  if (Number(plan.price) > 0) {
+    ensureStripeConfigured();
+  }
+
+  const startDate = new Date();
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + plan.durationDays);
+
+  const subscription = await prisma.subscription.create({
+    data: {
+      organizationId,
+      planId: plan.id,
+      startDate,
+      endDate,
+      status: 'PENDING',
+      autoRenew: true,
+    },
+    select: {
+      id: true, organizationId: true, planId: true,
+      startDate: true, endDate: true, status: true, autoRenew: true,
+    },
+  });
+
+  const payment = await prisma.payment.create({
+    data: {
+      subscriptionId: subscription.id,
+      organizationId,
+      amount: plan.price,
+      paymentMethod: 'STRIPE',
+      status: 'PENDING',
+    },
+    select: {
+      id: true, subscriptionId: true, organizationId: true,
+      amount: true, paymentDate: true, paymentMethod: true, status: true,
+    },
+  });
+
+  // Free plan (price === 0): skip Stripe entirely, activate immediately.
+  if (Number(plan.price) === 0) {
+    await prisma.$transaction(async (tx) => {
+      await tx.payment.update({ where: { id: payment.id }, data: { status: 'SUCCESS', paymentDate: new Date() } });
+      await tx.subscription.updateMany({
+        where: { organizationId, status: 'ACTIVE', NOT: { id: subscription.id } },
+        data: { status: 'CANCELLED' },
+      });
+      await tx.subscription.update({ where: { id: subscription.id }, data: { status: 'ACTIVE' } });
+    });
+    return { sessionId: null, checkoutUrl: null, freeActivated: true };
+  }
+
+  const checkoutSession = await createPlanSubscriptionCheckoutSession({
+    organization,
+    plan,
+    subscription,
+    payment,
+  });
+
+  return {
+    sessionId: checkoutSession.id,
+    checkoutUrl: checkoutSession.url,
+    freeActivated: false,
+  };
 };
 
 /**

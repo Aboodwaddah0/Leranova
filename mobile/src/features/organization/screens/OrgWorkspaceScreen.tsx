@@ -36,12 +36,12 @@ const ALL_TABS = [
   { key: 'courses',     label: 'Courses',     icon: BookOpen,     schoolOnly: false, academyOnly: false },
   { key: 'students',    label: 'Students',    icon: GraduationCap,schoolOnly: false, academyOnly: false },
   { key: 'parents',     label: 'Parents',     icon: Users2,       schoolOnly: true,  academyOnly: false },
-  { key: 'marks',       label: 'Marks',       icon: BarChart2,    schoolOnly: false, academyOnly: false },
-  { key: 'grades',      label: 'Grades',      icon: Trophy,       schoolOnly: false, academyOnly: false },
-  { key: 'school',      label: 'Academic',    icon: School,       schoolOnly: false, academyOnly: false },
-  { key: 'finance',     label: 'Finance',     icon: DollarSign,   schoolOnly: false, academyOnly: false },
-  { key: 'calendar',    label: 'Calendar',    icon: CalendarDays, schoolOnly: false, academyOnly: false },
-  { key: 'attendance',  label: 'Attendance',  icon: ClipboardList,schoolOnly: false, academyOnly: false },
+  { key: 'marks',       label: 'Marks',       icon: BarChart2,    schoolOnly: true,  academyOnly: false },
+  { key: 'grades',      label: 'Grades',      icon: Trophy,       schoolOnly: true,  academyOnly: false },
+  { key: 'school',      label: 'Settings',    icon: School,       schoolOnly: true,  academyOnly: false },
+  { key: 'finance',     label: 'Finance',     icon: DollarSign,   schoolOnly: false, academyOnly: true  },
+  { key: 'calendar',    label: 'Calendar',    icon: CalendarDays, schoolOnly: true,  academyOnly: false },
+  { key: 'attendance',  label: 'Attendance',  icon: ClipboardList,schoolOnly: true,  academyOnly: false },
   { key: 'reports',     label: 'Reports',     icon: FileText,     schoolOnly: false, academyOnly: false },
 ] as const;
 
@@ -66,7 +66,7 @@ export function OrgWorkspaceScreen() {
       if (t.schoolOnly && !isSchool) return false;
       if (t.academyOnly && isSchool) return false;
       return true;
-    }),
+    }).map(t => t.key === 'courses' ? { ...t, label: isSchool ? 'Classes' : 'Specializations' } : t),
     [isSchool]
   );
 
@@ -110,7 +110,7 @@ export function OrgWorkspaceScreen() {
   };
 
   // Year session selector (shown on marks/grades/attendance/calendar tabs)
-  const showSessionSelector = ['marks', 'grades', 'attendance', 'calendar', 'reports'].includes(activeTab);
+  const showSessionSelector = isSchool && ['marks', 'grades', 'attendance', 'calendar', 'reports'].includes(activeTab);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -199,6 +199,7 @@ export function OrgWorkspaceScreen() {
         >
           {tabs.map(({ key, label, icon: Icon }) => {
             const isActive = activeTab === key;
+            const displayLabel = isSchool && key === 'courses' ? 'Classes' : label;
             return (
               <TouchableOpacity
                 key={key}
@@ -211,7 +212,7 @@ export function OrgWorkspaceScreen() {
                   color={isActive ? T.primary : T.muted}
                 />
                 <Text style={[styles.tabLabel, { color: isActive ? T.primary : T.muted }]}>
-                  {label}
+                  {displayLabel}
                 </Text>
                 {isActive && (
                   <View style={[styles.tabIndicator, { backgroundColor: T.primary }]} />

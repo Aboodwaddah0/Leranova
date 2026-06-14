@@ -1,6 +1,7 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { resolveStudentContext } from './studentExperienceService.js';
+import { notifyTrackMembers } from './notificationService.js';
 
 const toRole = (value) => String(value || '').trim().toUpperCase();
 
@@ -160,6 +161,12 @@ export const createSubject = async (actor, courseId, data) => {
       Description: data.Description ?? null,
     },
   });
+
+  notifyTrackMembers(courseId, {
+    content: `New course "${subject.name}" was added`,
+    type: 'COURSE',
+    url: `/courses/${courseId}/subjects/${subject.id}`,
+  }).catch(() => {});
 
   return subject;
 };

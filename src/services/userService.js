@@ -428,13 +428,15 @@ export const generateUsers = async (data) => {
 
 
 export const addUser=async(data)=>{
-const isUserExist= await prisma.user.findUnique ({
-    where:{
-    email:data.email
-    }
-});
+const userEmail = data.email && String(data.email).trim() !== '' ? data.email : null;
 
-if (isUserExist)  { 
+const isUserExist= userEmail ? await prisma.user.findUnique ({
+    where:{
+    email:userEmail
+    }
+}) : null;
+
+if (isUserExist)  {
     throw new Error('user email already exists')
 }
 
@@ -462,7 +464,7 @@ const user=await prisma.user.create({
     data:{
   name:payload.name,
    age:finalAge,
-  email:payload.email,
+  email:userEmail,
   passwordHashed: hashedPassword,
   passwordEncrypted,
   mustChangePassword: true,

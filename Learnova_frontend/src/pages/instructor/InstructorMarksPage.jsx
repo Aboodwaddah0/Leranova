@@ -10,7 +10,7 @@ import {
   updateInstructorMark,
   fetchInstructorCourses,
 } from "../../services/instructorService";
-import { fetchAcademicYears, fetchTerms } from "../../services/organizationService";
+import { fetchAcademicYears, fetchTerms, fetchAssessmentComponents } from "../../services/organizationService";
 import EducationLoading from "../../components/ui/EducationLoading";
 import { useLanguage } from "../../utils/i18n";
 import { notifyError } from "../../lib/notify";
@@ -33,6 +33,7 @@ export default function InstructorMarksPage() {
   const [subjects, setSubjects] = useState([]);
   const [students, setStudents] = useState([]);
   const [courses, setCourses] = useState([]);
+  const [assessmentComponents, setAssessmentComponents] = useState([]);
   const [filterSubjectId, setFilterSubjectId] = useState('');
   const [filterStudentName, setFilterStudentName] = useState('');
   const [selectedCourse, setSelectedCourse] = useState('');
@@ -41,6 +42,7 @@ export default function InstructorMarksPage() {
   const [yearTerms, setYearTerms] = useState([]);
   const [selectedTerm, setSelectedTerm] = useState('all');
   const [markModalOpen, setMarkModalOpen] = useState(false);
+  const [formClassId, setFormClassId] = useState('');
   const [formYear, setFormYear] = useState('');
   const [formTerms, setFormTerms] = useState([]);
   const [formTerm, setFormTerm] = useState('');
@@ -52,6 +54,7 @@ export default function InstructorMarksPage() {
     OutOf: "100",
     ExamPercentage: "100",
     MarkType: "EXAM",
+    componentId: "",
     time: "",
   });
 
@@ -101,12 +104,14 @@ export default function InstructorMarksPage() {
         fetchInstructorSubjects(),
       ]);
 
-      const [coursesData, years] = await Promise.all([
+      const [coursesData, years, componentsData] = await Promise.all([
         fetchInstructorCourses().catch(() => []),
         fetchAcademicYears().catch(() => []),
+        fetchAssessmentComponents().catch(() => []),
       ]);
 
       const initialSubjectId = String(form.Subject_id || subjectsData[0]?.id || "");
+      const initialSubject = subjectsData.find((s) => String(s.id) === initialSubjectId);
       const studentsData = initialSubjectId
         ? await fetchInstructorStudents({ Subject_id: Number(initialSubjectId) })
         : [];
@@ -115,6 +120,8 @@ export default function InstructorMarksPage() {
       setSubjects(subjectsData);
       setStudents(studentsData);
       setCourses(coursesData || []);
+      setAssessmentComponents(componentsData || []);
+      setFormClassId(String(initialSubject?.Course_id || ""));
       setAcademicYears(years || []);
       const active = (years || []).find((y) => y.isActive) || years?.[0] || null;
       setSelectedYear(active);
@@ -124,7 +131,10 @@ export default function InstructorMarksPage() {
         // Pre-select year/term in the add-mark form
         setFormYear(String(active.id));
         setFormTerms(terms || []);
-        const activeTerm = (terms || []).find((t) => t.status === 'ACTIVE');
+        // Fall back to the first term of the year if none is marked ACTIVE —
+        // keeps `formTerm` populated so assessment-component options can be
+        // scoped to a single term and don't duplicate across terms.
+        const activeTerm = (terms || []).find((t) => t.status === 'ACTIVE') || (terms || [])[0];
         if (activeTerm) {
           setFormTerm(String(activeTerm.id));
           const today = new Date().toISOString().slice(0, 10);
@@ -218,7 +228,10 @@ export default function InstructorMarksPage() {
   const onEdit = async (mark) => {
     const subjectId = String(mark.Subject_id || mark.subject?.id || "");
     const studentId = String(mark.Student_id || mark.student?.id || "");
+    const subjectObj = subjects.find((s) => String(s.id) === subjectId);
+    const classId = String(mark.subject?.Course_id || subjectObj?.Course_id || "");
 
+    setFormClassId(classId);
     setForm({
       id: mark.id,
       Student_id: studentId,
@@ -227,6 +240,7 @@ export default function InstructorMarksPage() {
       OutOf: String(mark.OutOf ?? "100"),
       ExamPercentage: String(mark.ExamPercentage ?? "100"),
       MarkType: mark.MarkType || "EXAM",
+      componentId: mark.componentId ? String(mark.componentId) : "",
       time: mark.time ? String(mark.time).slice(0, 10) : "",
     });
 
@@ -240,16 +254,49 @@ export default function InstructorMarksPage() {
     if (activeYear && String(activeYear.id) !== formYear) {
       onFormYearChange(String(activeYear.id));
     }
-    setForm((current) => ({
+
+    // Pre-select a class (track) and the first subject taught in it
+    const trackIdsWithSubjects = new Set(subjects.map((s) => String(s.Course_id)));
+    const availableClasses = courses.filter((c) => trackIdsWithSubjects.has(String(c.id)));
+    const defaultClassId = formClassId && availableClasses.some((c) => String(c.id) === formClassId)
+      ? formClassId
+      : String(availableClasses[0]?.id || "");
+    const classSubjects = subjects.filter((s) => String(s.Course_id) === String(defaultClassId));
+    const defaultSubjectId = classSubjects.some((s) => String(s.id) === String(form.Subject_id))
+      ? String(form.Subject_id)
+      : String(classSubjects[0]?.id || "");
+
+    setFormClassId(defaultClassId);
+    setForm({
       id: null,
       Student_id: String(students[0]?.id || ""),
-      Subject_id: current.Subject_id || String(subjects[0]?.id || ""),
+      Subject_id: defaultSubjectId,
       Numbers: "",
       OutOf: "100",
       ExamPercentage: "100",
       MarkType: "EXAM",
+      componentId: "",
       time: "",
+    });
+
+    if (defaultSubjectId) {
+      loadStudentsBySubject(defaultSubjectId);
+    }
+  };
+
+  const onFormClassChange = async (classId) => {
+    setFormClassId(classId);
+    const classSubjects = subjects.filter((s) => String(s.Course_id) === String(classId));
+    const nextSubjectId = String(classSubjects[0]?.id || "");
+
+    setForm((current) => ({
+      ...current,
+      Subject_id: nextSubjectId,
+      Student_id: "",
+      componentId: "",
     }));
+
+    await loadStudentsBySubject(nextSubjectId);
   };
 
   const onFormYearChange = async (yearId) => {
@@ -258,8 +305,8 @@ export default function InstructorMarksPage() {
     if (!yearId) { setFormTerms([]); return; }
     const terms = await fetchTerms(Number(yearId)).catch(() => []);
     setFormTerms(terms || []);
-    // auto-select the ACTIVE term if any
-    const active = (terms || []).find((t) => t.status === 'ACTIVE');
+    // auto-select the ACTIVE term, falling back to the first term of the year
+    const active = (terms || []).find((t) => t.status === 'ACTIVE') || (terms || [])[0];
     if (active) onFormTermChange(active, terms || []);
   };
 
@@ -275,7 +322,7 @@ export default function InstructorMarksPage() {
     let date = today;
     if (start && today < start) date = start;
     if (end   && today > end)   date = end;
-    setForm((prev) => ({ ...prev, time: date }));
+    setForm((prev) => ({ ...prev, time: date, componentId: "" }));
   };
 
   const onSubjectChange = async (subjectId) => {
@@ -283,9 +330,26 @@ export default function InstructorMarksPage() {
       ...current,
       Subject_id: subjectId,
       Student_id: "",
+      componentId: "",
     }));
 
     await loadStudentsBySubject(subjectId);
+  };
+
+  const onComponentChange = (componentId) => {
+    if (!componentId) {
+      setForm((current) => ({ ...current, componentId: "" }));
+      return;
+    }
+
+    const component = assessmentComponents.find((c) => String(c.id) === String(componentId));
+    setForm((current) => ({
+      ...current,
+      componentId,
+      MarkType: component?.name || current.MarkType,
+      ExamPercentage: component ? String(component.weight) : current.ExamPercentage,
+      OutOf: component ? String(component.maxScore) : current.OutOf,
+    }));
   };
 
   const onSubmit = async (event) => {
@@ -308,6 +372,7 @@ export default function InstructorMarksPage() {
       OutOf: Number(form.OutOf),
       ExamPercentage: Number(form.ExamPercentage),
       MarkType: form.MarkType || "EXAM",
+      componentId: form.componentId ? Number(form.componentId) : null,
       ...(form.time ? { time: form.time } : {}),
     };
 
@@ -350,6 +415,30 @@ export default function InstructorMarksPage() {
       setSaving(false);
     }
   };
+
+  // Classes (tracks) that have at least one subject assigned to this teacher
+  const classOptions = useMemo(() => {
+    const trackIdsWithSubjects = new Set(subjects.map((s) => String(s.Course_id)));
+    return courses.filter((c) => trackIdsWithSubjects.has(String(c.id)));
+  }, [courses, subjects]);
+
+  // Subjects belonging to the selected class — avoids showing same-named
+  // subjects from other classes/grades in the same dropdown
+  const subjectOptionsForClass = useMemo(() => {
+    if (!formClassId) return [];
+    return subjects.filter((s) => String(s.Course_id) === String(formClassId));
+  }, [subjects, formClassId]);
+
+  // Assessment components (assessment types) the school configured for this
+  // subject and/or term — components scoped to "all subjects"/"all terms"
+  // (subjectId/termId === null) apply everywhere.
+  const componentOptionsForForm = useMemo(() => {
+    return (assessmentComponents || []).filter((c) => {
+      const subjectMatch = c.subjectId == null || String(c.subjectId) === String(form.Subject_id);
+      const termMatch = c.termId == null || String(c.termId) === String(formTerm);
+      return subjectMatch && termMatch;
+    });
+  }, [assessmentComponents, form.Subject_id, formTerm]);
 
   const hasEligibleStudents = students.length > 0;
 
@@ -443,8 +532,21 @@ export default function InstructorMarksPage() {
               </select>
             </label>
 
-            {/* Spacer on large screens */}
-            <div className="hidden md:block" />
+            {/* Class */}
+            <label className="space-y-1 text-xs font-semibold text-slate-700">
+              <span>{isArabic ? "الصف" : "Class"} *</span>
+              <select
+                value={formClassId}
+                onChange={(event) => onFormClassChange(event.target.value)}
+                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                required
+              >
+                <option value="">{isArabic ? "اختر الصف" : "Select class"}</option>
+                {classOptions.map((c) => (
+                  <option key={c.id} value={c.id}>{c.Name || c.name || `#${c.id}`}</option>
+                ))}
+              </select>
+            </label>
 
             <label className="space-y-1 text-xs font-semibold text-slate-700">
               <span>{isArabic ? "الطالب" : "Student"} *</span>
@@ -478,11 +580,12 @@ export default function InstructorMarksPage() {
               <select
                 value={form.Subject_id}
                 onChange={(event) => onSubjectChange(event.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm disabled:opacity-50"
+                disabled={!formClassId}
                 required
               >
                 <option value="">{isArabic ? "اختر المادة" : "Select subject"}</option>
-                {subjects.map((subject) => (
+                {subjectOptionsForClass.map((subject) => (
                   <option key={subject.id} value={subject.id}>{subject.name}</option>
                 ))}
               </select>
@@ -490,12 +593,26 @@ export default function InstructorMarksPage() {
 
             <label className="space-y-1 text-xs font-semibold text-slate-700">
               <span>{isArabic ? "نوع التقييم" : "Assessment type"}</span>
-              <input
-                value={form.MarkType}
-                onChange={(event) => setForm((current) => ({ ...current, MarkType: event.target.value }))}
-                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
-                placeholder={isArabic ? "مثال: EXAM" : "Example: EXAM"}
-              />
+              {componentOptionsForForm.length > 0 && (
+                <select
+                  value={form.componentId}
+                  onChange={(event) => onComponentChange(event.target.value)}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                >
+                  <option value="">{isArabic ? "مخصص / أخرى" : "Custom / Other"}</option>
+                  {componentOptionsForForm.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name} ({formatScore(c.weight)}%)</option>
+                  ))}
+                </select>
+              )}
+              {(componentOptionsForForm.length === 0 || !form.componentId) && (
+                <input
+                  value={form.MarkType}
+                  onChange={(event) => setForm((current) => ({ ...current, MarkType: event.target.value }))}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                  placeholder={isArabic ? "مثال: EXAM" : "Example: EXAM"}
+                />
+              )}
             </label>
 
             <label className="space-y-1 text-xs font-semibold text-slate-700">

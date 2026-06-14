@@ -1,9 +1,6 @@
 import dotenv from 'dotenv';
-import http from 'http';
-import { Server } from 'socket.io';
 import app from './src/app.js';
 import { runDuePromotions } from './src/services/studentPromotionService.js';
-import { initChatSocket } from './src/socket/chatSocket.js';
 
 dotenv.config();
 
@@ -21,18 +18,7 @@ const runDuePromotionsSafely = async () => {
   }
 };
 
-const server = http.createServer(app);
-
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST'],
-  },
-});
-
-initChatSocket(io);
-
-server.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 
   if (ENABLE_PROMOTION_RUNNER) {

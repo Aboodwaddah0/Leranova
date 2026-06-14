@@ -48,3 +48,7 @@ export const teacherStudentsQuerySchema = Joi.object({
   Subject_id: Joi.number().integer().positive(),
   search: Joi.string().max(255).allow(''),
 });
+
+export const instructorAnalyticsQuerySchema = Joi.object({
+  Subject_id: Joi.number().integer().positive(),
+});

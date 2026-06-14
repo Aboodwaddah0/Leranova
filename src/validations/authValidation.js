@@ -10,7 +10,6 @@ export const registerOrganizationSchema = Joi.object({
   Email: Joi.string().email({ tlds: { allow: false } }).max(255).required(),
   password: Joi.string().min(6).required(),
   Role: Joi.string().valid('ACADEMY', 'SCHOOL', 'Academy', 'School').required(),
-  planId: Joi.number().integer().positive().optional().allow(null),
   classRanges: Joi.array().items(classRangeSchema).optional().allow(null),
   Phone: Joi.string().max(50).allow('', null),
   Founded: Joi.date().iso().allow(null),
@@ -50,6 +49,19 @@ export const resetPasswordSchema = Joi.object({
     .messages({
       'string.pattern.base': 'newPassword must contain uppercase, lowercase, and a number',
     }),
+});
+
+export const forgotPasswordCodeSchema = Joi.object({
+  email: Joi.string().email({ tlds: { allow: false } }).max(255).required(),
+  accountType: Joi.string().valid('USER', 'ORGANIZATION').optional(),
+});
+
+export const resetPasswordCodeSchema = Joi.object({
+  token: Joi.string().length(6).pattern(/^\d{6}$/).required().messages({
+    'string.length': 'Code must be exactly 6 digits',
+    'string.pattern.base': 'Code must be 6 numeric digits',
+  }),
+  newPassword: Joi.string().min(8).required(),
 });
 
 export const changePasswordSchema = Joi.object({

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { ArrowLeft, BadgeCheck, CreditCard, Eye, PlayCircle } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, CreditCard, Eye, PlayCircle, Search } from 'lucide-react';
 import StudentLayout from '../../components/student/StudentLayout';
 import { fetchAcademyTrackSubjects, fetchStudentContext, subscribeAcademyMaterial } from '../../services/studentService';
 import { useLanguage } from '../../utils/i18n';
@@ -14,6 +14,10 @@ export default function StudentCourseDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [subscribingId, setSubscribingId] = useState(null);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [priceFilter, setPriceFilter] = useState('ALL');
+  const [subFilter, setSubFilter] = useState('ALL');
+  const [levelFilter, setLevelFilter] = useState('ALL');
 
   const loadTrack = async () => {
     const data = await fetchAcademyTrackSubjects(trackId);
@@ -56,6 +60,21 @@ export default function StudentCourseDetailsPage() {
     };
   }, [trackData]);
 
+  const filteredSubjects = useMemo(() => {
+    const all = trackData?.subjects || [];
+    const query = search.trim().toLowerCase();
+
+    return all.filter((subject) => {
+      if (query && !String(subject.name || '').toLowerCase().includes(query)) return false;
+      if (priceFilter === 'FREE' && subject.isPaid) return false;
+      if (priceFilter === 'PAID' && !subject.isPaid) return false;
+      if (subFilter === 'SUBSCRIBED' && !subject.isSubscribed) return false;
+      if (subFilter === 'NOT_SUBSCRIBED' && subject.isSubscribed) return false;
+      if (levelFilter !== 'ALL' && subject.level !== levelFilter) return false;
+      return true;
+    });
+  }, [trackData, search, priceFilter, subFilter, levelFilter]);
+
   if (context?.mode === 'SCHOOL') {
     return <Navigate to="/student/subjects" replace />;
   }
@@ -79,7 +98,7 @@ export default function StudentCourseDetailsPage() {
   };
 
   return (
-    <StudentLayout showAIAssistant>
+    <StudentLayout>
       <div className="mb-4">
         <Link to="/courses" className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold backdrop-blur transition hover:border-white/40 hover:bg-white/20">
           <ArrowLeft size={16} /> {isArabic ? 'عودة' : 'Back'}
@@ -102,76 +121,111 @@ export default function StudentCourseDetailsPage() {
         </div>
       </section>
 
+      <div className="mt-6 flex flex-wrap items-end gap-3">
+        <label className="flex min-w-[240px] flex-1 items-center gap-2 rounded-[14px] border border-slate-300 bg-white px-4 py-3">
+          <Search size={16} className="text-slate-400" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={isArabic ? 'البحث بالاسم' : 'Search by name'}
+            className="w-full bg-transparent text-sm outline-none"
+          />
+        </label>
+
+        <select value={priceFilter} onChange={(event) => setPriceFilter(event.target.value)} className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">
+          <option value="ALL">{isArabic ? 'كل الأسعار' : 'All prices'}</option>
+          <option value="FREE">{isArabic ? 'مجاني' : 'Free'}</option>
+          <option value="PAID">{isArabic ? 'مدفوع' : 'Paid'}</option>
+        </select>
+
+        <select value={subFilter} onChange={(event) => setSubFilter(event.target.value)} className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">
+          <option value="ALL">{isArabic ? 'كل الحالات' : 'All subjects'}</option>
+          <option value="SUBSCRIBED">{isArabic ? 'مشترك' : 'Subscribed'}</option>
+          <option value="NOT_SUBSCRIBED">{isArabic ? 'غير مشترك' : 'Not subscribed'}</option>
+        </select>
+
+        <select value={levelFilter} onChange={(event) => setLevelFilter(event.target.value)} className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">
+          <option value="ALL">{isArabic ? 'كل المستويات' : 'All levels'}</option>
+          <option value="BEGINNER">{isArabic ? 'مبتدئ' : 'Beginner'}</option>
+          <option value="INTERMEDIATE">{isArabic ? 'متوسط' : 'Intermediate'}</option>
+          <option value="ADVANCED">{isArabic ? 'متقدم' : 'Advanced'}</option>
+          <option value="EXPERT">{isArabic ? 'خبير' : 'Expert'}</option>
+        </select>
+
+        <button
+          type="button"
+          onClick={() => { setSearch(''); setPriceFilter('ALL'); setSubFilter('ALL'); setLevelFilter('ALL'); }}
+          className="h-11 rounded-[14px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+        >
+          {isArabic ? 'مسح' : 'Clear'}
+        </button>
+      </div>
+
       {loading ? (
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
             <div key={index} className="ln-skeleton h-40 rounded-[1.75rem]" />
           ))}
         </div>
       ) : (
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          {(trackData?.subjects || []).map((subject) => {
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filteredSubjects.map((subject) => {
             const canOpen = Boolean(subject.isSubscribed);
             return (
-              <article key={subject.id} className="rounded-[1.75rem] bg-white/90 p-5 shadow-xl shadow-indigo-500/5">
-                <div className="mb-3 overflow-hidden rounded-2xl bg-slate-100">
+              <article key={subject.id} className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
+                <div className="relative aspect-video overflow-hidden bg-slate-100">
                   <img
                     src={subject.imageUrl || trackData?.track?.thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80'}
                     alt={subject.name}
-                    className="h-40 w-full object-contain"
+                    className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                     loading="lazy"
                   />
-                </div>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-lg font-black text-slate-900">{subject.name}</h3>
-                      {subject.level && (
-                        <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${
-                          subject.level === 'BEGINNER'     ? 'bg-emerald-100 text-emerald-700' :
-                          subject.level === 'INTERMEDIATE' ? 'bg-blue-100 text-blue-700'       :
-                          subject.level === 'ADVANCED'     ? 'bg-violet-100 text-violet-700'   :
-                          'bg-rose-100 text-rose-700'
-                        }`}>
-                          {isArabic
-                            ? (subject.level === 'BEGINNER' ? 'مبتدئ' : subject.level === 'INTERMEDIATE' ? 'متوسط' : subject.level === 'ADVANCED' ? 'متقدم' : 'خبير')
-                            : subject.level.charAt(0) + subject.level.slice(1).toLowerCase()}
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-1 text-sm text-slate-500">{subject.teacher?.name || (isArabic ? 'مدرس غير محدد' : 'Unassigned teacher')}</p>
-                  </div>
-                  {subject.isSubscribed ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                  {subject.isSubscribed && (
+                    <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/90 px-2.5 py-1 text-xs font-bold text-white shadow-sm backdrop-blur">
                       <BadgeCheck size={12} /> {isArabic ? 'مشترك' : 'Subscribed'}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-                      <CreditCard size={12} /> {subject.isPaid ? `${subject.price} USD` : (isArabic ? 'مجاني' : 'Free')}
                     </span>
                   )}
                 </div>
 
-                <p className="mt-3 line-clamp-3 text-sm leading-7 text-slate-600">{subject.description || (isArabic ? 'لا يوجد وصف متاح.' : 'No description available.')}</p>
+                <div className="flex flex-1 flex-col space-y-2 p-4">
+                  <h3 className="line-clamp-2 min-h-[2.75rem] text-base font-extrabold leading-snug text-slate-900">{subject.name}</h3>
+                  <p className="text-sm text-slate-500">{subject.teacher?.name || (isArabic ? 'مدرس غير محدد' : 'Unassigned teacher')}</p>
+                  <p className="line-clamp-2 min-h-[2.625rem] text-sm leading-6 text-slate-600">{subject.description || (isArabic ? 'لا يوجد وصف متاح.' : 'No description available.')}</p>
 
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-semibold text-slate-500">{subject.lessonCount || 0} {isArabic ? 'دروس' : 'lessons'}</span>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    {subject.level && (
+                      <span className={`inline-block rounded px-2 py-0.5 text-xs font-bold ${
+                        subject.level === 'BEGINNER'     ? 'bg-emerald-100 text-emerald-700' :
+                        subject.level === 'INTERMEDIATE' ? 'bg-blue-100 text-blue-700'       :
+                        subject.level === 'ADVANCED'     ? 'bg-violet-100 text-violet-700'   :
+                        'bg-rose-100 text-rose-700'
+                      }`}>
+                        {isArabic
+                          ? (subject.level === 'BEGINNER' ? 'مبتدئ' : subject.level === 'INTERMEDIATE' ? 'متوسط' : subject.level === 'ADVANCED' ? 'متقدم' : 'خبير')
+                          : subject.level.charAt(0) + subject.level.slice(1).toLowerCase()}
+                      </span>
+                    )}
+                    <span className="text-xs font-semibold text-slate-500">{subject.lessonCount || 0} {isArabic ? 'دروس' : 'lessons'}</span>
+                  </div>
 
-                  <div className="flex items-center gap-2">
-                    {/* Always show a preview link for paid subjects — first 3 lessons are free */}
-                    {subject.isPaid && !canOpen && (
+                  <p className="pt-1 text-lg font-black text-slate-900">
+                    {subject.isPaid ? `${subject.price} USD` : (isArabic ? 'مجاني' : 'Free')}
+                  </p>
+
+                  <div className="mt-auto flex items-center gap-2 pt-2">
+                    {!canOpen && (
                       <Link
                         to={`/courses/${trackId}/subjects/${subject.id}`}
-                        className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100"
+                        className="inline-flex items-center gap-1.5 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-bold text-indigo-700 transition hover:bg-indigo-100"
                       >
-                        <Eye size={13} /> {isArabic ? 'معاينة' : 'Preview'}
+                        <Eye size={14} /> {isArabic ? 'معاينة' : 'Preview'}
                       </Link>
                     )}
 
                     {canOpen ? (
                       <Link
                         to={`/courses/${trackId}/subjects/${subject.id}`}
-                        className="inline-flex items-center gap-1 rounded-full bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-indigo-500"
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-500"
                       >
                         <PlayCircle size={14} /> {isArabic ? 'فتح المادة' : 'Open material'}
                       </Link>
@@ -180,12 +234,16 @@ export default function StudentCourseDetailsPage() {
                         type="button"
                         disabled={subscribingId === subject.id}
                         onClick={() => handleSubscribe(subject.id)}
-                        className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-4 py-2 text-xs font-bold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        <CreditCard size={14} />
-                        {subscribingId === subject.id
-                          ? (isArabic ? 'جاري الاشتراك...' : 'Subscribing...')
-                          : (isArabic ? 'اشترك الآن' : 'Subscribe now')}
+                        {subject.isPaid ? <CreditCard size={14} /> : <BadgeCheck size={14} />}
+                        {subject.isPaid
+                          ? (subscribingId === subject.id
+                              ? (isArabic ? 'جاري الاشتراك...' : 'Subscribing...')
+                              : (isArabic ? 'اشترك الآن' : 'Subscribe now'))
+                          : (subscribingId === subject.id
+                              ? (isArabic ? 'جاري الالتحاق...' : 'Enrolling...')
+                              : (isArabic ? 'التحق الآن' : 'Enroll now'))}
                       </button>
                     )}
                   </div>
@@ -199,6 +257,12 @@ export default function StudentCourseDetailsPage() {
       {!loading && !(trackData?.subjects || []).length ? (
         <div className="mt-6 rounded-[1.75rem] border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-500">
           {isArabic ? 'لا توجد مواد داخل هذا المسار حالياً.' : 'No materials found in this track yet.'}
+        </div>
+      ) : null}
+
+      {!loading && (trackData?.subjects || []).length > 0 && filteredSubjects.length === 0 ? (
+        <div className="mt-6 rounded-[1.75rem] border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-500">
+          {isArabic ? 'لا توجد نتائج مطابقة لعوامل التصفية.' : 'No subjects match your filters.'}
         </div>
       ) : null}
     </StudentLayout>

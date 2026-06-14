@@ -26,6 +26,30 @@ export const createNotification = async ({ userId, content, type, url = null }) 
   return notification;
 };
 
+/**
+ * Notify every student enrolled in a track (academy `enrollment` rows + school
+ * `student.Course_id`) about a course-wide event (new course/lesson/quiz/AI
+ * content/chat message). Fire-and-forget — failures are swallowed per-user so
+ * one bad token never blocks the rest.
+ */
+export const notifyTrackMembers = async (trackId, { content, type, url = null, excludeUserId = null }) => {
+  const [enrollments, students] = await Promise.all([
+    prisma.enrollment.findMany({ where: { Course_id: trackId }, select: { user_Academy_id: true } }),
+    prisma.student.findMany({ where: { Course_id: trackId }, select: { Student_id: true } }),
+  ]);
+
+  const userIds = new Set([
+    ...enrollments.map((e) => e.user_Academy_id),
+    ...students.map((s) => s.Student_id),
+  ]);
+
+  if (excludeUserId != null) userIds.delete(excludeUserId);
+
+  await Promise.all(
+    [...userIds].map((userId) => createNotification({ userId, content, type, url }).catch(() => {})),
+  );
+};
+
 export const getUserNotifications = async (userId, { skip = 0, limit = 20 } = {}) => {
   const [notifications, total, unreadCount] = await Promise.all([
     prisma.notification.findMany({

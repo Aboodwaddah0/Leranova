@@ -5,7 +5,9 @@ import {
 	loginUserController,
 	loginParentController,
 	forgotPasswordController,
+	forgotPasswordCodeController,
 	resetPasswordController,
+	resetPasswordCodeController,
 	changePasswordController,
 	getMeController,
 	updateMeController,
@@ -29,7 +31,9 @@ router.post('/user/login', loginUserController);
 router.post('/parent/login', loginParentController);
 router.post('/admin/login', loginAdminController);
 router.post('/forgot-password', forgotPasswordController);
+router.post('/forgot-password/code', forgotPasswordCodeController);
 router.post('/reset-password', resetPasswordController);
+router.post('/reset-password/code', resetPasswordCodeController);
 router.patch('/change-password', authMiddleware, changePasswordController);
 
 export default router;

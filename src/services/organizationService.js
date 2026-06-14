@@ -18,7 +18,10 @@ const organizationSelect = {
   Role: true,
   status: true,
   rejectionReason: true,
+  trialEndsAt: true,
 };
+
+const TRIAL_DURATION_DAYS = 14;
 
 const normalizeOrganizationRole = (role) => String(role || '').trim().toUpperCase();
 
@@ -144,6 +147,11 @@ export const updateOrganization = async (organizationId, data) => {
     }
   }
 
+  const isNewlyApproved = data.status === 'APPROVED' && existing.status !== 'APPROVED';
+  const trialEndsAt = isNewlyApproved
+    ? new Date(Date.now() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000)
+    : undefined;
+
   const updated = await prisma.organization.update({
     where: {
       id: organizationId,
@@ -160,6 +168,7 @@ export const updateOrganization = async (organizationId, data) => {
       Role: data.Role ? normalizeOrganizationRole(data.Role) : undefined,
       status: data.status,
       rejectionReason: data.rejectionReason ?? undefined,
+      trialEndsAt,
     },
     select: organizationSelect,
   });

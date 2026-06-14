@@ -9,11 +9,12 @@ import {
   CheckCircle2, Circle, Eye, EyeOff, ZapOff, Zap,
 } from "lucide-react";
 import InstructorLayout from "../../components/instructor/InstructorLayout";
+import RagBanner from "../../components/ui/RagBanner";
 import {
   fetchInstructorCourses, fetchInstructorLessons, fetchInstructorLessonAttachments,
   fetchInstructorSubjects, fetchInstructorProfile,
   createInstructorLesson, updateInstructorLessonMeta, deleteInstructorLesson,
-  uploadInstructorLessonAttachments, deleteInstructorLessonAttachment, reprocessLessonRag,
+  uploadInstructorLessonAttachments, deleteInstructorLessonAttachment, reprocessLessonRag, fetchLessonRagStatus,
   fetchLessonAiContentInstructor, generateLessonFlashcardsOnly, generateLessonMindmapOnly,
   updateLessonFlashcards, updateLessonMindmap, deleteLessonFlashcards, deleteLessonMindmap,
   publishLessonAiContent, unpublishLessonAiContent,
@@ -101,6 +102,9 @@ export default function InstructorCoursesPage() {
   const [uploadingAttach, setUploadingAttach] = useState(false);
   const [attachUploadPct, setAttachUploadPct] = useState(0);
   const [playingVideo,    setPlayingVideo]    = useState(null);
+  const [ragStatus,       setRagStatus]       = useState(null);
+  const ragPollRef  = useRef(null);
+  const ragStartRef = useRef(null);
 
   const [aiContent,     setAiContent]     = useState(null);
   const [aiLoading,     setAiLoading]     = useState(false);
@@ -181,6 +185,8 @@ export default function InstructorCoursesPage() {
   };
 
   const enterLesson = async (lesson) => {
+    if (ragPollRef.current) { clearInterval(ragPollRef.current); ragPollRef.current = null; }
+    setRagStatus(null);
     slide("right", () => { setDrillLesson(lesson); setActiveTab("overview"); setAttachments([]); setAiContent(null); setQuiz(null); setSlidesData(null); setPlayingVideo(null); });
     // Preload attachments
     setAttachLoading(true);
@@ -214,17 +220,26 @@ export default function InstructorCoursesPage() {
     e.preventDefault();
     if (!lessonTitle.trim()) return;
     setSaving(true);
+    const hadVideo = Boolean(videoFile);
+    const capturedVideoFile = videoFile;
     try {
       if (lessonModal.mode === "create") {
-        await createInstructorLesson({ subjectId: drillCourse.id, title: lessonTitle.trim(), description: lessonDesc.trim()||undefined, videoFile: videoFile||undefined, onProgress: setUploadPct });
+        const created = await createInstructorLesson({ subjectId: drillCourse.id, title: lessonTitle.trim(), description: lessonDesc.trim()||undefined, videoFile: videoFile||undefined, onProgress: setUploadPct });
+        closeModal();
+        await refreshLessons();
         notifySuccess(isArabic ? "تم إنشاء الدرس" : "Lesson created");
+        if (hadVideo && created?.id) {
+          if (ragPollRef.current) { clearInterval(ragPollRef.current); ragPollRef.current = null; }
+          setRagStatus({ status: 'queued', estimatedTime: capturedVideoFile?.size > 50*1024*1024 ? (isArabic ? 'الفيديو يحتاج 3-8 دقائق' : 'Video takes 3–8 min') : (isArabic ? 'معالجة 1-2 دقيقة' : 'Processing 1–2 min') });
+          setTimeout(() => startRagPolling(created.id, 0), 3000);
+        }
       } else {
         await updateInstructorLessonMeta(drillCourse.id, lessonModal.lesson.id, { title: lessonTitle.trim(), description: lessonDesc.trim()||undefined });
         if (drillLesson?.id === lessonModal.lesson.id) setDrillLesson((l) => ({ ...l, title: lessonTitle.trim(), description: lessonDesc.trim() }));
+        closeModal();
+        await refreshLessons();
         notifySuccess(isArabic ? "تم تحديث الدرس" : "Lesson updated");
       }
-      closeModal();
-      await refreshLessons();
     } catch (err) { notifyError(safeError(err)); }
     finally { setSaving(false); setUploadPct(0); }
   };
@@ -243,15 +258,49 @@ export default function InstructorCoursesPage() {
   };
 
   /* ─────────────────── ATTACHMENTS ─────────────────── */
+  const RAG_EXTS = /\.(pdf|docx|txt|mp4|mov|avi|webm|mp3|wav)$/i;
+  const RAG_MIME = ['pdf', 'docx', 'txt', 'video', 'audio'];
+
+  const startRagPolling = (lessonId, baseline) => {
+    if (ragPollRef.current) clearInterval(ragPollRef.current);
+    ragStartRef.current = Date.now();
+    setRagStatus({ status: 'processing', chunkCount: baseline, elapsed: 0 });
+    ragPollRef.current = setInterval(async () => {
+      try {
+        const res = await fetchLessonRagStatus(lessonId, baseline);
+        const elapsed = Math.floor((Date.now() - ragStartRef.current) / 1000);
+        if (res?.ready) {
+          clearInterval(ragPollRef.current); ragPollRef.current = null;
+          setRagStatus({ status: 'ready', chunkCount: res.chunkCount, elapsed });
+          setTimeout(() => setRagStatus(null), 15000);
+        } else {
+          setRagStatus({ status: 'processing', chunkCount: res?.chunkCount ?? baseline, elapsed });
+          if (elapsed > 600) { clearInterval(ragPollRef.current); ragPollRef.current = null; setRagStatus({ status: 'timeout' }); }
+        }
+      } catch { /* keep polling silently */ }
+    }, 5000);
+  };
+
   const handleAttachUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length || !drillLesson) return;
     setUploadingAttach(true); setAttachUploadPct(0);
+    setRagStatus(null);
+    if (ragPollRef.current) { clearInterval(ragPollRef.current); ragPollRef.current = null; }
     try {
+      const hasRagFiles = files.some((f) => RAG_MIME.some((t) => f.type.includes(t)) || RAG_EXTS.test(f.name));
+      const baseline = hasRagFiles
+        ? ((await fetchLessonRagStatus(drillLesson.id, 0).catch(() => ({ chunkCount: 0 }))).chunkCount ?? 0)
+        : 0;
       await uploadInstructorLessonAttachments({ lessonId: drillLesson.id, files, onProgress: setAttachUploadPct });
       const data = await fetchInstructorLessonAttachments(drillLesson.id);
       setAttachments(data || []);
-      notifySuccess(isArabic ? "تم رفع الملفات" : "Files uploaded");
+      if (hasRagFiles) {
+        setRagStatus({ status: 'queued' });
+        setTimeout(() => startRagPolling(drillLesson.id, baseline), 3000);
+      } else {
+        notifySuccess(isArabic ? "تم رفع الملفات" : "Files uploaded");
+      }
     } catch (err) { notifyError(safeError(err)); }
     finally { setUploadingAttach(false); setAttachUploadPct(0); if (attachInputRef.current) attachInputRef.current.value = ""; }
   };
@@ -469,7 +518,8 @@ export default function InstructorCoursesPage() {
     setShowSlidesModal(false);
     try {
       const d = await generateLessonPowerSlides(drillLesson.id, { lang: slidesForm.lang, numSlides: slidesForm.numSlides, theme: slidesForm.theme });
-      setSlidesData(d);
+      const slides = d?.powerSlides ?? d;
+      setSlidesData(slides ? { ...slides, lessonId: drillLesson.id } : null);
       notifySuccess(isArabic ? "تم توليد الشرائح" : "Slides generated");
     } catch (err) { notifyError(safeError(err)); }
     finally { setSlidesGenerating(false); }
@@ -479,12 +529,15 @@ export default function InstructorCoursesPage() {
     if (!slidesData?.slides?.length) return;
     try {
       const pptx = new PptxGenJS();
+      const isRTL = slidesData.slides.some(s => /[؀-ۿ]/.test(s.title));
+      const al = isRTL ? 'right' : 'left';
+      const W = 10, H = 5.625;
+      const ctx = { pptx, W, H, isRTL, al, ...makeHelpers({ pptx, W, H, isRTL, al }) };
       const template = PPTX_TEMPLATES[slidesData.theme] || PPTX_TEMPLATES.minimalist;
-      const helpers = makeHelpers(pptx);
-      for (const slide of slidesData.slides) {
+      slidesData.slides.forEach((slide, i) => {
         const s = pptx.addSlide();
-        template(s, slide, helpers);
-      }
+        template(s, slide, i, ctx);
+      });
       await pptx.writeFile({ fileName: `${drillLesson?.title || "lesson"}-slides.pptx` });
     } catch (err) { notifyError(safeError(err)); }
   };
@@ -518,9 +571,13 @@ export default function InstructorCoursesPage() {
   const isVideo = (a) => String(a.fileType||a.type||a.mimeType||"").toUpperCase().includes("VIDEO");
 
   /* ════════════════════════════════════════════════════════ */
+  const dismissRag = () => { setRagStatus(null); if (ragPollRef.current) { clearInterval(ragPollRef.current); ragPollRef.current = null; } };
+
   return (
     <InstructorLayout title={pageTitle} subtitle={isArabic?"استعرض وأدر محتوى دروسك":"Browse and manage your lesson content"}>
       <style>{CSS}</style>
+
+      <RagBanner ragStatus={ragStatus} onDismiss={dismissRag} isArabic={isArabic} />
 
       {loading && <EducationLoading isArabic={isArabic} title={isArabic?"جاري التحميل":"Loading"} subtitle={isArabic?"نجهز بياناتك":"Preparing your data"} fullscreen />}
 

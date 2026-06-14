@@ -14,7 +14,9 @@ export type RootStackParamList = {
 
 // ── Auth Stack ────────────────────────────────────────────────────────────────
 export type AuthStackParamList = {
-  Login: undefined;
+  Login:           undefined;
+  ForgotPassword:  undefined;
+  ResetPassword:   { email: string };
 };
 
 // ── Student Tabs ──────────────────────────────────────────────────────────────
@@ -38,7 +40,7 @@ export type StudentStackParamList = {
   Lesson:           { lessonId: number; lessonTitle: string; subjectId: number; courseId: number; autoPlay?: boolean };
   TeacherProfile:   { teacherId: number };
   ChatRoom:         { chatId: number; chatName?: string };
-  NotificationTest: undefined;
+  Notifications:    undefined;
 };
 
 // ── Parent Tabs ───────────────────────────────────────────────────────────────
@@ -57,7 +59,6 @@ export type ParentStackParamList = {
 // ── Organization Stack ────────────────────────────────────────────────────────
 export type OrgStackParamList = {
   OrgWorkspace:       undefined;
-  NotificationTest:   undefined;
 };
 
 // ── Instructor Stack ──────────────────────────────────────────────────────────
@@ -65,7 +66,6 @@ export type InstructorStackParamList = {
   InstructorWorkspace:    undefined;
   InstructorLessonDetail: { lessonId: number; lessonTitle: string; subjectId: number; courseId?: number };
   InstructorChatRoom:     { chatId: number; chatName?: string };
-  NotificationTest:       undefined;
 };
 
 // ── Screen prop helpers ───────────────────────────────────────────────────────

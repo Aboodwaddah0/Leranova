@@ -2,6 +2,7 @@ import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { askChatbot } from './chatbotService.js';
 import { uploadChatAttachment } from './cloudinary.service.js';
+import { notifyTrackMembers } from './notificationService.js';
 import {
   pushCourseMessage,
   markMessageSeen,
@@ -872,6 +873,13 @@ export const sendCourseChatMessage = async ({
 
   await setOnline(courseId, userId);
 
+  notifyTrackMembers(courseId, {
+    content: `${message.user.name}: ${cleanedContent.slice(0, 120)}`,
+    type: 'MESSAGE',
+    url: `/courses/${courseId}/chat`,
+    excludeUserId: userId,
+  }).catch(() => {});
+
   return {
     chatId: chat.id,
     courseId,
@@ -1447,17 +1455,31 @@ const verifyStudentAccessToChat = async ({ chatId, userId }) => {
       return chat;
     }
 
-    // Teacher — check if they teach this subject
+    // Teacher — check if they teach this subject (SCHOOL: course.Teacher_id; ACADEMY: via track.Teacher_id)
     const teacher = await prisma.teacher.findFirst({
       where: { Teacher_id: userId },
-      select: { Teacher_id: true },
+      select: { Teacher_id: true, organization: { select: { Role: true } } },
     });
     if (teacher) {
-      const owns = await prisma.course.findFirst({
-        where: { id: chat.subject_id, Teacher_id: userId },
-        select: { id: true },
-      });
-      if (!owns) throw new AppError('This subject is not assigned to you', 403);
+      if (teacher.organization?.Role === 'ACADEMY') {
+        // ACADEMY: subject belongs to a track; check that track belongs to this instructor
+        const subject = await prisma.course.findFirst({
+          where: { id: chat.subject_id },
+          select: { Course_id: true },
+        });
+        if (!subject) throw new AppError('This subject is not assigned to you', 403);
+        const track = await prisma.track.findFirst({
+          where: { id: subject.Course_id, Teacher_id: userId },
+          select: { id: true },
+        });
+        if (!track) throw new AppError('This subject is not assigned to you', 403);
+      } else {
+        const owns = await prisma.course.findFirst({
+          where: { id: chat.subject_id, Teacher_id: userId },
+          select: { id: true },
+        });
+        if (!owns) throw new AppError('This subject is not assigned to you', 403);
+      }
       return chat;
     }
 
@@ -1507,30 +1529,49 @@ const verifyStudentAccessToChat = async ({ chatId, userId }) => {
 };
 
 export const listChatsForTeacher = async ({ userId }) => {
-  // Get all subjects taught by this teacher
+  // Get teacher profile including org type (SCHOOL vs ACADEMY)
   const teacher = await prisma.teacher.findUnique({
     where: { Teacher_id: userId },
-    select: { OrgId: true },
+    select: { OrgId: true, organization: { select: { Role: true } } },
   });
   if (!teacher) throw new AppError('Teacher profile not found', 404);
 
-  const subjects = await prisma.course.findMany({
-    where: { Teacher_id: userId },
-    select: { id: true, name: true, Course_id: true },
-  });
+  const isAcademy = teacher.organization?.Role === 'ACADEMY';
+
+  let subjects = [];
+  let trackById = new Map();
+
+  if (isAcademy) {
+    // ACADEMY: instructor owns entire tracks; gather all subjects of those tracks
+    const instructorTracks = await prisma.track.findMany({
+      where: { Teacher_id: userId },
+      select: { id: true, Name: true, GradeLevel: true },
+    });
+    if (!instructorTracks.length) return [];
+    instructorTracks.forEach(t => trackById.set(t.id, t));
+    const trackIds = instructorTracks.map(t => t.id);
+    subjects = await prisma.course.findMany({
+      where: { Course_id: { in: trackIds } },
+      select: { id: true, name: true, Course_id: true },
+    });
+  } else {
+    // SCHOOL: teacher is directly assigned to specific subjects via course.Teacher_id
+    subjects = await prisma.course.findMany({
+      where: { Teacher_id: userId },
+      select: { id: true, name: true, Course_id: true },
+    });
+    if (subjects.length) {
+      const trackIds = [...new Set(subjects.map(s => s.Course_id))];
+      const tracks = await prisma.track.findMany({
+        where: { id: { in: trackIds } },
+        select: { id: true, Name: true, GradeLevel: true },
+      });
+      tracks.forEach(t => trackById.set(t.id, t));
+    }
+  }
+
   if (!subjects.length) return [];
 
-  const subjectIds = subjects.map(s => s.id);
-
-  // Map each subject to its parent class/track name so chats with the same
-  // subject title (e.g. "Mathematics" taught in both Grade 4 and Grade 5)
-  // can be told apart in the chat list.
-  const trackIds = [...new Set(subjects.map(s => s.Course_id))];
-  const tracks = trackIds.length ? await prisma.track.findMany({
-    where: { id: { in: trackIds } },
-    select: { id: true, Name: true, GradeLevel: true },
-  }) : [];
-  const trackById = new Map(tracks.map(t => [t.id, t]));
   const classBySubjectId = new Map(subjects.map(s => [s.id, trackById.get(s.Course_id) ?? null]));
 
   // Find or create GROUP chats for each subject

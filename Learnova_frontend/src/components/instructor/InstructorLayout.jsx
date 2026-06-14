@@ -15,7 +15,7 @@ const navItems = [
   { to: "/dashboard/instructor/students",    labelAr: "الطلاب",       labelEn: "Students" },
   { to: "/dashboard/instructor/analytics",   labelAr: "التحليلات",    labelEn: "Analytics" },
   { to: "/dashboard/instructor/marks",       labelAr: "العلامات",     labelEn: "Marks",       schoolOnly: true },
-  { to: "/dashboard/instructor/chat",        labelAr: "المحادثات",    labelEn: "Chats",       schoolOnly: true },
+  { to: "/dashboard/instructor/chat",        labelAr: "المحادثات",    labelEn: "Chats" },
   { to: "/dashboard/instructor/timetable",   labelAr: "الجدول",       labelEn: "Timetable",   schoolOnly: true },
   { to: "/dashboard/instructor/calendar",    labelAr: "التقويم",      labelEn: "Calendar",    schoolOnly: true },
 ];

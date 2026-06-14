@@ -17,6 +17,11 @@ export const bootstrapAuth = createAsyncThunk('auth/bootstrap', async () => {
     StorageService.getToken(),
     StorageService.getUser(),
   ]);
+  if (token && user) {
+    // Re-register FCM token on every launch — tokens can rotate, and this
+    // also covers sessions that started before push notifications existed.
+    registerFcmToken().catch(() => {});
+  }
   return { token, user };
 });
 

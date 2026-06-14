@@ -7,9 +7,9 @@ import {
 import { UserPlus, Search, Edit2, Trash2, X, Save, BookOpen, Users } from 'lucide-react-native';
 import { useTheme } from '../../../shared/hooks/useTheme';
 import { spacing, radius, fontSize, fontWeight } from '../../../shared/theme';
-import { LoadingState, EmptyState } from '../../../shared/components';
+import { LoadingState, EmptyState, Avatar, CredentialsModal } from '../../../shared/components';
 import {
-  fetchUsers, createUser, createUserGenerated, updateUser, deleteUser,
+  fetchUsers, createUser, updateUser, deleteUser,
   fetchCourses, enrollStudent, unenrollStudent, fetchStudentEnrollments,
 } from '../services/organizationService';
 import type { OrgUser, OrgCourse } from '../../../types/organization';
@@ -31,7 +31,7 @@ export function OrgStudentsTab({ orgType }: Props) {
   const [selected,   setSelected]   = useState<OrgUser | null>(null);
   const [form,       setForm]       = useState({ ...EMPTY_FORM });
   const [saving,     setSaving]     = useState(false);
-  const [genCreds,   setGenCreds]   = useState(false);
+  const [credentials, setCredentials] = useState<{ name: string; email: string | null; password: string | null } | null>(null);
 
   // Enrollment modal
   const [enrollModal, setEnrollModal] = useState(false);
@@ -84,20 +84,16 @@ export function OrgStudentsTab({ orgType }: Props) {
     setSaving(true);
     try {
       if (modal === 'add') {
-        const payload: Record<string, unknown> = { ...form, role: 'STUDENT' };
-        if (!payload.password) delete payload.password;
-        const res = genCreds
-          ? await createUserGenerated(payload)
-          : await createUser(payload);
-        const newUser = (res as { user?: OrgUser } & OrgUser).user ?? res as OrgUser;
-        if (newUser?.id) setStudents(prev => [...prev, newUser]);
-        const generatedEmail = (res as { generatedEmail?: string }).generatedEmail;
-        const generatedPassword = (res as { generatedPassword?: string }).generatedPassword;
-        if (generatedEmail) {
-          Alert.alert('Student Created', `Email: ${generatedEmail}\nPassword: ${generatedPassword || 'N/A'}`);
-        } else {
-          Alert.alert('Success', 'Student created.');
-        }
+        const { password, ...rest } = form;
+        const payload: Record<string, unknown> = { ...rest, role: 'STUDENT' };
+        if (!payload.email) delete payload.email;
+        const res = await createUser(payload);
+        await load();
+        setCredentials({
+          name: `${form.firstName} ${form.lastName}`.trim(),
+          email: res.email || null,
+          password: res.tempPassword || null,
+        });
       } else if (modal === 'edit' && selected) {
         const { password, email, ...rest } = form;
         const payload: Record<string, unknown> = { ...rest };
@@ -179,9 +175,7 @@ export function OrgStudentsTab({ orgType }: Props) {
           ListEmptyComponent={<EmptyState emoji="🎓" title="No students yet" subtitle={search ? 'No students match.' : 'Add your first student.'} />}
           renderItem={({ item: s }) => (
             <View style={[styles.row, { backgroundColor: T.surface, borderColor: T.border }]}>
-              <View style={[styles.avatar, { backgroundColor: 'rgba(245,158,11,0.12)' }]}>
-                <Text style={styles.avatarText}>{(s.firstName[0] || '') + (s.lastName[0] || '')}</Text>
-              </View>
+              <Avatar size={44} uri={s.avatarUrl} name={`${s.firstName ?? ''} ${s.lastName ?? ''}`} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.name, { color: T.text }]}>{s.firstName} {s.lastName}</Text>
                 {!!s.email && <Text style={[styles.sub, { color: T.muted }]}>{s.email}</Text>}
@@ -213,22 +207,18 @@ export function OrgStudentsTab({ orgType }: Props) {
           </View>
           <ScrollView contentContainerStyle={styles.modalBody}>
             {modal === 'add' && (
-              <View style={styles.genRow}>
-                <Text style={[styles.fieldLabel, { color: T.subtext }]}>Auto-generate credentials?</Text>
-                <TouchableOpacity
-                  style={[styles.toggle, { backgroundColor: genCreds ? T.primary : T.elevated }]}
-                  onPress={() => setGenCreds(p => !p)}
-                >
-                  <Text style={{ color: genCreds ? '#fff' : T.muted, fontSize: fontSize.xs, fontWeight: fontWeight.bold }}>{genCreds ? 'YES' : 'NO'}</Text>
-                </TouchableOpacity>
+              <View style={[styles.infoBox, { backgroundColor: T.elevated }]}>
+                <Text style={[styles.infoText, { color: T.muted }]}>
+                  Login credentials will be generated automatically and shown after the student is created.
+                </Text>
               </View>
             )}
             {[
               { key: 'firstName', label: 'First Name *', placeholder: 'First name' },
               { key: 'lastName', label: 'Last Name *', placeholder: 'Last name' },
-              ...(!genCreds || modal === 'edit' ? [
-                { key: 'email', label: modal === 'add' ? 'Email *' : 'Email', placeholder: 'email@example.com', keyboardType: 'email-address' },
-                { key: 'password', label: modal === 'add' ? 'Password *' : 'New Password', placeholder: 'Password', secure: true },
+              { key: 'email', label: modal === 'add' ? 'Email (optional)' : 'Email', placeholder: 'student@example.com', keyboardType: 'email-address' },
+              ...(modal === 'edit' ? [
+                { key: 'password', label: 'New Password', placeholder: 'Password', secure: true },
               ] : []),
               { key: 'phone', label: 'Phone', placeholder: 'Phone number', keyboardType: 'phone-pad' },
               { key: 'dob', label: 'Date of Birth (YYYY-MM-DD)', placeholder: '2010-05-15' },
@@ -308,6 +298,14 @@ export function OrgStudentsTab({ orgType }: Props) {
           )}
         </View>
       </Modal>
+
+      <CredentialsModal
+        visible={!!credentials}
+        onClose={() => setCredentials(null)}
+        name={credentials?.name}
+        email={credentials?.email}
+        password={credentials?.password}
+      />
     </>
   );
 }
@@ -322,8 +320,6 @@ const styles = StyleSheet.create({
   countText:   { fontSize: fontSize.xs, fontWeight: fontWeight.semibold },
   list:        { padding: spacing[4], paddingTop: 0, paddingBottom: spacing[10] },
   row:         { flexDirection: 'row', alignItems: 'center', gap: spacing[3], padding: spacing[4], borderRadius: radius.xl, borderWidth: 1 },
-  avatar:      { width: 44, height: 44, borderRadius: 99, alignItems: 'center', justifyContent: 'center' },
-  avatarText:  { fontSize: fontSize.sm, fontWeight: fontWeight.extrabold, color: '#f59e0b' },
   name:        { fontSize: fontSize.sm, fontWeight: fontWeight.bold },
   sub:         { fontSize: fontSize.xs, marginTop: 2 },
   actions:     { flexDirection: 'row', gap: spacing[1] },
@@ -335,8 +331,8 @@ const styles = StyleSheet.create({
   field:       { gap: spacing[1] },
   fieldLabel:  { fontSize: fontSize.sm, fontWeight: fontWeight.semibold },
   input:       { borderRadius: radius.lg, borderWidth: 1, paddingHorizontal: spacing[4], paddingVertical: spacing[3], fontSize: fontSize.sm },
-  genRow:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  toggle:      { paddingHorizontal: spacing[4], paddingVertical: spacing[2], borderRadius: 999 },
+  infoBox:     { borderRadius: radius.lg, padding: spacing[3] },
+  infoText:    { fontSize: fontSize.xs, lineHeight: 18 },
   genderRow:   { flexDirection: 'row', gap: spacing[3] },
   genderBtn:   { flex: 1, paddingVertical: spacing[3], borderRadius: radius.lg, borderWidth: 1, alignItems: 'center' },
   modalFooter: { flexDirection: 'row', gap: spacing[3], padding: spacing[5], borderTopWidth: 1 },

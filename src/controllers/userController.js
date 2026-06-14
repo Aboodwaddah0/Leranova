@@ -108,12 +108,14 @@ const result=await addUser(validatedData);
       message: 'Add new User successfully',
       data: result,
     });
-  }catch (error) {
-   if (error.message === "user email already exists") {
-    return res.status(409).json({ message: error.message });
-   }
-
-   return res.status(500).json({message:"Server Error", error: error.message})
+  } catch (error) {
+    if (error.message === "user email already exists") {
+      return res.status(409).json({ message: error.message });
+    }
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
+    return res.status(500).json({ message: "Server Error", error: error.message });
   }
  
 }
@@ -141,6 +143,9 @@ export const createUserWithGeneratedCredentialsController = async (req, res) => 
   } catch (error) {
     if (error?.code === "P2002") {
       return res.status(409).json({ message: "user email already exists" });
+    }
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
     }
     return res.status(500).json({ message: "Server Error", error: error.message });
   }

@@ -224,7 +224,7 @@ function SubjectCard({
   onSubscribe: () => void;
   onOpen: () => void;
 }) {
-  const canOpen = subject.isSubscribed || !subject.isPaid;
+  const canOpen = subject.isSubscribed;
 
   return (
     <View style={styles.itemWrap}>
@@ -315,9 +315,13 @@ function SubjectCard({
                   disabled={subscribing}
                   activeOpacity={0.8}
                 >
-                  <CreditCard size={13} color="#fff" />
+                  {subject.isPaid
+                    ? <CreditCard size={13} color="#fff" />
+                    : <BadgeCheck size={13} color="#fff" />}
                   <Text style={[styles.btnText, { color: '#fff' }]}>
-                    {subscribing ? 'Opening Stripe…' : 'Subscribe now'}
+                    {subject.isPaid
+                      ? (subscribing ? 'Opening Stripe…' : 'Subscribe now')
+                      : (subscribing ? 'Enrolling…' : 'Enroll now')}
                   </Text>
                 </TouchableOpacity>
               )}

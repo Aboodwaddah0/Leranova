@@ -11,7 +11,7 @@ services:
       - ./src:/app/src
       - ./prisma:/app/prisma
       - ./scripts:/app/scripts
-    command: sh -c "npx prisma generate && npx prisma migrate deploy && npx nodemon --watch src --ext js,mjs server.js"
+    command: sh -c "npx prisma generate && npx prisma migrate deploy && npx nodemon --legacy-watch --watch src --ext js,mjs server.js"
     env_file:
       - .env
     environment:

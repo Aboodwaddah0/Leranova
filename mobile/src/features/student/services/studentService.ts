@@ -424,15 +424,29 @@ export async function fetchMyStudentMarks(): Promise<StudentMark[]> {
 export function normalizeMessage(raw: Record<string, unknown>): ChatMessage {
   const sender = raw.sender as { id?: number; name?: string; email?: string } | null | undefined;
   return {
-    ...(raw as ChatMessage),
+    ...(raw as unknown as ChatMessage),
     senderName:   String(raw.senderName   ?? sender?.name   ?? ''),
     senderAvatar: (raw.senderAvatar       ?? null)           as string | null,
   };
 }
 
+function normalizeChat(raw: Record<string, unknown>): Chat {
+  const lastMsg = raw.lastMessage as { content?: string; createdAt?: string } | null | undefined;
+  return {
+    id:          raw.id as number,
+    type:        'GROUP',
+    name:        (raw.title ?? raw.className ?? raw.name) as string | null | undefined,
+    lastMessage: lastMsg && typeof lastMsg === 'object'
+      ? { content: String(lastMsg.content ?? ''), createdAt: String(lastMsg.createdAt ?? '') }
+      : null,
+    unreadCount: (raw.unreadCount as number | undefined) ?? 0,
+  };
+}
+
 export async function fetchStudentChats(): Promise<Chat[]> {
   const res = await apiClient.get('/chats');
-  return ensureArray<Chat>(unwrap(res));
+  const arr = ensureArray<Record<string, unknown>>(unwrap(res));
+  return arr.map(normalizeChat);
 }
 
 export async function fetchStudentChatMessages(chatId: number, limit = 100): Promise<ChatMessage[]> {

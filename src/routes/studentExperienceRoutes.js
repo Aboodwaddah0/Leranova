@@ -5,6 +5,7 @@ import {
   getSchoolSubjectsController,
   getAcademyTracksController,
   getAcademyTrackSubjectsController,
+  getRecentAcademySubjectsController,
   subscribeAcademySubjectController,
   getAcademySubscriptionsController,
   verifyAcademyCheckoutController,
@@ -17,6 +18,7 @@ router.use(authMiddleware);
 router.get('/me/context', getStudentContextController);
 router.get('/school/subjects', getSchoolSubjectsController);
 router.get('/academy/tracks', getAcademyTracksController);
+router.get('/academy/subjects/recent', getRecentAcademySubjectsController);
 router.get('/academy/tracks/:trackId/subjects', getAcademyTrackSubjectsController);
 router.post('/academy/subjects/:subjectId/subscribe', subscribeAcademySubjectController);
 router.get('/academy/subscriptions', getAcademySubscriptionsController);

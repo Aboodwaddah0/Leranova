@@ -28,7 +28,7 @@ const amountToCents = (amount) => {
   return Math.round(parsed * 100);
 };
 
-export const createRegistrationCheckoutSession = async ({
+export const createPlanSubscriptionCheckoutSession = async ({
   organization,
   plan,
   subscription,
@@ -37,11 +37,11 @@ export const createRegistrationCheckoutSession = async ({
   const stripe = getStripeClient();
 
   const successUrl =
-    process.env.STRIPE_CHECKOUT_SUCCESS_URL ||
-    'http://localhost:5173/payment/success?session_id={CHECKOUT_SESSION_ID}';
+    process.env.STRIPE_PLAN_CHECKOUT_SUCCESS_URL ||
+    'http://localhost:5173/organization/billing/success?session_id={CHECKOUT_SESSION_ID}';
   const cancelUrl =
-    process.env.STRIPE_CHECKOUT_CANCEL_URL ||
-    'http://localhost:5173/payment/cancel';
+    process.env.STRIPE_PLAN_CHECKOUT_CANCEL_URL ||
+    'http://localhost:5173/organization/billing/cancel';
 
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
@@ -60,6 +60,7 @@ export const createRegistrationCheckoutSession = async ({
       },
     ],
     metadata: {
+      type: 'PLAN_SUBSCRIPTION',
       organizationId: String(organization.id),
       subscriptionId: String(subscription.id),
       paymentId: String(payment.id),
@@ -192,9 +193,4 @@ export const createSubjectCheckoutSession = async ({
 export const retrieveCheckoutSession = async (sessionId) => {
   const stripe = getStripeClient();
   return stripe.checkout.sessions.retrieve(sessionId);
-};
-
-export const refundPaymentIntent = async (paymentIntentId) => {
-  const stripe = getStripeClient();
-  return stripe.refunds.create({ payment_intent: paymentIntentId });
 };

@@ -406,6 +406,7 @@ model organization {
   emailVerificationToken     String?                   @db.VarChar(255)
   emailVerificationExpiresAt DateTime?                 @db.Timestamp(0)
   rejectionReason            String?                   @db.Text
+  trialEndsAt                DateTime?                 @db.Timestamp(0)
   academy_user           academy_user[]
   chats                  chats[]
   track                  track[]
@@ -428,6 +429,7 @@ model organization {
   updatedAt              DateTime                      @default(now()) @updatedAt @db.Timestamp(0)
 
   @@index([status], map: "idx_org_status")
+  @@index([trialEndsAt], map: "idx_organization_trial_ends_at")
 }
 
 model plan {

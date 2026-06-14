@@ -3,6 +3,7 @@ import PptxGenJS from "pptxgenjs";
 import PPTX_TEMPLATES from "../../utils/pptxTemplates";
 import { makeHelpers } from "../../utils/pptxTemplates/helpers";
 import InstructorLayout from "../../components/instructor/InstructorLayout";
+import RagBanner from "../../components/ui/RagBanner";
 import {
   createInstructorLesson,
   fetchInstructorLessonAttachments,
@@ -254,6 +255,7 @@ export default function InstructorLessonsPage() {
   const [ragStatus, setRagStatus] = useState(null);
   const ragPollRef = useRef(null);
   const ragStartRef = useRef(null);
+  const newLessonRagRef = useRef(null); // set before selectedLessonId changes to prevent useEffect clearing a fresh ragStatus
 
   // ── Quiz state ──────────────────────────────────────────────────────────────
   const [quiz, setQuiz] = useState(null);
@@ -335,6 +337,17 @@ export default function InstructorLessonsPage() {
   useEffect(() => {
     let cancelled = false;
 
+    // Clear any in-flight RAG poll from the previous lesson.
+    // Skip the ragStatus reset if onCreateLesson just set a fresh 'queued' status
+    // for this very lesson (newLessonRagRef guards against the race condition).
+    if (ragPollRef.current) { clearInterval(ragPollRef.current); ragPollRef.current = null; }
+    const keepRag = newLessonRagRef.current && String(newLessonRagRef.current) === selectedLessonId;
+    if (keepRag) {
+      newLessonRagRef.current = null;
+    } else {
+      setRagStatus(null);
+    }
+
     const loadDetails = async () => {
       if (!selectedLessonId) { setAttachments([]); setComments([]); setQuiz(null); return; }
       setDetailsLoading(true);
@@ -352,6 +365,14 @@ export default function InstructorLessonsPage() {
         if (!cancelled && subjectId) {
           const quizData = await fetchLessonQuiz(subjectId, selectedLessonId, quizViewLang).catch(() => null);
           if (!cancelled) setQuiz(quizData);
+        }
+        // Auto-detect if RAG ingestion is already in progress for this lesson
+        if (!cancelled) {
+          const ragRes = await fetchLessonRagStatus(selectedLessonId, 0).catch(() => null);
+          if (!cancelled && ragRes?.status === 'processing' && !ragPollRef.current) {
+            setRagStatus({ status: 'processing', chunkCount: ragRes.chunkCount ?? 0, elapsed: 0 });
+            startRagPolling(selectedLessonId, ragRes.chunkCount ?? 0, true);
+          }
         }
       } catch (err) {
         if (!cancelled) setError(safeError(err));
@@ -381,7 +402,12 @@ export default function InstructorLessonsPage() {
   const onWizardUpload = async (subjectId, videoFile, onProgress) => {
     const tempTitle = videoFile.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ') || 'Untitled Lesson';
     const lesson = await createInstructorLesson({ subjectId, title: tempTitle, videoFile, onProgress });
-    if (lesson?.id) setSelectedLessonId(String(lesson.id));
+    if (lesson?.id) {
+      // Guard BEFORE setSelectedLessonId so the useEffect skips its ragStatus reset
+      newLessonRagRef.current = lesson.id;
+      setRagStatus({ status: 'queued', estimatedTime: isArabic ? 'الفيديو يحتاج 3-8 دقائق' : 'Video takes 3–8 min' });
+      setSelectedLessonId(String(lesson.id));
+    }
     await refreshLessons();
     return lesson;
   };
@@ -416,6 +442,8 @@ export default function InstructorLessonsPage() {
       setForm((current) => ({ ...current, title: "", description: "", videoFile: null }));
       setLessonModalOpen(false);
 
+      // Set the ref BEFORE setSelectedLessonId so the useEffect skips its ragStatus reset
+      if (hadVideo && createdLesson?.id) newLessonRagRef.current = createdLesson.id;
       if (createdLesson?.id) setSelectedLessonId(String(createdLesson.id));
       await refreshLessons();
 
@@ -452,7 +480,7 @@ export default function InstructorLessonsPage() {
           clearInterval(ragPollRef.current);
           ragPollRef.current = null;
           setRagStatus({ status: 'ready', chunkCount: res.chunkCount, elapsed });
-          setTimeout(() => setRagStatus(null), 8000);
+          setTimeout(() => setRagStatus(null), 15000);
         } else {
           setRagStatus({ status: 'processing', chunkCount: res?.chunkCount ?? baseline, elapsed });
           if (elapsed > 600) {
@@ -802,11 +830,14 @@ export default function InstructorLessonsPage() {
     } catch (err) { setError(safeError(err)); }
   };
 
+  const dismissRag = () => { setRagStatus(null); if (ragPollRef.current) { clearInterval(ragPollRef.current); ragPollRef.current = null; } };
+
   return (
     <InstructorLayout
       title={isArabic ? "الدروس" : "Lessons"}
       subtitle={isArabic ? "استعراض الدروس والمرفقات وتعليقات الطلاب" : "Review lessons, attachments, and student comments."}
     >
+      <RagBanner ragStatus={ragStatus} onDismiss={dismissRag} isArabic={isArabic} />
       {loading ? (
         <EducationLoading
           isArabic={isArabic}
@@ -932,7 +963,6 @@ export default function InstructorLessonsPage() {
             </div>
           ) : null}
 
-          
           {/* ── Attachments (hidden until selected) ── */}
           {instructorSection === 'attachments' && (
           <div className="grid gap-4 lg:grid-cols-2">
@@ -961,21 +991,6 @@ export default function InstructorLessonsPage() {
                     {isArabic ? 'إعادة معالجة AI (إذا لم يعمل المساعد الذكي)' : 'Re-process for AI (if chatbot has no content)'}
                   </button>
 
-                  {ragStatus ? (
-                    <div className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm ${
-                      ragStatus.status === 'ready' ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                        : ragStatus.status === 'timeout' ? 'border-amber-200 bg-amber-50 text-amber-700'
-                        : 'border-blue-200 bg-blue-50 text-blue-700'
-                    }`}>
-                      {ragStatus.status === 'ready' ? (
-                        <><span className="text-lg">✅</span><div><p className="font-bold">{isArabic ? 'جاهز للبحث الذكي!' : 'Ready for AI search!'}</p><p className="text-xs opacity-75">{isArabic ? `${ragStatus.chunkCount} مقطع • ${ragStatus.elapsed}ث` : `${ragStatus.chunkCount} chunks • ${ragStatus.elapsed}s`}</p></div></>
-                      ) : ragStatus.status === 'timeout' ? (
-                        <><span className="text-lg">⚠️</span><div><p className="font-bold">{isArabic ? 'المعالجة تأخذ وقتاً' : 'Processing taking longer'}</p><p className="text-xs opacity-75">{isArabic ? 'يستمر في الخلفية' : 'Continues in background'}</p></div></>
-                      ) : (
-                        <><span className="animate-spin text-lg">⚙️</span><div className="flex-1"><p className="font-bold">{ragStatus.status === 'queued' ? (isArabic ? 'في الانتظار للمعالجة...' : 'Queued for AI processing...') : (isArabic ? `يُعالج للبحث الذكي • ${ragStatus.elapsed}ث` : `Processing for AI search • ${ragStatus.elapsed}s`)}</p><p className="text-xs opacity-75">{ragStatus.estimatedTime || (isArabic ? 'يرجى الانتظار' : 'Please wait')}</p></div></>
-                      )}
-                    </div>
-                  ) : null}
                 </div>
               ) : null}
 

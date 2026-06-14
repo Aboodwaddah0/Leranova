@@ -55,3 +55,33 @@ export const clearFcmToken = async (): Promise<void> => {
     // ignore
   }
 };
+
+export interface PushPayload {
+  title: string;
+  body: string;
+  type: string | null;
+  url: string | null;
+}
+
+const toPushPayload = (content: Notifications.NotificationContent): PushPayload => ({
+  title: content.title ?? '',
+  body:  content.body ?? '',
+  type:  (content.data?.type as string) ?? null,
+  url:   (content.data?.url as string) ?? null,
+});
+
+/** Listen for pushes that arrive while the app is in the foreground. Returns an unsubscribe fn. */
+export const listenForegroundMessages = (onNotification: (payload: PushPayload) => void): (() => void) => {
+  const sub = Notifications.addNotificationReceivedListener((event) => {
+    onNotification(toPushPayload(event.request.content));
+  });
+  return () => sub.remove();
+};
+
+/** Listen for the user tapping a push notification (foreground, background, or cold start). Returns an unsubscribe fn. */
+export const listenNotificationTaps = (onTap: (payload: PushPayload) => void): (() => void) => {
+  const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+    onTap(toPushPayload(response.notification.request.content));
+  });
+  return () => sub.remove();
+};

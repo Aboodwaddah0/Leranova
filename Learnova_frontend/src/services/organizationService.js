@@ -404,3 +404,14 @@ export const fetchReport = async (reportPath, params = {}) => {
   const { data } = await api.get(`/reports/${reportPath}${qs ? `?${qs}` : ""}`);
   return data?.data || null;
 };
+
+// ── Billing ──────────────────────────────────────────────────────────────────
+export const fetchOrganizationSubscription = async (orgId) => {
+  const { data } = await api.get(`/subscriptions/organizations/${orgId}`);
+  return data?.data || null;
+};
+
+export const initiateBillingCheckout = async (orgId, planId) => {
+  const { data } = await api.post(`/subscriptions/organizations/${orgId}/checkout`, { planId });
+  return data?.data || null;
+};

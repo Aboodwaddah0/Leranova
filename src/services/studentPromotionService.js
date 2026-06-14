@@ -236,7 +236,7 @@ const applyPromotionDecision = async (tx, student, decisionResult, schoolYear, o
         academicStatus = 'GRADUATED';
         courseId = null;
       } else {
-        const nextCourse = await ensureCourseForGradeLevel(orgId, nextGrade, tx);
+        const nextCourse = await ensureCourseForGradeLevel(orgId, nextGrade, tx, { skipChat: true });
         toGradeLevel = nextGrade;
         courseId = nextCourse.id;
       }
@@ -246,7 +246,7 @@ const applyPromotionDecision = async (tx, student, decisionResult, schoolYear, o
       decisionResult = { ...decisionResult, decision: 'GRADUATED' };
     }
   } else if (decisionResult.decision === 'REPEATED' && fromGradeLevel) {
-    const sameGradeCourse = await ensureCourseForGradeLevel(orgId, fromGradeLevel, tx);
+    const sameGradeCourse = await ensureCourseForGradeLevel(orgId, fromGradeLevel, tx, { skipChat: true });
     toGradeLevel = fromGradeLevel;
     courseId = sameGradeCourse.id;
     academicStatus = 'ACTIVE';

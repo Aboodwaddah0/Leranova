@@ -41,6 +41,7 @@ export interface InstructorSubject {
   Description?: string | null;
   courseId?: number;
   courseName?: string;
+  courseGradeLevel?: number | null;
   level?: string | null;
   imageUrl?: string | null;
   lessonsCount?: number;
@@ -148,6 +149,7 @@ export interface Quiz {
 // ── Students ───────────────────────────────────────────────────────────────────
 export interface InstructorStudent {
   id: number;
+  name?: string;
   firstName: string;
   lastName: string;
   email?: string;
@@ -157,6 +159,7 @@ export interface InstructorStudent {
   age?: number | null;
   registrationNumber?: string | null;
   phone?: string | null;
+  avatarUrl?: string | null;
 }
 
 // ── Student Notes ──────────────────────────────────────────────────────────────
@@ -193,17 +196,22 @@ export interface InstructorAnalytics {
   overview?: {
     totalStudents: number;
     activeStudents: number;
+    inactiveStudents: number;
     avgXp: number;
     avgLevel: number;
     avgCompletionRate: number;
-    quizPassRate: number;
+    totalLessons: number;
+    totalSubjects: number;
+    totalCourses: number;
+    quizPassRate: number | null;
   };
-  subjectPerformance?: { subjectId: number; subjectName: string; completionRate: number }[];
+  subjectPerformance?: { id: number; name: string; totalLessons: number; completionRate: number; studentsCount: number }[];
   performanceTrend?: { date: string; completions: number; quizPasses: number }[];
-  topStudents?: { studentId: number; name: string; rank: number; level: number; completedLessons: number; streak: number; xp: number }[];
-  atRiskStudents?: { studentId: number; name: string; lastActivityAt?: string; completionRate: number; daysInactive: number }[];
-  activityFeed?: { eventType: string; studentName: string; occurredAt: string }[];
-  aiCoaching?: { summary?: string; keyInsights?: string[]; actionItems?: string[]; fallback?: boolean };
+  topStudents?: { id: number; name: string; rank: number; level: number; completedLessons: number; streak: number; xp: number }[];
+  atRiskStudents?: { id: number; name: string; lastActive?: string | null; completionRate: number; daysSince: number; streakDays: number; reason: string }[];
+  activityFeed?: { studentId: number; studentName: string; eventType: string; label: string; createdAt: string }[];
+  aiCoaching?: { summary?: string; insights?: { icon: string; type: string; message: string }[]; aiPowered?: boolean; generatedAt?: string };
+  generatedAt?: string;
 }
 
 // ── Chat ───────────────────────────────────────────────────────────────────────

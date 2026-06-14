@@ -119,12 +119,13 @@ function _emptyTrend() {
 
 // ── Main service ─────────────────────────────────────────────────────────────
 
-export async function getInstructorAnalytics(teacherId) {
-  const cached = _cache.get(teacherId);
+export async function getInstructorAnalytics(teacherId, subjectId) {
+  const cacheKey = `${teacherId}:${subjectId ?? 'all'}`;
+  const cached = _cache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < CACHE_TTL) return cached.data;
 
-  // Step 1: Teacher's courses + subjects (2 parallel queries)
-  const [teacherCourses, teacherSubjects] = await Promise.all([
+  // Step 1: Teacher's courses (tracks) + subjects/courses assigned to the teacher (2 parallel queries)
+  const [allTeacherCourses, allTeacherSubjects] = await Promise.all([
     prisma.track.findMany({
       where:  { Teacher_id: teacherId },
       select: { id: true, Name: true },
@@ -135,7 +136,21 @@ export async function getInstructorAnalytics(teacherId) {
     }),
   ]);
 
-  const courseIds  = [...new Set([...teacherCourses.map(c => c.id), ...teacherSubjects.map(s => s.Course_id)])];
+  let courseIds = [...new Set([...allTeacherCourses.map(c => c.id), ...allTeacherSubjects.map(s => s.Course_id)])];
+
+  let teacherCourses  = allTeacherCourses;
+  let teacherSubjects = allTeacherSubjects;
+
+  // Optionally narrow everything down to a single course/subject assigned to the teacher
+  if (subjectId !== undefined && subjectId !== null) {
+    const subject = allTeacherSubjects.find(s => s.id === subjectId);
+    if (!subject) return _emptyResult([], [], 0);
+
+    teacherSubjects = [subject];
+    courseIds       = [subject.Course_id];
+    teacherCourses  = allTeacherCourses.filter(c => c.id === subject.Course_id);
+  }
+
   const subjectIds = teacherSubjects.map(s => s.id);
   const lessonIds  = teacherSubjects.flatMap(s => s.lesson.map(l => l.id));
 
@@ -276,12 +291,12 @@ export async function getInstructorAnalytics(teacherId) {
     .sort((a, b) => b.totalXp - a.totalXp)
     .slice(0, 10)
     .map((x, i) => ({
-      rank: i + 1,
+      rank:             i + 1,
       id:               x.studentId,
       name:             nameMap.get(x.studentId) || 'Student',
-      totalXp:          x.totalXp,
+      xp:               x.totalXp,
       level:            x.level,
-      currentStreak:    streakMap.get(x.studentId)?.currentStreak ?? 0,
+      streak:           streakMap.get(x.studentId)?.currentStreak ?? 0,
       completedLessons: completedByStudent.get(x.studentId)?.size ?? 0,
     }));
 
@@ -320,6 +335,6 @@ export async function getInstructorAnalytics(teacherId) {
     generatedAt: new Date().toISOString(),
   };
 
-  _cache.set(teacherId, { data: result, cachedAt: Date.now() });
+  _cache.set(cacheKey, { data: result, cachedAt: Date.now() });
   return result;
 }

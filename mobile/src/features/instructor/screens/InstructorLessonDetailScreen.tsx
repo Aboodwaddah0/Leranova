@@ -124,7 +124,7 @@ export function InstructorLessonDetailScreen() {
       const data = await fetchAiContent(lessonId, aiLang);
       setAiContent(data);
       if (data?.flashcards) setEditCards(data.flashcards);
-      if (data?.mindmap) setEditMM(data.mindmap);
+      if (data?.mindmap?.branches) setEditMM(data.mindmap);
     } catch {}
     finally { setAiLoading(false); }
   }, [lessonId, aiLang]);
@@ -283,7 +283,11 @@ export function InstructorLessonDetailScreen() {
     try {
       const q = await createQuiz(subjectId, lessonId, { title: `${lessonTitle} Quiz`, difficulty: 'MEDIUM', passingScore: 60 });
       setQuiz(q);
-    } catch (e: unknown) { Alert.alert('Error', (e as Error).message || 'Failed to create quiz.'); }
+    } catch (e: unknown) {
+      Alert.alert('Error', (e as Error).message || 'Failed to create quiz.');
+      // A quiz may already exist (e.g. stale screen state) — re-sync with the server.
+      loadQuiz();
+    }
   };
 
   const handleDeleteQuiz = () => {
@@ -292,7 +296,11 @@ export function InstructorLessonDetailScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try { await deleteQuiz(subjectId, lessonId, quiz.id); setQuiz(null); }
-        catch { Alert.alert('Error', 'Failed.'); }
+        catch (e: unknown) {
+          Alert.alert('Error', (e as Error).message || 'Failed to delete quiz.');
+          // The quiz may no longer exist on the server — re-sync to clear stale state.
+          loadQuiz();
+        }
       }},
     ]);
   };
@@ -531,7 +539,8 @@ export function InstructorLessonDetailScreen() {
   );
 
   const renderMindmap = () => {
-    const mm = editMM ?? aiContent?.mindmap;
+    // A lesson with no mindmap yet can come back as `{}` (no `branches`) — treat that as "no mindmap".
+    const mm = editMM ?? (aiContent?.mindmap?.branches ? aiContent.mindmap : null);
     return (
       <ScrollView contentContainerStyle={styles.tabBody} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={T.primary} />} showsVerticalScrollIndicator={false}>
         <LangToggle />
@@ -598,7 +607,7 @@ export function InstructorLessonDetailScreen() {
             <View style={[styles.centralNode, { backgroundColor: '#8b5cf6' }]}>
               <Text style={styles.centralText}>{mm.central}</Text>
             </View>
-            {mm.branches.map((b, i) => (
+            {(mm.branches ?? []).map((b, i) => (
               <View key={i} style={[styles.branchRow, { borderLeftColor: '#8b5cf6' }]}>
                 <Text style={[styles.branchLabel, { color: '#8b5cf6' }]}>• {b.label}</Text>
                 {(b.children ?? []).map((c, j) => (

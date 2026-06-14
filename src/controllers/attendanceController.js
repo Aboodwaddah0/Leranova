@@ -35,6 +35,15 @@ export const getClassAttendanceController = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+export const getClassAttendanceSummaryController = async (req, res, next) => {
+  try {
+    const classId = Number(req.params.classId);
+    if (Number.isNaN(classId)) return next(new AppError('Invalid class id', 400));
+    const data = await attendanceService.getClassAttendanceSummary(req.user, classId, req.query);
+    return res.status(200).json({ success: true, status: 200, data, error: null, timestamp: ts() });
+  } catch (err) { next(err); }
+};
+
 export const getStudentAttendanceController = async (req, res, next) => {
   try {
     const studentId = Number(req.params.studentId);

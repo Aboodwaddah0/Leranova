@@ -298,6 +298,90 @@ export const getSchoolStudentSubjects = async (userId) => {
   };
 };
 
+export const getRecentAcademySubjects = async (userId, limit = 8) => {
+  const context = await resolveStudentContext(userId);
+
+  if (context.mode !== 'ACADEMY') {
+    throw new AppError('Academy student profile required', 403);
+  }
+
+  const subjects = await prisma.course.findMany({
+    where: {
+      track: {
+        Org_id: context.orgId,
+        kind: 'TRACK',
+      },
+    },
+    include: {
+      _count: {
+        select: {
+          lesson: true,
+        },
+      },
+      teacher: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+      track: {
+        select: {
+          id: true,
+          Name: true,
+        },
+      },
+      subscriptions: {
+        where: {
+          user_Academy_id: userId,
+        },
+        select: {
+          id: true,
+          paymentStatus: true,
+          status: true,
+          paidAt: true,
+        },
+        take: 1,
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+    take: limit,
+  });
+
+  return subjects.map((subject) => {
+    const subscription = subject.subscriptions[0] || null;
+    const hasPaidSubscription = Boolean(
+      subscription && ['PAID', 'SUCCESS'].includes(toUpper(subscription.paymentStatus || subscription.status)),
+    );
+    const hasFreeEnrollment = Boolean(subscription && !subject.isPaid);
+    const isSubscribed = hasPaidSubscription || hasFreeEnrollment;
+
+    return {
+      id: subject.id,
+      name: subject.name,
+      trackId: subject.Course_id,
+      trackName: subject.track?.Name || null,
+      description: subject.Description,
+      imageUrl: subject.imageUrl,
+      level: subject.level || null,
+      isPaid: Boolean(subject.isPaid),
+      price: Number(subject.price || 0),
+      isSubscribed,
+      lessonCount: subject._count.lesson,
+      createdAt: subject.createdAt,
+      teacher: {
+        id: subject.teacher?.Teacher_id || null,
+        name: subject.teacher?.user?.name || null,
+      },
+    };
+  });
+};
+
 export const getAcademyTracks = async (userId) => {
   const context = await resolveStudentContext(userId);
 
@@ -358,6 +442,7 @@ export const getAcademyTracks = async (userId) => {
     thumbnail: track.Thumbnail,
     subjectCount: track.courses.length,
     subscribedSubjectCount: subscriptionByTrack.get(track.id) || 0,
+    createdAt: track.createdAt,
   }));
 };
 
@@ -446,6 +531,7 @@ export const getAcademyTrackSubjects = async (userId, trackId) => {
         trackId: subject.Course_id,
         description: subject.Description,
         imageUrl: subject.imageUrl,
+        level: subject.level || null,
         isPaid: Boolean(subject.isPaid),
         price: Number(subject.price || 0),
         isSubscribed,

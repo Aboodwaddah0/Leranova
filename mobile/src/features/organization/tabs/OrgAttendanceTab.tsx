@@ -268,7 +268,7 @@ export function OrgAttendanceTab({ orgType, academicYears, viewingYearId }: Prop
                       activeOpacity={0.85}
                     >
                       <View style={[styles.studentAvatar, { backgroundColor: meta.bg }]}>
-                        <Text style={[styles.avatarText, { color: meta.color }]}>{s.firstName[0]}{s.lastName[0]}</Text>
+                        <Text style={[styles.avatarText, { color: meta.color }]}>{(s.firstName ?? '')[0] ?? ''}{(s.lastName ?? '')[0] ?? ''}</Text>
                       </View>
                       <Text style={[styles.studentName, { color: T.text }]} numberOfLines={1}>{s.firstName} {s.lastName}</Text>
                       <View style={[styles.statusBtn, { backgroundColor: meta.bg, borderColor: meta.color }]}>

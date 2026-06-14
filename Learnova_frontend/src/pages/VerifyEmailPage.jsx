@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { Sparkles, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Sparkles, CheckCircle2, XCircle, Loader2, Clock } from "lucide-react";
 import api from "../utils/api";
 import { useLanguage } from "../utils/i18n";
 
@@ -85,19 +85,29 @@ export default function VerifyEmailPage() {
 
         {status === "success" && !autoApproved && (
           <>
-            <CheckCircle2 size={40} className="mx-auto mb-4 text-indigo-500" />
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50">
+              <Clock size={28} className="text-amber-500" />
+            </div>
             <h1 className="mb-2 text-xl font-black text-slate-900">
               {t.signup.verifyEmail.successPendingTitle}
             </h1>
             <p className="mb-6 text-sm text-slate-500">
               {t.signup.verifyEmail.successPending}
             </p>
-            <Link
-              to="/"
-              className="inline-block rounded-2xl border border-slate-200 px-6 py-3 text-sm font-bold text-slate-700 hover:border-indigo-200"
-            >
-              {isArabic ? "الصفحة الرئيسية" : "Back to home"}
-            </Link>
+            <div className="flex flex-col items-center gap-3">
+              <Link
+                to="/login"
+                className="inline-block rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white hover:bg-indigo-700"
+              >
+                {isArabic ? "تسجيل الدخول" : "Go to Login"}
+              </Link>
+              <Link
+                to="/"
+                className="text-xs text-slate-400 hover:text-slate-600"
+              >
+                {isArabic ? "الصفحة الرئيسية" : "Back to home"}
+              </Link>
+            </div>
           </>
         )}
 

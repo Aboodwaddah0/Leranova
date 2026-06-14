@@ -11,7 +11,10 @@ interface Props {
 }
 
 export function Avatar({ name, uri, size = 44, style }: Props) {
-  const initial = name?.trim()?.[0]?.toUpperCase() ?? '?';
+  const parts = name?.trim().split(/\s+/).filter(Boolean) ?? [];
+  const initial = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : (parts[0]?.[0]?.toUpperCase() ?? '?');
   const fontSize = Math.max(12, Math.round(size * 0.4));
 
   if (uri) {

@@ -4,6 +4,7 @@ import {
   loginUser,
   loginParent,
   forgotPassword,
+  forgotPasswordCode,
   resetPassword,
   changePassword,
   getMe,
@@ -16,7 +17,9 @@ import {
   loginUserSchema,
   loginParentSchema,
   forgotPasswordSchema,
+  forgotPasswordCodeSchema,
   resetPasswordSchema,
+  resetPasswordCodeSchema,
   changePasswordSchema,
 } from '../validations/authValidation.js';
 import AppError from '../utils/appError.js';
@@ -31,12 +34,9 @@ export const register = async (req, res, next) => {
     }
 
     const result = await registerOrganization(value);
-    const hasCheckout = Boolean(result?.checkout?.checkoutUrl);
 
     return res.status(201).json({
-      message: hasCheckout
-        ? 'Organization registered successfully. Please check your email to verify your account, then complete payment.'
-        : 'Organization registered successfully. Please check your email to verify your account.',
+      message: 'Organization registered successfully. Please check your email to verify your account.',
       data: result,
     });
   } catch (error) {
@@ -137,6 +137,28 @@ export const resetPasswordController = async (req, res, next) => {
     return res.status(200).json({
       message: 'Password reset successfully',
     });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const forgotPasswordCodeController = async (req, res, next) => {
+  try {
+    const { error, value } = forgotPasswordCodeSchema.validate(req.body);
+    if (error) return next(new AppError(error.details[0].message, 400));
+    await forgotPasswordCode(value);
+    return res.status(200).json({ message: 'If the account exists, a reset code was sent to your email.' });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const resetPasswordCodeController = async (req, res, next) => {
+  try {
+    const { error, value } = resetPasswordCodeSchema.validate(req.body);
+    if (error) return next(new AppError(error.details[0].message, 400));
+    await resetPassword(value);
+    return res.status(200).json({ message: 'Password reset successfully' });
   } catch (error) {
     return next(error);
   }

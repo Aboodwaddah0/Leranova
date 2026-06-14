@@ -14,6 +14,7 @@ import {
   fetchCourseSubjects,
   fetchSubjectLessons,
   fetchStudentCourseCatalog,
+  fetchRecentAcademySubjects,
   fetchStudentProfile,
   fetchGamificationStats,
   fetchGamificationLeaderboard,
@@ -89,6 +90,7 @@ export default function StudentDashboardPage() {
   const _orgType = String(authUser?.organizationType || authUser?.organization?.Role || '').toUpperCase();
   const isSchoolStudent = _orgType === 'SCHOOL' || (_orgType !== 'ACADEMY' && !authUser?.academyUser);
   const [enrolledCourses, setEnrolledCourses] = useState([]);
+  const [recentCourses, setRecentCourses] = useState([]);
   const [marks, setMarks] = useState([]);
   const [profile, setProfile] = useState(null);
   const [purchases, setPurchases] = useState([]);
@@ -132,10 +134,11 @@ export default function StudentDashboardPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const [courseData, marksData, purchaseData, profileData, gamData, lbData, achData, missData, lpData, adaptMissData, mentorData, feedData, insightsData] = await Promise.all([
+        const [courseData, marksData, purchaseData, profileData, gamData, lbData, achData, missData, lpData, adaptMissData, mentorData, feedData, insightsData, recentSubjectsData] = await Promise.all([
           fetchStudentCourseCatalog(), fetchMyStudentMarks(), fetchMyStudentPurchases(),
           fetchStudentProfile(), fetchGamificationStats(), fetchGamificationLeaderboard(),
           fetchAchievements(), fetchMissions(), fetchLearningProfile(), fetchAdaptiveMissions(), fetchAIMentor(), fetchActivityFeed(), fetchAdaptiveInsights(),
+          fetchRecentAcademySubjects(),
         ]);
         if (cancelled) return;
 
@@ -160,6 +163,7 @@ export default function StudentDashboardPage() {
         );
 
         setEnrolledCourses(coursesWithProgress);
+        setRecentCourses(Array.isArray(recentSubjectsData) ? recentSubjectsData : []);
         setMarks(safeMarks);
         setPurchases(Array.isArray(purchaseData) ? purchaseData : []);
         setProfile(profileData || null);
@@ -463,8 +467,16 @@ export default function StudentDashboardPage() {
         {/* ─── Today's Focus ─── */}
         <DarkTodaysFocusCard missions={missions} adaptiveMissions={adaptiveMissions} isArabic={isArabic} />
 
-        {/* ─── This Week's Progress ─── */}
-        <DarkWeekProgressCard gamification={gamification} activityFeed={activityFeed} isArabic={isArabic} />
+        {/* ─── This Week's Progress + Achievements ─── */}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <DarkWeekProgressCard gamification={gamification} activityFeed={activityFeed} isArabic={isArabic} />
+          <AchievementPreviewCard achievements={achievements} isArabic={isArabic} />
+        </div>
+
+        {/* ─── Recently Added Courses ─── */}
+        {recentCourses.length > 0 && (
+          <DarkRecentCoursesSection courses={recentCourses} isArabic={isArabic} />
+        )}
 
         {/* ─── My Specializations (not started) ─── */}
         {myCourses.length > 0 && (
@@ -1554,52 +1566,58 @@ function CompactAIMentorCard({ mentor, isArabic, engagedToday }) {
 function AchievementPreviewCard({ achievements, isArabic }) {
   const pct = Math.round((achievements.unlocked.length / 11) * 100);
   return (
-    <section className="flex flex-col overflow-hidden rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 via-indigo-50 to-violet-50 shadow-sm">
-      <div className="flex items-center justify-between border-b border-violet-100 px-5 py-3.5">
+    <section className="rounded-2xl p-7" style={{ background: 'var(--ln-sec-bg)', border: '1px solid var(--ln-sec-border)' }}>
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-md shadow-violet-100">
-            <Medal size={15} className="text-white" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.25)' }}>
+            <Medal size={16} style={{ color: '#a78bfa' }} />
           </div>
           <div>
-            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-violet-400">{isArabic ? 'الإنجازات' : 'Achievements'}</p>
-            <h3 className="text-sm font-black text-violet-900">
-              {achievements.unlocked.length}<span className="text-xs font-semibold text-violet-400">/11</span> {isArabic ? 'مفتوح' : 'unlocked'}
+            <p className="text-[9px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--ln-sec-subtext)' }}>{isArabic ? 'الإنجازات' : 'Achievements'}</p>
+            <h3 className="text-sm font-black" style={{ color: 'var(--ln-sec-text)' }}>
+              {achievements.unlocked.length}<span className="text-xs font-semibold" style={{ color: 'var(--ln-sec-subtext)' }}>/11</span> {isArabic ? 'مفتوح' : 'unlocked'}
             </h3>
           </div>
         </div>
-        <span className="text-lg font-black text-violet-600">{pct}%</span>
+        <Link
+          to="/student/achievements"
+          className="shrink-0 rounded-xl px-3 py-1.5 text-[11px] font-semibold transition-colors"
+          style={{ background: 'var(--ln-item-bg)', border: '1px solid var(--ln-item-border)', color: '#a78bfa' }}
+        >
+          {isArabic ? 'عرض الكل' : 'View all'}
+        </Link>
       </div>
 
-      <div className="flex flex-1 flex-col gap-3 p-4">
+      <div className="mt-4 flex flex-col gap-3">
         {/* Overall progress bar */}
-        <div className="h-2 overflow-hidden rounded-full bg-violet-100">
+        <div className="h-2 overflow-hidden rounded-full" style={{ background: 'var(--ln-item-bg)' }}>
           <div
-            className="h-full rounded-full bg-gradient-to-r from-violet-400 to-indigo-500 transition-all duration-700"
-            style={{ width: `${pct}%` }}
+            className="h-full rounded-full transition-all duration-700"
+            style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #8B5CF6, #6366F1)' }}
           />
         </div>
 
         {/* Latest unlock */}
         {achievements.latestUnlocked ? (
-          <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-white/80 px-3 py-2.5 backdrop-blur">
-            <CheckCircle2 size={14} className="shrink-0 text-emerald-500" />
+          <div className="flex items-center gap-2.5 rounded-xl px-3 py-2.5" style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)' }}>
+            <CheckCircle2 size={14} className="shrink-0" style={{ color: '#10B981' }} />
             <div className="flex-1 min-w-0">
-              <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-500">{isArabic ? 'آخر إنجاز' : 'Latest unlock'}</p>
-              <p className="truncate text-xs font-black text-emerald-800">{achievements.latestUnlocked.label}</p>
+              <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#10B981' }}>{isArabic ? 'آخر إنجاز' : 'Latest unlock'}</p>
+              <p className="truncate text-xs font-black" style={{ color: 'var(--ln-sec-text)' }}>{achievements.latestUnlocked.label}</p>
             </div>
-            <span className="shrink-0 rounded-full bg-violet-500 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-white shadow">NEW</span>
+            <span className="shrink-0 rounded-full px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-white shadow" style={{ background: '#8B5CF6' }}>NEW</span>
           </div>
         ) : (
-          <div className="flex items-center gap-2 rounded-xl bg-violet-100/60 px-3 py-2.5">
-            <Lock size={12} className="shrink-0 text-violet-400" />
-            <span className="text-[11px] font-semibold text-violet-500">
+          <div className="flex items-center gap-2 rounded-xl px-3 py-2.5" style={{ background: 'var(--ln-item-bg)' }}>
+            <Lock size={12} className="shrink-0" style={{ color: 'var(--ln-sec-subtext)' }} />
+            <span className="text-[11px] font-semibold" style={{ color: 'var(--ln-sec-subtext)' }}>
               {isArabic ? 'أكمل دروسًا لفتح الإنجازات' : 'Complete lessons to unlock achievements'}
             </span>
           </div>
         )}
 
         {achievements.locked.length > 0 && (
-          <p className="text-center text-[10px] font-semibold text-violet-400">
+          <p className="text-center text-[10px] font-semibold" style={{ color: 'var(--ln-sec-subtext)' }}>
             {achievements.locked.length} {isArabic ? 'إنجاز متبقٍّ للفتح' : 'more to unlock'}
           </p>
         )}
@@ -2382,6 +2400,117 @@ function DarkEnrolledTracksSection({ courses, isArabic }) {
             </div>
           </Link>
         ))}
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────── Dark Recently Added Courses Section ─────────────── */
+
+const _LEVEL_BADGE = {
+  BEGINNER:     { cls: 'bg-emerald-100 text-emerald-700', label: 'Beginner',     labelAr: 'مبتدئ' },
+  INTERMEDIATE: { cls: 'bg-blue-100 text-blue-700',       label: 'Intermediate', labelAr: 'متوسط' },
+  ADVANCED:     { cls: 'bg-violet-100 text-violet-700',   label: 'Advanced',     labelAr: 'متقدم' },
+  EXPERT:       { cls: 'bg-rose-100 text-rose-700',       label: 'Expert',       labelAr: 'خبير'  },
+};
+
+const _recentTimeAgo = (iso, isArabic) => {
+  if (!iso) return '';
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (days <= 0) return isArabic ? 'اليوم' : 'Today';
+  if (days === 1) return isArabic ? 'أمس' : 'Yesterday';
+  if (days < 7) return isArabic ? `منذ ${days} أيام` : `${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 4) return isArabic ? `منذ ${weeks} أسبوع` : `${weeks}w ago`;
+  const months = Math.floor(days / 30);
+  return isArabic ? `منذ ${months} شهر` : `${months}mo ago`;
+};
+
+function DarkRecentCoursesSection({ courses, isArabic }) {
+  return (
+    <section
+      className="rounded-2xl p-7"
+      style={{ background: 'var(--ln-sec-bg)', border: '1px solid var(--ln-sec-border)' }}
+    >
+      <div className="mb-5 flex items-center gap-2">
+        <Sparkles size={18} className="text-violet-400" />
+        <h2 className="text-[17px] font-semibold" style={{ color: 'var(--ln-sec-text)' }}>
+          {isArabic ? 'أحدث الكورسات المضافة' : 'Recently added courses'}
+        </h2>
+      </div>
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {courses.slice(0, 6).map((course, i) => {
+          const levelCfg = _LEVEL_BADGE[course.level] || null;
+          return (
+            <Link
+              key={course.id}
+              to={`/courses/${course.trackId}/subjects/${course.id}`}
+              className="group block overflow-hidden rounded-2xl transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+              style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.22)' }}
+            >
+              {/* Banner */}
+              <div
+                className="relative flex h-[140px] items-center justify-center overflow-hidden"
+                style={{ background: _TRACK_GRADIENTS[i % _TRACK_GRADIENTS.length] }}
+              >
+                {course.imageUrl ? (
+                  <img src={course.imageUrl} alt="" className="h-full w-full object-cover opacity-40" />
+                ) : (
+                  <span className="text-6xl opacity-30">{_TRACK_EMOJIS[i % _TRACK_EMOJIS.length]}</span>
+                )}
+                <div
+                  className="absolute left-3 top-3 rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white"
+                  style={{ background: 'rgba(34,197,94,0.85)' }}
+                >
+                  {isArabic ? 'جديد' : 'New'}
+                </div>
+                {course.createdAt && (
+                  <div
+                    className="absolute right-3 top-3 rounded-lg px-3 py-1.5 text-[11px] font-semibold text-white"
+                    style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)' }}
+                  >
+                    {_recentTimeAgo(course.createdAt, isArabic)}
+                  </div>
+                )}
+              </div>
+              {/* Content */}
+              <div className="p-5">
+                {course.trackName && (
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-violet-400">{course.trackName}</p>
+                )}
+                <h3 className="mb-1 truncate text-[16px] font-semibold" style={{ color: 'var(--ln-sec-text)' }}>{course.name}</h3>
+                {course.teacher?.name && (
+                  <p className="mb-2 text-[12px]" style={{ color: 'var(--ln-sec-subtext)' }}>{course.teacher.name}</p>
+                )}
+                {course.description && (
+                  <p className="mb-3 line-clamp-2 text-[12px] leading-relaxed" style={{ color: 'var(--ln-sec-subtext)' }}>{course.description}</p>
+                )}
+
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  {levelCfg && (
+                    <span className={`inline-block rounded px-2 py-0.5 text-[10px] font-bold ${levelCfg.cls}`}>
+                      {isArabic ? levelCfg.labelAr : levelCfg.label}
+                    </span>
+                  )}
+                  <span className="text-[11px] font-semibold" style={{ color: 'var(--ln-sec-subtext)' }}>
+                    {course.lessonCount || 0} {isArabic ? 'دروس' : 'lessons'}
+                  </span>
+                  <span className="ml-auto text-[15px] font-black" style={{ color: 'var(--ln-sec-text)' }}>
+                    {course.isPaid ? `${course.price} USD` : (isArabic ? 'مجاني' : 'Free')}
+                  </span>
+                </div>
+
+                <div
+                  className="flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-all duration-200"
+                  style={{ border: '1px solid rgba(99,102,241,0.35)', color: 'rgba(167,139,250,0.9)' }}
+                >
+                  {course.isSubscribed ? (isArabic ? 'فتح المادة' : 'Open material') : (isArabic ? 'استكشف الكورس' : 'Explore course')}
+                  <ArrowRight size={15} />
+                </div>
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </section>
   );

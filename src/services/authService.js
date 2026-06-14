@@ -8,11 +8,7 @@ import {
   hashPasswordResetToken,
   buildPasswordResetLink,
 } from '../utils/passwordReset.js';
-import { sendPasswordResetEmail, sendOrgVerificationEmail, sendOrgApprovedEmail } from '../utils/emailService.js';
-import {
-  createRegistrationCheckoutSession,
-  ensureStripeConfigured,
-} from './stripeService.js';
+import { sendPasswordResetEmail, sendPasswordResetCodeEmail, sendOrgVerificationEmail, sendOrgApprovedEmail } from '../utils/emailService.js';
 import { ensureSchoolClassesForOrg, normalizeClassRanges } from './schoolClassService.js';
 import { getOrCreateSchoolSettings } from './schoolSettingsService.js';
 import { isBusinessEmail } from '../utils/domainCheck.js';
@@ -52,8 +48,6 @@ const normalizeRequestedUserRole = (role) => {
 
 export const registerOrganization = async (data) => {
   const normalizedRole = String(data.Role || '').trim().toUpperCase();
-  const normalizedPlanId = Number(data.planId);
-  const hasSelectedPlan = Number.isInteger(normalizedPlanId) && normalizedPlanId > 0;
 
   // Validate classRanges for school organizations
   if (normalizedRole === 'SCHOOL') {
@@ -68,29 +62,6 @@ export const registerOrganization = async (data) => {
 
   if (existingOrganization) {
     throw new AppError('Organization email already exists', 400);
-  }
-
-  let selectedPlan = null;
-
-  if (hasSelectedPlan) {
-    selectedPlan = await prisma.plan.findUnique({
-      where: { id: normalizedPlanId },
-      select: {
-        id: true,
-        name: true,
-        price: true,
-        durationDays: true,
-        description: true,
-      },
-    });
-
-    if (!selectedPlan) {
-      throw new AppError('Selected plan not found', 404);
-    }
-
-    if (Number(selectedPlan.price) > 0) {
-      ensureStripeConfigured();
-    }
   }
 
   const hashedPassword = await hashPassword(data.password);
@@ -143,65 +114,7 @@ export const registerOrganization = async (data) => {
       }
     }
 
-    if (!selectedPlan) {
-      return {
-        organization,
-        plan: null,
-        subscription: null,
-        payment: null,
-      };
-    }
-
-    const startDate = new Date();
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + selectedPlan.durationDays);
-
-    const subscription = await tx.subscription.create({
-      data: {
-        organizationId: organization.id,
-        planId: selectedPlan.id,
-        startDate,
-        endDate,
-        status: 'PENDING',
-        autoRenew: true,
-      },
-      select: {
-        id: true,
-        organizationId: true,
-        planId: true,
-        startDate: true,
-        endDate: true,
-        status: true,
-        autoRenew: true,
-        createdAt: true,
-      },
-    });
-
-    const payment = await tx.payment.create({
-      data: {
-        subscriptionId: subscription.id,
-        organizationId: organization.id,
-        amount: selectedPlan.price,
-        paymentMethod: 'STRIPE',
-        status: 'PENDING',
-      },
-      select: {
-        id: true,
-        subscriptionId: true,
-        organizationId: true,
-        amount: true,
-        paymentDate: true,
-        paymentMethod: true,
-        status: true,
-      },
-    });
-
-    return {
-      organization,
-      plan: selectedPlan,
-      subscription,
-      payment,
-    };
+    return { organization };
   });
 
   const verificationBaseUrl = process.env.EMAIL_VERIFICATION_URL_BASE;
@@ -214,27 +127,8 @@ export const registerOrganization = async (data) => {
     }).catch((err) => console.error('[EMAIL] Verification email failed:', err.message));
   }
 
-  if (!selectedPlan) {
-    return {
-      ...result,
-      checkout: null,
-    };
-  }
-
-  const checkoutSession = await createRegistrationCheckoutSession({
-    organization: result.organization,
-    plan: result.plan,
-    subscription: result.subscription,
-    payment: result.payment,
-  });
-
   return {
-    ...result,
-    checkout: {
-      sessionId: checkoutSession.id,
-      checkoutUrl: checkoutSession.url,
-      status: 'PENDING_PAYMENT',
-    },
+    organization: result.organization,
   };
 };
 
@@ -304,6 +198,15 @@ export const loginOrganization = async ({ Email, password }) => {
     throw new AppError('Invalid email or password', 401);
   }
 
+  if (organization.status === 'PENDING') {
+    throw new AppError('Please verify your email address first. Check your inbox for a verification link.', 403);
+  }
+  if (organization.status === 'EMAIL_VERIFIED') {
+    throw new AppError('Your account is pending admin approval. You will receive an email once approved.', 403);
+  }
+  if (organization.status === 'REJECTED') {
+    throw new AppError('Your organization registration has been rejected. Please contact support.', 403);
+  }
   if (organization.status !== 'APPROVED') {
     throw new AppError('Organization account is not active yet', 403);
   }
@@ -327,6 +230,7 @@ export const loginOrganization = async ({ Email, password }) => {
       Description: organization.Description,
       Role: organization.Role,
       status: organization.status,
+      trialEndsAt: organization.trialEndsAt,
     },
     token,
   };
@@ -598,6 +502,57 @@ export const resetPassword = async ({ token, newPassword }) => {
   }
 
   throw new AppError('Invalid or expired reset token', 400);
+};
+
+const PIN_EXPIRY_MINUTES = 15;
+
+export const forgotPasswordCode = async ({ email, accountType }) => {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (!normalizedEmail) throw new AppError('Email is required', 400);
+
+  const rawAccountType = String(accountType || '').trim().toUpperCase();
+  const pin = String(Math.floor(100000 + Math.random() * 900000));
+  const tokenHash = hashPasswordResetToken(pin);
+  const expiresAt = new Date(Date.now() + PIN_EXPIRY_MINUTES * 60 * 1000);
+
+  let recipient = null;
+
+  if (rawAccountType !== 'ORGANIZATION') {
+    const user = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true, email: true, name: true },
+    });
+    if (user) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordResetToken: tokenHash, passwordResetExpiresAt: expiresAt },
+      });
+      recipient = { email: user.email, name: user.name };
+    }
+  }
+
+  if (!recipient && rawAccountType !== 'USER') {
+    const org = await prisma.organization.findUnique({
+      where: { Email: normalizedEmail },
+      select: { id: true, Email: true, Name: true },
+    });
+    if (org) {
+      await prisma.organization.update({
+        where: { id: org.id },
+        data: { PasswordResetToken: tokenHash, PasswordResetExpiresAt: expiresAt },
+      });
+      recipient = { email: org.Email, name: org.Name };
+    }
+  }
+
+  if (!recipient) return;
+
+  await sendPasswordResetCodeEmail({
+    to: recipient.email,
+    name: recipient.name,
+    code: pin,
+    expiresMinutes: PIN_EXPIRY_MINUTES,
+  });
 };
 
 export const getMe = async (userId) => {

@@ -2,6 +2,7 @@ import prisma from '../utils/prisma.js';
 import AppError from '../utils/appError.js';
 import { gatherLessonContent, callGroq, gradeShortAnswer, buildMixedQuizPrompt } from './aiContentService.js';
 import { dispatch, dispatchGamificationEvent, mergeRewards } from './gamificationDispatcher.js';
+import { notifyTrackMembers } from './notificationService.js';
 
 /* ─── Role resolution ─────────────────────────────────────────────────────── */
 
@@ -27,7 +28,7 @@ const resolveActor = async (actor) => {
 const ensureTeacherOwnsLesson = async (scope, lessonId) => {
   const lesson = await prisma.lesson.findUnique({
     where: { id: Number(lessonId) },
-    include: { course: { select: { Teacher_id: true, track: { select: { Org_id: true } } } } },
+    include: { course: { select: { Teacher_id: true, Course_id: true, track: { select: { Org_id: true } } } } },
   });
   if (!lesson) throw new AppError('Lesson not found', 404);
   if (lesson.course.track.Org_id !== scope.orgId) throw new AppError('Access denied', 403);
@@ -151,7 +152,7 @@ export const getQuizForLesson = async (actor, lessonId, lang = 'ar') => {
 export const createQuiz = async (actor, lessonId, { title, description, difficulty = 'MEDIUM', passingScore = 70, isHidden = false, availableFrom, availableTo }) => {
   const scope = await resolveActor(actor);
   if (scope.role === 'STUDENT') throw new AppError('Students cannot create quizzes', 403);
-  await ensureTeacherOwnsLesson(scope, lessonId);
+  const lesson = await ensureTeacherOwnsLesson(scope, lessonId);
 
   const existing = await prisma.quiz.findUnique({ where: { lessonId: Number(lessonId) } });
   if (existing) throw new AppError('A quiz already exists for this lesson', 409);
@@ -170,6 +171,14 @@ export const createQuiz = async (actor, lessonId, { title, description, difficul
     },
     include: { questions: true },
   });
+
+  if (quiz.isPublished && !quiz.isHidden) {
+    notifyTrackMembers(lesson.course.Course_id, {
+      content: `New quiz "${quiz.title}" is available for "${lesson.name}"`,
+      type: 'QUIZ',
+      url: `/lessons/${lessonId}`,
+    }).catch(() => {});
+  }
 
   return serializeQuiz(quiz, { includeCorrectAnswers: true });
 };
@@ -438,15 +447,10 @@ export const generateQuizQuestions = async (actor, quizId, { numQuestions, numMC
   if (!questions.length) throw new AppError('AI did not return valid questions', 502);
 
   // Replace only the questions for this language — other language's questions are preserved
-  // Auto-publish the quiz when questions are generated so students see it immediately.
   await prisma.$transaction([
     prisma.quiz_question.deleteMany({ where: { quizId: Number(quizId), lang: l } }),
     prisma.quiz_question.createMany({
       data: questions.map((q) => ({ ...q, quizId: Number(quizId) })),
-    }),
-    prisma.quiz.update({
-      where: { id: Number(quizId) },
-      data: { isPublished: true },
     }),
   ]);
 

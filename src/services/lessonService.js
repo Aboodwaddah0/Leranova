@@ -3,6 +3,7 @@ import AppError from '../utils/appError.js';
 import { deleteUploadedFile } from './cloudinary.service.js';
 import { resolveStudentContext } from './studentExperienceService.js';
 import { normalizeUploadedFilename } from '../utils/filenameEncoding.js';
+import { notifyTrackMembers } from './notificationService.js';
 
 const toRole = (value) => String(value || '').trim().toUpperCase();
 const PAID_SUBSCRIPTION_FILTER = {
@@ -222,6 +223,18 @@ export const createLesson = async (actor, subjectId, data) => {
       Description: data.description ?? null,
     },
   });
+
+  prisma.course.findUnique({
+    where: { id: subjectId },
+    select: { name: true, Course_id: true },
+  }).then((subject) => {
+    if (!subject) return;
+    return notifyTrackMembers(subject.Course_id, {
+      content: `New lesson "${lesson.name}" was added to "${subject.name}"`,
+      type: 'LESSON',
+      url: `/lessons/${lesson.id}`,
+    });
+  }).catch(() => {});
 
   return serializeLesson(lesson);
 };

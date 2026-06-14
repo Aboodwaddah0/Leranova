@@ -406,6 +406,17 @@ export async function fetchAcademyTrackSubjects(trackId) {
   }
 }
 
+export async function fetchRecentAcademySubjects() {
+  try {
+    const response = await api.get('/student/academy/subjects/recent');
+    const data = unwrap(response, []);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('fetchRecentAcademySubjects error:', error);
+    return [];
+  }
+}
+
 export async function fetchAcademySubscriptions() {
   try {
     const response = await api.get('/student/academy/subscriptions');

@@ -1,8 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
+import { useSelector } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
 import InstructorLayout from "../../components/instructor/InstructorLayout";
-import { fetchInstructorAnalytics } from "../../services/instructorService";
+import { fetchInstructorAnalytics, fetchInstructorSubjects } from "../../services/instructorService";
 import { useLanguage } from "../../utils/i18n";
+import { getArabicOrdinal, getCourseLabel } from "../../utils/gradeHelpers";
+import { ORG_TYPES } from "../../utils/constants";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const fmt = (n) => (n ?? 0).toLocaleString();
@@ -27,6 +30,7 @@ const ICON = {
   INSIGHT:    "💡", WARNING: "⚠️", ACTION: "🎯", RISK: "🚨",
   FLAME:      "🔥", TROPHY: "🏆", TARGET: "🎯", STAR: "⭐",
   TREND_UP:   "📈", TREND_DOWN: "📉",
+  BRAIN:      "🧠", TREND: "📈", QUIZ: "✅", LESSON: "📖",
 };
 const EVENT_ICONS = {
   LESSON_COMPLETE: "📖", QUIZ_PASS: "✅", QUIZ_PERFECT: "🏆",
@@ -167,7 +171,7 @@ function TrendChart({ trend }) {
 // ── AI coaching card ──────────────────────────────────────────────────────────
 function AICoachingCard({ coaching, isArabic }) {
   if (!coaching) return null;
-  const { summary, keyInsights = [], actionItems = [], fallback } = coaching;
+  const { summary, insights = [], aiPowered } = coaching;
 
   return (
     <motion.div variants={fadeUp} className="relative overflow-hidden rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 via-indigo-50 to-white p-6 shadow-sm">
@@ -185,8 +189,8 @@ function AICoachingCard({ coaching, isArabic }) {
               </h3>
             </div>
           </div>
-          <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${fallback ? "bg-amber-100 text-amber-700" : "bg-violet-100 text-violet-700"}`}>
-            {fallback ? "Algorithmic" : "✨ AI"}
+          <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${aiPowered ? "bg-violet-100 text-violet-700" : "bg-amber-100 text-amber-700"}`}>
+            {aiPowered ? "✨ AI" : "Algorithmic"}
           </span>
         </div>
 
@@ -194,33 +198,22 @@ function AICoachingCard({ coaching, isArabic }) {
           <p className="mb-5 text-sm leading-relaxed text-slate-600 border-l-2 border-violet-300 pl-3">{summary}</p>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          {keyInsights.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Key Insights</p>
-              {keyInsights.map((ins, i) => (
-                <div key={i} className="flex items-start gap-2 rounded-xl bg-white/80 border border-slate-100 px-3 py-2 text-sm text-slate-700 shadow-sm">
-                  <span className="mt-0.5 shrink-0 text-base">{ICON[ins.icon] ?? "💡"}</span>
-                  <span className="leading-snug">{ins.text}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {actionItems.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Action Items</p>
-              {actionItems.map((act, i) => (
-                <div key={i} className="flex items-start gap-2 rounded-xl bg-white/80 border border-indigo-100 px-3 py-2 shadow-sm">
-                  <span className="mt-0.5 shrink-0 text-base">{ICON[act.icon] ?? "🎯"}</span>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800 leading-snug">{act.action}</p>
-                    {act.reason && <p className="mt-0.5 text-xs text-slate-400">{act.reason}</p>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {insights.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Insights</p>
+            {insights.map((ins, i) => (
+              <div
+                key={i}
+                className={`flex items-start gap-2 rounded-xl bg-white/80 border px-3 py-2 text-sm text-slate-700 shadow-sm ${
+                  ins.type === "warning" ? "border-rose-100" : ins.type === "success" ? "border-emerald-100" : "border-slate-100"
+                }`}
+              >
+                <span className="mt-0.5 shrink-0 text-base">{ICON[ins.icon] ?? "💡"}</span>
+                <span className="leading-snug">{ins.message}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </motion.div>
   );
@@ -258,7 +251,7 @@ function LeaderboardRow({ student, index }) {
 
 // ── at-risk row ───────────────────────────────────────────────────────────────
 function AtRiskRow({ student }) {
-  const lastSeen = student.lastActivityAt ? timeAgo(student.lastActivityAt) : "Never";
+  const lastSeen = student.lastActive ? timeAgo(student.lastActive) : "Never";
   return (
     <motion.div variants={fadeUp} className="flex items-center gap-3 rounded-xl border border-rose-100 bg-rose-50/60 px-4 py-3 hover:bg-rose-50 transition-colors">
       <span className="text-base shrink-0">⚠️</span>
@@ -267,7 +260,7 @@ function AtRiskRow({ student }) {
         <p className="text-xs text-slate-500">Last seen: {lastSeen} · {pct(student.completionRate)} complete</p>
       </div>
       <span className="shrink-0 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">
-        {student.daysInactive}d inactive
+        {student.daysSince}d inactive
       </span>
     </motion.div>
   );
@@ -282,16 +275,16 @@ function FeedItem({ item, index }) {
     >
       <div className="relative mt-0.5 shrink-0">
         <span className="text-base">{EVENT_ICONS[item.eventType] ?? "⚡"}</span>
-        {isLive(item.occurredAt) && (
+        {isLive(item.createdAt) && (
           <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
         )}
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm text-slate-700 leading-snug">
           <span className="font-semibold text-slate-800">{item.studentName}</span>
-          {" — "}{EVENT_LABELS[item.eventType] ?? item.eventType}
+          {" — "}{item.label ?? EVENT_LABELS[item.eventType] ?? item.eventType}
         </p>
-        <p className="text-xs text-slate-400 mt-0.5">{timeAgo(item.occurredAt)}</p>
+        <p className="text-xs text-slate-400 mt-0.5">{timeAgo(item.createdAt)}</p>
       </div>
     </motion.div>
   );
@@ -357,14 +350,19 @@ function Panel({ title, children, className }) {
 // ── main page ─────────────────────────────────────────────────────────────────
 export default function InstructorAnalyticsPage() {
   const { isArabic } = useLanguage();
+  const authUser = useSelector((s) => s.auth.user);
+  const orgType  = String(authUser?.organizationType || authUser?.organization?.Role || "").toUpperCase();
+  const isSchool = orgType === ORG_TYPES.SCHOOL;
   const [analytics, setAnalytics] = useState(null);
+  const [subjects, setSubjects] = useState([]);
+  const [selectedSubjectId, setSelectedSubjectId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (subjectId) => {
     try {
       setError(null);
-      const data = await fetchInstructorAnalytics();
+      const data = await fetchInstructorAnalytics(subjectId ?? undefined);
       setAnalytics(data);
     } catch (err) {
       setError(err?.response?.data?.error || "Failed to load analytics.");
@@ -373,7 +371,16 @@ export default function InstructorAnalyticsPage() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { fetchInstructorSubjects().then(setSubjects).catch(() => {}); }, []);
+  useEffect(() => { load(selectedSubjectId); }, [load, selectedSubjectId]);
+
+  const subjectChipLabel = (s) => {
+    const grade = s.track?.GradeLevel;
+    if (isSchool && grade != null) {
+      return isArabic ? `${s.name} (الصف ${getArabicOrdinal(grade)})` : `${s.name} (Class ${grade})`;
+    }
+    return s.name;
+  };
 
   const ov   = analytics?.overview ?? {};
   const subj = analytics?.subjectPerformance ?? [];
@@ -387,6 +394,31 @@ export default function InstructorAnalyticsPage() {
       title={isArabic ? "التحليلات" : "Analytics"}
       subtitle={isArabic ? "أداء الفصل والطلاب" : "Class performance & student engagement"}
     >
+      {subjects.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectedSubjectId(null)}
+            className={`rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${
+              selectedSubjectId === null ? "bg-violet-600 text-white" : "bg-white text-slate-600 border border-slate-200 hover:border-violet-300"
+            }`}
+          >
+            {isArabic ? `كل ${getCourseLabel(isSchool, isArabic)}` : `All ${getCourseLabel(isSchool, isArabic)}`}
+          </button>
+          {subjects.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setSelectedSubjectId(s.id)}
+              className={`rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${
+                selectedSubjectId === s.id ? "bg-violet-600 text-white" : "bg-white text-slate-600 border border-slate-200 hover:border-violet-300"
+              }`}
+            >
+              {subjectChipLabel(s)}
+            </button>
+          ))}
+        </div>
+      )}
       <AnimatePresence mode="wait">
         {loading ? (
           <motion.div key="skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -403,7 +435,7 @@ export default function InstructorAnalyticsPage() {
             <p className="text-sm text-rose-700 font-medium">{error}</p>
             <button
               type="button"
-              onClick={() => { setLoading(true); load(); }}
+              onClick={() => { setLoading(true); load(selectedSubjectId); }}
               className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 transition-colors"
             >
               Retry
@@ -430,7 +462,7 @@ export default function InstructorAnalyticsPage() {
               <Panel title="Subject Performance">
                 {subj.length === 0
                   ? <EmptyPanel icon="📚" message="No subject data yet." />
-                  : <div className="space-y-3">{subj.map((s, i) => <SubjectBar key={s.subjectId} name={s.subjectName} rate={s.completionRate} rank={i} />)}</div>
+                  : <div className="space-y-3">{subj.map((s, i) => <SubjectBar key={s.id} name={s.name} rate={s.completionRate} rank={i} />)}</div>
                 }
               </Panel>
               <Panel title="7-Day Activity Trend">
@@ -448,13 +480,13 @@ export default function InstructorAnalyticsPage() {
               <Panel title="⚠️ At-Risk Students">
                 {risk.length === 0
                   ? <EmptyPanel icon="🎉" message="No at-risk students — great work!" />
-                  : <motion.div variants={staggerGrid} className="space-y-2">{risk.map(s => <AtRiskRow key={s.studentId} student={s} />)}</motion.div>
+                  : <motion.div variants={staggerGrid} className="space-y-2">{risk.map(s => <AtRiskRow key={s.id} student={s} />)}</motion.div>
                 }
               </Panel>
               <Panel title="🏆 Top Students">
                 {top.length === 0
                   ? <EmptyPanel icon="📊" message="No student data yet." />
-                  : <motion.div variants={staggerGrid} className="space-y-2">{top.map((s, i) => <LeaderboardRow key={s.studentId} student={s} index={i} />)}</motion.div>
+                  : <motion.div variants={staggerGrid} className="space-y-2">{top.map((s, i) => <LeaderboardRow key={s.id} student={s} index={i} />)}</motion.div>
                 }
               </Panel>
             </div>

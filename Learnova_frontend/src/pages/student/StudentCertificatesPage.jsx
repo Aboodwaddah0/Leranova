@@ -71,7 +71,9 @@ export default function StudentCertificatesPage() {
         </div>
       ) : (
         <div className="mt-6 space-y-5">
-          {certs.map((cert) => {
+          {(() => {
+            let academyShown = false;
+            return certs.map((cert) => {
             const isAcademy = !cert.termId;
             const avg       = Number(cert.overallAverage ?? 0);
             const gc        = gradeColor(avg);
@@ -79,8 +81,11 @@ export default function StudentCertificatesPage() {
             const subPassed = cert.subjects?.filter(s => s.isPassed).length ?? 0;
             const hours     = Math.max(5, (cert.lessonCount ?? 3) * 2);
 
-            // ── Academy certificate card ──────────────────────────────────
+            // ── Academy certificate card — show at most one, regardless of
+            // how many subject certificates the student has earned ──────────
             if (isAcademy) {
+              if (academyShown) return null;
+              academyShown = true;
               return (
                 <div key={cert.id} style={{
                   border: `1.5px solid ${border}`,
@@ -259,7 +264,8 @@ export default function StudentCertificatesPage() {
                 </div>
               </div>
             );
-          })}
+            });
+          })()}
         </div>
       )}
 

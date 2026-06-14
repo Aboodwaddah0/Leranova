@@ -16,6 +16,7 @@ export interface OrgProfile {
 export interface OrgTeacher {
   id: number;
   userId?: number;
+  name?: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -60,9 +61,31 @@ export interface OrgSubject {
   lessonsCount?: number;
 }
 
+// ── Lesson (read-only, org drill-down) ──────────────────────────────────────────
+export interface OrgLessonAttachment {
+  id: number;
+  originalName?: string | null;
+  name?: string | null;
+  fileUrl?: string | null;
+  url?: string | null;
+  fileType?: string | null;
+  type?: string | null;
+  mimeType?: string | null;
+}
+
+export interface OrgLesson {
+  id: number;
+  title?: string | null;
+  name?: string | null;
+  description?: string | null;
+  videoUrl?: string | null;
+  attachments?: OrgLessonAttachment[];
+}
+
 // ── User (Student / Parent) ────────────────────────────────────────────────────
 export interface OrgUser {
   id: number;
+  name?: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -209,10 +232,11 @@ export interface TimetableSlot {
 // ── Finance ────────────────────────────────────────────────────────────────────
 export interface OrgRevenue {
   totalRevenue: number;
-  totalEnrollments: number;
-  paidEnrollments?: number;
-  recentTransactions?: RevenueTransaction[];
-  monthly?: { month: string; revenue: number }[];
+  totalPayments: number;
+  paidCoursesCount: number;
+  freeCoursesCount: number;
+  recentPayments: RevenueTransaction[];
+  byCourse: CourseRevenue[];
 }
 
 export interface RevenueTransaction {
@@ -222,6 +246,16 @@ export interface RevenueTransaction {
   amount: number;
   date: string;
   status?: string;
+  paymentMethod?: string | null;
+}
+
+export interface CourseRevenue {
+  courseId: number;
+  courseName: string;
+  isPaid: boolean;
+  price: number | null;
+  revenue: number;
+  payments: number;
 }
 
 // ── School Settings ────────────────────────────────────────────────────────────

@@ -37,6 +37,10 @@ api.interceptors.response.use(
       localStorage.removeItem(STORAGE_KEYS.USER);
     }
 
+    if (error?.response?.status === 403 && error?.response?.data?.code === "TRIAL_EXPIRED") {
+      window.dispatchEvent(new CustomEvent("learnova:trial-expired", { detail: { message } }));
+    }
+
     // Keep full Axios error shape so callers can read response.data.errors (e.g. 422 Excel validation details).
     error.message = message;
     return Promise.reject(error);

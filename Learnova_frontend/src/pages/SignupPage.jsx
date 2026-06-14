@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { Sparkles, CheckCircle2 } from "lucide-react";
-import PlanSelector from "../components/auth/PlanSelector";
+import { Sparkles, CheckCircle2, Mail, Clock } from "lucide-react";
 import OrgSignupForm from "../components/auth/OrgSignupForm";
 import { registerOrganizationThunk } from "../redux/thunks/authThunks";
 import { useLanguage } from "../utils/i18n";
@@ -11,12 +10,9 @@ import { notifyError } from "../lib/notify";
 
 export default function SignupPage() {
   const dispatch  = useDispatch();
-  const navigate  = useNavigate();
-  const { loading, error, plans } = useSelector((s) => s.auth);
-  const [selectedPlanId, setSelectedPlanId] = useState(null);
+  const { loading, error } = useSelector((s) => s.auth);
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const { lang, isArabic, t, toggleLang } = useLanguage();
-  const hasPlans = Array.isArray(plans) && plans.length > 0;
 
   useEffect(() => {
     if (error) notifyError(error);
@@ -25,11 +21,6 @@ export default function SignupPage() {
   const handleSignup = async (payload) => {
     const result = await dispatch(registerOrganizationThunk(payload));
     if (registerOrganizationThunk.fulfilled.match(result)) {
-      const checkoutUrl = result.payload?.checkout?.checkoutUrl;
-      if (checkoutUrl) {
-        navigate("/signup/checkout", { state: { checkout: result.payload?.checkout } });
-        return;
-      }
       setRegistrationComplete(true);
     }
   };
@@ -121,9 +112,26 @@ export default function SignupPage() {
             <h1 className="text-2xl font-black tracking-tight text-slate-900 mb-3">
               {t.signup.verifyEmail.title}
             </h1>
-            <p className="text-slate-500 mb-6 max-w-sm">
+            <p className="text-slate-500 mb-8 max-w-sm">
               {t.signup.verifyEmail.description}
             </p>
+            {/* Two-step process indicator */}
+            <div className="w-full max-w-xs space-y-3 mb-8">
+              <div className="flex items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-start">
+                <Mail size={18} className="shrink-0 text-indigo-500" />
+                <div>
+                  <p className="text-xs font-black text-indigo-700">{isArabic ? "الخطوة ١ — تحقق من البريد" : "Step 1 — Verify your email"}</p>
+                  <p className="text-xs text-slate-500">{isArabic ? "انقر على الرابط في بريدك الإلكتروني" : "Click the link sent to your inbox"}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-start">
+                <Clock size={18} className="shrink-0 text-slate-400" />
+                <div>
+                  <p className="text-xs font-black text-slate-600">{isArabic ? "الخطوة ٢ — موافقة المشرف" : "Step 2 — Admin approval"}</p>
+                  <p className="text-xs text-slate-500">{isArabic ? "سيتم إعلامك بالبريد عند الموافقة" : "You'll receive an email once approved"}</p>
+                </div>
+              </div>
+            </div>
             <Link to="/login" className="text-sm font-bold text-indigo-600 hover:text-indigo-700">
               {t.signup.backToLogin}
             </Link>
@@ -137,29 +145,8 @@ export default function SignupPage() {
               <h1 className="text-3xl font-black tracking-tight text-slate-900">{t.signup.title}</h1>
             </div>
 
-            {/* Step 1: Plans */}
-            <section className="mb-10">
-              <div className="mb-5 flex items-center gap-3">
-                <div className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-black text-white" style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}>1</div>
-                <h2 className="text-lg font-black text-slate-900">{t.signup.step1}</h2>
-              </div>
-              <PlanSelector selectedPlanId={selectedPlanId} onSelect={setSelectedPlanId} t={t} />
-              {!hasPlans && (
-                <p className="mt-3 text-xs text-slate-400">{t.signup.noPlansProceedHint}</p>
-              )}
-            </section>
-
-            {/* Divider */}
-            <div className="mb-10 flex items-center gap-4">
-              <div className="h-px flex-1 bg-slate-100" />
-              <div className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-black text-white" style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}>2</div>
-              <h2 className="text-lg font-black text-slate-900">{t.signup.step2}</h2>
-              <div className="h-px flex-1 bg-slate-100" />
-            </div>
-
-            {/* Step 2: Org details */}
+            {/* Org details */}
             <OrgSignupForm
-              selectedPlanId={selectedPlanId}
               onSubmit={handleSignup}
               loading={loading}
               t={t}

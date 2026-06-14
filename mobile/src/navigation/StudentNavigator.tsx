@@ -31,7 +31,7 @@ import { TeacherProfileScreen }    from '../features/student/screens/TeacherProf
 import { SchoolMarksScreen }       from '../features/student/screens/SchoolMarksScreen';
 import { SchoolAttendanceScreen }  from '../features/student/screens/SchoolAttendanceScreen';
 import { SchoolCalendarScreen }    from '../features/student/screens/SchoolCalendarScreen';
-import { NotificationTestScreen }  from '../features/notifications/NotificationTestScreen';
+import { NotificationsScreen }     from '../features/notifications/screens/NotificationsScreen';
 
 const Tab   = createBottomTabNavigator<StudentTabParamList>();
 const Stack = createNativeStackNavigator<StudentStackParamList>();
@@ -201,7 +201,7 @@ export function StudentNavigator() {
       <Stack.Screen name="Lesson"         component={LessonScreen} />
       <Stack.Screen name="TeacherProfile"   component={TeacherProfileScreen} />
       <Stack.Screen name="ChatRoom"         component={ChatRoomScreen} />
-      <Stack.Screen name="NotificationTest" component={NotificationTestScreen} />
+      <Stack.Screen name="Notifications"    component={NotificationsScreen} />
     </Stack.Navigator>
   );
 }

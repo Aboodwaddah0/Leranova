@@ -46,8 +46,8 @@ export function OrgCalendarTab({ orgType, viewingYearId, academicYears }: Props)
     const params: Record<string, unknown> = {};
     const activeYear = academicYears.find(y => y.id === viewingYearId);
     if (activeYear) {
-      params.startDate = String(activeYear.startDate).slice(0, 10);
-      params.endDate   = String(activeYear.endDate).slice(0, 10);
+      params.from = String(activeYear.startDate).slice(0, 10);
+      params.to   = String(activeYear.endDate).slice(0, 10);
     }
     try {
       const data = await fetchCalendarEvents(params);
